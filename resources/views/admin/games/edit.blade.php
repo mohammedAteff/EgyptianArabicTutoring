@@ -15,6 +15,35 @@
     </div>
     <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Edit Game — {{ $game->title }}</h1>
 
+@php
+    $valTitle = old('title', $draftRevision?->title ?? $game->title);
+    $valDescription = old('description', $draftRevision?->content['description'] ?? $game->description);
+    $valBadge = old('badge', $draftRevision?->content['badge'] ?? $game->badge);
+    $valTargetUrl = old('target_url', $draftRevision?->content['target_url'] ?? $game->target_url);
+    $valThumbnailPath = old('thumbnail_path', $draftRevision?->content['thumbnail_path'] ?? $game->thumbnail_path);
+    $valStatus = old('status', $draftRevision?->content['status'] ?? $game->status);
+    $valSortOrder = old('sort_order', $draftRevision?->content['sort_order'] ?? $game->sort_order);
+@endphp
+
+    @if ($draftRevision)
+        <div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                <div>
+                    <p class="text-sm font-semibold text-amber-900">Unpublished Draft Revision Pending</p>
+                    <p class="text-xs text-amber-700">This form is showing pending draft changes (Revision #{{ $draftRevision->revision_number }}). The live site still displays published content.</p>
+                </div>
+            </div>
+            <form action="{{ route('admin.games.draft.destroy', $game->id) }}" method="POST" onsubmit="return confirm('Discard this draft and revert to live published values?');">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold rounded-lg shadow-xs transition-colors">
+                    Discard Draft
+                </button>
+            </form>
+        </div>
+    @endif
+
     <!-- Form Card -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
         <form action="{{ route('admin.games.update', $game->id) }}" method="POST" class="space-y-6">
@@ -24,7 +53,7 @@
             <!-- Title -->
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Title</label>
-                <input type="text" name="title" value="{{ old('title', $game->title) }}" required 
+                <input type="text" name="title" value="{{ $valTitle }}" required 
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 @error('title') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
             </div>
@@ -33,14 +62,14 @@
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Description</label>
                 <textarea name="description" rows="3" 
-                          class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ old('description', $game->description) }}</textarea>
+                          class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ $valDescription }}</textarea>
                 @error('description') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
             </div>
 
             <!-- Badge Label -->
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Badge / Category Label</label>
-                <input type="text" name="badge" value="{{ old('badge', $game->badge) }}" placeholder="e.g. Speaking Practice"
+                <input type="text" name="badge" value="{{ $valBadge }}" placeholder="e.g. Speaking Practice"
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 @error('badge') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
             </div>
@@ -48,7 +77,7 @@
             <!-- Target External URL -->
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">External Target URL (Optional)</label>
-                <input type="url" name="target_url" value="{{ old('target_url', $game->target_url) }}" placeholder="https://mohamedateff.com/6word"
+                <input type="url" name="target_url" value="{{ $valTargetUrl }}" placeholder="https://mohamedateff.com/6word"
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 <p class="text-xs text-slate-400 mt-1">If provided, clicking the game card launches this external destination in a new tab.</p>
                 @error('target_url') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
@@ -57,7 +86,7 @@
             <!-- Thumbnail Image Path -->
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Thumbnail / Preview Image Path</label>
-                <input type="text" name="thumbnail_path" value="{{ old('thumbnail_path', $game->thumbnail_path) }}" placeholder="images/games/6-word-story.webp"
+                <input type="text" name="thumbnail_path" value="{{ $valThumbnailPath }}" placeholder="images/games/6-word-story.webp"
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 @error('thumbnail_path') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
             </div>
@@ -67,16 +96,16 @@
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Availability Status</label>
                     <select name="status" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                        <option value="available" {{ old('status', $game->status) === 'available' ? 'selected' : '' }}>Available to Play</option>
-                        <option value="coming_soon" {{ old('status', $game->status) === 'coming_soon' ? 'selected' : '' }}>Coming Soon</option>
-                        <option value="disabled" {{ old('status', $game->status) === 'disabled' ? 'selected' : '' }}>Disabled (Hidden)</option>
+                        <option value="available" {{ $valStatus === 'available' ? 'selected' : '' }}>Available to Play</option>
+                        <option value="coming_soon" {{ $valStatus === 'coming_soon' ? 'selected' : '' }}>Coming Soon</option>
+                        <option value="disabled" {{ $valStatus === 'disabled' ? 'selected' : '' }}>Disabled (Hidden)</option>
                     </select>
                 </div>
 
                 <!-- Sort Order -->
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Sort Order</label>
-                    <input type="number" name="sort_order" value="{{ old('sort_order', $game->sort_order) }}" min="0" required
+                    <input type="number" name="sort_order" value="{{ $valSortOrder }}" min="0" required
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
             </div>
@@ -86,8 +115,11 @@
                 <a href="{{ route('admin.games.index') }}" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900">
                     Cancel
                 </a>
-                <button type="submit" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs font-serif">
-                    Save Changes
+                <button type="submit" name="action" value="draft" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors shadow-xs">
+                    Save as Draft
+                </button>
+                <button type="submit" name="action" value="publish" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs font-serif">
+                    Publish Game
                 </button>
             </div>
         </form>

@@ -5,7 +5,11 @@ namespace Tests\Feature;
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\Looping;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -201,5 +205,32 @@ class ProductionHealthAndSchedulerTest extends TestCase
         // PHP and Laravel versions are returned
         $this->assertEquals(PHP_VERSION, $response->viewData('phpVersion'));
         $this->assertEquals(app()->version(), $response->viewData('laravelVersion'));
+    }
+
+    public function test_queue_worker_heartbeat_listeners_update_cache_on_real_queue_events(): void
+    {
+        Cache::forget('queue_worker_heartbeat_at');
+        $this->assertNull(Cache::get('queue_worker_heartbeat_at'));
+
+        // Fire real Queue::looping event
+        event(new Looping('database', 'default'));
+
+        $heartbeat = Cache::get('queue_worker_heartbeat_at');
+        $this->assertNotNull($heartbeat, 'Queue::looping event must record queue_worker_heartbeat_at in cache without crashing');
+
+        $parsed = CarbonImmutable::parse($heartbeat);
+        $this->assertTrue($parsed->diffInSeconds(now('UTC')) < 5);
+
+        // Advance time and fire Queue::before event
+        CarbonImmutable::setTestNow(now('UTC')->addSeconds(10));
+        $jobMock = \Mockery::mock(Job::class);
+        $jobMock->shouldReceive('payload')->andReturn([]);
+        event(new JobProcessing('database', $jobMock));
+
+        $updatedHeartbeat = Cache::get('queue_worker_heartbeat_at');
+        $this->assertNotNull($updatedHeartbeat);
+        $this->assertNotEquals($heartbeat, $updatedHeartbeat);
+
+        CarbonImmutable::setTestNow();
     }
 }

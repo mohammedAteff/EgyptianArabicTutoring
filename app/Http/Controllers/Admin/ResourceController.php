@@ -122,10 +122,12 @@ class ResourceController extends Controller
     public function edit(Resource $resource): View
     {
         $categories = ResourceCategory::query()->where('active', true)->orderBy('sort_order')->get();
+        $draftRevision = $resource->revisions()->where('status', 'draft')->latest('id')->first();
 
         return view('admin.resources.edit', [
             'title' => 'Edit Resource — '.$resource->title,
             'resource' => $resource,
+            'draftRevision' => $draftRevision,
             'categories' => $categories,
         ]);
     }
@@ -222,7 +224,13 @@ class ResourceController extends Controller
             $updates['cover_image_path'] = $newCoverPath;
         }
 
+        $existingDraft = $resource->revisions()->where('status', 'draft')->latest('id')->first();
+
         if ($isDraftAction && $resource->status === 'published') {
+            $draftFilePath = $newFilePath ?? $existingDraft?->content['file_path'] ?? $resource->file_path;
+            $draftFileSize = $request->hasFile('file') ? $request->file('file')->getSize() : ($existingDraft?->content['file_size'] ?? $resource->file_size);
+            $draftCoverPath = $newCoverPath ?? $existingDraft?->content['cover_image_path'] ?? $resource->cover_image_path;
+
             $nextRevision = ($resource->revisions()->max('revision_number') ?? 0) + 1;
             ContentRevision::create([
                 'revisable_type' => Resource::class,
@@ -234,9 +242,9 @@ class ResourceController extends Controller
                     'category_id' => $validated['category_id'],
                     'short_description' => $description,
                     'file_type' => $validated['file_type'],
-                    'file_path' => $newFilePath ?? $resource->file_path,
-                    'file_size' => $request->hasFile('file') ? $request->file('file')->getSize() : $resource->file_size,
-                    'cover_image_path' => $newCoverPath ?? $resource->cover_image_path,
+                    'file_path' => $draftFilePath,
+                    'file_size' => $draftFileSize,
+                    'cover_image_path' => $draftCoverPath,
                     'is_gated' => $request->boolean('is_gated', true),
                     'featured' => $request->boolean('featured'),
                     'sort_order' => $validated['sort_order'] ?? 0,
@@ -261,8 +269,20 @@ class ResourceController extends Controller
                 ->with('success', "Draft revision #{$nextRevision} saved. The live published resource remains unchanged.");
         }
 
-        if ($validated['status'] === 'published' && ! $resource->published_at) {
-            $updates['published_at'] = now();
+        if ($action === 'publish' || $validated['status'] === 'published') {
+            $updates['status'] = 'published';
+            if (! $resource->published_at) {
+                $updates['published_at'] = now();
+            }
+            if (! $newFilePath && $existingDraft && ! empty($existingDraft->content['file_path']) && $existingDraft->content['file_path'] !== $resource->file_path) {
+                $updates['file_path'] = $existingDraft->content['file_path'];
+                $updates['file_size'] = $existingDraft->content['file_size'] ?? $resource->file_size;
+                $newFilePath = $existingDraft->content['file_path'];
+            }
+            if (! $newCoverPath && $existingDraft && ! empty($existingDraft->content['cover_image_path']) && $existingDraft->content['cover_image_path'] !== $resource->cover_image_path) {
+                $updates['cover_image_path'] = $existingDraft->content['cover_image_path'];
+                $newCoverPath = $existingDraft->content['cover_image_path'];
+            }
         }
 
         try {
@@ -278,6 +298,8 @@ class ResourceController extends Controller
                         'alt_text' => $validated['title'].' Cover',
                     ]);
                 }
+
+                $resource->revisions()->where('status', 'draft')->update(['status' => 'archived']);
 
                 $prev = $resource->toArray();
                 $resource->update($updates);
@@ -364,5 +386,26 @@ class ResourceController extends Controller
         ]);
 
         return redirect()->route('admin.resources.index')->with('success', 'Resource deleted successfully.');
+    }
+
+    public function discardDraft(Resource $resource): RedirectResponse
+    {
+        $drafts = $resource->revisions()->where('status', 'draft')->get();
+        foreach ($drafts as $draft) {
+            $draftFilePath = $draft->content['file_path'] ?? null;
+            $draftCoverPath = $draft->content['cover_image_path'] ?? null;
+
+            $draft->delete();
+
+            if ($draftFilePath && $draftFilePath !== $resource->file_path && ! Media::isPathReferenced($draftFilePath)) {
+                Storage::disk('local')->delete($draftFilePath);
+            }
+            if ($draftCoverPath && $draftCoverPath !== $resource->cover_image_path && ! Media::isPathReferenced($draftCoverPath)) {
+                Storage::disk('public')->delete($draftCoverPath);
+            }
+        }
+
+        return redirect()->route('admin.resources.edit', $resource)
+            ->with('success', 'Draft revision discarded. Reverted to live published values.');
     }
 }

@@ -105,7 +105,21 @@ class PageController extends Controller
             abort(403, 'Preview requires administrator authentication.');
         }
 
-        $faqs = Faq::query()->orderBy('sort_order')->get();
+        $faqs = Faq::query()->with(['revisions' => function ($q) {
+            $q->where('status', 'draft')->latest('id');
+        }])->orderBy('sort_order')->get()->map(function ($faq) {
+            $draftRevision = $faq->revisions->first();
+            if ($draftRevision) {
+                $previewFaq = clone $faq;
+                $previewFaq->question = $draftRevision->title ?? $draftRevision->content['question'] ?? $faq->question;
+                $previewFaq->answer = $draftRevision->content['answer'] ?? $faq->answer;
+                $previewFaq->active = $draftRevision->content['active'] ?? $faq->active;
+
+                return $previewFaq;
+            }
+
+            return $faq;
+        });
 
         return view('public.faq', [
             'faqs' => $faqs,

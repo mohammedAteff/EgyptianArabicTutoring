@@ -89,9 +89,12 @@ class GameController extends Controller
 
     public function edit(Game $game): View
     {
+        $draftRevision = $game->revisions()->where('status', 'draft')->latest('id')->first();
+
         return view('admin.games.edit', [
             'title' => 'Edit Game — '.$game->title,
             'game' => $game,
+            'draftRevision' => $draftRevision,
         ]);
     }
 
@@ -155,8 +158,14 @@ class GameController extends Controller
                 ->with('success', "Draft revision #{$nextRevision} saved. The live game remains untouched.");
         }
 
+        if ($action === 'publish' && $validated['status'] === 'draft') {
+            $validated['status'] = 'available';
+        }
+
         $prev = $game->toArray();
         $game->update($validated);
+
+        $game->revisions()->where('status', 'draft')->update(['status' => 'archived']);
 
         $nextRevision = ($game->revisions()->max('revision_number') ?? 0) + 1;
         ContentRevision::create([
@@ -207,5 +216,13 @@ class GameController extends Controller
         ]);
 
         return redirect()->route('admin.games.index')->with('success', "Game '{$gameTitle}' removed.");
+    }
+
+    public function discardDraft(Game $game): RedirectResponse
+    {
+        $game->revisions()->where('status', 'draft')->delete();
+
+        return redirect()->route('admin.games.edit', $game)
+            ->with('success', 'Draft revision discarded. Reverted to live published values.');
     }
 }

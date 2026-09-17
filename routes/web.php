@@ -129,6 +129,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/resources/{resource}/edit', [App\Http\Controllers\Admin\ResourceController::class, 'edit'])->name('resources.edit');
         Route::put('/resources/{resource}', [App\Http\Controllers\Admin\ResourceController::class, 'update'])->name('resources.update');
         Route::delete('/resources/{resource}', [App\Http\Controllers\Admin\ResourceController::class, 'destroy'])->name('resources.destroy');
+        Route::delete('/resources/{resource}/draft', [App\Http\Controllers\Admin\ResourceController::class, 'discardDraft'])->name('resources.draft.destroy');
 
         // Games Lifecycle Management
         Route::get('/games', [App\Http\Controllers\Admin\GameController::class, 'index'])->name('games.index');
@@ -137,6 +138,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/games/{game}/edit', [App\Http\Controllers\Admin\GameController::class, 'edit'])->name('games.edit');
         Route::put('/games/{game}', [App\Http\Controllers\Admin\GameController::class, 'update'])->name('games.update');
         Route::delete('/games/{game}', [App\Http\Controllers\Admin\GameController::class, 'destroy'])->name('games.destroy');
+        Route::delete('/games/{game}/draft', [App\Http\Controllers\Admin\GameController::class, 'discardDraft'])->name('games.draft.destroy');
 
         // Internal Notifications Center
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
@@ -149,6 +151,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/content/faqs', [ContentController::class, 'storeFaq'])->name('content.faq.store');
         Route::put('/content/faqs/{faq}', [ContentController::class, 'updateFaq'])->name('content.faq.update');
         Route::delete('/content/faqs/{faq}', [ContentController::class, 'destroyFaq'])->name('content.faq.destroy');
+        Route::delete('/content/faqs/{faq}/draft', [ContentController::class, 'discardFaqDraft'])->name('content.faq.draft.destroy');
         Route::post('/content/social', [ContentController::class, 'updateSocial'])->name('content.social.update');
 
         // CMS Custom Pages & Revisions

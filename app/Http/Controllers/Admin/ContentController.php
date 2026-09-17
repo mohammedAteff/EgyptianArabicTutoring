@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\SocialLink;
@@ -16,7 +17,9 @@ class ContentController extends Controller
 {
     public function index(): View
     {
-        $faqs = Faq::query()->orderBy('sort_order')->get();
+        $faqs = Faq::query()->with(['revisions' => function ($q) {
+            $q->where('status', 'draft')->latest('id');
+        }])->orderBy('sort_order')->get();
         $pages = Page::query()->orderBy('title')->get();
         $socials = SocialLink::query()->orderBy('sort_order')->get();
 
@@ -63,7 +66,42 @@ class ContentController extends Controller
             'answer' => ['required', 'string', 'max:5000'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'active' => ['nullable', 'boolean'],
+            'action' => ['nullable', 'string', 'in:draft,publish'],
         ]);
+
+        $action = $request->input('action', 'publish');
+
+        if ($action === 'draft') {
+            $nextRevision = ($faq->revisions()->max('revision_number') ?? 0) + 1;
+            ContentRevision::create([
+                'revisable_type' => Faq::class,
+                'revisable_id' => $faq->id,
+                'revision_number' => $nextRevision,
+                'title' => $validated['question'],
+                'content' => [
+                    'question' => $validated['question'],
+                    'answer' => $validated['answer'],
+                    'sort_order' => $validated['sort_order'] ?? $faq->sort_order,
+                    'active' => $request->boolean('active', true),
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => 'draft',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'faq_draft_saved',
+                'entity_type' => Faq::class,
+                'entity_id' => $faq->id,
+                'new_data' => [
+                    'revision_number' => $nextRevision,
+                    'question' => $validated['question'],
+                ],
+                'created_at' => now(),
+            ]);
+
+            return back()->with('success', "FAQ draft revision #{$nextRevision} saved. The live FAQ remains untouched.");
+        }
 
         $prev = $faq->toArray();
         $faq->update([
@@ -71,6 +109,24 @@ class ContentController extends Controller
             'answer' => $validated['answer'],
             'sort_order' => $validated['sort_order'] ?? 0,
             'active' => $request->boolean('active'),
+        ]);
+
+        $faq->revisions()->where('status', 'draft')->update(['status' => 'archived']);
+
+        $nextRevision = ($faq->revisions()->max('revision_number') ?? 0) + 1;
+        ContentRevision::create([
+            'revisable_type' => Faq::class,
+            'revisable_id' => $faq->id,
+            'revision_number' => $nextRevision,
+            'title' => $faq->question,
+            'content' => [
+                'question' => $faq->question,
+                'answer' => $faq->answer,
+                'sort_order' => $faq->sort_order,
+                'active' => $faq->active,
+            ],
+            'created_by_id' => Auth::id(),
+            'status' => 'published',
         ]);
 
         AuditLog::create([
@@ -83,7 +139,14 @@ class ContentController extends Controller
             'created_at' => now(),
         ]);
 
-        return back()->with('success', 'FAQ updated.');
+        return back()->with('success', 'FAQ published.');
+    }
+
+    public function discardFaqDraft(Faq $faq): RedirectResponse
+    {
+        $faq->revisions()->where('status', 'draft')->delete();
+
+        return back()->with('success', 'FAQ draft discarded. Reverted to live published values.');
     }
 
     public function destroyFaq(Faq $faq): RedirectResponse

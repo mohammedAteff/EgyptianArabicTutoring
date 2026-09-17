@@ -172,6 +172,246 @@ class CmsDraftAndPreviewMatrixTest extends TestCase
         $adminPreview->assertSee('Administrator Preview Mode');
     }
 
+    public function test_resource_draft_to_publish_workflow_and_discard(): void
+    {
+        $resource = Resource::create([
+            'title' => 'Live Resource Title',
+            'slug' => 'live-resource-title',
+            'category_id' => $this->category->id,
+            'short_description' => 'Live description',
+            'file_type' => 'pdf',
+            'file_path' => 'resources/live.pdf',
+            'status' => 'published',
+            'published_at' => now()->subDay(),
+        ]);
+
+        // 1. Save draft revision
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.resources.update', $resource), [
+                'action' => 'draft',
+                'title' => 'Pending Draft Resource Title',
+                'slug' => 'live-resource-title',
+                'category_id' => $this->category->id,
+                'short_description' => 'Draft description',
+                'file_type' => 'pdf',
+                'status' => 'draft',
+            ])
+            ->assertRedirect(route('admin.resources.edit', $resource));
+
+        // 2. Edit view renders draft values and draft banner
+        $editResponse = $this->actingAs($this->admin, 'web')->get(route('admin.resources.edit', $resource));
+        $editResponse->assertOk();
+        $editResponse->assertSee('Unpublished Draft Revision Pending');
+        $editResponse->assertSee('Pending Draft Resource Title');
+
+        // 3. Discard draft
+        $this->actingAs($this->admin, 'web')
+            ->delete(route('admin.resources.draft.destroy', $resource))
+            ->assertRedirect(route('admin.resources.edit', $resource));
+
+        $this->assertDatabaseMissing('content_revisions', [
+            'revisable_type' => Resource::class,
+            'revisable_id' => $resource->id,
+            'status' => 'draft',
+        ]);
+
+        // 4. Save draft again and then publish
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.resources.update', $resource), [
+                'action' => 'draft',
+                'title' => 'Final Approved Draft Title',
+                'slug' => 'live-resource-title',
+                'category_id' => $this->category->id,
+                'short_description' => 'Final approved draft description',
+                'file_type' => 'pdf',
+                'status' => 'draft',
+            ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.resources.update', $resource), [
+                'action' => 'publish',
+                'title' => 'Final Approved Draft Title',
+                'slug' => 'live-resource-title',
+                'category_id' => $this->category->id,
+                'short_description' => 'Final approved draft description',
+                'file_type' => 'pdf',
+                'status' => 'published',
+            ])
+            ->assertRedirect(route('admin.resources.index'));
+
+        $resource->refresh();
+        $this->assertSame('Final Approved Draft Title', $resource->title);
+        $this->assertSame('Final approved draft description', $resource->short_description);
+        $this->assertSame('published', $resource->status);
+
+        // Draft revision is archived
+        $this->assertDatabaseMissing('content_revisions', [
+            'revisable_type' => Resource::class,
+            'revisable_id' => $resource->id,
+            'status' => 'draft',
+        ]);
+
+        $this->get(route('resources.show', $resource->slug))
+            ->assertOk()
+            ->assertSee('Final Approved Draft Title');
+    }
+
+    public function test_game_draft_to_publish_workflow_and_discard(): void
+    {
+        $game = Game::create([
+            'title' => 'Live Game Title',
+            'slug' => 'live-game-title',
+            'description' => 'Live description',
+            'badge' => 'Beginner',
+            'status' => 'available',
+            'sort_order' => 1,
+        ]);
+
+        // 1. Save draft
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.games.update', $game), [
+                'action' => 'draft',
+                'title' => 'Draft Pending Game Title',
+                'slug' => 'live-game-title',
+                'description' => 'Draft game description',
+                'badge' => 'Advanced',
+                'status' => 'draft',
+                'sort_order' => 1,
+            ])
+            ->assertRedirect(route('admin.games.edit', $game));
+
+        // 2. Edit view renders draft banner and values
+        $editResponse = $this->actingAs($this->admin, 'web')->get(route('admin.games.edit', $game));
+        $editResponse->assertOk();
+        $editResponse->assertSee('Unpublished Draft Revision Pending');
+        $editResponse->assertSee('Draft Pending Game Title');
+
+        // 3. Discard draft
+        $this->actingAs($this->admin, 'web')
+            ->delete(route('admin.games.draft.destroy', $game))
+            ->assertRedirect(route('admin.games.edit', $game));
+
+        $this->assertDatabaseMissing('content_revisions', [
+            'revisable_type' => Game::class,
+            'revisable_id' => $game->id,
+            'status' => 'draft',
+        ]);
+
+        // 4. Save draft again and publish
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.games.update', $game), [
+                'action' => 'draft',
+                'title' => 'Published New Game Title',
+                'slug' => 'live-game-title',
+                'description' => 'Published game description',
+                'badge' => 'Intermediate',
+                'status' => 'draft',
+                'sort_order' => 1,
+            ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.games.update', $game), [
+                'action' => 'publish',
+                'title' => 'Published New Game Title',
+                'slug' => 'live-game-title',
+                'description' => 'Published game description',
+                'badge' => 'Intermediate',
+                'status' => 'available',
+                'sort_order' => 1,
+            ])
+            ->assertRedirect(route('admin.games.index'));
+
+        $game->refresh();
+        $this->assertSame('Published New Game Title', $game->title);
+        $this->assertSame('Published game description', $game->description);
+        $this->assertSame('available', $game->status);
+
+        $this->assertDatabaseMissing('content_revisions', [
+            'revisable_type' => Game::class,
+            'revisable_id' => $game->id,
+            'status' => 'draft',
+        ]);
+    }
+
+    public function test_faq_draft_to_publish_workflow_and_discard(): void
+    {
+        $faq = Faq::create([
+            'question' => 'Live FAQ Question?',
+            'answer' => 'Live FAQ Answer.',
+            'sort_order' => 1,
+            'active' => true,
+        ]);
+
+        // 1. Save draft
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.content.faq.update', $faq), [
+                'action' => 'draft',
+                'question' => 'Draft Question Under Review?',
+                'answer' => 'Draft Answer Under Review.',
+                'sort_order' => 1,
+                'active' => true,
+            ])
+            ->assertRedirect();
+
+        // 2. Public FAQ still sees live
+        $this->get(route('faq'))
+            ->assertOk()
+            ->assertSee('Live FAQ Question?')
+            ->assertDontSee('Draft Question Under Review?');
+
+        // 3. Admin preview sees draft
+        $this->actingAs($this->admin, 'web')
+            ->get(route('faq.preview'))
+            ->assertOk()
+            ->assertSee('Draft Question Under Review?')
+            ->assertDontSee('Live FAQ Question?');
+
+        // 4. Discard draft
+        $this->actingAs($this->admin, 'web')
+            ->delete(route('admin.content.faq.draft.destroy', $faq))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('content_revisions', [
+            'revisable_type' => Faq::class,
+            'revisable_id' => $faq->id,
+            'status' => 'draft',
+        ]);
+
+        // Preview now reverts to live
+        $this->actingAs($this->admin, 'web')
+            ->get(route('faq.preview'))
+            ->assertOk()
+            ->assertSee('Live FAQ Question?');
+
+        // 5. Save draft again and publish
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.content.faq.update', $faq), [
+                'action' => 'draft',
+                'question' => 'Newly Published Question?',
+                'answer' => 'Newly Published Answer.',
+                'sort_order' => 1,
+                'active' => true,
+            ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.content.faq.update', $faq), [
+                'action' => 'publish',
+                'question' => 'Newly Published Question?',
+                'answer' => 'Newly Published Answer.',
+                'sort_order' => 1,
+                'active' => true,
+            ])
+            ->assertRedirect();
+
+        $faq->refresh();
+        $this->assertSame('Newly Published Question?', $faq->question);
+        $this->assertSame('Newly Published Answer.', $faq->answer);
+
+        $this->get(route('faq'))
+            ->assertOk()
+            ->assertSee('Newly Published Question?');
+    }
+
     public function test_preview_routes_reject_unauthenticated_guests_even_with_fake_parameters(): void
     {
         $resource = Resource::create([
