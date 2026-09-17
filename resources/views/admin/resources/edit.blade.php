@@ -25,7 +25,7 @@
     $valSortOrder = old('sort_order', $draftContent['sort_order'] ?? $resource->sort_order);
     $valDescription = old('description', $draftContent['short_description'] ?? $resource->short_description ?? $resource->description);
     $valIsGated = old('is_gated', isset($draftContent['is_gated']) ? ($draftContent['is_gated'] ? '1' : '0') : ($resource->is_gated ? '1' : '0'));
-    $valStatus = old('status', $hasDraft ? 'draft' : $resource->status);
+    $valStatus = old('status', $resource->status);
     $valCover = old('cover_image_path', $draftContent['cover_image_path'] ?? $resource->cover_image_path);
     $activeFile = $draftContent['file_path'] ?? $resource->file_path;
 @endphp

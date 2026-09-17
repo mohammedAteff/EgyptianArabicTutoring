@@ -21,7 +21,7 @@
     $valBadge = old('badge', $draftRevision?->content['badge'] ?? $game->badge);
     $valTargetUrl = old('target_url', $draftRevision?->content['target_url'] ?? $game->target_url);
     $valThumbnailPath = old('thumbnail_path', $draftRevision?->content['thumbnail_path'] ?? $game->thumbnail_path);
-    $valStatus = old('status', $draftRevision?->content['status'] ?? $game->status);
+    $valStatus = old('status', $game->status);
     $valSortOrder = old('sort_order', $draftRevision?->content['sort_order'] ?? $game->sort_order);
 @endphp
 

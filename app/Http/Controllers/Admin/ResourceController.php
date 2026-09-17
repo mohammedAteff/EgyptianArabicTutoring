@@ -151,7 +151,11 @@ class ResourceController extends Controller
         ]);
 
         $action = $request->input('action');
-        $isDraftAction = $action === 'draft' || ($resource->status === 'published' && $validated['status'] === 'draft');
+        $isDraftAction = $action === 'draft' || ($action !== 'publish' && $resource->status === 'published' && $validated['status'] === 'draft');
+
+        if ($action === 'publish') {
+            $validated['status'] = 'published';
+        }
 
         $description = $validated['description'] ?? $validated['short_description'] ?? null;
         $slug = Str::slug($validated['slug']);
@@ -173,29 +177,29 @@ class ResourceController extends Controller
         }
 
         $oldFilePath = $resource->file_path;
-        $newFilePath = null;
+        $newlyUploadedFilePath = null;
         $oldCoverPath = $resource->cover_image_path;
-        $newCoverPath = null;
+        $newlyUploadedCoverPath = null;
 
         if ($request->hasFile('file')) {
             $uploaded = $request->file('file');
             $ext = $uploaded->getClientOriginalExtension() ?: $validated['file_type'];
             $fileName = $slug.'-'.Str::random(10).'.'.$ext;
             try {
-                $newFilePath = $uploaded->storeAs('resources', $fileName, 'local');
+                $newlyUploadedFilePath = $uploaded->storeAs('resources', $fileName, 'local');
             } catch (\Throwable $e) {
                 return back()->withInput()->with('error', 'File upload failed: '.$e->getMessage());
             }
 
-            if (! $newFilePath || ! Storage::disk('local')->exists($newFilePath)) {
-                if ($newFilePath && Storage::disk('local')->exists($newFilePath)) {
-                    Storage::disk('local')->delete($newFilePath);
+            if (! $newlyUploadedFilePath || ! Storage::disk('local')->exists($newlyUploadedFilePath)) {
+                if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
+                    Storage::disk('local')->delete($newlyUploadedFilePath);
                 }
 
                 return back()->withInput()->with('error', 'Failed to store resource file.');
             }
 
-            $updates['file_path'] = $newFilePath;
+            $updates['file_path'] = $newlyUploadedFilePath;
             $updates['file_size'] = $uploaded->getSize();
         }
 
@@ -204,32 +208,32 @@ class ResourceController extends Controller
             $coverExt = $coverUploaded->getClientOriginalExtension();
             $coverName = Str::random(32).'.'.$coverExt;
             try {
-                $newCoverPath = $coverUploaded->storeAs('media', $coverName, 'public');
+                $newlyUploadedCoverPath = $coverUploaded->storeAs('media', $coverName, 'public');
             } catch (\Throwable $e) {
-                if ($newFilePath && Storage::disk('local')->exists($newFilePath)) {
-                    Storage::disk('local')->delete($newFilePath);
+                if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
+                    Storage::disk('local')->delete($newlyUploadedFilePath);
                 }
 
                 return back()->withInput()->with('error', 'Cover image upload failed: '.$e->getMessage());
             }
 
-            if (! $newCoverPath || ! Storage::disk('public')->exists($newCoverPath)) {
-                if ($newFilePath && Storage::disk('local')->exists($newFilePath)) {
-                    Storage::disk('local')->delete($newFilePath);
+            if (! $newlyUploadedCoverPath || ! Storage::disk('public')->exists($newlyUploadedCoverPath)) {
+                if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
+                    Storage::disk('local')->delete($newlyUploadedFilePath);
                 }
 
                 return back()->withInput()->with('error', 'Failed to store cover image.');
             }
 
-            $updates['cover_image_path'] = $newCoverPath;
+            $updates['cover_image_path'] = $newlyUploadedCoverPath;
         }
 
         $existingDraft = $resource->revisions()->where('status', 'draft')->latest('id')->first();
 
         if ($isDraftAction && $resource->status === 'published') {
-            $draftFilePath = $newFilePath ?? $existingDraft?->content['file_path'] ?? $resource->file_path;
+            $draftFilePath = $newlyUploadedFilePath ?? $existingDraft?->content['file_path'] ?? $resource->file_path;
             $draftFileSize = $request->hasFile('file') ? $request->file('file')->getSize() : ($existingDraft?->content['file_size'] ?? $resource->file_size);
-            $draftCoverPath = $newCoverPath ?? $existingDraft?->content['cover_image_path'] ?? $resource->cover_image_path;
+            $draftCoverPath = $newlyUploadedCoverPath ?? $existingDraft?->content['cover_image_path'] ?? $resource->cover_image_path;
 
             $nextRevision = ($resource->revisions()->max('revision_number') ?? 0) + 1;
             ContentRevision::create([
@@ -269,30 +273,33 @@ class ResourceController extends Controller
                 ->with('success', "Draft revision #{$nextRevision} saved. The live published resource remains unchanged.");
         }
 
+        $effectiveReplacementFilePath = $newlyUploadedFilePath;
+        $effectiveReplacementCoverPath = $newlyUploadedCoverPath;
+
         if ($action === 'publish' || $validated['status'] === 'published') {
             $updates['status'] = 'published';
             if (! $resource->published_at) {
                 $updates['published_at'] = now();
             }
-            if (! $newFilePath && $existingDraft && ! empty($existingDraft->content['file_path']) && $existingDraft->content['file_path'] !== $resource->file_path) {
+            if (! $effectiveReplacementFilePath && $existingDraft && ! empty($existingDraft->content['file_path']) && $existingDraft->content['file_path'] !== $resource->file_path) {
                 $updates['file_path'] = $existingDraft->content['file_path'];
                 $updates['file_size'] = $existingDraft->content['file_size'] ?? $resource->file_size;
-                $newFilePath = $existingDraft->content['file_path'];
+                $effectiveReplacementFilePath = $existingDraft->content['file_path'];
             }
-            if (! $newCoverPath && $existingDraft && ! empty($existingDraft->content['cover_image_path']) && $existingDraft->content['cover_image_path'] !== $resource->cover_image_path) {
+            if (! $effectiveReplacementCoverPath && $existingDraft && ! empty($existingDraft->content['cover_image_path']) && $existingDraft->content['cover_image_path'] !== $resource->cover_image_path) {
                 $updates['cover_image_path'] = $existingDraft->content['cover_image_path'];
-                $newCoverPath = $existingDraft->content['cover_image_path'];
+                $effectiveReplacementCoverPath = $existingDraft->content['cover_image_path'];
             }
         }
 
         try {
-            DB::transaction(function () use ($resource, $updates, $request, $newCoverPath, $validated) {
-                if ($request->hasFile('cover_file') && $newCoverPath) {
+            DB::transaction(function () use ($resource, $updates, $request, $newlyUploadedCoverPath, $validated) {
+                if ($request->hasFile('cover_file') && $newlyUploadedCoverPath) {
                     $coverUploaded = $request->file('cover_file');
                     Media::create([
                         'filename' => $coverUploaded->getClientOriginalName(),
                         'disk' => 'public',
-                        'path' => $newCoverPath,
+                        'path' => $newlyUploadedCoverPath,
                         'mime_type' => $coverUploaded->getMimeType(),
                         'file_size' => $coverUploaded->getSize(),
                         'alt_text' => $validated['title'].' Cover',
@@ -337,25 +344,25 @@ class ResourceController extends Controller
                 ]);
             });
         } catch (\Throwable $e) {
-            if ($newFilePath && Storage::disk('local')->exists($newFilePath)) {
-                Storage::disk('local')->delete($newFilePath);
+            if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
+                Storage::disk('local')->delete($newlyUploadedFilePath);
             }
-            if ($newCoverPath && Storage::disk('public')->exists($newCoverPath)) {
-                Storage::disk('public')->delete($newCoverPath);
+            if ($newlyUploadedCoverPath && Storage::disk('public')->exists($newlyUploadedCoverPath)) {
+                Storage::disk('public')->delete($newlyUploadedCoverPath);
             }
 
             return back()->withInput()->with('error', 'Failed to update resource: '.$e->getMessage());
         }
 
         // Retire old files only after commit and only if unreferenced elsewhere
-        if ($newFilePath && $oldFilePath && $oldFilePath !== $newFilePath) {
+        if ($effectiveReplacementFilePath && $oldFilePath && $oldFilePath !== $effectiveReplacementFilePath) {
             $isReferencedElsewhere = Media::isPathReferenced($oldFilePath, $resource->id);
             if (! $isReferencedElsewhere && Storage::disk('local')->exists($oldFilePath)) {
                 Storage::disk('local')->delete($oldFilePath);
             }
         }
 
-        if ($newCoverPath && $oldCoverPath && $oldCoverPath !== $newCoverPath) {
+        if ($effectiveReplacementCoverPath && $oldCoverPath && $oldCoverPath !== $effectiveReplacementCoverPath) {
             $isCoverReferencedElsewhere = Media::isPathReferenced($oldCoverPath, $resource->id);
             if (! $isCoverReferencedElsewhere && Storage::disk('public')->exists($oldCoverPath)) {
                 Storage::disk('public')->delete($oldCoverPath);

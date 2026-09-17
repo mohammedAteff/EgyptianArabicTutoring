@@ -119,7 +119,11 @@ class GameController extends Controller
         $validated['featured'] = $request->boolean('featured', false);
 
         $action = $request->input('action');
-        $isDraftAction = $action === 'draft' || ($game->status === 'available' && $validated['status'] === 'draft');
+        $isDraftAction = $action === 'draft' || ($action !== 'publish' && in_array($game->status, ['available', 'coming_soon'], true) && $validated['status'] === 'draft');
+
+        if ($action === 'publish') {
+            $validated['status'] = 'available';
+        }
 
         if ($isDraftAction && in_array($game->status, ['available', 'coming_soon'], true)) {
             $nextRevision = ($game->revisions()->max('revision_number') ?? 0) + 1;

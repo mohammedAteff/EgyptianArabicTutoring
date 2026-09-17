@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\Games\Models\Game;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CmsDraftAndPreviewMatrixTest extends TestCase
@@ -235,7 +238,7 @@ class CmsDraftAndPreviewMatrixTest extends TestCase
                 'category_id' => $this->category->id,
                 'short_description' => 'Final approved draft description',
                 'file_type' => 'pdf',
-                'status' => 'published',
+                'status' => 'draft', // Real browser payload: form sends status=draft with action=publish
             ])
             ->assertRedirect(route('admin.resources.index'));
 
@@ -316,7 +319,7 @@ class CmsDraftAndPreviewMatrixTest extends TestCase
                 'slug' => 'live-game-title',
                 'description' => 'Published game description',
                 'badge' => 'Intermediate',
-                'status' => 'available',
+                'status' => 'draft', // Real browser payload: form sends status=draft with action=publish
                 'sort_order' => 1,
             ])
             ->assertRedirect(route('admin.games.index'));
@@ -433,5 +436,135 @@ class CmsDraftAndPreviewMatrixTest extends TestCase
         $this->get(route('faq.preview'))->assertForbidden();
         $this->get(route('home.preview'))->assertForbidden();
         $this->get(route('about.preview'))->assertForbidden();
+    }
+
+    public function test_failed_draft_publication_does_not_delete_pre_existing_draft_files(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        Storage::disk('local')->put('resources/live-original.pdf', 'Live original file content');
+        $resource = Resource::create([
+            'title' => 'Original Resource',
+            'slug' => 'original-resource',
+            'category_id' => $this->category->id,
+            'file_type' => 'pdf',
+            'file_path' => 'resources/live-original.pdf',
+            'file_size' => 25,
+            'status' => 'published',
+            'published_at' => now()->subDay(),
+        ]);
+
+        Storage::disk('local')->put('resources/draft-file-pending.pdf', 'Draft file content bytes');
+        $draftRevision = ContentRevision::create([
+            'revisable_type' => Resource::class,
+            'revisable_id' => $resource->id,
+            'revision_number' => 1,
+            'title' => 'Pending Draft Resource',
+            'content' => [
+                'slug' => 'original-resource',
+                'category_id' => $this->category->id,
+                'short_description' => 'Draft description',
+                'file_type' => 'pdf',
+                'file_path' => 'resources/draft-file-pending.pdf',
+                'file_size' => 25,
+                'status' => 'draft',
+            ],
+            'created_by_id' => $this->admin->id,
+            'status' => 'draft',
+        ]);
+
+        // Trigger a database failure during update by registering a failing saving event
+        Resource::saving(function ($model) {
+            if ($model->title === 'Failing Title Trigger') {
+                throw new \RuntimeException('Simulated database crash during publication');
+            }
+        });
+
+        // Submit publish request without uploading a new file (carrying over the draft file)
+        $response = $this->actingAs($this->admin, 'web')
+            ->put(route('admin.resources.update', $resource), [
+                'action' => 'publish',
+                'title' => 'Failing Title Trigger',
+                'slug' => 'original-resource',
+                'category_id' => $this->category->id,
+                'file_type' => 'pdf',
+                'status' => 'draft',
+            ]);
+
+        $response->assertSessionHas('error');
+
+        // CRITICAL ASSERTION: The pre-existing draft file must NOT be deleted by the catch block!
+        $this->assertTrue(
+            Storage::disk('local')->exists('resources/draft-file-pending.pdf'),
+            'Failed draft publication deleted the pre-existing draft file!'
+        );
+
+        // The live file must also remain intact
+        $this->assertTrue(Storage::disk('local')->exists('resources/live-original.pdf'));
+
+        // The draft revision must still be intact in the database
+        $this->assertDatabaseHas('content_revisions', [
+            'id' => $draftRevision->id,
+            'status' => 'draft',
+        ]);
+    }
+
+    public function test_failed_update_deletes_newly_uploaded_file_but_preserves_pre_existing_draft_file(): void
+    {
+        Storage::fake('local');
+
+        Storage::disk('local')->put('resources/draft-existing.pdf', 'Draft content bytes');
+        $resource = Resource::create([
+            'title' => 'Original Resource',
+            'slug' => 'original-resource',
+            'category_id' => $this->category->id,
+            'file_type' => 'pdf',
+            'file_path' => 'resources/live.pdf',
+            'status' => 'published',
+        ]);
+
+        ContentRevision::create([
+            'revisable_type' => Resource::class,
+            'revisable_id' => $resource->id,
+            'revision_number' => 1,
+            'title' => 'Draft with file',
+            'content' => [
+                'slug' => 'original-resource',
+                'category_id' => $this->category->id,
+                'file_type' => 'pdf',
+                'file_path' => 'resources/draft-existing.pdf',
+                'status' => 'draft',
+            ],
+            'created_by_id' => $this->admin->id,
+            'status' => 'draft',
+        ]);
+
+        Resource::saving(function ($model) {
+            if ($model->title === 'Failing Upload Trigger') {
+                throw new \RuntimeException('Simulated failure during save');
+            }
+        });
+
+        $newUploadedFile = UploadedFile::fake()->create('brand-new-upload.pdf', 50, 'application/pdf');
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->put(route('admin.resources.update', $resource), [
+                'action' => 'publish',
+                'title' => 'Failing Upload Trigger',
+                'slug' => 'original-resource',
+                'category_id' => $this->category->id,
+                'file_type' => 'pdf',
+                'status' => 'draft',
+                'file' => $newUploadedFile,
+            ]);
+
+        $response->assertSessionHas('error');
+
+        // Pre-existing draft file remains intact on disk
+        $this->assertTrue(
+            Storage::disk('local')->exists('resources/draft-existing.pdf'),
+            'Pre-existing draft file was deleted on failed update!'
+        );
     }
 }
