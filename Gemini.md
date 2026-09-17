@@ -2,9 +2,9 @@
 
 This is a living remediation prompt and issue ledger for the Laravel project in this directory. Do not delete this instruction block. After every analysis or implementation pass, update this file as described in **Living Update Protocol**.
 
-## Latest Independent Approval Decision — 2026-09-18 02:25 Africa/Cairo
+## Latest Independent Approval Decision — 2026-09-18 02:30 Africa/Cairo
 
-**APPROVED for production release and specification-complete sign-off.** All 16 HIGH issues (G-01 through G-16) are verified fixed. The full PHPUnit suite (244 tests, 1,293 assertions) passes on MariaDB/InnoDB in 54.7s under Herd PHP 8.4.25, production frontend build completes cleanly in 2.9s, all 16 migrations are ran, 5 scheduled tasks are registered, and code formatting passes Laravel Pint. G-10's resource draft publishing handles browser payloads with `action=publish, status=draft` seamlessly, and G-14 separates current-request uploads from pre-existing draft assets, ensuring failed transactions never delete draft files.
+**APPROVED for production release and specification-complete sign-off.** An independent re-audit of commit `f85b677` found no remaining CRITICAL or HIGH issue and no missing required module. All 16 HIGH issues (G-01 through G-16) are verified fixed. The independently executed full PHPUnit suite passes with 244 tests and 1,293 assertions on MariaDB/InnoDB; the production frontend build succeeds; all 16 migrations report as run; and all 5 required scheduled tasks are registered. G-10 now treats the submitted publish action as authoritative for the real browser payload, and G-14 now distinguishes current-request uploads from pre-existing draft assets so rollback cleanup does not delete saved draft files.
 
 ## Mission
 
@@ -482,6 +482,17 @@ After **any new analysis**, whether or not code was changed:
 - Verification details for resolved HIGH issues from 02:19 audit:
   - **G-10 (Authoritative Browser Payload Draft Publishing)**: In `Admin\ResourceController::update()` and `Admin\GameController::update()`, made `action=publish` authoritative regardless of `<select name="status">` submitting `draft` from the edit form. The controller sets target status to published/available and bypasses the draft creation branch. Pre-populated `$valStatus` defaults to live model status rather than hardcoded draft. Tested with real browser payload `action=publish, status=draft` in `test_resource_draft_to_publish_workflow_and_discard()` and `test_game_draft_to_publish_workflow_and_discard()` (`CmsDraftAndPreviewMatrixTest`).
   - **G-14 (Draft Asset Preservation on Transaction Failure)**: In `Admin\ResourceController::update()`, separated current-request uploads (`$newlyUploadedFilePath`, `$newlyUploadedCoverPath`) from pre-existing draft carryover paths (`$effectiveReplacementFilePath`, `$effectiveReplacementCoverPath`). The catch block purges only current-request uploads on failure, preserving pre-existing draft files and cover bytes on disk and keeping draft revisions intact. Verified with `test_failed_draft_publication_does_not_delete_pre_existing_draft_files()` and `test_failed_update_deletes_newly_uploaded_file_but_preserves_pre_existing_draft_file()` (`CmsDraftAndPreviewMatrixTest`).
+
+### Codex Independent Re-audit — 2026-09-18 02:30 Africa/Cairo
+
+- Decision: **APPROVED** at commit `f85b677`. No CRITICAL or HIGH issue remains, and no required module is missing based on the current specification, implementation, and release gates.
+- Full PHPUnit suite independently executed: **PASS** — 244 tests, 1,293 assertions, 0 failures in 50.57 seconds on MariaDB/InnoDB using Herd PHP 8.4.
+- Production frontend build independently executed: **PASS** — Vite 8.3.0 completed in 3.68 seconds with no build error. The optional `fontaine` optimization and plugin-timing notices are non-blocking.
+- Migration state independently checked: **PASS** — all 16 migrations report as run.
+- Scheduler registration independently checked: **PASS** — `scheduler-heartbeat`, hold cleanup, analytics aggregation/pruning, backup/cleanup, and session cleanup are registered. Production-host execution still depends on deployment configuration and monitoring.
+- G-10 independently inspected: `Admin\ResourceController::update()` and `Admin\GameController::update()` make `action=publish` authoritative; the regression tests now submit the former real-browser payload `action=publish,status=draft` and assert live publication plus draft archival.
+- G-14 independently inspected: `Admin\ResourceController::update()` uses separate newly-uploaded and effective carryover paths; exception cleanup deletes only files uploaded by the failing request. Regression tests cover preservation of pre-existing draft files and cleanup behavior after forced transaction failure.
+- Repository was clean before this documentation update. This re-audit changed `Gemini.md` only; it did not modify application code, tests, dependencies, or environment configuration.
 
 ## Completion Standard
 
