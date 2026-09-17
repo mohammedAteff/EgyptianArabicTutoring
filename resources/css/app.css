@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../views/**/*.blade.php';
+
+@theme {
+    --font-sans: 'Plus Jakarta Sans', 'Cairo', ui-sans-serif, system-ui, sans-serif;
+    --font-cairo: 'Cairo', ui-sans-serif, system-ui, sans-serif;
+
+    --color-terracotta-50: #fbf6f3;
+    --color-terracotta-100: #f6ebe5;
+    --color-terracotta-500: #c85a32;
+    --color-terracotta-600: #b24c27;
+    --color-terracotta-700: #943d1f;
+
+    --color-nile-50: #f0f7f8;
+    --color-nile-100: #dceef0;
+    --color-nile-600: #1b535d;
+    --color-nile-700: #16434b;
+    --color-nile-800: #12373e;
+    --color-nile-900: #0e2a30;
+}

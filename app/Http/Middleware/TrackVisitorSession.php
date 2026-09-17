@@ -1,0 +1,186 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Domains\Analytics\Models\Visitor;
+use App\Domains\Analytics\Models\VisitorSession;
+use App\Domains\Analytics\Services\AnalyticsService;
+use Carbon\CarbonImmutable;
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
+
+class TrackVisitorSession
+{
+    public function __construct(
+        protected AnalyticsService $analyticsService
+    ) {}
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        if ($this->shouldSkip($request)) {
+            return $next($request);
+        }
+
+        $visitorCookieName = '_va_visitor';
+        $sessionCookieName = '_va_session';
+        $sessionTimeoutMinutes = 30;
+
+        $newVisitorCookie = null;
+        $newSessionCookie = null;
+
+        try {
+            $userAgent = (string) $request->header('User-Agent', '');
+            $isBot = $this->detectBot($userAgent);
+
+            // 1. Identify or initialize Visitor
+            $visitorToken = $request->cookie($visitorCookieName);
+            if (! $visitorToken || ! Str::isUuid($visitorToken)) {
+                $visitorToken = (string) Str::uuid();
+                $newVisitorCookie = cookie($visitorCookieName, $visitorToken, 60 * 24 * 365, '/', null, false, false, false, 'Lax');
+            }
+
+            $deviceType = $this->detectDevice($userAgent);
+
+            $visitor = Visitor::firstOrCreate(
+                ['visitor_token' => $visitorToken],
+                [
+                    'first_seen_at' => now(),
+                    'last_seen_at' => now(),
+                    'device_type' => $deviceType,
+                    'user_agent' => substr($userAgent, 0, 500),
+                    'is_bot' => $isBot,
+                ]
+            );
+
+            if (! $visitor->wasRecentlyCreated) {
+                $visitor->update(['last_seen_at' => now()]);
+            }
+
+            // 2. Identify or initialize Session
+            $sessionToken = $request->cookie($sessionCookieName);
+            $session = null;
+
+            if ($sessionToken) {
+                $session = VisitorSession::where('session_token', $sessionToken)->first();
+            }
+
+            $now = CarbonImmutable::now();
+            $shouldStartNewSession = false;
+
+            if (! $session) {
+                $shouldStartNewSession = true;
+            } elseif ($now->diffInMinutes($session->last_activity_at) > $sessionTimeoutMinutes) {
+                $shouldStartNewSession = true;
+            }
+
+            if ($shouldStartNewSession) {
+                $sessionToken = (string) Str::uuid();
+                $session = VisitorSession::create([
+                    'session_token' => $sessionToken,
+                    'visitor_id' => $visitor->id,
+                    'started_at' => now(),
+                    'last_activity_at' => now(),
+                    'utm_source' => $request->query('utm_source'),
+                    'utm_medium' => $request->query('utm_medium'),
+                    'utm_campaign' => $request->query('utm_campaign'),
+                    'utm_content' => $request->query('utm_content'),
+                    'utm_term' => $request->query('utm_term'),
+                    'referrer' => substr((string) $request->header('referer', ''), 0, 500) ?: null,
+                    'landing_page' => substr($request->fullUrl(), 0, 255),
+                    'is_bot' => $isBot,
+                ]);
+
+                $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, false, false, false, 'Lax');
+            } else {
+                $session->update(['last_activity_at' => now()]);
+            }
+
+            $request->attributes->set('analytics_visitor_token', $visitorToken);
+            $request->attributes->set('analytics_session_token', $sessionToken);
+            $request->attributes->set('analytics_is_bot', $isBot);
+
+            if ($request->hasSession()) {
+                $sessionStore = $request->session();
+                $sessionStore->put('analytics_visitor_token', $visitorToken);
+                $sessionStore->put('analytics_session_token', $sessionToken);
+
+                $utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+                foreach ($utmParams as $param) {
+                    if ($request->query($param)) {
+                        $sessionStore->put($param, (string) $request->query($param));
+                    } elseif (! $sessionStore->has($param) && $session && $session->{$param}) {
+                        $sessionStore->put($param, (string) $session->{$param});
+                    }
+                }
+            }
+
+            if ($request->isMethod('GET') && ! $request->ajax() && ! $request->prefetch()) {
+                $this->analyticsService->track(
+                    eventName: 'page_view',
+                    metadata: [],
+                    request: $request,
+                    visitorToken: $visitorToken,
+                    sessionToken: $sessionToken
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('TrackVisitorSession middleware error: '.$e->getMessage());
+        }
+
+        $response = $next($request);
+
+        if ($newVisitorCookie) {
+            if (method_exists($response, 'withCookie')) {
+                $response->withCookie($newVisitorCookie);
+            } else {
+                $response->headers->setCookie($newVisitorCookie);
+            }
+        }
+        if ($newSessionCookie) {
+            if (method_exists($response, 'withCookie')) {
+                $response->withCookie($newSessionCookie);
+            } else {
+                $response->headers->setCookie($newSessionCookie);
+            }
+        }
+
+        return $response;
+    }
+
+    protected function shouldSkip(Request $request): bool
+    {
+        return $request->is('admin*')
+            || $request->is('livewire*')
+            || $request->is('up')
+            || $request->is('build*')
+            || $request->is('assets*')
+            || $request->is('favicon.ico')
+            || $request->is('robots.txt');
+    }
+
+    protected function detectBot(string $userAgent): bool
+    {
+        if (trim($userAgent) === '' || strlen($userAgent) < 5) {
+            return true;
+        }
+
+        $pattern = '/bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegrambot|slackbot|discordbot|twitterbot|pinterest|googlebot|bingbot|yandex|baiduspider|duckduckbot|ahrefs|semrush|petalbot|bytespider|applebot|curl|wget|python-requests|headlesschrome/i';
+
+        return (bool) preg_match($pattern, $userAgent);
+    }
+
+    protected function detectDevice(string $userAgent): string
+    {
+        if (preg_match('/mobile|android|iphone|ipod/i', $userAgent)) {
+            return 'mobile';
+        }
+        if (preg_match('/tablet|ipad/i', $userAgent)) {
+            return 'tablet';
+        }
+
+        return 'desktop';
+    }
+}
