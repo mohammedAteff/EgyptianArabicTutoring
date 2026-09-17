@@ -99,6 +99,21 @@ class PageController extends Controller
         ]);
     }
 
+    public function previewFaq(Request $request): View
+    {
+        if (! Auth::guard('web')->check()) {
+            abort(403, 'Preview requires administrator authentication.');
+        }
+
+        $faqs = Faq::query()->orderBy('sort_order')->get();
+
+        return view('public.faq', [
+            'faqs' => $faqs,
+            'title' => '[PREVIEW] Frequently Asked Questions',
+            'isPreview' => true,
+        ]);
+    }
+
     public function terms(): View
     {
         return view('public.terms', [

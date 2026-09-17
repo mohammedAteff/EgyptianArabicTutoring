@@ -12,7 +12,6 @@ use App\Domains\Games\Models\Game;
 use App\Domains\Resources\Models\ResourceCategory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -21,25 +20,32 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Initial Super Administrator (Secure environment-based or randomized in production)
+        // 1. Initial Super Administrator (Non-destructive & secret-safe)
+        // Never update or overwrite existing administrator credentials during seeding!
         $adminEmail = env('ADMIN_DEFAULT_EMAIL', 'admin@boltlanding.test');
         $adminPassword = env('ADMIN_DEFAULT_PASSWORD');
 
-        if (! $adminPassword) {
-            $adminPassword = app()->isProduction() ? Str::random(24) : 'Password123!';
+        if (! Administrator::where('email', $adminEmail)->exists() && Administrator::count() === 0) {
             if (app()->isProduction()) {
-                $this->command?->warn("Generated random super admin password for {$adminEmail}: {$adminPassword}");
+                if ($adminPassword) {
+                    Administrator::create([
+                        'email' => $adminEmail,
+                        'name' => 'Tutor Admin',
+                        'password' => Hash::make($adminPassword),
+                        'role' => 'super_admin',
+                    ]);
+                } else {
+                    $this->command?->info("Production environment: No administrator provisioned. Run 'php artisan admin:create' to provision an initial administrator.");
+                }
+            } else {
+                Administrator::create([
+                    'email' => $adminEmail,
+                    'name' => 'Tutor Admin',
+                    'password' => Hash::make($adminPassword ?: 'Password123!'),
+                    'role' => 'super_admin',
+                ]);
             }
         }
-
-        Administrator::updateOrCreate(
-            ['email' => $adminEmail],
-            [
-                'name' => 'Tutor Admin',
-                'password' => Hash::make($adminPassword),
-                'role' => 'super_admin',
-            ]
-        );
 
         // 2. Initial Active Session Type
         SessionType::updateOrCreate(

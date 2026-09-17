@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Media;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
@@ -147,6 +148,9 @@ class ResourceController extends Controller
             'cover_file' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:10240'],
         ]);
 
+        $action = $request->input('action');
+        $isDraftAction = $action === 'draft' || ($resource->status === 'published' && $validated['status'] === 'draft');
+
         $description = $validated['description'] ?? $validated['short_description'] ?? null;
         $slug = Str::slug($validated['slug']);
 
@@ -218,6 +222,45 @@ class ResourceController extends Controller
             $updates['cover_image_path'] = $newCoverPath;
         }
 
+        if ($isDraftAction && $resource->status === 'published') {
+            $nextRevision = ($resource->revisions()->max('revision_number') ?? 0) + 1;
+            ContentRevision::create([
+                'revisable_type' => Resource::class,
+                'revisable_id' => $resource->id,
+                'revision_number' => $nextRevision,
+                'title' => $validated['title'],
+                'content' => [
+                    'slug' => $slug,
+                    'category_id' => $validated['category_id'],
+                    'short_description' => $description,
+                    'file_type' => $validated['file_type'],
+                    'file_path' => $newFilePath ?? $resource->file_path,
+                    'file_size' => $request->hasFile('file') ? $request->file('file')->getSize() : $resource->file_size,
+                    'cover_image_path' => $newCoverPath ?? $resource->cover_image_path,
+                    'is_gated' => $request->boolean('is_gated', true),
+                    'featured' => $request->boolean('featured'),
+                    'sort_order' => $validated['sort_order'] ?? 0,
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => 'draft',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'resource_draft_saved',
+                'entity_type' => Resource::class,
+                'entity_id' => $resource->id,
+                'new_data' => [
+                    'revision_number' => $nextRevision,
+                    'title' => $validated['title'],
+                ],
+                'created_at' => now(),
+            ]);
+
+            return redirect()->route('admin.resources.edit', $resource)
+                ->with('success', "Draft revision #{$nextRevision} saved. The live published resource remains unchanged.");
+        }
+
         if ($validated['status'] === 'published' && ! $resource->published_at) {
             $updates['published_at'] = now();
         }
@@ -238,6 +281,28 @@ class ResourceController extends Controller
 
                 $prev = $resource->toArray();
                 $resource->update($updates);
+
+                $nextRevision = ($resource->revisions()->max('revision_number') ?? 0) + 1;
+                ContentRevision::create([
+                    'revisable_type' => Resource::class,
+                    'revisable_id' => $resource->id,
+                    'revision_number' => $nextRevision,
+                    'title' => $resource->title,
+                    'content' => [
+                        'slug' => $resource->slug,
+                        'category_id' => $resource->category_id,
+                        'short_description' => $resource->short_description,
+                        'file_type' => $resource->file_type,
+                        'file_path' => $resource->file_path,
+                        'file_size' => $resource->file_size,
+                        'cover_image_path' => $resource->cover_image_path,
+                        'is_gated' => $resource->is_gated,
+                        'featured' => $resource->featured,
+                        'sort_order' => $resource->sort_order,
+                    ],
+                    'created_by_id' => Auth::id(),
+                    'status' => $resource->status === 'published' ? 'published' : 'draft',
+                ]);
 
                 AuditLog::create([
                     'administrator_id' => Auth::id(),
@@ -262,18 +327,14 @@ class ResourceController extends Controller
 
         // Retire old files only after commit and only if unreferenced elsewhere
         if ($newFilePath && $oldFilePath && $oldFilePath !== $newFilePath) {
-            $isReferencedElsewhere = Resource::where('id', '!=', $resource->id)
-                ->where('file_path', $oldFilePath)
-                ->exists();
+            $isReferencedElsewhere = Media::isPathReferenced($oldFilePath, $resource->id);
             if (! $isReferencedElsewhere && Storage::disk('local')->exists($oldFilePath)) {
                 Storage::disk('local')->delete($oldFilePath);
             }
         }
 
         if ($newCoverPath && $oldCoverPath && $oldCoverPath !== $newCoverPath) {
-            $isCoverReferencedElsewhere = Resource::where('id', '!=', $resource->id)
-                ->where('cover_image_path', $oldCoverPath)
-                ->exists();
+            $isCoverReferencedElsewhere = Media::isPathReferenced($oldCoverPath, $resource->id);
             if (! $isCoverReferencedElsewhere && Storage::disk('public')->exists($oldCoverPath)) {
                 Storage::disk('public')->delete($oldCoverPath);
             }

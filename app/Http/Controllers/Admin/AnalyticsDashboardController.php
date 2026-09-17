@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\CMS\Models\Setting;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -28,8 +29,9 @@ class AnalyticsDashboardController extends Controller
         };
         $endDate = $now->endOfDay();
 
-        $activeVisitorsCount = $this->analyticsService->getActiveVisitorsCount(5);
-        $activeVisitors = $this->analyticsService->getActiveVisitorsSummary(5);
+        $windowMinutes = (int) Setting::get('active_visitor_window', 5);
+        $activeVisitorsCount = $this->analyticsService->getActiveVisitorsCount($windowMinutes);
+        $activeVisitors = $this->analyticsService->getActiveVisitorsSummary($windowMinutes);
         $primaryFunnel = $this->analyticsService->getPrimaryBookingFunnel($startDate, $endDate);
         $resourceFunnel = $this->analyticsService->getResourceFunnel($startDate, $endDate);
         $gameFunnel = $this->analyticsService->getGameFunnel($startDate, $endDate);

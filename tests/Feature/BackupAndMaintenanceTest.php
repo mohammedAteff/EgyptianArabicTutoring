@@ -10,6 +10,7 @@ use App\Domains\System\Services\BackupService;
 use Exception;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -578,5 +579,49 @@ class BackupAndMaintenanceTest extends TestCase
 
         // Clean up
         $backupService->deleteBackup(basename($backupPath));
+    }
+
+    public function test_system_health_controller_warns_on_unconfigured_or_local_offsite_backup_and_fails_on_replication_error(): void
+    {
+        // 1. Warning when offsite disk is local or empty
+        config(['filesystems.backup_disk' => 'local']);
+        Setting::set('last_offsite_backup_status', null, 'system');
+        Setting::set('last_backup_status', 'success', 'system');
+        Setting::set('last_backup_at', now()->toIso8601String(), 'system');
+
+        $response = $this->actingAs($this->superAdmin, 'web')
+            ->get(route('admin.health'));
+        $response->assertOk();
+        $response->assertViewHas('backupStatus', 'warning');
+        $this->assertStringContainsString('Off-host backup unconfigured or set to local disk', $response->getContent());
+
+        // 2. Unhealthy when offsite replication failed
+        Setting::set('last_offsite_backup_status', 'failed: AccessDenied to S3 bucket', 'system');
+        $responseFailing = $this->actingAs($this->superAdmin, 'web')
+            ->get(route('admin.health'));
+        $responseFailing->assertOk();
+        $responseFailing->assertViewHas('backupStatus', 'unhealthy');
+        $this->assertStringContainsString('Off-host backup replication failed', $responseFailing->getContent());
+    }
+
+    public function test_system_health_controller_monitors_queue_worker_heartbeat(): void
+    {
+        // When queue driver is database and no heartbeat is recorded
+        config(['queue.default' => 'database']);
+        Cache::forget('queue_worker_heartbeat_at');
+
+        $response = $this->actingAs($this->superAdmin, 'web')
+            ->get(route('admin.health'));
+        $response->assertOk();
+        $response->assertViewHas('queueStatus', 'warning');
+        $this->assertStringContainsString('No active queue worker heartbeat detected', $response->getContent());
+
+        // When heartbeat is active
+        Cache::put('queue_worker_heartbeat_at', now('UTC')->toIso8601String(), 300);
+        $responseActive = $this->actingAs($this->superAdmin, 'web')
+            ->get(route('admin.health'));
+        $responseActive->assertOk();
+        $responseActive->assertViewHas('queueStatus', 'healthy');
+        $this->assertStringContainsString('Queue worker operational (heartbeat active)', $responseActive->getContent());
     }
 }

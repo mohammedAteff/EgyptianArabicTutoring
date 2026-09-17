@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\Games\Models\Game;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -54,6 +55,26 @@ class GameController extends Controller
 
         $game = Game::create($validated);
 
+        // Create initial revision #1
+        ContentRevision::create([
+            'revisable_type' => Game::class,
+            'revisable_id' => $game->id,
+            'revision_number' => 1,
+            'title' => $game->title,
+            'content' => [
+                'slug' => $game->slug,
+                'description' => $game->description,
+                'badge' => $game->badge,
+                'target_url' => $game->target_url,
+                'thumbnail_path' => $game->thumbnail_path,
+                'status' => $game->status,
+                'sort_order' => $game->sort_order,
+                'featured' => $game->featured,
+            ],
+            'created_by_id' => Auth::id(),
+            'status' => $game->status === 'available' ? 'published' : 'draft',
+        ]);
+
         AuditLog::create([
             'administrator_id' => Auth::id(),
             'action' => 'game_created',
@@ -94,8 +115,68 @@ class GameController extends Controller
 
         $validated['featured'] = $request->boolean('featured', false);
 
+        $action = $request->input('action');
+        $isDraftAction = $action === 'draft' || ($game->status === 'available' && $validated['status'] === 'draft');
+
+        if ($isDraftAction && in_array($game->status, ['available', 'coming_soon'], true)) {
+            $nextRevision = ($game->revisions()->max('revision_number') ?? 0) + 1;
+            ContentRevision::create([
+                'revisable_type' => Game::class,
+                'revisable_id' => $game->id,
+                'revision_number' => $nextRevision,
+                'title' => $validated['title'],
+                'content' => [
+                    'slug' => $validated['slug'] ?? $game->slug,
+                    'description' => $validated['description'] ?? null,
+                    'badge' => $validated['badge'] ?? null,
+                    'target_url' => $validated['target_url'] ?? null,
+                    'thumbnail_path' => $validated['thumbnail_path'] ?? null,
+                    'status' => 'draft',
+                    'sort_order' => $validated['sort_order'] ?? 0,
+                    'featured' => $validated['featured'] ?? false,
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => 'draft',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'game_draft_saved',
+                'entity_type' => Game::class,
+                'entity_id' => $game->id,
+                'new_data' => [
+                    'revision_number' => $nextRevision,
+                    'title' => $validated['title'],
+                ],
+                'created_at' => now(),
+            ]);
+
+            return redirect()->route('admin.games.edit', $game)
+                ->with('success', "Draft revision #{$nextRevision} saved. The live game remains untouched.");
+        }
+
         $prev = $game->toArray();
         $game->update($validated);
+
+        $nextRevision = ($game->revisions()->max('revision_number') ?? 0) + 1;
+        ContentRevision::create([
+            'revisable_type' => Game::class,
+            'revisable_id' => $game->id,
+            'revision_number' => $nextRevision,
+            'title' => $game->title,
+            'content' => [
+                'slug' => $game->slug,
+                'description' => $game->description,
+                'badge' => $game->badge,
+                'target_url' => $game->target_url,
+                'thumbnail_path' => $game->thumbnail_path,
+                'status' => $game->status,
+                'sort_order' => $game->sort_order,
+                'featured' => $game->featured,
+            ],
+            'created_by_id' => Auth::id(),
+            'status' => $game->status === 'available' ? 'published' : 'draft',
+        ]);
 
         AuditLog::create([
             'administrator_id' => Auth::id(),

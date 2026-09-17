@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Request;
@@ -26,7 +27,7 @@ class TrackVisitorSession
 
         $visitorCookieName = '_va_visitor';
         $sessionCookieName = '_va_session';
-        $sessionTimeoutMinutes = 30;
+        $sessionTimeoutMinutes = (int) Setting::get('session_timeout_minutes', 30);
 
         $newVisitorCookie = null;
         $newSessionCookie = null;
@@ -72,7 +73,7 @@ class TrackVisitorSession
 
             if (! $session) {
                 $shouldStartNewSession = true;
-            } elseif ($now->diffInMinutes($session->last_activity_at) > $sessionTimeoutMinutes) {
+            } elseif ($session->last_activity_at && $session->last_activity_at->diffInMinutes($now, true) > $sessionTimeoutMinutes) {
                 $shouldStartNewSession = true;
             }
 
@@ -96,6 +97,8 @@ class TrackVisitorSession
                 $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, false, false, false, 'Lax');
             } else {
                 $session->update(['last_activity_at' => now()]);
+                // Slide session expiration forward on active request
+                $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, false, false, false, 'Lax');
             }
 
             $request->attributes->set('analytics_visitor_token', $visitorToken);

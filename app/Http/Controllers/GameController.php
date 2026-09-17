@@ -39,13 +39,25 @@ class GameController extends Controller
             ->where('slug', $slug)
             ->firstOrFail();
 
-        if ($game->target_url) {
-            return redirect()->away($game->target_url);
+        $draftRevision = $game->revisions()->where('status', 'draft')->latest('id')->first();
+        if ($draftRevision) {
+            $previewGame = clone $game;
+            $previewGame->title = $draftRevision->title ?? $game->title;
+            $previewGame->description = $draftRevision->content['description'] ?? $game->description;
+            $previewGame->badge = $draftRevision->content['badge'] ?? $game->badge;
+            $previewGame->target_url = $draftRevision->content['target_url'] ?? $game->target_url;
+            $previewGame->thumbnail_path = $draftRevision->content['thumbnail_path'] ?? $game->thumbnail_path;
+        } else {
+            $previewGame = $game;
+        }
+
+        if ($previewGame->target_url && $request->boolean('redirect')) {
+            return redirect()->away($previewGame->target_url);
         }
 
         return view('public.games.show', [
-            'game' => $game,
-            'title' => '[PREVIEW] '.$game->title,
+            'game' => $previewGame,
+            'title' => '[PREVIEW] '.$previewGame->title,
             'isPreview' => true,
         ]);
     }

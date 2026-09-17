@@ -65,6 +65,7 @@ Route::get('/about/preview', [PageController::class, 'previewAbout'])->name('abo
 Route::get('/p/{slug}/preview', [PageController::class, 'preview'])->name('pages.preview');
 Route::get('/resources/{slug}/preview', [ResourceController::class, 'preview'])->name('resources.preview');
 Route::get('/games/{slug}/preview', [GameController::class, 'preview'])->name('games.preview');
+Route::get('/faq/preview', [PageController::class, 'previewFaq'])->name('faq.preview');
 
 // First-Party Client Analytics Ingestion
 Route::post('/analytics/event', [AnalyticsController::class, 'track'])->middleware('throttle:60,1')->name('analytics.track');

@@ -8,10 +8,14 @@
         <div>
             <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Content, FAQs & Social Channels</h1>
             <p class="text-sm text-slate-500 mt-1">Manage public frequently asked questions and official social media/WhatsApp contact channels.</p>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('faq.preview') }}" target="_blank" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors shadow-xs">
+                Preview FAQs &rarr;
+            </a>
+            <button @click="addFaqModalOpen = true" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs font-serif">
+                + Add New FAQ
+            </button>
         </div>
-        <button @click="addFaqModalOpen = true" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs font-serif">
-            + Add New FAQ
-        </button>
     </div>
 
     <!-- FAQs Management -->

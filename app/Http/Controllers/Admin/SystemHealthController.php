@@ -77,6 +77,7 @@ class SystemHealthController extends Controller
         $lastBackupStatusSetting = Setting::get('last_backup_status', 'never_run');
         $lastBackupFile = Setting::get('last_backup_file');
         $offsiteStatus = Setting::get('last_offsite_backup_status');
+        $offsiteDisk = config('filesystems.backup_disk') ?: Setting::get('backup_offsite_disk');
         $backupStatus = 'healthy';
         $backupMessage = 'Backups operational';
 
@@ -86,14 +87,18 @@ class SystemHealthController extends Controller
         } elseif (str_starts_with($lastBackupStatusSetting, 'failed')) {
             $backupStatus = 'unhealthy';
             $backupMessage = $lastBackupStatusSetting;
+        } elseif ($offsiteStatus && str_starts_with($offsiteStatus, 'failed')) {
+            $backupStatus = 'unhealthy';
+            $backupMessage = 'Off-host backup replication failed: '.substr($offsiteStatus, 8);
+        } elseif ($lastBackupAt && CarbonImmutable::parse($lastBackupAt)->isBefore(now()->subHours(36))) {
+            $backupStatus = 'warning';
+            $backupMessage = 'Last backup is over 36 hours old';
+        } elseif (empty($offsiteDisk) || $offsiteDisk === 'local') {
+            $backupStatus = 'warning';
+            $backupMessage = 'Off-host backup unconfigured or set to local disk (Section 106 requires off-host storage)';
         } elseif ($lastBackupAt) {
             $backupTime = CarbonImmutable::parse($lastBackupAt);
-            if ($backupTime->isBefore(now()->subHours(36))) {
-                $backupStatus = 'warning';
-                $backupMessage = 'Last backup is over 36 hours old';
-            } else {
-                $backupMessage = 'Last snapshot: '.$backupTime->diffForHumans();
-            }
+            $backupMessage = 'Last snapshot: '.$backupTime->diffForHumans();
         }
 
         // 5. Scheduler Heartbeat & Freshness Check
@@ -122,20 +127,51 @@ class SystemHealthController extends Controller
         $failedJobsCount = 0;
         $pendingJobsCount = 0;
         $queueStatus = 'healthy';
+        $queueDriver = config('queue.default', 'sync');
         $queueMessage = 'Queue worker operational';
 
         try {
             $failedJobsCount = DB::table('failed_jobs')->count();
-            if ($failedJobsCount > 0) {
-                $queueStatus = 'warning';
-                $queueMessage = "{$failedJobsCount} failed ".($failedJobsCount === 1 ? 'job' : 'jobs').' in queue';
-            }
         } catch (\Throwable) {
         }
 
         try {
             $pendingJobsCount = DB::table('jobs')->count();
         } catch (\Throwable) {
+        }
+
+        if ($queueDriver === 'sync') {
+            if ($failedJobsCount > 0) {
+                $queueStatus = 'warning';
+                $queueMessage = "{$failedJobsCount} failed ".($failedJobsCount === 1 ? 'job' : 'jobs').' in queue';
+            } elseif (app()->isProduction()) {
+                $queueStatus = 'warning';
+                $queueMessage = 'Sync queue driver active in production (background jobs run synchronously)';
+            } else {
+                $queueStatus = 'healthy';
+                $queueMessage = 'Sync driver active (synchronous execution)';
+            }
+        } else {
+            $workerHeartbeat = Cache::get('queue_worker_heartbeat_at');
+            if (! $workerHeartbeat && $pendingJobsCount > 0) {
+                $queueStatus = 'unhealthy';
+                $queueMessage = "Queue worker inactive with {$pendingJobsCount} pending jobs";
+            } elseif ($workerHeartbeat && CarbonImmutable::parse($workerHeartbeat)->isBefore(now()->subMinutes(5)) && $pendingJobsCount > 0) {
+                $queueStatus = 'unhealthy';
+                $queueMessage = 'Queue worker heartbeat stale with pending jobs';
+            } elseif ($failedJobsCount > 0) {
+                $queueStatus = 'warning';
+                $queueMessage = "{$failedJobsCount} failed ".($failedJobsCount === 1 ? 'job' : 'jobs').' in queue';
+            } elseif (! $workerHeartbeat) {
+                $queueStatus = 'warning';
+                $queueMessage = 'No active queue worker heartbeat detected';
+            } elseif (CarbonImmutable::parse($workerHeartbeat)->isBefore(now()->subMinutes(5))) {
+                $queueStatus = 'warning';
+                $queueMessage = 'Queue worker heartbeat stale ('.CarbonImmutable::parse($workerHeartbeat)->diffForHumans().')';
+            } else {
+                $queueStatus = 'healthy';
+                $queueMessage = 'Queue worker operational (heartbeat active)';
+            }
         }
 
         // 7. Mail Delivery Configuration

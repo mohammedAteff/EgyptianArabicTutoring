@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\DailyMetric;
+use App\Domains\Analytics\Models\Visitor;
+use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -132,6 +134,14 @@ class AggregateDailyAnalyticsCommand extends Command
 
             $deletedEvents = AnalyticsEvent::where('created_at', '<', $pruneCutoff)->delete();
             $this->info("Pruned {$deletedEvents} raw analytics events older than {$retentionDays} days.");
+
+            $deletedSessions = VisitorSession::where('created_at', '<', $pruneCutoff)->delete();
+            $this->info("Pruned {$deletedSessions} visitor sessions older than {$retentionDays} days.");
+
+            $deletedVisitors = Visitor::where('last_seen_at', '<', $pruneCutoff)
+                ->whereDoesntHave('contacts')
+                ->delete();
+            $this->info("Pruned {$deletedVisitors} inactive uncontacted visitors older than {$retentionDays} days.");
 
             $exportPath = storage_path('app/exports');
             if (File::isDirectory($exportPath)) {

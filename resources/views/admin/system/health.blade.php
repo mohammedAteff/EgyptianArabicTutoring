@@ -55,10 +55,10 @@
         <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
             <div class="flex items-center justify-between mb-3">
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Queue Worker</span>
-                <span class="w-2.5 h-2.5 rounded-full {{ $queueStatus === 'healthy' ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
+                <span class="w-2.5 h-2.5 rounded-full {{ $queueStatus === 'healthy' ? 'bg-emerald-500' : ($queueStatus === 'warning' ? 'bg-amber-500' : 'bg-red-500') }}"></span>
             </div>
             <div class="text-lg font-bold text-slate-900">Async Jobs</div>
-            <div class="text-xs font-medium {{ $queueStatus === 'healthy' ? 'text-slate-600' : 'text-amber-700' }} mt-1">
+            <div class="text-xs font-medium {{ $queueStatus === 'healthy' ? 'text-slate-600' : ($queueStatus === 'warning' ? 'text-amber-700' : 'text-red-700') }} mt-1">
                 {{ $queueMessage }}
             </div>
             <div class="text-[11px] text-slate-400 mt-2">

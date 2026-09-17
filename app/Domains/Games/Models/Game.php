@@ -2,9 +2,11 @@
 
 namespace App\Domains\Games\Models;
 
+use App\Domains\CMS\Models\ContentRevision;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Game extends Model
 {
@@ -45,5 +47,10 @@ class Game extends Model
     public function isAvailable(): bool
     {
         return $this->status === 'available';
+    }
+
+    public function revisions(): MorphMany
+    {
+        return $this->morphMany(ContentRevision::class, 'revisable');
     }
 }

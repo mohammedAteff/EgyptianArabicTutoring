@@ -108,26 +108,24 @@ app/
 | `CACHE_STORE` | Cache backend | `database` |
 | `QUEUE_CONNECTION` | Queue backend | `database` |
 | `MAIL_MAILER` | Mail provider driver | `smtp` |
-| `BACKUP_OFFSITE_DISK` | Secondary backup destination | `local` (or S3 disk) |
+| `BACKUP_OFFSITE_DISK` | Secondary off-host backup destination disk | `s3` (or configured off-host disk) |
 
 ---
 
 ## 6. Initial Administrator Creation
 
-To create or seed staff administrators:
+To provision administrators securely:
 ```bash
-# Via Database Seeder:
-# Creates initial super_admin: admin@boltlanding.test / password
-php artisan db:seed
+# Recommended: Provision safely via interactive artisan command
+php artisan admin:create
 
-# Or programmatically via Tinker:
-php artisan tinker --execute '
-App\Domains\Administration\Models\Administrator::create([
-    "name" => "Lead Tutor",
-    "email" => "tutor@yourdomain.com",
-    "password" => Hash::make("SecurePassword123!"),
-    "role" => "super_admin",
-]);'
+# Or specify arguments directly:
+php artisan admin:create admin@yourdomain.com --name="Lead Tutor" --role=super_admin
+
+# In non-production environments only:
+# DatabaseSeeder creates an initial super_admin (admin@boltlanding.test / Password123!) 
+# only if no administrator accounts exist. Re-running the seeder never resets passwords.
+php artisan db:seed
 ```
 
 Roles supported:

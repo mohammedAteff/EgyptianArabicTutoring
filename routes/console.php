@@ -2,6 +2,8 @@
 
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\CMS\Models\Setting;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 
 // 1. Scheduler Heartbeat: executes every minute to prove host cron is active
@@ -52,3 +54,15 @@ Schedule::command('backup:run --clean')
         } catch (Throwable) {
         }
     });
+
+// 5. Session and Auth Cleanup: purges expired database sessions and password reset tokens
+Schedule::call(function () {
+    Artisan::call('auth:clear-resets');
+
+    if (config('session.driver') === 'database') {
+        $lifetime = (int) config('session.lifetime', 120);
+        DB::table(config('session.table', 'sessions'))
+            ->where('last_activity', '<', now()->subMinutes($lifetime)->getTimestamp())
+            ->delete();
+    }
+})->dailyAt('03:00')->name('session-cleanup');

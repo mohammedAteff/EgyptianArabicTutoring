@@ -4,6 +4,7 @@ namespace App\Domains\Analytics\Services;
 
 use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\VisitorSession;
+use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -199,9 +200,10 @@ class AnalyticsService
         }
     }
 
-    public function getActiveVisitorsCount(int $windowMinutes = 5): int
+    public function getActiveVisitorsCount(?int $windowMinutes = null): int
     {
-        $cutoff = CarbonImmutable::now()->subMinutes($windowMinutes);
+        $window = $windowMinutes ?? (int) Setting::get('active_visitor_window', 5);
+        $cutoff = CarbonImmutable::now()->subMinutes($window);
 
         return (int) AnalyticsEvent::query()
             ->where('created_at', '>=', $cutoff)
@@ -211,9 +213,10 @@ class AnalyticsService
             ->count('visitor_token');
     }
 
-    public function getActiveVisitorsSummary(int $windowMinutes = 5, int $limit = 15): Collection
+    public function getActiveVisitorsSummary(?int $windowMinutes = null, int $limit = 15): Collection
     {
-        $cutoff = CarbonImmutable::now()->subMinutes($windowMinutes);
+        $window = $windowMinutes ?? (int) Setting::get('active_visitor_window', 5);
+        $cutoff = CarbonImmutable::now()->subMinutes($window);
 
         return AnalyticsEvent::query()
             ->where('created_at', '>=', $cutoff)
@@ -232,7 +235,7 @@ class AnalyticsService
                     'page' => $latest->page,
                     'source' => $latest->utm_source ?: 'Direct / Organic',
                     'last_active_at' => $latest->created_at,
-                    'minutes_ago' => $latest->created_at->diffInMinutes(now()),
+                    'minutes_ago' => $latest->created_at->diffInMinutes(now(), true),
                 ];
             })
             ->values();

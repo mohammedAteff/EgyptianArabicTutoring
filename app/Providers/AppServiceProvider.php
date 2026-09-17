@@ -74,6 +74,14 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        Queue::looping(function () {
+            Cache::put('queue_worker_heartbeat_at', now('UTC')->toIso8601String(), 300);
+        });
+
+        Queue::before(function () {
+            Cache::put('queue_worker_heartbeat_at', now('UTC')->toIso8601String(), 300);
+        });
+
         Queue::failing(function (JobFailed $event) {
             try {
                 app(AdminNotificationService::class)->notifyJobFailed(

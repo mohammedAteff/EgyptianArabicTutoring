@@ -2,6 +2,12 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    @if($isPreview ?? false)
+        <div class="mb-8 p-4 bg-amber-500 text-white rounded-2xl text-center text-xs font-bold shadow-xs">
+            Administrator Preview Mode &bull; Showing all FAQs including hidden and drafts.
+        </div>
+    @endif
+
     <!-- Header -->
     <div class="text-center max-w-2xl mx-auto mb-16 space-y-4">
         <span class="inline-flex items-center gap-1.5 bg-terracotta-50 text-terracotta-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">

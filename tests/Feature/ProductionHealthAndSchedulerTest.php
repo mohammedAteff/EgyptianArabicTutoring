@@ -131,6 +131,8 @@ class ProductionHealthAndSchedulerTest extends TestCase
 
     public function test_backup_freshness_reporting(): void
     {
+        config(['filesystems.backup_disk' => 's3']);
+
         // Case A: never_run -> Warning
         Setting::set('last_backup_status', 'never_run', 'system');
         Setting::query()->where('key', 'last_backup_at')->delete();
