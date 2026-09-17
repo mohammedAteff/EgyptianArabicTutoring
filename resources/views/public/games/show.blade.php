@@ -15,6 +15,7 @@
     <div class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-10 shadow-sm"
          x-data="{
              gameSlug: @js($game->slug),
+             trackingUrl: @js(route('games.track', ['slug' => $game->slug])),
              csrfToken: @js(csrf_token()),
              state: 'intro', // 'intro', 'playing', 'finished'
              currentIndex: 0,
@@ -96,7 +97,7 @@
                  this.showFeedback = false;
 
                  // Track game_started event
-                 fetch(`/games/${this.gameSlug}/track`, {
+                 fetch(this.trackingUrl, {
                      method: 'POST',
                      headers: {
                          'Content-Type': 'application/json',
@@ -126,7 +127,7 @@
                  this.state = 'finished';
 
                  // Track game_completed event
-                 fetch(`/games/${this.gameSlug}/track`, {
+                 fetch(this.trackingUrl, {
                      method: 'POST',
                      headers: {
                          'Content-Type': 'application/json',

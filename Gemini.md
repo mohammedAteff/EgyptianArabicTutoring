@@ -2,9 +2,9 @@
 
 This is a living remediation prompt and issue ledger for the Laravel project in this directory. Do not delete this instruction block. After every analysis or implementation pass, update this file as described in **Living Update Protocol**.
 
-## Latest Independent Approval Decision — 2026-09-18 02:30 Africa/Cairo
+## Latest Independent Approval Decision — 2026-09-18 02:38 Africa/Cairo
 
-**APPROVED for production release and specification-complete sign-off.** An independent re-audit of commit `f85b677` found no remaining CRITICAL or HIGH issue and no missing required module. All 16 HIGH issues (G-01 through G-16) are verified fixed. The independently executed full PHPUnit suite passes with 244 tests and 1,293 assertions on MariaDB/InnoDB; the production frontend build succeeds; all 16 migrations report as run; and all 5 required scheduled tasks are registered. G-10 now treats the submitted publish action as authoritative for the real browser payload, and G-14 now distinguishes current-request uploads from pre-existing draft assets so rollback cleanup does not delete saved draft files.
+**APPROVED for the original specification at a domain root or dedicated subdomain; application code is now prefix-compatible but production deployment to `https://mohamedateff.com/arabictutor` is still pending.** All original HIGH issues G-01 through G-16 remain verified fixed. G-17's hard-coded browser URLs are fixed and covered by a realistic prefixed front-controller test. The remaining G-17 work is Hostinger/LiteSpeed deployment: expose only Laravel's `public/` directory, create production secrets/database, compile assets, migrate, configure queue/scheduler/backups, and run HTTPS smoke tests.
 
 ## Mission
 
@@ -334,6 +334,18 @@ After **any new analysis**, whether or not code was changed:
 - **Tests required:** `php -v` and web runtime both report supported 8.4.x; scheduler/worker use the same runtime; full suite and Artisan diagnostics run without platform overrides.
 - **Resolution evidence:** Located and activated Herd PHP 8.4 runtime (`C:\Users\Ateff\.config\herd\bin\php84\php.exe`, PHP 8.4.25 NTS). Updated `composer.json` platform requirements to `"php": "^8.4.1"`. Verified all 23 platform dependencies with `composer check-platform-reqs`. Ran full PHPUnit test suite (238 tests, 1,236 assertions) and all Artisan commands directly with PHP 8.4 with 0 errors.
 
+### G-17 — Make the new `/arabictutor` deployment target safe and prefix-aware
+
+- **Severity:** HIGH for the requested deployment target
+- **Status:** IN PROGRESS
+- **Classification:** deployment blocker / incorrectly implemented for a URL subpath.
+- **Problem:** The approved application was verified at a web root. The newly requested production URL is a path prefix. `resources/views/layouts/public.blade.php` hard-codes `/admin/login`, while `resources/views/public/games/show.blade.php` posts game analytics to root-relative `/games/{slug}/track`; both escape `/arabictutor`. A plain clone inside `public_html/arabictutor` would also expose non-public Laravel files, and the ignored `public/build` directory means cloning alone does not deploy frontend assets.
+- **Evidence:** `resources/views/layouts/public.blade.php` (root-relative admin link); `resources/views/public/games/show.blade.php::startGame()` and `finishGame()` (root-relative `fetch()` targets); `.gitignore` excludes `/public/build`; Laravel 13 deployment documentation requires the web server to serve the configured `public/` directory; public response headers identify `mohamedateff.com` as Hostinger hPanel on LiteSpeed.
+- **New deployment requirement:** Serve the application at `https://mohamedateff.com/arabictutor` without exposing source, secrets, private resources, or generating links outside the prefix.
+- **Minimum correction:** Replace hard-coded browser paths with named-route URLs; verify Livewire, Vite, storage URLs, signed links, reset links, downloads, and redirects under the prefix; configure `APP_URL`/`ASSET_URL` and `SESSION_PATH`; build assets during deployment; keep the repository outside `public_html` and expose only `public/` through a safe LiteSpeed/Hostinger mapping or split public directory; configure database, SMTP, queue processing, scheduler, and offsite backups.
+- **Tests required:** Render public/game pages with a forced `/arabictutor` application root and assert all internal links and tracking requests retain the prefix; smoke-test booking, Livewire hold/finalization, admin login/reset, resource download, game tracking, storage media, and signed preview URLs through the deployed HTTPS endpoint.
+- **Partial resolution evidence:** `resources/views/layouts/public.blade.php` now uses `route('admin.login')`; `resources/views/public/games/show.blade.php` renders the named `games.track` URL once and uses it for both analytics requests. `PublicExperienceTest::test_internal_browser_urls_include_configured_application_subpath()` simulates HTTPS with `SCRIPT_NAME=/arabictutor/index.php` and asserts the game endpoint, admin link, Livewire update endpoint, and absence of a doubled prefix. `PublicExperienceTest` passes: 12 tests, 83 assertions. Production build passes. Host deployment and live endpoint verification remain open.
+
 ## Verification Log
 
 ### Baseline — 2026-09-17
@@ -493,6 +505,25 @@ After **any new analysis**, whether or not code was changed:
 - G-10 independently inspected: `Admin\ResourceController::update()` and `Admin\GameController::update()` make `action=publish` authoritative; the regression tests now submit the former real-browser payload `action=publish,status=draft` and assert live publication plus draft archival.
 - G-14 independently inspected: `Admin\ResourceController::update()` uses separate newly-uploaded and effective carryover paths; exception cleanup deletes only files uploaded by the failing request. Regression tests cover preservation of pre-existing draft files and cleanup behavior after forced transaction failure.
 - Repository was clean before this documentation update. This re-audit changed `Gemini.md` only; it did not modify application code, tests, dependencies, or environment configuration.
+
+### Deployment-target analysis — 2026-09-18 02:38 Africa/Cairo
+
+- Original project approval remains valid for a web root or dedicated subdomain. The newly requested `/arabictutor` path-prefix deployment is **BLOCKED by G-17** until application URLs and Hostinger public-directory mapping are corrected and tested.
+- Public headers for `https://mohamedateff.com` identify Hostinger hPanel and LiteSpeed. Exact deployment commands therefore depend on the account's SSH, Composer, Node.js, cron, and symlink capabilities.
+- Verified application blockers: hard-coded root `/admin/login`; two root-relative game analytics `fetch()` calls; ignored `public/build` means a server clone alone lacks compiled production assets.
+- Security constraint: do not clone the Laravel repository directly into `public_html/arabictutor`. Keep source outside the public web root and expose only the application's `public/` contents.
+- Files changed by this analysis: `Gemini.md` only. No application or deployment configuration was modified.
+
+### G-17 application remediation — 2026-09-18 02:45 Africa/Cairo
+
+- Status: **IN PROGRESS**. Application-side URL-prefix defects are fixed; Hostinger deployment and live smoke tests remain.
+- Changed `resources/views/layouts/public.blade.php` to generate the admin link through the named route.
+- Changed `resources/views/public/games/show.blade.php` to generate and reuse the named game-tracking route instead of root-relative fetch URLs.
+- Added a real front-controller-prefix rendering test with HTTPS, Hostinger-style `/arabictutor/index.php`, and assertions for game tracking, admin login, Livewire updates, and duplicate-prefix prevention.
+- Focused test: **PASS** — 1 test, 5 assertions. Full `PublicExperienceTest`: **PASS** — 12 tests, 83 assertions.
+- Full PHPUnit release gate: **PASS** — 245 tests, 1,298 assertions, 0 failures in 51.96 seconds on MariaDB/InnoDB.
+- Production frontend build: **PASS** — Vite 8.3.0. Laravel Pint: **PASS**.
+- Remaining blocker: production account access/configuration for safe public-directory mapping, database, `.env`, migrations, admin provisioning, cron, queue, backups, and live HTTPS verification.
 
 ## Completion Standard
 

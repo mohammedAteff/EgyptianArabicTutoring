@@ -360,6 +360,32 @@ class PublicExperienceTest extends TestCase
         ]);
     }
 
+    public function test_internal_browser_urls_include_configured_application_subpath(): void
+    {
+        $game = Game::create([
+            'title' => 'Subpath Game',
+            'slug' => 'subpath-game',
+            'description' => 'Checks prefix-aware browser URLs.',
+            'status' => 'available',
+        ]);
+
+        $server = [
+            'HTTPS' => 'on',
+            'HTTP_HOST' => 'mohamedateff.com',
+            'SCRIPT_NAME' => '/arabictutor/index.php',
+            'SCRIPT_FILENAME' => public_path('index.php'),
+        ];
+
+        $gameResponse = $this->withServerVariables($server)
+            ->get('https://mohamedateff.com/arabictutor/games/subpath-game');
+
+        $gameResponse->assertOk();
+        $gameResponse->assertSee('mohamedateff.com\\/arabictutor\\/games\\/subpath-game\\/track', false);
+        $gameResponse->assertSee('href="https://mohamedateff.com/arabictutor/admin/login"', false);
+        $gameResponse->assertSee('data-update-uri="https://mohamedateff.com/arabictutor/livewire-', false);
+        $gameResponse->assertDontSee('/arabictutor/arabictutor/', false);
+    }
+
     public function test_external_game_card_renders_with_preview_image_badge_and_clickable_link(): void
     {
         $externalGame = Game::create([

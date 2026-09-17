@@ -204,7 +204,7 @@
                             <li><span class="text-stone-500">Contact directly via email</span></li>
                         @endforelse
                         <li class="pt-2">
-                            <a href="/admin/login" class="text-xs text-stone-600 hover:text-stone-400 transition-colors">Tutor Admin Portal</a>
+                            <a href="{{ route('admin.login') }}" class="text-xs text-stone-600 hover:text-stone-400 transition-colors">Tutor Admin Portal</a>
                         </li>
                     </ul>
                 </div>
