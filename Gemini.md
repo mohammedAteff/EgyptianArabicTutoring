@@ -573,3 +573,8 @@ When reporting completion, provide a concise table of issue ID, status, main fil
 - **Verification:** live `/arabictutor/` and `/arabictutor/about` canonical/OG URLs are now `https://mohamedateff.com/arabictutor` and `/arabictutor/about`; no internal landing path appears. Root, `/flasha/`, games, resources, admin login, Vite manifest, `.env` protection, and direct-controller redirects were rechecked.
 - **Regression gates:** focused Blade-dependent tests passed (11 tests, 64 assertions); complete PHPUnit suite passed (245 tests, 1,298 assertions); Vite production build passed; Pint passed.
 - **Current conclusion:** no unresolved CRITICAL/HIGH code defect was found in this deployment pass. The application is live, but owner configuration is still required before a production-release approval: provision an administrator, configure a real SMTP transport, and configure/test off-host S3-compatible backups. These are deployment prerequisites, not silently assumed defaults.
+
+### Admin provisioning follow-up — 2026-09-18
+
+- The requested regular `admin` account was provisioned on the deployed application using the owner-supplied email and password. Credentials are intentionally not stored in this audit file.
+- The remaining production prerequisites are real SMTP delivery and configured/tested off-host S3-compatible backups. No `super_admin` account was created or granted implicitly.
