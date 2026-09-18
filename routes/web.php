@@ -33,6 +33,9 @@ use Illuminate\Support\Facades\Route;
 // Homepage
 Route::get('/', [HomeController::class, 'index'])->name('home');
 
+// LiteSpeed subdirectory landing target (used only by the Hostinger wrapper).
+Route::get('/_arabictutor-landing', [HomeController::class, 'index'])->name('home.internal');
+
 // Native Booking System
 Route::get('/book', [BookingController::class, 'index'])->name('booking.index');
 Route::get('/book/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation');

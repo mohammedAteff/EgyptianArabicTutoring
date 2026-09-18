@@ -525,6 +525,21 @@ After **any new analysis**, whether or not code was changed:
 - Production frontend build: **PASS** — Vite 8.3.0. Laravel Pint: **PASS**.
 - Remaining blocker: production account access/configuration for safe public-directory mapping, database, `.env`, migrations, admin provisioning, cron, queue, backups, and live HTTPS verification.
 
+### Hostinger deployment inspection — 2026-09-18 02:54 Africa/Cairo
+
+- Hostinger hPanel session is authenticated for `mohamedateff.com`; SSH is active and the existing local key `id_ed25519_hostinger_ucft` connects successfully without a password.
+- The website web runtime is currently PHP 8.2, which cannot run this Laravel release. Hostinger exposes PHP 8.4.19 CLI and PHP 8.4 can be selected in hPanel; switching the website runtime is a domain-level operational change and requires explicit owner approval because it briefly stops site processes.
+- Hostinger already contains a MySQL database/user named for this application; no database was created or altered by this inspection.
+- No prior Arabic tutoring application directory or cron entry was found in the read-only SSH checks. The repository has not yet been cloned remotely.
+- Git commit `0462032` exists locally but has not been pushed because explicit approval for a consequential `origin/main` mutation is still required.
+
+### Shared PHP-runtime risk check — 2026-09-18 02:57 Africa/Cairo
+
+- Hostinger's PHP selector is website-wide for `mohamedateff.com` and reports a 1–2 minute process interruption when changed.
+- Read-only inventory found nine existing Laravel applications under the same `public_html` tree (`api`, `fashion`, `flasha`, `gym`, three landing pages, `masria`, and `scholarsites`). Each declares Composer PHP `^8.2`, so PHP 8.4 satisfies their declared platform range; this does not prove runtime compatibility with PHP 8.4.
+- Static/other projects also exist (`6word`, `plans`, `modekick`, `ucft`, `zeyad`). DNS/SSL/static files are not affected by the PHP selector, but PHP-backed applications must be smoke-tested after the change and PHP 8.2 rollback must remain available.
+- No PHP version was changed and no existing site/database/file was modified by this analysis.
+
 ## Completion Standard
 
 Do not declare the project complete until:
@@ -539,3 +554,22 @@ Do not declare the project complete until:
 - this file's statuses and Verification Log accurately reflect the final repository state.
 
 When reporting completion, provide a concise table of issue ID, status, main files changed, tests added, and verification result. Do not repeat `PROJECT_STATUS.md` claims without re-verifying them.
+
+### Hostinger deployment verification — 2026-09-18 03:10 Africa/Cairo
+
+- Deployment target: `https://mohamedateff.com/arabictutor/` on Hostinger/LiteSpeed. The existing root site and `/flasha/` still returned HTTP 200 after the domain PHP selector was changed to PHP 8.4.
+- Application source is isolated outside `public_html` at the domain's `arabictutor_app` directory. The public path exposes only a wrapper directory and a `public/` symlink; the failed wrapper experiment was moved outside `public_html` as a recoverable backup.
+- Remote installation completed from verified commit `0462032` (private GitHub clone was unavailable to the host, so the source was transferred as an archive; the remote directory has no Git metadata).
+- Composer dependencies installed with scripts disabled followed by successful `artisan package:discover`; all 16 migrations ran; production seed completed without creating an administrator; local Vite `public/build` was transferred because the shared-host Node build hit a resource-limit panic.
+- Hostinger PHP 8.4.19 is active. The web process could not connect to MySQL with `DB_HOST=127.0.0.1`; changing the deployed `.env` to `DB_HOST=localhost` fixed web sessions and all tested Laravel pages. `APP_DEBUG=false`, `.env` mode is 640, and `.env`/nested private paths returned HTTP 403.
+- Hostinger cron jobs were added for `schedule:run` and a locked `queue:work --stop-when-empty`; the scheduler also executed successfully through the host cron output. Main, about, games, resources, admin login, password-reset, and Vite asset URLs returned HTTP 200 after the final wrapper (`front.php`) deployment, with no `/public/index.php` URL leakage.
+- The subpath workaround adds the deployment-only route `home.internal` (`/_arabictutor-landing`) in `routes/web.php`; keep this route and the wrapper behavior when future archives are deployed.
+- **Production blockers still requiring owner configuration:** no administrator account has been provisioned; `MAIL_MAILER=log` means booking/admin email is not delivered; `BACKUP_OFFSITE_DISK=s3` still has placeholder bucket/credentials, so off-host backup replication is not configured. These are not safe to call production-complete until configured and verified.
+
+### Hostinger canonical URL follow-up — 2026-09-18 04:25 Africa/Cairo
+
+- **Finding G-18:** the first live subpath wrapper rendered the internal `/_arabictutor-landing` route in homepage canonical and Open Graph URLs. This was a deployment correctness/SEO issue, not an application data or access-control defect.
+- **Correction:** `resources/views/layouts/public.blade.php` now uses the real named `home` route whenever the wrapper-only `home.internal` route renders. The corrected view was uploaded and Laravel's view cache was rebuilt on Hostinger.
+- **Verification:** live `/arabictutor/` and `/arabictutor/about` canonical/OG URLs are now `https://mohamedateff.com/arabictutor` and `/arabictutor/about`; no internal landing path appears. Root, `/flasha/`, games, resources, admin login, Vite manifest, `.env` protection, and direct-controller redirects were rechecked.
+- **Regression gates:** focused Blade-dependent tests passed (11 tests, 64 assertions); complete PHPUnit suite passed (245 tests, 1,298 assertions); Vite production build passed; Pint passed.
+- **Current conclusion:** no unresolved CRITICAL/HIGH code defect was found in this deployment pass. The application is live, but owner configuration is still required before a production-release approval: provision an administrator, configure a real SMTP transport, and configure/test off-host S3-compatible backups. These are deployment prerequisites, not silently assumed defaults.

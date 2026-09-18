@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}</title>
     <meta name="description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Master authentic conversational Egyptian Arabic through structured 1-on-1 private lessons with a native educator in Cairo.') }}">
-    <link rel="canonical" href="{{ url()->current() }}">
+    @php
+        $canonicalUrl = request()->routeIs('home.internal') ? route('home') : url()->current();
+    @endphp
+    <link rel="canonical" href="{{ $canonicalUrl }}">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}">
     <meta property="og:description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Master authentic conversational Egyptian Arabic.') }}">
-    <meta property="og:url" content="{{ url()->current() }}">
+    <meta property="og:url" content="{{ $canonicalUrl }}">
 
     <!-- Google Fonts Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
