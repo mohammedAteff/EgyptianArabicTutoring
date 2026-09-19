@@ -12,8 +12,9 @@ Schedule::call(function () {
 })->everyMinute()->name('scheduler-heartbeat');
 
 // 2. Booking Holds Cleanup: purges expired and released reservation holds
-Schedule::command('booking:cleanup-holds')
+Schedule::call(fn (): bool => Artisan::call('booking:cleanup-holds', []) === 0)
     ->everyFiveMinutes()
+    ->name('booking:cleanup-holds')
     ->onSuccess(function () {
         Setting::set('last_holds_cleanup_at', now('UTC')->toIso8601String(), 'system');
     })
@@ -29,8 +30,9 @@ Schedule::command('booking:cleanup-holds')
     });
 
 // 3. Analytics Aggregation: computes daily traffic and conversion rollups
-Schedule::command('analytics:aggregate-daily --prune')
+Schedule::call(fn (): bool => Artisan::call('analytics:aggregate-daily', ['--prune' => true]) === 0)
     ->dailyAt('00:05')
+    ->name('analytics:aggregate-daily --prune')
     ->onSuccess(function () {
         Setting::set('last_analytics_aggregation_at', now('UTC')->toIso8601String(), 'system');
     })
@@ -46,8 +48,9 @@ Schedule::command('analytics:aggregate-daily --prune')
     });
 
 // 4. Daily Database & Storage Backup: point-in-time snapshot with integrity manifest
-Schedule::command('backup:run --clean')
+Schedule::call(fn (): bool => Artisan::call('backup:run', ['--clean' => true]) === 0)
     ->dailyAt('02:00')
+    ->name('backup:run --clean')
     ->onFailure(function () {
         try {
             app(AdminNotificationService::class)->notifyBackupFailed('Daily scheduled backup execution failed.');

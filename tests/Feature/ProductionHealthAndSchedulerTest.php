@@ -5,10 +5,13 @@ namespace Tests\Feature;
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
+use Illuminate\Console\Scheduling\CallbackEvent;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\Looping;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -80,6 +83,31 @@ class ProductionHealthAndSchedulerTest extends TestCase
 
         $parsed = CarbonImmutable::parse($lastHeartbeat);
         $this->assertTrue($parsed->diffInSeconds(now('UTC')) < 30);
+    }
+
+    public function test_scheduled_commands_run_in_process_without_proc_open(): void
+    {
+        $events = collect(app(Schedule::class)->events())
+            ->keyBy(fn ($event) => $event->getSummaryForDisplay());
+
+        $commands = [
+            'booking:cleanup-holds' => ['booking:cleanup-holds', [], 'last_holds_cleanup_at'],
+            'analytics:aggregate-daily --prune' => ['analytics:aggregate-daily', ['--prune' => true], 'last_analytics_aggregation_at'],
+            'backup:run --clean' => ['backup:run', ['--clean' => true], null],
+        ];
+
+        foreach ($commands as $name => [$command, $arguments, $successSetting]) {
+            $event = $events->get($name);
+            $this->assertInstanceOf(CallbackEvent::class, $event);
+
+            Artisan::shouldReceive('call')->once()->with($command, $arguments)->andReturn(0);
+            $event->run(app());
+
+            $this->assertSame(0, $event->exitCode);
+            if ($successSetting !== null) {
+                $this->assertNotNull(Setting::get($successSetting));
+            }
+        }
     }
 
     public function test_scheduler_health_reporting_statuses(): void
