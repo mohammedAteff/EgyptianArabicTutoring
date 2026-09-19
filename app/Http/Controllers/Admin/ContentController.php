@@ -7,10 +7,12 @@ use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\SocialLink;
+use App\Domains\CMS\Services\TranslationService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ContentController extends Controller
@@ -55,6 +57,11 @@ class ContentController extends Controller
             'new_data' => $faq->toArray(),
             'created_at' => now(),
         ]);
+
+        app(TranslationService::class)->updateEnglishSource($faq, [
+            'question' => $faq->question,
+            'answer' => $faq->answer,
+        ], Auth::id());
 
         return back()->with('success', 'FAQ added successfully.');
     }
@@ -104,40 +111,50 @@ class ContentController extends Controller
         }
 
         $prev = $faq->toArray();
-        $faq->update([
-            'question' => $validated['question'],
-            'answer' => $validated['answer'],
-            'sort_order' => $validated['sort_order'] ?? 0,
-            'active' => $request->boolean('active'),
-        ]);
 
-        $faq->revisions()->where('status', 'draft')->update(['status' => 'archived']);
+        DB::transaction(function () use ($faq, $validated, $request, $prev) {
+            $lockedFaq = Faq::where('id', $faq->id)->lockForUpdate()->firstOrFail();
 
-        $nextRevision = ($faq->revisions()->max('revision_number') ?? 0) + 1;
-        ContentRevision::create([
-            'revisable_type' => Faq::class,
-            'revisable_id' => $faq->id,
-            'revision_number' => $nextRevision,
-            'title' => $faq->question,
-            'content' => [
-                'question' => $faq->question,
-                'answer' => $faq->answer,
-                'sort_order' => $faq->sort_order,
-                'active' => $faq->active,
-            ],
-            'created_by_id' => Auth::id(),
-            'status' => 'published',
-        ]);
+            $lockedFaq->update([
+                'question' => $validated['question'],
+                'answer' => $validated['answer'],
+                'sort_order' => $validated['sort_order'] ?? 0,
+                'active' => $request->boolean('active'),
+            ]);
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'faq_updated',
-            'entity_type' => Faq::class,
-            'entity_id' => $faq->id,
-            'previous_data' => $prev,
-            'new_data' => $faq->toArray(),
-            'created_at' => now(),
-        ]);
+            app(TranslationService::class)->updateEnglishSource($lockedFaq, [
+                'question' => $lockedFaq->question,
+                'answer' => $lockedFaq->answer,
+            ], Auth::id());
+
+            $lockedFaq->revisions()->where('status', 'draft')->update(['status' => 'archived']);
+
+            $nextRevision = ($lockedFaq->revisions()->max('revision_number') ?? 0) + 1;
+            ContentRevision::create([
+                'revisable_type' => Faq::class,
+                'revisable_id' => $lockedFaq->id,
+                'revision_number' => $nextRevision,
+                'title' => $lockedFaq->question,
+                'content' => [
+                    'question' => $lockedFaq->question,
+                    'answer' => $lockedFaq->answer,
+                    'sort_order' => $lockedFaq->sort_order,
+                    'active' => $lockedFaq->active,
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => 'published',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'faq_updated',
+                'entity_type' => Faq::class,
+                'entity_id' => $lockedFaq->id,
+                'previous_data' => $prev,
+                'new_data' => $lockedFaq->toArray(),
+                'created_at' => now(),
+            ]);
+        });
 
         return back()->with('success', 'FAQ published.');
     }

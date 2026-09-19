@@ -73,7 +73,12 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-base font-bold text-slate-900">Primary Business Funnel: Website → Confirmed Lesson</h2>
-                <p class="text-xs text-slate-500 mt-0.5">Authoritative drop-off analysis between booking intent and completion.</p>
+                <div class="flex items-center gap-3 mt-0.5">
+                    <p class="text-xs text-slate-500">Authoritative drop-off analysis between booking intent and completion.</p>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ ($primaryFunnel['is_mature'] ?? false) ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800' }}">
+                        {{ $primaryFunnel['maturity_label'] ?? 'Immature / In-Progress' }}
+                    </span>
+                </div>
             </div>
             <div class="px-3 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
                 Overall Conversion: {{ $primaryFunnel['overall_conversion'] }}%
@@ -93,15 +98,19 @@
                 </div>
             </div>
 
-            <!-- Step 2: CTA Clicked -->
+            <!-- Step 2: Booking CTA Reached / Qualified -->
             <div class="p-4 rounded-xl bg-slate-50 border border-slate-150 flex flex-col justify-between">
                 <div>
                     <span class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Stage 2</span>
-                    <div class="text-xs font-semibold text-slate-800 mt-0.5">Booking CTA Clicked</div>
+                    <div class="text-xs font-semibold text-slate-800 mt-0.5">Booking CTA Reached / Qualified</div>
                 </div>
                 <div class="mt-4">
-                    <div class="text-2xl font-black text-slate-900">{{ number_format($primaryFunnel['cta_clicked']) }}</div>
+                    <div class="text-2xl font-black text-slate-900">{{ number_format($primaryFunnel['cta_qualified'] ?? $primaryFunnel['cta_clicked']) }}</div>
                     <div class="text-[11px] text-amber-700 font-semibold mt-1">{{ $primaryFunnel['cta_rate'] }}% of visitors</div>
+                    <div class="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
+                        <span>Observed: {{ number_format($primaryFunnel['cta_observed'] ?? 0) }}</span>
+                        <span>Imputed: {{ number_format($primaryFunnel['cta_imputed'] ?? 0) }}</span>
+                    </div>
                 </div>
             </div>
 

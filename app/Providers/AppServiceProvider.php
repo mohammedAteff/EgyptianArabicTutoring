@@ -18,7 +18,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        require_once __DIR__.'/../helpers.php';
     }
 
     /**
@@ -94,6 +94,16 @@ class AppServiceProvider extends ServiceProvider
             } catch (\Throwable) {
                 // Ignore failure in dispatching internal notification
             }
+        });
+
+        // Ensure JSON static strings missing in non-English locales fall back to English
+        $this->app->make('translator')->handleMissingKeysUsing(function (string $key, array $replace, ?string $locale, bool $fallback) {
+            $fallbackLocale = config('app.fallback_locale', 'en');
+            if ($locale !== $fallbackLocale) {
+                return $this->app->make('translator')->get($key, $replace, $fallbackLocale, false);
+            }
+
+            return $key;
         });
     }
 }

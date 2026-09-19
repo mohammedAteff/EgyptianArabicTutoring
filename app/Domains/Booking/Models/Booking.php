@@ -17,6 +17,7 @@ class Booking extends Model
 
     protected $fillable = [
         'contact_id',
+        'visitor_token',
         'session_type_id',
         'start_at_utc',
         'end_at_utc',
@@ -39,6 +40,8 @@ class Booking extends Model
         'campaign',
         'content',
         'term',
+        'referrer',
+        'touch_at',
         'cancelled_at',
         'cancellation_reason',
         'completed_at',
@@ -49,6 +52,7 @@ class Booking extends Model
         return [
             'start_at_utc' => 'datetime',
             'end_at_utc' => 'datetime',
+            'touch_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'completed_at' => 'datetime',
             'business_local_date_at_booking' => 'date',

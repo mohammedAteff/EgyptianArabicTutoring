@@ -16,12 +16,19 @@ class PageController extends Controller
         $page = Page::query()
             ->where('slug', 'about')
             ->where('status', 'published')
+            ->with('translations')
             ->first();
 
+        $resolved = $page?->resolveTranslation();
+        $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
+
         return view('public.about', [
-            'title' => $page ? $page->title : 'About Ahmad & The Teaching Methodology',
+            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'About Ahmad & The Teaching Methodology'),
             'page' => $page,
-            'biography' => $page?->content ?? Setting::get('about_biography'),
+            'translation' => $resolved['translation'] ?? null,
+            'isFallback' => $isFallback,
+            'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
+            'biography' => $resolved['translation']?->content ?? ($page?->content ?? Setting::get('about_biography')),
             'philosophy' => Setting::get('about_philosophy'),
             'imagePath' => $page?->og_image_path ?? Setting::get('about_image_path'),
         ]);
@@ -91,10 +98,29 @@ class PageController extends Controller
 
     public function faq(): View
     {
-        $faqs = Faq::active()->get();
+        $faqs = Faq::active()->with('translations')->orderBy('sort_order')->get();
+
+        $locale = app()->getLocale();
+        $isFallback = false;
+        if ($locale !== 'en') {
+            $hasAnyTranslation = $faqs->contains(fn ($f) => $f->liveTranslation($locale) !== null);
+            if (! $hasAnyTranslation) {
+                $isFallback = true;
+            }
+        }
+
+        $availableLocales = ['en'];
+        foreach (['fr', 'de'] as $loc) {
+            $allTranslated = $faqs->isNotEmpty() && $faqs->every(fn ($f) => $f->liveTranslation($loc) !== null);
+            if ($allTranslated) {
+                $availableLocales[] = $loc;
+            }
+        }
 
         return view('public.faq', [
             'faqs' => $faqs,
+            'isFallback' => $isFallback,
+            'entityLocales' => $availableLocales,
             'title' => 'Frequently Asked Questions',
         ]);
     }
@@ -130,15 +156,25 @@ class PageController extends Controller
 
     public function terms(): View
     {
+        $locale = app()->getLocale();
+        $isFallback = ($locale !== 'en');
+
         return view('public.terms', [
             'title' => 'Terms of Service & Booking Policies',
+            'isFallback' => $isFallback,
+            'entityLocales' => ['en'],
         ]);
     }
 
     public function privacy(): View
     {
+        $locale = app()->getLocale();
+        $isFallback = ($locale !== 'en');
+
         return view('public.privacy', [
             'title' => 'Privacy Policy & Data Protection',
+            'isFallback' => $isFallback,
+            'entityLocales' => ['en'],
         ]);
     }
 
@@ -147,11 +183,17 @@ class PageController extends Controller
         $page = Page::query()
             ->where('slug', $slug)
             ->where('status', 'published')
+            ->with('translations')
             ->firstOrFail();
+
+        $resolved = $page->resolveTranslation();
 
         return view('public.page', [
             'page' => $page,
-            'title' => $page->title,
+            'translation' => $resolved['translation'],
+            'isFallback' => $resolved['is_fallback'],
+            'entityLocales' => $page->getAvailableLocales(),
+            'title' => $resolved['translation']?->title ?? $page->title,
         ]);
     }
 }

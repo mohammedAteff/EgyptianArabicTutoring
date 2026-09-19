@@ -2,13 +2,22 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    @if($isFallback ?? false)
+        <div class="mb-8 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-2xl text-sm text-amber-900 font-medium shadow-sm flex items-center gap-3">
+            <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ __('content_fallback_banner') }}</span>
+        </div>
+    @endif
+
     <!-- Header -->
     <div class="text-center max-w-2xl mx-auto mb-16 space-y-4">
         <span class="inline-flex items-center gap-1.5 bg-terracotta-50 text-terracotta-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            Native Arabic Educator
+            {{ __('Native Arabic Educator') }}
         </span>
         <h1 class="text-4xl sm:text-5xl font-extrabold text-stone-900 tracking-tight">
-            Meet Your Tutor, Ahmad
+            {{ $translation->title ?? ($page ? $page->title : __('Meet Your Tutor, Ahmad')) }}
         </h1>
         <p class="text-stone-600 text-lg leading-relaxed">
             Born and raised in Cairo, teaching real, living Egyptian Arabic to students around the globe.
@@ -16,7 +25,7 @@
     </div>
 
     <!-- Story & Bio Section -->
-    <div class="bg-white rounded-3xl border border-stone-200/80 p-8 sm:p-12 shadow-sm mb-12 space-y-8">
+    <div @if($isFallback ?? false) lang="en" dir="ltr" @endif class="bg-white rounded-3xl border border-stone-200/80 p-8 sm:p-12 shadow-sm mb-12 space-y-8">
         @if(!empty($imagePath))
             <div class="mb-6 flex justify-center">
                 <img src="{{ str_starts_with($imagePath, 'http') ? $imagePath : \Illuminate\Support\Facades\Storage::disk('public')->url($imagePath) }}"
@@ -63,7 +72,7 @@
 
     <!-- The 4 Pillars of the Method -->
     <div class="mb-16 space-y-6">
-        <h2 class="text-2xl sm:text-3xl font-bold text-stone-900 text-center">The Teaching Philosophy</h2>
+        <h2 class="text-2xl sm:text-3xl font-bold text-stone-900 text-center">{{ __('The Teaching Philosophy') }}</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="bg-white rounded-2xl border border-stone-200/80 p-6 space-y-3">
                 <div class="w-10 h-10 rounded-xl bg-terracotta-50 text-terracotta-600 flex items-center justify-center font-bold text-lg">
@@ -109,13 +118,13 @@
 
     <!-- CTA Section -->
     <div class="text-center bg-stone-900 text-white rounded-3xl p-8 sm:p-12 space-y-6">
-        <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Ready to Begin Your Arabic Journey?</h2>
+        <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">{{ __('Ready to Speak Authentic Egyptian Arabic?') }}</h2>
         <p class="text-stone-300 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
             Check the live tutor schedule, pick your local timezone, and book your first lesson today.
         </p>
         <div>
-            <a href="{{ route('booking.index') }}" class="inline-flex items-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-sm px-8 py-3.5 rounded-full shadow-md transition-all">
-                <span>Book a Private Lesson with Ahmad</span>
+            <a href="{{ localized_url('booking') }}" class="inline-flex items-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-sm px-8 py-3.5 rounded-full shadow-md transition-all">
+                <span>{{ __('Book a Private Lesson') }}</span>
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
             </a>
         </div>

@@ -125,5 +125,8 @@
         </form>
     </div>
 
+    <!-- Translations & Localization Panel -->
+    <x-admin.translations-panel :entity="$game" entity-type="game" />
+
 </div>
 @endsection

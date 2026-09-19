@@ -6,6 +6,7 @@ use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
+use App\Domains\Analytics\Services\FunnelProgressionService;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -14,24 +15,33 @@ use Illuminate\Support\Facades\File;
 
 class AggregateDailyAnalyticsCommand extends Command
 {
-    protected $signature = 'analytics:aggregate-daily {--date= : The target date in YYYY-MM-DD format (defaults to yesterday)} {--prune : Whether to execute raw event and export file retention cleanup}';
+    protected $signature = 'analytics:aggregate-daily 
+                            {--date= : The target date in YYYY-MM-DD format (defaults to yesterday in Cairo)} 
+                            {--prune : Whether to execute raw event and export file retention cleanup}
+                            {--rebuild-funnel : Rebuild visitor_funnel_progressions from retained events}';
 
-    protected $description = 'Pre-aggregate raw analytics events into daily_metrics and enforce retention policies';
+    protected $description = 'Pre-aggregate raw analytics events into daily_metrics in Africa/Cairo and manage retention';
 
     public function handle(): int
     {
         $dateInput = $this->option('date');
+        $cairoTz = 'Africa/Cairo';
+
         $targetDate = $dateInput
-            ? CarbonImmutable::parse($dateInput)->toDateString()
-            : CarbonImmutable::yesterday()->toDateString();
+            ? CarbonImmutable::parse($dateInput, $cairoTz)->toDateString()
+            : CarbonImmutable::now($cairoTz)->subDay()->toDateString();
 
-        $startOfDay = CarbonImmutable::parse($targetDate)->startOfDay();
-        $endOfDay = CarbonImmutable::parse($targetDate)->endOfDay();
+        // Exact Cairo day half-open interval [cairoStart, cairoNext) converted to UTC for database querying
+        $cairoStart = CarbonImmutable::parse($targetDate, $cairoTz)->startOfDay();
+        $cairoNext = $cairoStart->addDay();
+        $startUtc = $cairoStart->setTimezone('UTC');
+        $endUtc = $cairoNext->setTimezone('UTC');
 
-        $this->info("Aggregating daily metrics for {$targetDate}...");
+        $this->info("Aggregating daily metrics for {$targetDate} ({$cairoTz})...");
 
         $baseQuery = AnalyticsEvent::query()
-            ->whereBetween('created_at', [$startOfDay, $endOfDay])
+            ->where('created_at', '>=', $startUtc)
+            ->where('created_at', '<', $endUtc)
             ->where('is_bot', false);
 
         // 1. Overall counts by event_name
@@ -40,51 +50,36 @@ class AggregateDailyAnalyticsCommand extends Command
             ->groupBy('event_name')
             ->pluck('count', 'event_name');
 
-        foreach ($eventCounts as $eventName => $count) {
-            DailyMetric::updateOrCreate(
-                [
-                    'metric_date' => $targetDate,
-                    'metric_name' => $eventName,
-                    'dimension_key' => null,
-                    'dimension_value' => null,
-                ],
-                ['count' => $count]
-            );
-        }
-
-        // 2. Unique Visitors
+        // 2. Unique Visitors within Cairo day
         $uniqueVisitors = (clone $baseQuery)
             ->whereNotNull('visitor_token')
             ->distinct('visitor_token')
             ->count('visitor_token');
 
-        DailyMetric::updateOrCreate(
-            [
-                'metric_date' => $targetDate,
-                'metric_name' => 'unique_visitors',
-                'dimension_key' => null,
-                'dimension_value' => null,
-            ],
-            ['count' => $uniqueVisitors]
-        );
+        // 3. Unique Sessions strictly attributed by session started_at in Cairo day (EDITS V1 §15)
+        $uniqueSessions = VisitorSession::query()
+            ->where('is_bot', false)
+            ->where('started_at', '>=', $startUtc)
+            ->where('started_at', '<', $endUtc)
+            ->count();
 
-        // 3. Unique Sessions
-        $uniqueSessions = (clone $baseQuery)
-            ->whereNotNull('session_token')
-            ->distinct('session_token')
-            ->count('session_token');
+        // 4. Bookings Created on calendar date D in Cairo regardless of later status (EDITS V1 §13)
+        $bookingsCreated = DB::table('bookings')
+            ->where('created_at', '>=', $startUtc)
+            ->where('created_at', '<', $endUtc)
+            ->count();
 
-        DailyMetric::updateOrCreate(
-            [
-                'metric_date' => $targetDate,
-                'metric_name' => 'sessions',
-                'dimension_key' => null,
-                'dimension_value' => null,
-            ],
-            ['count' => $uniqueSessions]
-        );
+        // 5. Social Link Clicks
+        $socialClicks = (clone $baseQuery)
+            ->whereIn('event_name', ['social_link_clicked', 'whatsapp_clicked', 'telegram_clicked'])
+            ->count();
 
-        // 4. Page views by Page
+        // 6. Resource Downloads
+        $downloads = (clone $baseQuery)
+            ->where('event_name', 'resource_downloaded')
+            ->count();
+
+        // 7. Page views by Page
         $pageViewsByPage = (clone $baseQuery)
             ->where('event_name', 'page_view')
             ->whereNotNull('page')
@@ -94,54 +89,234 @@ class AggregateDailyAnalyticsCommand extends Command
             ->take(50)
             ->get();
 
-        foreach ($pageViewsByPage as $row) {
-            DailyMetric::updateOrCreate(
-                [
-                    'metric_date' => $targetDate,
-                    'metric_name' => 'page_views',
-                    'dimension_key' => 'page',
-                    'dimension_value' => substr($row->page, 0, 128),
-                ],
-                ['count' => $row->count]
-            );
-        }
-
-        // 5. Visitors by Source
+        // 8. Visitors by Source
         $visitorsBySource = (clone $baseQuery)
             ->whereNotNull('utm_source')
             ->select('utm_source', DB::raw('count(distinct visitor_token) as count'))
             ->groupBy('utm_source')
             ->get();
 
-        foreach ($visitorsBySource as $row) {
-            DailyMetric::updateOrCreate(
-                [
+        // 9. Sessions by Source
+        $sessionsBySource = VisitorSession::query()
+            ->where('is_bot', false)
+            ->where('started_at', '>=', $startUtc)
+            ->where('started_at', '<', $endUtc)
+            ->whereNotNull('utm_source')
+            ->select('utm_source', DB::raw('count(*) as count'))
+            ->groupBy('utm_source')
+            ->get();
+
+        // 10. Page Views by Source
+        $pageViewsBySource = (clone $baseQuery)
+            ->where('event_name', 'page_view')
+            ->whereNotNull('utm_source')
+            ->select('utm_source', DB::raw('count(*) as count'))
+            ->groupBy('utm_source')
+            ->get();
+
+        // Atomic rebuild: purge existing date metrics first to eliminate stale dimension rows
+        DB::transaction(function () use (
+            $targetDate,
+            $eventCounts,
+            $uniqueVisitors,
+            $uniqueSessions,
+            $bookingsCreated,
+            $socialClicks,
+            $downloads,
+            $pageViewsByPage,
+            $visitorsBySource,
+            $sessionsBySource,
+            $pageViewsBySource
+        ) {
+            DailyMetric::where('metric_date', $targetDate)->delete();
+
+            foreach ($eventCounts as $eventName => $count) {
+                DailyMetric::create([
+                    'metric_date' => $targetDate,
+                    'metric_name' => $eventName,
+                    'dimension_key' => '',
+                    'dimension_value' => '',
+                    'count' => $count,
+                ]);
+            }
+
+            DailyMetric::create([
+                'metric_date' => $targetDate,
+                'metric_name' => 'unique_visitors',
+                'dimension_key' => '',
+                'dimension_value' => '',
+                'count' => $uniqueVisitors,
+            ]);
+
+            DailyMetric::create([
+                'metric_date' => $targetDate,
+                'metric_name' => 'sessions',
+                'dimension_key' => '',
+                'dimension_value' => '',
+                'count' => $uniqueSessions,
+            ]);
+
+            DailyMetric::create([
+                'metric_date' => $targetDate,
+                'metric_name' => 'bookings_created',
+                'dimension_key' => '',
+                'dimension_value' => '',
+                'count' => $bookingsCreated,
+            ]);
+
+            DailyMetric::create([
+                'metric_date' => $targetDate,
+                'metric_name' => 'social_clicks',
+                'dimension_key' => '',
+                'dimension_value' => '',
+                'count' => $socialClicks,
+            ]);
+
+            DailyMetric::create([
+                'metric_date' => $targetDate,
+                'metric_name' => 'resource_downloads',
+                'dimension_key' => '',
+                'dimension_value' => '',
+                'count' => $downloads,
+            ]);
+
+            foreach ($pageViewsByPage as $row) {
+                DailyMetric::create([
+                    'metric_date' => $targetDate,
+                    'metric_name' => 'page_views',
+                    'dimension_key' => 'page',
+                    'dimension_value' => substr($row->page, 0, 128),
+                    'count' => $row->count,
+                ]);
+            }
+
+            foreach ($visitorsBySource as $row) {
+                DailyMetric::create([
                     'metric_date' => $targetDate,
                     'metric_name' => 'visitors_by_source',
                     'dimension_key' => 'source',
                     'dimension_value' => substr($row->utm_source, 0, 128),
-                ],
-                ['count' => $row->count]
-            );
-        }
+                    'count' => $row->count,
+                ]);
+            }
+
+            foreach ($sessionsBySource as $row) {
+                DailyMetric::create([
+                    'metric_date' => $targetDate,
+                    'metric_name' => 'sessions_by_source',
+                    'dimension_key' => 'source',
+                    'dimension_value' => substr($row->utm_source, 0, 128),
+                    'count' => $row->count,
+                ]);
+            }
+
+            foreach ($pageViewsBySource as $row) {
+                DailyMetric::create([
+                    'metric_date' => $targetDate,
+                    'metric_name' => 'page_views_by_source',
+                    'dimension_key' => 'source',
+                    'dimension_value' => substr($row->utm_source, 0, 128),
+                    'count' => $row->count,
+                ]);
+            }
+        });
 
         $this->info("Aggregation completed for {$targetDate}.");
 
-        // Retention Pruning
-        if ($this->option('prune') || ! $dateInput) {
+        // Optional Rebuilding of visitor_funnel_progressions (Section 14)
+        if ($this->option('rebuild-funnel')) {
+            $this->info('Rebuilding visitor_funnel_progressions...');
+            $funnelService = app(FunnelProgressionService::class);
+            $visitors = Visitor::all();
+            $rebuiltCount = 0;
+            $reconciledAt = now();
             $retentionDays = (int) Setting::get('analytics_retention_days', 180);
             $pruneCutoff = CarbonImmutable::now()->subDays($retentionDays);
 
-            $deletedEvents = AnalyticsEvent::where('created_at', '<', $pruneCutoff)->delete();
-            $this->info("Pruned {$deletedEvents} raw analytics events older than {$retentionDays} days.");
+            $preservedCount = 0;
+            DB::transaction(function () use ($visitors, $funnelService, $reconciledAt, $pruneCutoff, &$rebuiltCount, &$preservedCount) {
+                foreach ($visitors as $visitor) {
+                    $funnelService->rebuildVisitorFunnel($visitor, $reconciledAt);
+                    $rebuiltCount++;
+                    if ($visitor->first_seen_at && CarbonImmutable::parse($visitor->first_seen_at)->addDays(30)->lt($pruneCutoff)) {
+                        $preservedCount++;
+                    }
+                }
+            });
 
-            $deletedSessions = VisitorSession::where('created_at', '<', $pruneCutoff)->delete();
-            $this->info("Pruned {$deletedSessions} visitor sessions older than {$retentionDays} days.");
+            $authoritativeBookingsCount = DB::table('bookings')->where('status', '!=', 'cancelled')->count();
 
-            $deletedVisitors = Visitor::where('last_seen_at', '<', $pruneCutoff)
-                ->whereDoesntHave('contacts')
-                ->delete();
-            $this->info("Pruned {$deletedVisitors} inactive uncontacted visitors older than {$retentionDays} days.");
+            $funnelService->recordReconciliationAudit([
+                'audit_type' => 'rebuild',
+                'cutover_at' => $reconciledAt,
+                'rebuilt_visitors_count' => $rebuiltCount,
+                'preserved_historical_count' => $preservedCount,
+                'authoritative_bookings_count' => $authoritativeBookingsCount,
+                'non_comparable_before' => $pruneCutoff,
+                'notes' => "Rebuild executed via aggregate-daily command for {$rebuiltCount} visitors.",
+            ]);
+
+            $this->info("Rebuilt funnel progressions for {$rebuiltCount} visitors (reconciled at: {$reconciledAt}).");
+        }
+
+        // Retention Pruning (EDITS V1 §9, §13-15: whole Cairo calendar days, verified durable rollups)
+        if ($this->option('prune') || ! $dateInput) {
+            $retentionDays = (int) Setting::get('analytics_retention_days', 180);
+            $pruneCutoffDateCairo = CarbonImmutable::now('Africa/Cairo')->subDays($retentionDays)->startOfDay();
+            $pruneCutoffUtc = $pruneCutoffDateCairo->setTimezone('UTC');
+
+            $oldestEvent = AnalyticsEvent::where('created_at', '<', $pruneCutoffUtc)->min('created_at');
+            $oldestSession = VisitorSession::where('started_at', '<', $pruneCutoffUtc)->orWhere('created_at', '<', $pruneCutoffUtc)->min('started_at')
+                ?: VisitorSession::where('created_at', '<', $pruneCutoffUtc)->min('created_at');
+
+            $totalDeletedEvents = 0;
+            $totalDeletedSessions = 0;
+
+            if ($oldestEvent || $oldestSession) {
+                $oldestTimestamp = min(array_filter([$oldestEvent, $oldestSession]));
+                $currDay = CarbonImmutable::parse($oldestTimestamp)->setTimezone('Africa/Cairo')->startOfDay();
+                $latestPrunableDay = $pruneCutoffDateCairo->subDay()->startOfDay();
+
+                while ($currDay->lte($latestPrunableDay)) {
+                    $dayStr = $currDay->toDateString();
+                    $dayStartUtc = $currDay->setTimezone('UTC');
+                    $dayEndUtc = $currDay->addDay()->setTimezone('UTC');
+
+                    // Confirm durable rollup exists for this whole Cairo day before deleting raw data
+                    $hasRollup = DailyMetric::where('metric_date', $dayStr)
+                        ->where('metric_name', 'unique_visitors')
+                        ->exists();
+
+                    if (! $hasRollup) {
+                        $this->warn("Skipping retention pruning for Cairo date {$dayStr}: durable daily rollup is missing.");
+                        $currDay = $currDay->addDay();
+
+                        continue;
+                    }
+
+                    $deletedEvents = AnalyticsEvent::where('created_at', '>=', $dayStartUtc)
+                        ->where('created_at', '<', $dayEndUtc)
+                        ->delete();
+                    $totalDeletedEvents += $deletedEvents;
+
+                    $deletedSessions = VisitorSession::where(function ($q) use ($dayStartUtc, $dayEndUtc) {
+                        $q->where('started_at', '>=', $dayStartUtc)->where('started_at', '<', $dayEndUtc)
+                            ->orWhere(function ($sub) use ($dayStartUtc, $dayEndUtc) {
+                                $sub->whereNull('started_at')
+                                    ->where('created_at', '>=', $dayStartUtc)
+                                    ->where('created_at', '<', $dayEndUtc);
+                            });
+                    })->delete();
+                    $totalDeletedSessions += $deletedSessions;
+
+                    $currDay = $currDay->addDay();
+                }
+            }
+
+            $this->info("Pruned {$totalDeletedEvents} raw analytics events older than {$retentionDays} days across whole Cairo days.");
+            $this->info("Pruned {$totalDeletedSessions} visitor sessions older than {$retentionDays} days across whole Cairo days.");
+
+            // Notice: visitors and visitor_funnel_progressions are NOT deleted to preserve multi-year cohort reporting!
 
             $exportPath = storage_path('app/exports');
             if (File::isDirectory($exportPath)) {

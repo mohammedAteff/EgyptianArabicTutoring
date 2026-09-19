@@ -16,12 +16,14 @@ use App\Http\Controllers\Admin\ResourceCategoryController;
 use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\SystemHealthController;
+use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Middleware\ApplyAdminNoindexHeaders;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,43 +34,89 @@ use Illuminate\Support\Facades\Route;
 
 // Homepage
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/fr', [HomeController::class, 'index'])->name('home.fr');
+Route::get('/de', [HomeController::class, 'index'])->name('home.de');
 
 // LiteSpeed subdirectory landing target (used only by the Hostinger wrapper).
 Route::get('/_arabictutor-landing', [HomeController::class, 'index'])->name('home.internal');
 
 // Native Booking System
-Route::get('/book', [BookingController::class, 'index'])->name('booking.index');
+Route::get('/booking', [BookingController::class, 'index'])->name('booking.index');
+Route::permanentRedirect('/book', '/booking');
+Route::get('/fr/reservation', [BookingController::class, 'index'])->name('booking.fr');
+Route::get('/de/buchen', [BookingController::class, 'index'])->name('booking.de');
+
 Route::get('/book/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation');
+Route::get('/booking/confirmation/{token}', [BookingController::class, 'confirmation']);
+Route::get('/fr/reservation/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation.fr');
+Route::get('/de/buchen/bestaetigung/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation.de');
 Route::get('/book/confirmation/{token}/ics', [BookingController::class, 'ics'])->name('booking.ics');
+Route::get('/booking/confirmation/{token}/ics', [BookingController::class, 'ics']);
 Route::get('/book/{token}/reschedule', [BookingController::class, 'showReschedule'])->name('booking.reschedule');
+Route::get('/booking/{token}/reschedule', [BookingController::class, 'showReschedule']);
 Route::post('/book/{token}/reschedule', [BookingController::class, 'processReschedule'])->middleware('throttle:booking-reschedule')->name('booking.reschedule.submit');
+Route::post('/booking/{token}/reschedule', [BookingController::class, 'processReschedule'])->middleware('throttle:booking-reschedule');
 Route::post('/book/{token}/cancel', [BookingController::class, 'cancel'])->middleware('throttle:booking-cancel')->name('booking.cancel');
+Route::post('/booking/{token}/cancel', [BookingController::class, 'cancel'])->middleware('throttle:booking-cancel');
 
 // Resource Library & Gated Access
 Route::get('/resources', [ResourceController::class, 'index'])->name('resources.index');
+Route::get('/fr/ressources', [ResourceController::class, 'index'])->name('resources.fr');
+Route::get('/de/ressourcen', [ResourceController::class, 'index'])->name('resources.de');
+
 Route::get('/resources/{slug}', [ResourceController::class, 'show'])->name('resources.show');
+Route::get('/fr/ressources/{slug}', [ResourceController::class, 'show'])->name('resources.show.fr');
+Route::get('/de/ressourcen/{slug}', [ResourceController::class, 'show'])->name('resources.show.de');
+
 Route::post('/resources/{slug}/request', [ResourceController::class, 'requestAccess'])->middleware('throttle:resource-request')->name('resources.request');
+Route::post('/fr/ressources/{slug}/request', [ResourceController::class, 'requestAccess'])->middleware('throttle:resource-request')->name('resources.request.fr');
+Route::post('/de/ressourcen/{slug}/request', [ResourceController::class, 'requestAccess'])->middleware('throttle:resource-request')->name('resources.request.de');
+
 Route::get('/resources/{slug}/download', [ResourceController::class, 'download'])->name('resources.download');
+Route::get('/fr/ressources/{slug}/download', [ResourceController::class, 'download'])->name('resources.download.fr');
+Route::get('/de/ressourcen/{slug}/download', [ResourceController::class, 'download'])->name('resources.download.de');
 
 // Games
 Route::get('/games', [GameController::class, 'index'])->name('games.index');
+Route::get('/fr/jeux', [GameController::class, 'index'])->name('games.fr');
+Route::get('/de/spiele', [GameController::class, 'index'])->name('games.de');
+
 Route::get('/games/{slug}', [GameController::class, 'show'])->name('games.show');
+Route::get('/fr/jeux/{slug}', [GameController::class, 'show'])->name('games.show.fr');
+Route::get('/de/spiele/{slug}', [GameController::class, 'show'])->name('games.show.de');
+
 Route::post('/games/{slug}/track', [GameController::class, 'track'])->middleware('throttle:game-track')->name('games.track');
 
 // Static & CMS Pages
 Route::get('/about', [PageController::class, 'about'])->name('about');
-Route::get('/faq', [PageController::class, 'faq'])->name('faq');
-Route::get('/terms', [PageController::class, 'terms'])->name('terms');
-Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
-Route::get('/p/{slug}', [PageController::class, 'show'])->name('page.show');
+Route::get('/fr/a-propos', [PageController::class, 'about'])->name('about.fr');
+Route::get('/de/ueber-uns', [PageController::class, 'about'])->name('about.de');
 
-// Authenticated / Signed Draft Preview Routes (Section 49)
-Route::get('/preview/home', [HomeController::class, 'preview'])->name('home.preview');
-Route::get('/about/preview', [PageController::class, 'previewAbout'])->name('about.preview');
-Route::get('/p/{slug}/preview', [PageController::class, 'preview'])->name('pages.preview');
-Route::get('/resources/{slug}/preview', [ResourceController::class, 'preview'])->name('resources.preview');
-Route::get('/games/{slug}/preview', [GameController::class, 'preview'])->name('games.preview');
-Route::get('/faq/preview', [PageController::class, 'previewFaq'])->name('faq.preview');
+Route::get('/faq', [PageController::class, 'faq'])->name('faq');
+Route::get('/fr/faq', [PageController::class, 'faq'])->name('faq.fr');
+Route::get('/de/faq', [PageController::class, 'faq'])->name('faq.de');
+
+Route::get('/terms', [PageController::class, 'terms'])->name('terms');
+Route::get('/fr/conditions', [PageController::class, 'terms'])->name('terms.fr');
+Route::get('/de/agb', [PageController::class, 'terms'])->name('terms.de');
+
+Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
+Route::get('/fr/confidentialite', [PageController::class, 'privacy'])->name('privacy.fr');
+Route::get('/de/datenschutz', [PageController::class, 'privacy'])->name('privacy.de');
+
+Route::get('/p/{slug}', [PageController::class, 'show'])->name('page.show');
+Route::get('/fr/p/{slug}', [PageController::class, 'show'])->name('page.show.fr');
+Route::get('/de/p/{slug}', [PageController::class, 'show'])->name('page.show.de');
+
+// Authenticated / Signed Draft Preview Routes (Section 49 & Section 33)
+Route::middleware(ApplyAdminNoindexHeaders::class)->group(function () {
+    Route::get('/preview/home', [HomeController::class, 'preview'])->name('home.preview');
+    Route::get('/about/preview', [PageController::class, 'previewAbout'])->name('about.preview');
+    Route::get('/p/{slug}/preview', [PageController::class, 'preview'])->name('pages.preview');
+    Route::get('/resources/{slug}/preview', [ResourceController::class, 'preview'])->name('resources.preview');
+    Route::get('/games/{slug}/preview', [GameController::class, 'preview'])->name('games.preview');
+    Route::get('/faq/preview', [PageController::class, 'previewFaq'])->name('faq.preview');
+});
 
 // First-Party Client Analytics Ingestion
 Route::post('/analytics/event', [AnalyticsController::class, 'track'])->middleware('throttle:60,1')->name('analytics.track');
@@ -78,7 +126,7 @@ Route::post('/analytics/event', [AnalyticsController::class, 'track'])->middlewa
 | Admin Authentication Routes
 |--------------------------------------------------------------------------
 */
-Route::prefix('admin')->name('admin.')->group(function () {
+Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::class)->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -96,6 +144,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     */
     Route::middleware('auth:web')->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index']);
 
         // Bookings
         Route::get('/bookings', [App\Http\Controllers\Admin\BookingController::class, 'index'])->name('bookings.index');
@@ -160,6 +209,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // CMS Custom Pages & Revisions
         Route::resource('pages', App\Http\Controllers\Admin\PageController::class)->except(['show']);
         Route::post('/pages/{page}/revisions/{revision}/restore', [App\Http\Controllers\Admin\PageController::class, 'restoreRevision'])->name('pages.revisions.restore');
+
+        // Translations & Multilingual CMS Revisions
+        Route::post('/translations/{entityType}/{id}/{locale}/draft', [TranslationController::class, 'saveDraft'])->name('translations.save-draft');
+        Route::post('/translations/{entityType}/{id}/{locale}/publish', [TranslationController::class, 'publish'])->name('translations.publish');
+        Route::get('/translations/{entityType}/{id}/{locale}/reconcile', [TranslationController::class, 'reconcile'])->name('translations.reconcile');
 
         // Media Library
         Route::get('/media', [MediaController::class, 'index'])->name('media.index');

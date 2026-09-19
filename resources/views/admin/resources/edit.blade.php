@@ -180,5 +180,8 @@
         @endif
     </div>
 
+    <!-- Translations & Localization Panel -->
+    <x-admin.translations-panel :entity="$resource" entity-type="resource" />
+
 </div>
 @endsection

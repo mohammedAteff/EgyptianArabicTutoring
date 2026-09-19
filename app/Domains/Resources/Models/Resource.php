@@ -3,6 +3,7 @@
 namespace App\Domains\Resources\Models;
 
 use App\Domains\CMS\Models\ContentRevision;
+use App\Domains\CMS\Traits\HasTranslations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,17 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Resource extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasTranslations, SoftDeletes;
+
+    public function getTranslationModelClass(): string
+    {
+        return ResourceTranslation::class;
+    }
+
+    public function getEntityType(): string
+    {
+        return 'resource';
+    }
 
     protected $table = 'resources';
 

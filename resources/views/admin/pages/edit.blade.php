@@ -129,8 +129,10 @@
             </form>
         </div>
 
-        <!-- Revisions Sidebar (1 col) -->
+        <!-- Revisions and Translations Sidebar (1 col) -->
         <div class="space-y-6">
+            <x-admin.translations-panel :entity="$page" entity-type="page" />
+
             <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                     <h2 class="text-sm font-bold uppercase tracking-wider text-slate-900">Revision History</h2>

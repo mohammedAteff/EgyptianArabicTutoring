@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Page;
+use App\Domains\CMS\Services\TranslationService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -61,6 +63,14 @@ class PageController extends Controller
             'og_image_path' => $validated['og_image_path'] ?? null,
             'published_at' => $validated['status'] === 'published' ? now() : null,
         ]);
+
+        app(TranslationService::class)->updateEnglishSource($page, [
+            'title' => $page->title,
+            'content' => $page->content ?? '',
+            'excerpt' => $page->excerpt,
+            'seo_title' => $page->seo_title,
+            'seo_description' => $page->seo_description,
+        ], Auth::id());
 
         // Create initial revision #1
         ContentRevision::create([
@@ -160,43 +170,55 @@ class PageController extends Controller
             $publishedAt = now();
         }
 
-        $page->update([
-            'title' => $validated['title'],
-            'slug' => $slug,
-            'content' => $validated['content'] ?? '',
-            'excerpt' => $validated['excerpt'] ?? null,
-            'status' => $targetStatus,
-            'seo_title' => $validated['seo_title'] ?? null,
-            'seo_description' => $validated['seo_description'] ?? null,
-            'og_image_path' => $validated['og_image_path'] ?? null,
-            'published_at' => $publishedAt,
-        ]);
+        DB::transaction(function () use ($page, $validated, $slug, $targetStatus, $publishedAt, $previousData, $nextRevision) {
+            $lockedPage = Page::where('id', $page->id)->lockForUpdate()->firstOrFail();
 
-        ContentRevision::create([
-            'revisable_type' => Page::class,
-            'revisable_id' => $page->id,
-            'revision_number' => $nextRevision,
-            'title' => $validated['title'],
-            'content' => [
-                'body' => $validated['content'] ?? '',
+            $lockedPage->update([
+                'title' => $validated['title'],
+                'slug' => $slug,
+                'content' => $validated['content'] ?? '',
                 'excerpt' => $validated['excerpt'] ?? null,
-                'og_image_path' => $validated['og_image_path'] ?? null,
+                'status' => $targetStatus,
                 'seo_title' => $validated['seo_title'] ?? null,
                 'seo_description' => $validated['seo_description'] ?? null,
-            ],
-            'created_by_id' => Auth::id(),
-            'status' => $targetStatus === 'published' ? 'published' : 'draft',
-        ]);
+                'og_image_path' => $validated['og_image_path'] ?? null,
+                'published_at' => $publishedAt,
+            ]);
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => $targetStatus === 'published' ? 'page_published' : 'page_updated',
-            'entity_type' => Page::class,
-            'entity_id' => $page->id,
-            'previous_data' => $previousData,
-            'new_data' => $page->toArray(),
-            'created_at' => now(),
-        ]);
+            app(TranslationService::class)->updateEnglishSource($lockedPage, [
+                'title' => $validated['title'],
+                'content' => $validated['content'] ?? '',
+                'excerpt' => $validated['excerpt'] ?? null,
+                'seo_title' => $validated['seo_title'] ?? null,
+                'seo_description' => $validated['seo_description'] ?? null,
+            ], Auth::id());
+
+            ContentRevision::create([
+                'revisable_type' => Page::class,
+                'revisable_id' => $lockedPage->id,
+                'revision_number' => $nextRevision,
+                'title' => $validated['title'],
+                'content' => [
+                    'body' => $validated['content'] ?? '',
+                    'excerpt' => $validated['excerpt'] ?? null,
+                    'og_image_path' => $validated['og_image_path'] ?? null,
+                    'seo_title' => $validated['seo_title'] ?? null,
+                    'seo_description' => $validated['seo_description'] ?? null,
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => $targetStatus === 'published' ? 'published' : 'draft',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => $targetStatus === 'published' ? 'page_published' : 'page_updated',
+                'entity_type' => Page::class,
+                'entity_id' => $lockedPage->id,
+                'previous_data' => $previousData,
+                'new_data' => $lockedPage->toArray(),
+                'created_at' => now(),
+            ]);
+        });
 
         return redirect()->route('admin.pages.index')
             ->with('success', "Page '{$page->title}' updated (Revision #{$nextRevision} saved).");
@@ -211,25 +233,57 @@ class PageController extends Controller
         $content = $revision->content['body'] ?? '';
         $excerpt = $revision->content['excerpt'] ?? null;
         $ogImagePath = $revision->content['og_image_path'] ?? $page->og_image_path;
+        $title = $revision->title ?? $page->title;
 
-        $page->update([
-            'title' => $revision->title ?? $page->title,
-            'content' => $content,
-            'excerpt' => $excerpt,
-            'og_image_path' => $ogImagePath,
-        ]);
+        DB::transaction(function () use ($page, $revision, $content, $excerpt, $ogImagePath, $title) {
+            $lockedPage = Page::where('id', $page->id)->lockForUpdate()->firstOrFail();
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'page_revision_restored',
-            'entity_type' => Page::class,
-            'entity_id' => $page->id,
-            'new_data' => [
-                'restored_revision_number' => $revision->revision_number,
-                'title' => $page->title,
-            ],
-            'created_at' => now(),
-        ]);
+            $lockedPage->update([
+                'title' => $title,
+                'content' => $content,
+                'excerpt' => $excerpt,
+                'og_image_path' => $ogImagePath,
+            ]);
+
+            // Synchronize canonical English translation, record new source snapshot, and stale FR/DE rows
+            app(TranslationService::class)->updateEnglishSource($lockedPage, [
+                'title' => $title,
+                'content' => $content,
+                'excerpt' => $excerpt,
+                'seo_title' => $lockedPage->seo_title,
+                'seo_description' => $lockedPage->seo_description,
+            ], Auth::id());
+
+            $nextRevision = ($lockedPage->revisions()->max('revision_number') ?? 0) + 1;
+            ContentRevision::create([
+                'revisable_type' => Page::class,
+                'revisable_id' => $lockedPage->id,
+                'revision_number' => $nextRevision,
+                'title' => $title,
+                'content' => [
+                    'body' => $content,
+                    'excerpt' => $excerpt,
+                    'og_image_path' => $ogImagePath,
+                    'seo_title' => $lockedPage->seo_title,
+                    'seo_description' => $lockedPage->seo_description,
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => $lockedPage->status === 'published' ? 'published' : 'draft',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'page_revision_restored',
+                'entity_type' => Page::class,
+                'entity_id' => $lockedPage->id,
+                'new_data' => [
+                    'restored_from_revision' => $revision->revision_number,
+                    'new_revision_number' => $nextRevision,
+                    'title' => $title,
+                ],
+                'created_at' => now(),
+            ]);
+        });
 
         return back()->with('success', "Restored content from Revision #{$revision->revision_number}.");
     }

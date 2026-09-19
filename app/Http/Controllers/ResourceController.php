@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\CMS\Services\LocalizedUrlService;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
@@ -24,6 +25,7 @@ class ResourceController extends Controller
         $categorySlug = $request->query('category');
 
         $categories = ResourceCategory::where('active', true)
+            ->with('translations')
             ->orderBy('sort_order')
             ->get();
 
@@ -31,7 +33,7 @@ class ResourceController extends Controller
             ->where('status', 'published')
             ->whereNotNull('published_at')
             ->where('published_at', '<=', now())
-            ->with('category')
+            ->with(['category.translations', 'translations'])
             ->orderBy('sort_order');
 
         if ($categorySlug) {
@@ -45,6 +47,8 @@ class ResourceController extends Controller
             'categories' => $categories,
             'selectedCategory' => $categorySlug,
             'title' => 'Free Egyptian Arabic Workbooks & Guides',
+            'isFallback' => false,
+            'entityLocales' => ['en', 'fr', 'de'],
         ]);
     }
 
@@ -55,12 +59,18 @@ class ResourceController extends Controller
             ->where('status', 'published')
             ->whereNotNull('published_at')
             ->where('published_at', '<=', now())
-            ->with('category')
+            ->with(['category.translations', 'translations'])
             ->firstOrFail();
+
+        $resolved = $resource->resolveTranslation();
 
         return view('public.resources.show', [
             'resource' => $resource,
-            'title' => $resource->title.' — Free Egyptian Arabic Resource',
+            'translation' => $resolved['translation'],
+            'isFallback' => $resolved['is_fallback'],
+            'isStale' => $resolved['is_stale'],
+            'entityLocales' => $resource->getAvailableLocales(),
+            'title' => ($resolved['translation']?->title ?? $resource->title).' — Free Egyptian Arabic Resource',
         ]);
     }
 
@@ -177,7 +187,9 @@ class ResourceController extends Controller
             'request_id' => $resourceRequest->id,
         ]);
 
-        return redirect()->route('resources.show', ['slug' => $resource->slug])
+        $targetUrl = app(LocalizedUrlService::class)->getLocalizedUrl('resource.detail', app()->getLocale(), $resource->slug);
+
+        return redirect()->to($targetUrl)
             ->with('access_granted', true)
             ->with('download_token', $downloadToken)
             ->with('success', 'Your download is ready! Click the button below to get your file.');
@@ -207,7 +219,9 @@ class ResourceController extends Controller
             }
 
             if (! $tokenData || ($tokenData['resource_id'] ?? null) !== $resource->id) {
-                return redirect()->route('resources.show', ['slug' => $slug])
+                $targetUrl = app(LocalizedUrlService::class)->getLocalizedUrl('resource.detail', app()->getLocale(), $slug);
+
+                return redirect()->to($targetUrl)
                     ->with('error', 'Please enter your email to get free access to this resource.');
             }
         }

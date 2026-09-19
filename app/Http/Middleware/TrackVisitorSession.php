@@ -36,11 +36,13 @@ class TrackVisitorSession
             $userAgent = (string) $request->header('User-Agent', '');
             $isBot = $this->detectBot($userAgent);
 
+            $isSecure = app()->isProduction() || $request->isSecure();
+
             // 1. Identify or initialize Visitor
             $visitorToken = $request->cookie($visitorCookieName);
             if (! $visitorToken || ! Str::isUuid($visitorToken)) {
                 $visitorToken = (string) Str::uuid();
-                $newVisitorCookie = cookie($visitorCookieName, $visitorToken, 60 * 24 * 365, '/', null, false, false, false, 'Lax');
+                $newVisitorCookie = cookie($visitorCookieName, $visitorToken, 60 * 24 * 365, '/', null, $isSecure, false, false, 'Lax');
             }
 
             $deviceType = $this->detectDevice($userAgent);
@@ -77,6 +79,10 @@ class TrackVisitorSession
                 $shouldStartNewSession = true;
             }
 
+            $rawReferrer = substr((string) $request->header('referer', ''), 0, 500) ?: null;
+            $hasUtm = $request->filled('utm_source');
+            $hasExternalReferrer = $this->analyticsService->isValidExternalReferrer($rawReferrer);
+
             if ($shouldStartNewSession) {
                 $sessionToken = (string) Str::uuid();
                 $session = VisitorSession::create([
@@ -89,16 +95,43 @@ class TrackVisitorSession
                     'utm_campaign' => $request->query('utm_campaign'),
                     'utm_content' => $request->query('utm_content'),
                     'utm_term' => $request->query('utm_term'),
-                    'referrer' => substr((string) $request->header('referer', ''), 0, 500) ?: null,
+                    'referrer' => $rawReferrer,
                     'landing_page' => substr($request->fullUrl(), 0, 255),
                     'is_bot' => $isBot,
                 ]);
 
-                $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, false, false, false, 'Lax');
+                $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, $isSecure, false, false, 'Lax');
             } else {
-                $session->update(['last_activity_at' => now()]);
+                $updateData = ['last_activity_at' => now()];
+
+                // When an existing session receives new marketing touch, update the active session UTMs
+                if ($hasUtm || $hasExternalReferrer) {
+                    $updateData['utm_source'] = $request->query('utm_source') ?: parse_url((string) $rawReferrer, PHP_URL_HOST);
+                    $updateData['utm_medium'] = $request->query('utm_medium') ?: $session->utm_medium;
+                    $updateData['utm_campaign'] = $request->query('utm_campaign') ?: $session->utm_campaign;
+                    $updateData['utm_content'] = $request->query('utm_content') ?: $session->utm_content;
+                    $updateData['utm_term'] = $request->query('utm_term') ?: $session->utm_term;
+                    $updateData['referrer'] = $rawReferrer ?: $session->referrer;
+                }
+
+                $session->update($updateData);
                 // Slide session expiration forward on active request
-                $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, false, false, false, 'Lax');
+                $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, $isSecure, false, false, 'Lax');
+            }
+
+            // Persist timestamped non-direct marketing touch (Section 18B & 19)
+            if (! $isBot && ($hasUtm || $hasExternalReferrer)) {
+                $this->analyticsService->recordMarketingTouch(
+                    visitor: $visitor,
+                    sessionToken: $sessionToken,
+                    utmSource: $request->query('utm_source'),
+                    utmMedium: $request->query('utm_medium'),
+                    utmCampaign: $request->query('utm_campaign'),
+                    utmContent: $request->query('utm_content'),
+                    utmTerm: $request->query('utm_term'),
+                    referrer: $rawReferrer,
+                    touchAt: $now
+                );
             }
 
             $request->attributes->set('analytics_visitor_token', $visitorToken);

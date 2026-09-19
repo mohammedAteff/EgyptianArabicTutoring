@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\CMS\Services\TranslationService;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -52,6 +54,11 @@ class ResourceCategoryController extends Controller
 
         $category = ResourceCategory::create($validated);
 
+        app(TranslationService::class)->updateEnglishSource($category, [
+            'name' => $category->name,
+            'description' => null,
+        ], Auth::id());
+
         AuditLog::create([
             'administrator_id' => Auth::id(),
             'action' => 'resource_category_created',
@@ -89,17 +96,26 @@ class ResourceCategoryController extends Controller
         $validated['active'] = $request->boolean('active', false);
 
         $prev = $resourceCategory->toArray();
-        $resourceCategory->update($validated);
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'resource_category_updated',
-            'entity_type' => ResourceCategory::class,
-            'entity_id' => $resourceCategory->id,
-            'previous_data' => $prev,
-            'new_data' => $resourceCategory->toArray(),
-            'created_at' => now(),
-        ]);
+        DB::transaction(function () use ($resourceCategory, $validated, $prev) {
+            $lockedCategory = ResourceCategory::where('id', $resourceCategory->id)->lockForUpdate()->firstOrFail();
+            $lockedCategory->update($validated);
+
+            app(TranslationService::class)->updateEnglishSource($lockedCategory, [
+                'name' => $lockedCategory->name,
+                'description' => null,
+            ], Auth::id());
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'resource_category_updated',
+                'entity_type' => ResourceCategory::class,
+                'entity_id' => $lockedCategory->id,
+                'previous_data' => $prev,
+                'new_data' => $lockedCategory->toArray(),
+                'created_at' => now(),
+            ]);
+        });
 
         return redirect()->route('admin.resource-categories.index')->with('success', "Category '{$resourceCategory->name}' updated.");
     }

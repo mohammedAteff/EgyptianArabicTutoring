@@ -2,6 +2,7 @@
 
 namespace App\Domains\CMS\Models;
 
+use App\Domains\CMS\Traits\HasTranslations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +10,17 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Faq extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTranslations;
+
+    public function getTranslationModelClass(): string
+    {
+        return FaqTranslation::class;
+    }
+
+    public function getEntityType(): string
+    {
+        return 'faq';
+    }
 
     protected $table = 'faqs';
 

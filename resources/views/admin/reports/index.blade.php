@@ -47,6 +47,10 @@
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'events' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             5. Raw Events Log
         </a>
+        <a href="{{ route('admin.reports.index', ['type' => 'campaigns', 'range' => $range]) }}" 
+           class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'campaigns' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
+            6. Campaign & Content Attribution
+        </a>
     </div>
 
     <!-- Date Range & Period Filter Bar -->
@@ -74,14 +78,36 @@
             <!-- Period Comparison KPI Bar -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                    <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Unique Visitors</div>
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                        @if(!empty($reportData['summary']['visitors_is_daily_sum']))
+                            Sum of Daily Unique Visitors
+                        @else
+                            Unique Visitors
+                        @endif
+                    </div>
                     <div class="mt-2 flex items-baseline gap-3">
                         <span class="text-3xl font-black text-slate-900">{{ number_format($reportData['summary']['visitors']) }}</span>
-                        <span class="text-xs font-semibold {{ $reportData['summary']['visitor_change_pct'] >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">
-                            {{ $reportData['summary']['visitor_change_pct'] >= 0 ? '+' : '' }}{{ $reportData['summary']['visitor_change_pct'] }}% vs prev period
-                        </span>
+                        @if(!empty($reportData['summary']['is_comparable_visitors']) && isset($reportData['summary']['visitor_change_pct']))
+                            <span class="text-xs font-semibold {{ $reportData['summary']['visitor_change_pct'] >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">
+                                {{ $reportData['summary']['visitor_change_pct'] >= 0 ? '+' : '' }}{{ $reportData['summary']['visitor_change_pct'] }}% vs prev period
+                            </span>
+                        @else
+                            <span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded" title="Non-comparable: periods have different counting bases">
+                                Non-comparable
+                            </span>
+                        @endif
                     </div>
-                    <div class="text-[11px] text-slate-600 mt-1">Previous period: {{ number_format($reportData['summary']['prev_visitors']) }}</div>
+                    <div class="text-[11px] text-slate-600 mt-1">
+                        Previous period: {{ number_format($reportData['summary']['prev_visitors']) }}
+                        @if(!empty($reportData['summary']['prev_visitors_is_daily_sum']))
+                            <span class="text-slate-500">(sum of daily uniques)</span>
+                        @endif
+                    </div>
+                    @if(!empty($reportData['summary']['visitors_is_daily_sum']))
+                        <div class="text-[11px] text-amber-700 mt-1.5 font-medium leading-tight">
+                            Raw events pruned across multi-day range; total represents sum of daily uniques rather than deduplicated visitors.
+                        </div>
+                    @endif
                 </div>
 
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -161,6 +187,8 @@
                                 <th class="py-3 px-4">Student Local Time</th>
                                 <th class="py-3 px-4">Source</th>
                                 <th class="py-3 px-4">Campaign</th>
+                                <th class="py-3 px-4">Content</th>
+                                <th class="py-3 px-4">Touch Time</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -187,10 +215,12 @@
                                         <span class="px-2 py-0.5 rounded-md bg-slate-100 font-mono text-[11px]">{{ $b['source'] }}</span>
                                     </td>
                                     <td class="py-3 px-4 font-mono text-[11px]">{{ $b['campaign'] }}</td>
+                                    <td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $b['content'] }}</td>
+                                    <td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $b['touch_at'] }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="py-8 text-center text-slate-400 italic">No bookings recorded in this date range.</td>
+                                    <td colspan="9" class="py-8 text-center text-slate-400 italic">No bookings recorded in this date range.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -318,6 +348,85 @@
                             @empty
                                 <tr>
                                     <td colspan="5" class="py-8 text-center text-slate-400 italic">No events found.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- REPORT 6: CAMPAIGN & CONTENT ATTRIBUTION -->
+    @if($reportType === 'campaigns')
+        <div class="space-y-6">
+            <!-- Period Comparison KPI Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Active Campaigns</div>
+                    <div class="mt-2 text-3xl font-black text-slate-900">{{ number_format($reportData['total_campaigns']) }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Distinct campaign tags</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Campaign Visitors</div>
+                    <div class="mt-2 text-3xl font-black text-slate-900">{{ number_format($reportData['total_visitors']) }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Acquired through marketing</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Downstream Bookings</div>
+                    <div class="mt-2 text-3xl font-black text-amber-700">{{ number_format($reportData['total_bookings']) }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Total bookings attributed</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Confirmed / Completed</div>
+                    <div class="mt-2 text-3xl font-black text-emerald-700">{{ number_format($reportData['total_confirmed']) }}</div>
+                    <div class="text-[11px] text-slate-500 mt-1">Successful conversions</div>
+                </div>
+            </div>
+
+            <!-- Granular Content Drilldown Table -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div class="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Granular Content Attribution (Section 19)</h2>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Campaign → Content → Visitor Count → Downstream Bookings</p>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4">Campaign</th>
+                                <th class="py-3 px-4">Content (Ad / Creative / Post)</th>
+                                <th class="py-3 px-4">Channel / Source</th>
+                                <th class="py-3 px-4 text-right">Unique Visitors</th>
+                                <th class="py-3 px-4 text-right">Total Bookings</th>
+                                <th class="py-3 px-4 text-right">Confirmed / Completed</th>
+                                <th class="py-3 px-4 text-right">Conversion Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @forelse($reportData['rows'] as $row)
+                                <tr class="hover:bg-slate-50/80 transition-colors">
+                                    <td class="py-3 px-4 font-mono font-bold text-slate-900">{{ $row['campaign'] }}</td>
+                                    <td class="py-3 px-4 font-mono text-[11px] text-amber-800 font-semibold">{{ $row['content'] }}</td>
+                                    <td class="py-3 px-4">
+                                        <span class="px-2 py-0.5 rounded-md bg-slate-100 font-mono text-[11px]">{{ $row['source'] }}</span>
+                                    </td>
+                                    <td class="py-3 px-4 text-right font-medium text-slate-800">{{ number_format($row['visitors_count']) }}</td>
+                                    <td class="py-3 px-4 text-right font-medium text-slate-800">{{ number_format($row['bookings_count']) }}</td>
+                                    <td class="py-3 px-4 text-right font-bold text-emerald-700">{{ number_format($row['confirmed_bookings']) }}</td>
+                                    <td class="py-3 px-4 text-right font-mono font-bold {{ $row['conversion_rate'] > 0 ? 'text-emerald-700' : 'text-slate-400' }}">
+                                        {{ $row['conversion_rate'] }}%
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-slate-400 italic">No campaign-attributed activity in this date range.</td>
                                 </tr>
                             @endforelse
                         </tbody>

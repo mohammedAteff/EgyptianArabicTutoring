@@ -19,29 +19,33 @@ class AnalyticsDashboardController extends Controller
     {
         $range = $request->query('range', '30d');
 
-        $now = CarbonImmutable::now();
-        $startDate = match ($range) {
+        $cairoTz = 'Africa/Cairo';
+        $now = CarbonImmutable::now($cairoTz);
+        $startCairo = match ($range) {
             'today' => $now->startOfDay(),
             '7d' => $now->subDays(7)->startOfDay(),
             '90d' => $now->subDays(90)->startOfDay(),
             'month' => $now->startOfMonth(),
             default => $now->subDays(30)->startOfDay(),
         };
-        $endDate = $now->endOfDay();
+        $endCairo = $now->endOfDay();
+
+        $startDateUtc = $startCairo->setTimezone('UTC');
+        $endDateUtc = $endCairo->setTimezone('UTC');
 
         $windowMinutes = (int) Setting::get('active_visitor_window', 5);
         $activeVisitorsCount = $this->analyticsService->getActiveVisitorsCount($windowMinutes);
         $activeVisitors = $this->analyticsService->getActiveVisitorsSummary($windowMinutes);
-        $primaryFunnel = $this->analyticsService->getPrimaryBookingFunnel($startDate, $endDate);
-        $resourceFunnel = $this->analyticsService->getResourceFunnel($startDate, $endDate);
-        $gameFunnel = $this->analyticsService->getGameFunnel($startDate, $endDate);
-        $acquisition = $this->analyticsService->getAcquisitionPerformance($startDate, $endDate);
+        $primaryFunnel = $this->analyticsService->getPrimaryBookingFunnel($startDateUtc, $endDateUtc);
+        $resourceFunnel = $this->analyticsService->getResourceFunnel($startDateUtc, $endDateUtc);
+        $gameFunnel = $this->analyticsService->getGameFunnel($startDateUtc, $endDateUtc);
+        $acquisition = $this->analyticsService->getAcquisitionPerformance($startDateUtc, $endDateUtc);
 
         return view('admin.analytics.index', [
             'title' => 'First-Party Analytics & Business Funnels',
             'range' => $range,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
+            'startDate' => $startCairo,
+            'endDate' => $endCairo,
             'activeVisitorsCount' => $activeVisitorsCount,
             'activeVisitors' => $activeVisitors,
             'primaryFunnel' => $primaryFunnel,

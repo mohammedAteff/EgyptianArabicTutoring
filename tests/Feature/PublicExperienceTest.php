@@ -74,8 +74,9 @@ class PublicExperienceTest extends TestCase
 
     public function test_booking_page_renders_livewire_wizard(): void
     {
-        $response = $this->get('/book');
+        $this->get('/book')->assertStatus(301)->assertRedirect('/booking');
 
+        $response = $this->get('/booking');
         $response->assertStatus(200);
         $response->assertSeeLivewire(BookingWizard::class);
     }
@@ -381,7 +382,8 @@ class PublicExperienceTest extends TestCase
 
         $gameResponse->assertOk();
         $gameResponse->assertSee('mohamedateff.com\\/arabictutor\\/games\\/subpath-game\\/track', false);
-        $gameResponse->assertSee('href="https://mohamedateff.com/arabictutor/admin/login"', false);
+        $gameResponse->assertSee('href="https://mohamedateff.com/arabictutor/booking"', false);
+        $gameResponse->assertDontSee('/admin/login', false);
         $gameResponse->assertSee('data-update-uri="https://mohamedateff.com/arabictutor/livewire-', false);
         $gameResponse->assertDontSee('/arabictutor/arabictutor/', false);
     }

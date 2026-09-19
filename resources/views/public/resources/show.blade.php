@@ -4,11 +4,11 @@
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-xs font-medium text-stone-500 mb-8">
-        <a href="{{ route('home') }}" class="hover:text-stone-800">Home</a>
+        <a href="{{ localized_url('home') }}" class="hover:text-stone-800">{{ __('Home') }}</a>
         <span>/</span>
-        <a href="{{ route('resources.index') }}" class="hover:text-stone-800">Resources</a>
+        <a href="{{ localized_url('resources') }}" class="hover:text-stone-800">{{ __('Resources') }}</a>
         <span>/</span>
-        <span class="text-stone-800 font-bold truncate">{{ $resource->title }}</span>
+        <span class="text-stone-800 font-bold truncate">{{ $translation->title ?? $resource->title }}</span>
     </nav>
 
     @if(session('success'))
@@ -17,12 +17,21 @@
         </div>
     @endif
 
+    @if($isFallback ?? false)
+        <div class="mb-8 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-2xl text-sm text-amber-900 font-medium shadow-sm flex items-center gap-3">
+            <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ __('content_fallback_banner') }}</span>
+        </div>
+    @endif
+
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         <!-- Main Description (7 cols) -->
-        <div class="lg:col-span-7 space-y-6">
+        <div @if($isFallback ?? false) lang="en" dir="ltr" @endif class="lg:col-span-7 space-y-6">
             <div class="flex items-center gap-3">
                 <span class="text-xs font-bold uppercase tracking-wider text-terracotta-600 bg-terracotta-50 px-3 py-1 rounded-full">
-                    {{ $resource->category?->name ?? 'Free Resource' }}
+                    {{ $resource->category?->liveTranslation()?->name ?? $resource->category?->name ?? 'Free Resource' }}
                 </span>
                 <span class="text-xs font-semibold text-stone-500 bg-stone-100 px-2.5 py-0.5 rounded-full">
                     {{ strtoupper($resource->file_type ?? 'PDF') }}
@@ -32,20 +41,20 @@
             @if($resource->cover_image_path)
                 <div class="rounded-3xl overflow-hidden shadow-sm border border-stone-200/80 mb-6">
                     <img src="{{ str_starts_with($resource->cover_image_path, 'http') ? $resource->cover_image_path : \Illuminate\Support\Facades\Storage::disk('public')->url($resource->cover_image_path) }}"
-                         alt="{{ $resource->title }}" class="w-full max-h-96 object-cover">
+                         alt="{{ $translation->title ?? $resource->title }}" class="w-full max-h-96 object-cover">
                 </div>
             @endif
 
             <h1 class="text-3xl sm:text-4xl font-extrabold text-stone-900 tracking-tight leading-snug">
-                {{ $resource->title }}
+                {{ $translation->title ?? $resource->title }}
             </h1>
 
             <div class="prose prose-stone text-stone-600 leading-relaxed text-base space-y-4">
                 <p class="font-medium text-stone-800 text-lg leading-relaxed">
-                    {{ $resource->short_description }}
+                    {{ $translation->short_description ?? $resource->short_description }}
                 </p>
                 <div class="pt-2">
-                    {!! nl2br(e($resource->full_description ?? $resource->short_description)) !!}
+                    {!! nl2br(e($translation->full_description ?? ($resource->full_description ?? ($translation->short_description ?? $resource->short_description)))) !!}
                 </div>
             </div>
 
@@ -85,12 +94,12 @@
                             Click below to save the file directly to your device.
                         </p>
                         <div class="pt-2">
-                            <a href="{{ route('resources.download', array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) }}"
-                               class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base px-6 py-4 rounded-full shadow-md hover:shadow-lg transition-all">
+                            <a href="{{ route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) }}"
+                                class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base px-6 py-4 rounded-full shadow-md hover:shadow-lg transition-all">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                 </svg>
-                                <span>Download {{ strtoupper($resource->file_type ?? 'PDF') }}</span>
+                                <span>{{ __('Download Resource') }}</span>
                             </a>
                         </div>
                     </div>
@@ -106,7 +115,7 @@
                             Instant access provided right on this screen. No waiting for email links or promotional spam.
                         </p>
 
-                        <form method="POST" action="{{ route('resources.request', $resource->slug) }}" class="space-y-4">
+                        <form method="POST" action="{{ route(app()->getLocale() === 'fr' ? 'resources.request.fr' : (app()->getLocale() === 'de' ? 'resources.request.de' : 'resources.request'), $resource->slug) }}" class="space-y-4">
                             @csrf
 
                             <div>
@@ -140,7 +149,7 @@
                             <div class="pt-2">
                                 <button type="submit"
                                         class="w-full inline-flex items-center justify-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-sm px-6 py-3.5 rounded-full shadow-md hover:shadow transition-all">
-                                    <span>Get Free Resource Now</span>
+                                    <span>{{ __('Request Free Access') }}</span>
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
                                     </svg>
@@ -158,7 +167,7 @@
                 <div class="mt-8 pt-6 border-t border-stone-100 text-center">
                     <div class="text-xs font-bold text-stone-900 mb-1">Want to practice speaking?</div>
                     <p class="text-xs text-stone-500 mb-3">Practice these exact phrases in a private 1-on-1 session.</p>
-                    <a href="{{ route('booking.index') }}" class="text-xs font-bold text-terracotta-600 hover:text-terracotta-700 underline">
+                    <a href="{{ localized_url('booking') }}" class="text-xs font-bold text-terracotta-600 hover:text-terracotta-700 underline">
                         Book a Lesson with Ahmad →
                     </a>
                 </div>

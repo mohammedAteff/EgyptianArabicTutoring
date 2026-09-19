@@ -129,6 +129,10 @@
                                 </button>
                             </div>
                         </form>
+
+                        <div class="pt-3 border-t border-slate-200/60">
+                            <x-admin.translations-panel :entity="$faq" entity-type="faq" />
+                        </div>
                     </div>
                 </div>
             @empty

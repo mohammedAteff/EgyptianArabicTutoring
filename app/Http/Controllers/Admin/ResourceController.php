@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Media;
+use App\Domains\CMS\Services\TranslationService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Http\Controllers\Controller;
@@ -106,6 +107,12 @@ class ResourceController extends Controller
             'sort_order' => $validated['sort_order'] ?? 0,
             'published_at' => $validated['status'] === 'published' ? now() : null,
         ]);
+
+        app(TranslationService::class)->updateEnglishSource($resource, [
+            'title' => $validated['title'],
+            'short_description' => $description,
+            'full_description' => $validated['full_description'] ?? $description,
+        ], Auth::id());
 
         AuditLog::create([
             'administrator_id' => Auth::id(),
@@ -310,6 +317,12 @@ class ResourceController extends Controller
 
                 $prev = $resource->toArray();
                 $resource->update($updates);
+
+                app(TranslationService::class)->updateEnglishSource($resource, [
+                    'title' => $resource->title,
+                    'short_description' => $resource->short_description,
+                    'full_description' => $resource->full_description ?? $resource->short_description,
+                ], Auth::id());
 
                 $nextRevision = ($resource->revisions()->max('revision_number') ?? 0) + 1;
                 ContentRevision::create([

@@ -94,19 +94,21 @@ class BookingHoldService
                 'status' => 'active',
             ]);
 
-            // 6. Track server-side analytics event
-            $this->analyticsService->trackEvent(
-                eventType: 'booking_slot_held',
-                page: '/booking',
-                visitorToken: $aVisitor,
-                sessionToken: $aSession,
-                metadata: [
-                    'hold_id' => $hold->id,
-                    'session_type_id' => $sessionType->id,
-                    'slot_start_utc' => $start->toDateTimeString(),
-                    'slot_end_utc' => $end->toDateTimeString(),
-                ]
-            );
+            // 6. Track server-side analytics event post-commit
+            DB::afterCommit(function () use ($aVisitor, $aSession, $hold, $sessionType, $start, $end) {
+                $this->analyticsService->trackEvent(
+                    eventType: 'booking_slot_held',
+                    page: '/booking',
+                    visitorToken: $aVisitor,
+                    sessionToken: $aSession,
+                    metadata: [
+                        'hold_id' => $hold->id,
+                        'session_type_id' => $sessionType->id,
+                        'slot_start_utc' => $start->toDateTimeString(),
+                        'slot_end_utc' => $end->toDateTimeString(),
+                    ]
+                );
+            });
 
             return $hold;
         }, 5);

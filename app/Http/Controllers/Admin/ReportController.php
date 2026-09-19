@@ -29,6 +29,7 @@ class ReportController extends Controller
             'resources' => $this->reportService->getResourcesReport($start, $end),
             'social' => $this->reportService->getSocialReport($start, $end),
             'events' => $this->reportService->getEventsReport($start, $end, $request->query('event_name')),
+            'campaigns' => $this->reportService->getCampaignContentReport($start, $end, $request->query('campaign')),
             default => $this->reportService->getTrafficReport($start, $end, $request->query('source')),
         };
 
@@ -36,8 +37,8 @@ class ReportController extends Controller
             'title' => 'Operational Reports & Data Exports',
             'reportType' => $reportType,
             'range' => $range,
-            'start' => $start,
-            'end' => $end,
+            'start' => $start->setTimezone('Africa/Cairo'),
+            'end' => $end->setTimezone('Africa/Cairo'),
             'reportData' => $data,
         ]);
     }
@@ -57,6 +58,7 @@ class ReportController extends Controller
             'resources' => $this->exportResources($start, $end, $format, $timestamp),
             'social' => $this->exportSocial($start, $end, $format, $timestamp),
             'events' => $this->exportEvents($start, $end, $format, $timestamp, $request->query('event_name')),
+            'campaigns' => $this->exportCampaigns($start, $end, $format, $timestamp, $request->query('campaign')),
             default => $this->exportTraffic($start, $end, $format, $timestamp, $request->query('source')),
         };
     }
@@ -94,6 +96,9 @@ class ReportController extends Controller
             'Time (Student Local)',
             'Acquisition Source',
             'Campaign',
+            'Content',
+            'Referrer',
+            'Touch Time',
             'Booked At',
         ];
         $rows = $report['rows']->map(fn ($b) => [
@@ -107,6 +112,9 @@ class ReportController extends Controller
             $b['lesson_time_student'],
             $b['source'],
             $b['campaign'],
+            $b['content'],
+            $b['referrer'],
+            $b['touch_at'],
             $b['created_at'],
         ]);
 
@@ -114,6 +122,27 @@ class ReportController extends Controller
 
         return $format === 'xlsx'
             ? $this->exportService->exportXlsx($filename, $headers, $rows, 'Bookings Report')
+            : $this->exportService->exportCsv($filename, $headers, $rows);
+    }
+
+    protected function exportCampaigns(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $campaign): Response
+    {
+        $report = $this->reportService->getCampaignContentReport($start, $end, $campaign);
+        $headers = ['Campaign', 'Content (Ad / Post)', 'Source', 'Unique Visitors', 'Total Bookings', 'Confirmed / Completed', 'Conversion Rate (%)'];
+        $rows = $report['rows']->map(fn ($r) => [
+            $r['campaign'],
+            $r['content'],
+            $r['source'],
+            $r['visitors_count'],
+            $r['bookings_count'],
+            $r['confirmed_bookings'],
+            $r['conversion_rate'].'%',
+        ]);
+
+        $filename = "campaign_attribution_{$ts}.{$format}";
+
+        return $format === 'xlsx'
+            ? $this->exportService->exportXlsx($filename, $headers, $rows, 'Campaign Attribution')
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
@@ -181,16 +210,29 @@ class ReportController extends Controller
      */
     protected function resolveDateRange(string $range, Request $request): array
     {
-        $now = CarbonImmutable::now();
+        $cairoTz = 'Africa/Cairo';
+        $now = CarbonImmutable::now($cairoTz);
 
         if ($range === 'custom' && $request->filled('start_date') && $request->filled('end_date')) {
+            $startCairo = CarbonImmutable::parse($request->query('start_date'), $cairoTz)->startOfDay();
+            $endCairo = CarbonImmutable::parse($request->query('end_date'), $cairoTz)->endOfDay();
+
+            if ($startCairo->gt($endCairo)) {
+                $endCairo = $startCairo->endOfDay();
+            }
+
+            // Cap custom range to 5 years (1825 days) to ensure bounded query horizons
+            if ($startCairo->diffInDays($endCairo) > 1825) {
+                $endCairo = $startCairo->addDays(1825)->endOfDay();
+            }
+
             return [
-                CarbonImmutable::parse($request->query('start_date'))->startOfDay(),
-                CarbonImmutable::parse($request->query('end_date'))->endOfDay(),
+                $startCairo->setTimezone('UTC'),
+                $endCairo->setTimezone('UTC'),
             ];
         }
 
-        return match ($range) {
+        [$startCairo, $endCairo] = match ($range) {
             'today' => [$now->startOfDay(), $now->endOfDay()],
             '7d' => [$now->subDays(7)->startOfDay(), $now->endOfDay()],
             '90d' => [$now->subDays(90)->startOfDay(), $now->endOfDay()],
@@ -198,5 +240,10 @@ class ReportController extends Controller
             'last_month' => [$now->subMonth()->startOfMonth(), $now->subMonth()->endOfMonth()],
             default => [$now->subDays(30)->startOfDay(), $now->endOfDay()],
         };
+
+        return [
+            $startCairo->setTimezone('UTC'),
+            $endCairo->setTimezone('UTC'),
+        ];
     }
 }

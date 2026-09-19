@@ -22,3 +22,12 @@
     --color-nile-800: #12373e;
     --color-nile-900: #0e2a30;
 }
+
+/* Bidirectional Text Isolation for Embedded Arabic Learning Content (Section 29) */
+bdi[lang="ar"],
+.arabic-learning-text,
+[dir="rtl"][lang="ar"] {
+    font-family: var(--font-cairo);
+    unicode-bidi: isolate;
+    line-height: 1.6;
+}

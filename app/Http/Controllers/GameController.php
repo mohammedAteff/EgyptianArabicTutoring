@@ -20,12 +20,15 @@ class GameController extends Controller
     {
         $games = Game::query()
             ->whereIn('status', ['available', 'coming_soon'])
+            ->with('translations')
             ->orderBy('sort_order')
             ->get();
 
         return view('public.games.index', [
             'games' => $games,
             'title' => 'Egyptian Arabic Learning Games & Quizzes',
+            'isFallback' => false,
+            'entityLocales' => ['en', 'fr', 'de'],
         ]);
     }
 
@@ -67,7 +70,10 @@ class GameController extends Controller
         $game = Game::query()
             ->where('slug', $slug)
             ->whereIn('status', ['available', 'coming_soon'])
+            ->with('translations')
             ->firstOrFail();
+
+        $resolved = $game->resolveTranslation();
 
         $visitorToken = $request->attributes->get('analytics_visitor_token')
             ?? ($request->hasSession() ? $request->session()->get('analytics_visitor_token') : null)
@@ -96,7 +102,11 @@ class GameController extends Controller
 
         return view('public.games.show', [
             'game' => $game,
-            'title' => $game->title.' — Egyptian Arabic Game',
+            'translation' => $resolved['translation'],
+            'isFallback' => $resolved['is_fallback'],
+            'isStale' => $resolved['is_stale'],
+            'entityLocales' => $game->getAvailableLocales(),
+            'title' => ($resolved['translation']?->title ?? $game->title).' — Egyptian Arabic Game',
         ]);
     }
 

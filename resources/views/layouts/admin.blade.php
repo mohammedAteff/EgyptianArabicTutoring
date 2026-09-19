@@ -14,9 +14,11 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="h-full font-sans antialiased bg-slate-100" x-data="{ mobileSidebarOpen: false }">
+<body class="h-full font-sans antialiased bg-slate-100" 
+      x-data="adminMobileNav()" 
+      @keydown.window="handleKeydown($event)">
 
-    <!-- Mobile Sidebar Backdrop -->
+    <!-- Mobile Sidebar Backdrop (Section 32) -->
     <div x-show="mobileSidebarOpen" 
          x-transition:enter="transition-opacity ease-linear duration-300"
          x-transition:enter-start="opacity-0"
@@ -26,12 +28,16 @@
          x-transition:leave-end="opacity-0"
          class="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-xs lg:hidden"
          style="display: none;"
-         @click="mobileSidebarOpen = false"></div>
+         @click="closeSidebar()"></div>
 
     <div class="min-h-full flex">
 
-        <!-- Sidebar for Desktop & Mobile Drawer -->
-        <aside :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+        <!-- Sidebar for Desktop & Mobile Drawer (Section 32) -->
+        <aside id="admin-sidebar"
+               role="dialog"
+               aria-modal="true"
+               aria-label="Admin Navigation"
+               :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
                class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out lg:static lg:flex-shrink-0">
             
             <!-- Brand / Logo -->
@@ -45,7 +51,10 @@
                         <div class="text-xs text-amber-400 font-medium">Operations Console</div>
                     </div>
                 </a>
-                <button @click="mobileSidebarOpen = false" class="lg:hidden text-slate-400 hover:text-white">
+                <button type="button"
+                        @click="closeSidebar()"
+                        aria-label="Close Navigation Menu"
+                        class="lg:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -224,7 +233,13 @@
                 
                 <!-- Left: Hamburger toggle + Global Search Form -->
                 <div class="flex items-center gap-4 flex-1 max-w-xl">
-                    <button @click="mobileSidebarOpen = true" class="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100">
+                    <button type="button"
+                            id="admin-menu-toggle"
+                            @click="openSidebar()"
+                            aria-controls="admin-sidebar"
+                            :aria-expanded="mobileSidebarOpen ? 'true' : 'false'"
+                            aria-label="Open Navigation Menu"
+                            class="lg:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
 
@@ -287,5 +302,86 @@
         </div>
     </div>
     @include('admin.partials.media-picker')
+
+    <script>
+    function adminMobileNav() {
+        return {
+            mobileSidebarOpen: false,
+            previousFocusedElement: null,
+            previousBodyOverflow: '',
+
+            openSidebar() {
+                this.previousFocusedElement = document.activeElement;
+                this.previousBodyOverflow = document.body.style.overflow || '';
+                document.body.style.overflow = 'hidden';
+                this.mobileSidebarOpen = true;
+
+                this.$nextTick(() => {
+                    const sidebar = document.getElementById('admin-sidebar');
+                    if (!sidebar) return;
+                    const focusable = this.getFocusableElements(sidebar);
+                    if (focusable.length > 0) {
+                        focusable[0].focus();
+                    }
+                });
+            },
+
+            closeSidebar() {
+                if (!this.mobileSidebarOpen) return;
+                this.mobileSidebarOpen = false;
+                document.body.style.overflow = this.previousBodyOverflow;
+
+                this.$nextTick(() => {
+                    if (this.previousFocusedElement && typeof this.previousFocusedElement.focus === 'function') {
+                        this.previousFocusedElement.focus();
+                    } else {
+                        const toggle = document.getElementById('admin-menu-toggle');
+                        if (toggle) toggle.focus();
+                    }
+                });
+            },
+
+            handleKeydown(e) {
+                if (!this.mobileSidebarOpen) return;
+
+                if (e.key === 'Escape' || e.keyCode === 27) {
+                    e.preventDefault();
+                    this.closeSidebar();
+                    return;
+                }
+
+                if (e.key === 'Tab' || e.keyCode === 9) {
+                    const sidebar = document.getElementById('admin-sidebar');
+                    if (!sidebar) return;
+                    const focusable = this.getFocusableElements(sidebar);
+                    if (focusable.length === 0) return;
+
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+
+                    if (e.shiftKey) {
+                        if (document.activeElement === first || !sidebar.contains(document.activeElement)) {
+                            e.preventDefault();
+                            last.focus();
+                        }
+                    } else {
+                        if (document.activeElement === last || !sidebar.contains(document.activeElement)) {
+                            e.preventDefault();
+                            first.focus();
+                        }
+                    }
+                }
+            },
+
+            getFocusableElements(container) {
+                return Array.from(
+                    container.querySelectorAll(
+                        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                    )
+                ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true' && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0));
+            }
+        };
+    }
+    </script>
 </body>
 </html>

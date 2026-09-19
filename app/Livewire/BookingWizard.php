@@ -6,6 +6,7 @@ use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
@@ -118,6 +119,55 @@ class BookingWizard extends Component
             $this->currentStep = 2; // skip session selection step
         } elseif ($activeSessions->count() > 1) {
             $this->currentStep = 1;
+        }
+
+        // Restore booking flow state across language switches or page navigations (Section 28)
+        $savedState = Session::get('booking_flow_state');
+        if (is_array($savedState) && ! empty($savedState['visitor_token'])) {
+            if (hash_equals($this->visitorToken, (string) $savedState['visitor_token'])) {
+                $this->customerTimezone = $savedState['customer_timezone'] ?? $this->customerTimezone;
+                $this->calendarMonth = $savedState['calendar_month'] ?? $this->calendarMonth;
+                $this->selectedDate = $savedState['selected_date'] ?? null;
+                $this->selectedSessionTypeId = $savedState['selected_session_type_id'] ?? $this->selectedSessionTypeId;
+                $this->name = $savedState['name'] ?? '';
+                $this->email = $savedState['email'] ?? '';
+                $this->phone = $savedState['phone'] ?? '';
+                $this->notes = $savedState['notes'] ?? '';
+
+                if (! empty($savedState['hold_id']) && ! empty($savedState['hold_token'])) {
+                    $hold = BookingHold::where('id', $savedState['hold_id'])
+                        ->where('status', 'active')
+                        ->first();
+
+                    if ($hold &&
+                        $hold->expires_at->isFuture() &&
+                        hash_equals((string) $hold->hold_token, (string) $savedState['hold_token']) &&
+                        hash_equals((string) $hold->visitor_token, (string) $this->visitorToken) &&
+                        hash_equals((string) $hold->session_token, (string) session()->getId())
+                    ) {
+                        $this->holdId = $hold->id;
+                        $this->holdToken = $hold->hold_token;
+                        $this->holdExpiresAt = $hold->expires_at->toIso8601String();
+                        $this->selectedSlotStartUtc = $savedState['selected_slot_start_utc'] ?? null;
+                        $this->selectedSlotEndUtc = $savedState['selected_slot_end_utc'] ?? null;
+                        $this->selectedSlot = $savedState['selected_slot'] ?? null;
+                        $this->currentStep = $savedState['current_step'] ?? 3;
+                    } else {
+                        $this->holdId = null;
+                        $this->holdToken = null;
+                        $this->holdExpiresAt = null;
+                        $this->selectedSlotStartUtc = null;
+                        $this->selectedSlotEndUtc = null;
+                        $this->selectedSlot = null;
+                        $this->currentStep = 2;
+                        if ($hold && ! $hold->expires_at->isFuture()) {
+                            $this->errorMessage = 'Your reserved slot has expired. Please select a time slot to continue.';
+                        }
+                    }
+                } elseif (! empty($savedState['current_step'])) {
+                    $this->currentStep = min($savedState['current_step'], 2);
+                }
+            }
         }
     }
 
@@ -251,6 +301,7 @@ class BookingWizard extends Component
 
             // Advance to details step
             $this->currentStep = 3;
+            $this->syncSessionState();
         } catch (SlotUnavailableException $e) {
             $this->errorMessage = $e->getMessage();
         }
@@ -261,6 +312,7 @@ class BookingWizard extends Component
         $this->validate();
         $this->errorMessage = null;
         $this->currentStep = 4; // Step 4: Review
+        $this->syncSessionState();
     }
 
     public function confirmBooking(): void
@@ -282,7 +334,13 @@ class BookingWizard extends Component
                     'active_booking_session_type_id',
                 ]);
 
-                $this->redirectRoute('booking.confirmation', ['token' => $existing->confirmation_token]);
+                $confRoute = match (app()->getLocale()) {
+                    'fr' => 'booking.confirmation.fr',
+                    'de' => 'booking.confirmation.de',
+                    default => 'booking.confirmation',
+                };
+
+                $this->redirectRoute($confRoute, ['token' => $existing->confirmation_token]);
 
                 return;
             }
@@ -349,16 +407,22 @@ class BookingWizard extends Component
             // Release hold reference
             $this->holdId = null;
             $this->holdToken = null;
-            session()->forget([
+            Session::forget([
                 'active_booking_hold_id',
                 'active_booking_hold_token',
                 'active_booking_slot_start_utc',
                 'active_booking_slot_end_utc',
                 'active_booking_session_type_id',
+                'booking_flow_state',
             ]);
 
             // Redirect to confirmation page
-            $this->redirectRoute('booking.confirmation', ['token' => $booking->confirmation_token]);
+            $confRoute = match (app()->getLocale()) {
+                'fr' => 'booking.confirmation.fr',
+                'de' => 'booking.confirmation.de',
+                default => 'booking.confirmation',
+            };
+            $this->redirectRoute($confRoute, ['token' => $booking->confirmation_token]);
         } catch (SlotUnavailableException $e) {
             $this->errorMessage = $e->getMessage();
             $this->currentStep = 2; // return to slot selection
@@ -372,7 +436,63 @@ class BookingWizard extends Component
         $this->errorMessage = null;
         if ($step < $this->currentStep) {
             $this->currentStep = $step;
+            $this->syncSessionState();
         }
+    }
+
+    public function syncSessionState(): void
+    {
+        Session::put('booking_flow_state', [
+            'visitor_token' => $this->visitorToken,
+            'current_step' => $this->currentStep,
+            'selected_session_type_id' => $this->selectedSessionTypeId,
+            'customer_timezone' => $this->customerTimezone,
+            'calendar_month' => $this->calendarMonth,
+            'selected_date' => $this->selectedDate,
+            'selected_slot_start_utc' => $this->selectedSlotStartUtc,
+            'selected_slot_end_utc' => $this->selectedSlotEndUtc,
+            'selected_slot' => $this->selectedSlot,
+            'hold_id' => $this->holdId,
+            'hold_token' => $this->holdToken,
+            'hold_expires_at' => $this->holdExpiresAt,
+            'name' => $this->name,
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'notes' => $this->notes,
+        ]);
+    }
+
+    public function updated($propertyName): void
+    {
+        $this->syncSessionState();
+    }
+
+    public function switchLanguage(string $locale, array $pendingData = []): void
+    {
+        if (! empty($pendingData)) {
+            if (isset($pendingData['name'])) {
+                $this->name = (string) $pendingData['name'];
+            }
+            if (isset($pendingData['email'])) {
+                $this->email = (string) $pendingData['email'];
+            }
+            if (isset($pendingData['phone'])) {
+                $this->phone = (string) $pendingData['phone'];
+            }
+            if (isset($pendingData['notes'])) {
+                $this->notes = (string) $pendingData['notes'];
+            }
+        }
+
+        $this->syncSessionState();
+
+        $targetUrl = match ($locale) {
+            'fr' => url('/fr/reservation'),
+            'de' => url('/de/buchen'),
+            default => url('/booking'),
+        };
+
+        $this->redirect($targetUrl);
     }
 
     public function render()

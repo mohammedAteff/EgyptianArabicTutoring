@@ -34,18 +34,20 @@ class HomeController extends Controller
         $featuredResources = Resource::query()
             ->where('status', 'published')
             ->whereNotNull('published_at')
-            ->with('category')
+            ->with(['category.translations', 'translations'])
             ->orderBy('sort_order')
             ->take(3)
             ->get();
 
         $featuredGames = Game::query()
             ->whereIn('status', ['available', 'coming_soon'])
+            ->with('translations')
             ->orderBy('sort_order')
             ->take(3)
             ->get();
 
         $faqs = Faq::active()
+            ->with('translations')
             ->take(6)
             ->get();
 
@@ -73,6 +75,8 @@ class HomeController extends Controller
             'homeCtaSubtitle' => $getSetting('home_cta_subtitle', 'Reserve your first private lesson in minutes. Choose your local timezone and get instant confirmation with your calendar invitation.'),
             'homeCtaButton' => $getSetting('home_cta_button', 'Book Your Session Now'),
             'isPreview' => $isPreview,
+            'isFallback' => false,
+            'entityLocales' => ['en', 'fr', 'de'],
         ]);
     }
 }

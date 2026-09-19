@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\ContentRevision;
+use App\Domains\CMS\Services\TranslationService;
 use App\Domains\Games\Models\Game;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -83,6 +85,11 @@ class GameController extends Controller
             'new_data' => $game->toArray(),
             'created_at' => now(),
         ]);
+
+        app(TranslationService::class)->updateEnglishSource($game, [
+            'title' => $game->title,
+            'description' => $game->description,
+        ], Auth::id());
 
         return redirect()->route('admin.games.index')->with('success', "Game '{$game->title}' created.");
     }
@@ -167,39 +174,48 @@ class GameController extends Controller
         }
 
         $prev = $game->toArray();
-        $game->update($validated);
 
-        $game->revisions()->where('status', 'draft')->update(['status' => 'archived']);
+        DB::transaction(function () use ($game, $validated, $prev) {
+            $lockedGame = Game::where('id', $game->id)->lockForUpdate()->firstOrFail();
+            $lockedGame->update($validated);
 
-        $nextRevision = ($game->revisions()->max('revision_number') ?? 0) + 1;
-        ContentRevision::create([
-            'revisable_type' => Game::class,
-            'revisable_id' => $game->id,
-            'revision_number' => $nextRevision,
-            'title' => $game->title,
-            'content' => [
-                'slug' => $game->slug,
-                'description' => $game->description,
-                'badge' => $game->badge,
-                'target_url' => $game->target_url,
-                'thumbnail_path' => $game->thumbnail_path,
-                'status' => $game->status,
-                'sort_order' => $game->sort_order,
-                'featured' => $game->featured,
-            ],
-            'created_by_id' => Auth::id(),
-            'status' => $game->status === 'available' ? 'published' : 'draft',
-        ]);
+            app(TranslationService::class)->updateEnglishSource($lockedGame, [
+                'title' => $lockedGame->title,
+                'description' => $lockedGame->description,
+            ], Auth::id());
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'game_updated',
-            'entity_type' => Game::class,
-            'entity_id' => $game->id,
-            'previous_data' => $prev,
-            'new_data' => $game->toArray(),
-            'created_at' => now(),
-        ]);
+            $lockedGame->revisions()->where('status', 'draft')->update(['status' => 'archived']);
+
+            $nextRevision = ($lockedGame->revisions()->max('revision_number') ?? 0) + 1;
+            ContentRevision::create([
+                'revisable_type' => Game::class,
+                'revisable_id' => $lockedGame->id,
+                'revision_number' => $nextRevision,
+                'title' => $lockedGame->title,
+                'content' => [
+                    'slug' => $lockedGame->slug,
+                    'description' => $lockedGame->description,
+                    'badge' => $lockedGame->badge,
+                    'target_url' => $lockedGame->target_url,
+                    'thumbnail_path' => $lockedGame->thumbnail_path,
+                    'status' => $lockedGame->status,
+                    'sort_order' => $lockedGame->sort_order,
+                    'featured' => $lockedGame->featured,
+                ],
+                'created_by_id' => Auth::id(),
+                'status' => $lockedGame->status === 'available' ? 'published' : 'draft',
+            ]);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'game_updated',
+                'entity_type' => Game::class,
+                'entity_id' => $lockedGame->id,
+                'previous_data' => $prev,
+                'new_data' => $lockedGame->toArray(),
+                'created_at' => now(),
+            ]);
+        });
 
         return redirect()->route('admin.games.index')->with('success', 'Game settings updated.');
     }

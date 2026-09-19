@@ -4,15 +4,24 @@
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-xs font-medium text-stone-500 mb-8">
-        <a href="{{ route('home') }}" class="hover:text-stone-800">Home</a>
+        <a href="{{ localized_url('home') }}" class="hover:text-stone-800">{{ __('Home') }}</a>
         <span>/</span>
-        <a href="{{ route('games.index') }}" class="hover:text-stone-800">Games</a>
+        <a href="{{ localized_url('games') }}" class="hover:text-stone-800">{{ __('Games') }}</a>
         <span>/</span>
-        <span class="text-stone-800 font-bold truncate">{{ $game->title }}</span>
+        <span class="text-stone-800 font-bold truncate">{{ $translation->title ?? $game->title }}</span>
     </nav>
 
+    @if($isFallback ?? false)
+        <div class="mb-8 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-2xl text-sm text-amber-900 font-medium shadow-sm flex items-center gap-3">
+            <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ __('content_fallback_banner') }}</span>
+        </div>
+    @endif
+
     <!-- Game Container with Alpine Reactive State -->
-    <div class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-10 shadow-sm"
+    <div @if($isFallback ?? false) lang="en" dir="ltr" @endif class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-10 shadow-sm"
          x-data="{
              gameSlug: @js($game->slug),
              trackingUrl: @js(route('games.track', ['slug' => $game->slug])),
@@ -151,11 +160,11 @@
             </div>
             <div>
                 <span class="text-xs font-bold uppercase tracking-wider text-terracotta-600 bg-terracotta-50 px-3 py-1 rounded-full">
-                    Interactive Challenge
+                    {{ $translation->badge ?? ($game->badge ?: 'Interactive Challenge') }}
                 </span>
-                <h1 class="text-3xl font-extrabold text-stone-900 mt-2">{{ $game->title }}</h1>
+                <h1 class="text-3xl font-extrabold text-stone-900 mt-2">{{ $translation->title ?? $game->title }}</h1>
                 <p class="text-stone-600 text-base max-w-md mx-auto mt-2 leading-relaxed">
-                    Test your understanding of essential Egyptian Arabic street phrases and expressions used daily in Cairo.
+                    {{ $translation->description ?? ($game->description ?: 'Test your understanding of essential Egyptian Arabic street phrases and expressions used daily in Cairo.') }}
                 </p>
             </div>
 
@@ -194,8 +203,8 @@
 
             <!-- Arabic Phrase Card -->
             <div class="p-8 rounded-3xl bg-stone-50 border border-stone-200/80 text-center space-y-2">
-                <div class="font-cairo font-extrabold text-3xl sm:text-4xl text-stone-900" dir="rtl"
-                     x-text="questions[currentIndex].arabic"></div>
+                <bdi dir="rtl" lang="ar" class="font-cairo font-extrabold text-3xl sm:text-4xl text-stone-900 block"
+                     x-text="questions[currentIndex].arabic"></bdi>
                 <div class="text-sm font-semibold text-terracotta-600"
                      x-text="questions[currentIndex].phonetic"></div>
             </div>
@@ -270,7 +279,7 @@
                         class="w-full sm:w-auto px-6 py-3 rounded-full border border-stone-300 text-stone-700 hover:bg-stone-50 font-semibold text-sm transition-colors">
                     🔄 Play Again
                 </button>
-                <a href="{{ route('booking.index') }}"
+                <a href="{{ localized_url('booking') }}"
                    class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-sm px-7 py-3 rounded-full shadow-md hover:shadow transition-all">
                     <span>Practice with Ahmad 1-on-1</span>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>

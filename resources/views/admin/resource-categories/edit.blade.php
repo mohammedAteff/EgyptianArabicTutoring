@@ -70,5 +70,8 @@
         </div>
     </form>
 
+    <!-- Translations & Localization Panel -->
+    <x-admin.translations-panel :entity="$category" entity-type="category" />
+
 </div>
 @endsection

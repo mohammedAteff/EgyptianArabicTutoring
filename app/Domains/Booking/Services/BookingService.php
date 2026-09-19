@@ -3,7 +3,6 @@
 namespace App\Domains\Booking\Services;
 
 use App\Domains\Administration\Services\AdminNotificationService;
-use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
@@ -138,7 +137,8 @@ class BookingService
             $holdId,
             $holdToken,
             $analyticsVisitorToken,
-            $analyticsSessionToken
+            $analyticsSessionToken,
+            $nowUtc
         ) {
             // Re-check idempotency inside transaction
             $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
@@ -199,21 +199,28 @@ class BookingService
                 resolvedConfig: $config
             );
 
-            $utmSource = $data['source'] ?? null;
-            $utmMedium = $data['medium'] ?? null;
-            $utmCampaign = $data['campaign'] ?? null;
-            $utmContent = $data['content'] ?? null;
-            $utmTerm = $data['term'] ?? null;
+            // Authoritative Last Non-Direct Touch conversion attribution within exact 30-day lookback (EDITS V1 §18B)
+            $conversionAttr = $this->analyticsService->getBookingConversionAttribution(
+                visitorToken: $analyticsVisitorToken ?? $visitorToken,
+                bookingTime: $nowUtc
+            );
 
-            if (! $utmSource && ($analyticsSessionToken ?? $sessionToken)) {
-                $visSession = VisitorSession::where('session_token', $analyticsSessionToken ?? $sessionToken)->first();
-                if ($visSession) {
-                    $utmSource = $visSession->utm_source;
-                    $utmMedium = $visSession->utm_medium;
-                    $utmCampaign = $visSession->utm_campaign;
-                    $utmContent = $visSession->utm_content;
-                    $utmTerm = $visSession->utm_term;
-                }
+            if ($conversionAttr['utm_source'] !== 'Direct / None') {
+                $utmSource = $conversionAttr['utm_source'];
+                $utmMedium = $conversionAttr['utm_medium'];
+                $utmCampaign = $conversionAttr['utm_campaign'];
+                $utmContent = $conversionAttr['utm_content'];
+                $utmTerm = $conversionAttr['utm_term'];
+                $referrer = $conversionAttr['referrer'];
+                $touchAt = $conversionAttr['touch_at'];
+            } else {
+                $utmSource = 'Direct / None';
+                $utmMedium = null;
+                $utmCampaign = null;
+                $utmContent = null;
+                $utmTerm = null;
+                $referrer = null;
+                $touchAt = null;
             }
 
             // Resolve or create canonical Contact
@@ -245,6 +252,7 @@ class BookingService
             try {
                 $booking = Booking::create(array_merge($snapshot, [
                     'contact_id' => $contact->id,
+                    'visitor_token' => $analyticsVisitorToken ?? $visitorToken,
                     'session_type_id' => $sessionType->id,
                     'status' => 'confirmed',
                     'idempotency_key' => $idempotencyKey,
@@ -255,6 +263,8 @@ class BookingService
                     'campaign' => $utmCampaign,
                     'content' => $utmContent,
                     'term' => $utmTerm,
+                    'referrer' => $referrer,
+                    'touch_at' => $touchAt,
                 ]));
             } catch (QueryException $e) {
                 // If duplicate key error (1062), fetch and return the winning concurrent booking
@@ -288,20 +298,22 @@ class BookingService
                 'created_at' => now(),
             ]);
 
-            // Track authoritative server-side analytics event
-            $this->analyticsService->trackEvent(
-                eventType: 'booking_completed',
-                page: '/booking/confirmed',
-                visitorToken: $analyticsVisitorToken ?? $visitorToken,
-                sessionToken: $analyticsSessionToken ?? $sessionToken,
-                metadata: [
-                    'booking_id' => $booking->id,
-                    'session_type_id' => $sessionType->id,
-                    'start_at_utc' => $startUtc->toDateTimeString(),
-                    'end_at_utc' => $endUtc->toDateTimeString(),
-                    'customer_timezone' => $customerTimezone,
-                ]
-            );
+            // Track authoritative server-side analytics event post-commit
+            DB::afterCommit(function () use ($booking, $sessionType, $startUtc, $endUtc, $customerTimezone, $analyticsVisitorToken, $visitorToken, $analyticsSessionToken, $sessionToken) {
+                $this->analyticsService->trackEvent(
+                    eventType: 'booking_completed',
+                    page: '/booking/confirmed',
+                    visitorToken: $analyticsVisitorToken ?? $visitorToken,
+                    sessionToken: $analyticsSessionToken ?? $sessionToken,
+                    metadata: [
+                        'booking_id' => $booking->id,
+                        'session_type_id' => $sessionType->id,
+                        'start_at_utc' => $startUtc->toDateTimeString(),
+                        'end_at_utc' => $endUtc->toDateTimeString(),
+                        'customer_timezone' => $customerTimezone,
+                    ]
+                );
+            });
 
             return $booking;
         }, 5);
@@ -419,6 +431,8 @@ class BookingService
                     'campaign' => $data['campaign'] ?? null,
                     'content' => $data['content'] ?? null,
                     'term' => $data['term'] ?? null,
+                    'referrer' => $data['referrer'] ?? null,
+                    'touch_at' => isset($data['touch_at']) ? CarbonImmutable::parse($data['touch_at']) : null,
                 ]));
             } catch (QueryException $e) {
                 if ($e->getCode() === '23000' || str_contains($e->getMessage(), '1062')) {

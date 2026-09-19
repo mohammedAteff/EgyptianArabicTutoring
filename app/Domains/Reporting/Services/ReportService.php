@@ -3,12 +3,16 @@
 namespace App\Domains\Reporting\Services;
 
 use App\Domains\Analytics\Models\AnalyticsEvent;
+use App\Domains\Analytics\Models\DailyMetric;
+use App\Domains\Analytics\Models\MarketingTouch;
+use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ReportService
@@ -19,6 +23,63 @@ class ReportService
 
     public function getTrafficReport(CarbonInterface $start, CarbonInterface $end, ?string $source = null): array
     {
+        $current = $this->resolvePeriodTrafficMetrics($start, $end, $source);
+
+        $startCairoStr = CarbonImmutable::parse($start)->setTimezone('Africa/Cairo')->toDateString();
+        $endCairoStr = CarbonImmutable::parse($end)->setTimezone('Africa/Cairo')->toDateString();
+
+        $dateCount = max(1, (new \DateTimeImmutable($startCairoStr))->diff(new \DateTimeImmutable($endCairoStr))->days + 1);
+        $prevStartDateStr = (new \DateTimeImmutable($startCairoStr))->sub(new \DateInterval("P{$dateCount}D"))->format('Y-m-d');
+        $prevEndDateStr = (new \DateTimeImmutable($startCairoStr))->sub(new \DateInterval('P1D'))->format('Y-m-d');
+
+        $prevStart = CarbonImmutable::parse($prevStartDateStr, 'Africa/Cairo')->startOfDay()->setTimezone('UTC');
+        $prevEnd = CarbonImmutable::parse($prevEndDateStr, 'Africa/Cairo')->endOfDay()->setTimezone('UTC');
+
+        $prev = $this->resolvePeriodTrafficMetrics($prevStart, $prevEnd, $source);
+
+        // Only compute comparison growth rate when current and previous periods have identical counting bases
+        $isComparableVisitors = ($current['visitors_basis'] === $prev['visitors_basis']);
+        $visitorChangePct = ($isComparableVisitors && $prev['visitors'] > 0)
+            ? round((($current['visitors'] - $prev['visitors']) / $prev['visitors']) * 100, 1)
+            : ($isComparableVisitors ? 0.0 : null);
+
+        return [
+            'rows' => $current['rows'],
+            'summary' => [
+                'visitors' => $current['visitors'],
+                'visitors_basis' => $current['visitors_basis'],
+                'visitors_is_daily_sum' => $current['visitors_is_daily_sum'],
+                'sessions' => $current['sessions'],
+                'page_views' => $current['page_views'],
+                'prev_visitors' => $prev['visitors'],
+                'prev_visitors_basis' => $prev['visitors_basis'],
+                'prev_visitors_is_daily_sum' => $prev['visitors_is_daily_sum'],
+                'is_comparable_visitors' => $isComparableVisitors,
+                'prev_sessions' => $prev['sessions'],
+                'prev_page_views' => $prev['page_views'],
+                'prev_start' => $prevStart,
+                'prev_end' => $prevEnd,
+                'visitor_change_pct' => $visitorChangePct,
+            ],
+        ];
+    }
+
+    /**
+     * Resolves reconciled daily rows and aggregate summary metrics for a given date range.
+     * Reconciles raw events/sessions with durable daily rollups when raw data has been pruned.
+     *
+     * @return array{
+     *     rows: Collection,
+     *     visitors: int,
+     *     sessions: int,
+     *     page_views: int,
+     *     visitors_basis: string,
+     *     visitors_is_daily_sum: bool,
+     *     has_pruned_dates: bool
+     * }
+     */
+    protected function resolvePeriodTrafficMetrics(CarbonInterface $start, CarbonInterface $end, ?string $source = null): array
+    {
         $query = AnalyticsEvent::query()
             ->whereBetween('created_at', [$start, $end])
             ->where('is_bot', false);
@@ -27,68 +88,152 @@ class ReportService
             $query->where('utm_source', $source);
         }
 
-        // Daily traffic totals grouped strictly by date (one row per date)
+        $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
+
+        // Daily traffic totals grouped strictly by Cairo calendar date (one row per date)
         $dailyTotals = (clone $query)
             ->select(
-                DB::raw('DATE(created_at) as report_date'),
+                DB::raw("{$dateExpr} as report_date"),
                 DB::raw('COUNT(DISTINCT visitor_token) as visitors'),
-                DB::raw('COUNT(DISTINCT session_token) as sessions'),
                 DB::raw('COUNT(CASE WHEN event_name = "page_view" THEN 1 END) as page_views')
             )
-            ->groupBy(DB::raw('DATE(created_at)'))
+            ->groupBy('report_date')
             ->orderByDesc('report_date')
             ->get();
+
+        // Sessions strictly attributed by session started_at in Cairo day (matching daily_metrics.sessions)
+        $sessionDateExpr = $this->getCairoDateExpression('started_at', $start, $end);
+        $sessionsByDate = VisitorSession::query()
+            ->whereBetween('started_at', [$start, $end])
+            ->where('is_bot', false)
+            ->when($source, fn ($q) => $q->where('utm_source', $source))
+            ->select(
+                DB::raw("{$sessionDateExpr} as report_date"),
+                DB::raw('COUNT(*) as sessions_count')
+            )
+            ->groupBy('report_date')
+            ->pluck('sessions_count', 'report_date');
 
         // Calculate actual top acquisition source for each day
         $sourcesByDate = (clone $query)
             ->select(
-                DB::raw('DATE(created_at) as report_date'),
+                DB::raw("{$dateExpr} as report_date"),
                 DB::raw('COALESCE(utm_source, "direct") as source_name'),
                 DB::raw('COUNT(*) as total_events')
             )
-            ->groupBy(DB::raw('DATE(created_at)'), 'source_name')
+            ->groupBy('report_date', 'source_name')
             ->orderByDesc('total_events')
             ->get()
             ->groupBy('report_date');
 
-        $dailyRows = $dailyTotals->map(function ($row) use ($sourcesByDate) {
+        $dailyRows = $dailyTotals->map(function ($row) use ($sourcesByDate, $sessionsByDate) {
             $top = $sourcesByDate->get($row->report_date)?->first();
             $row->top_source = $top ? $top->source_name : 'direct';
+            $row->sessions = (int) ($sessionsByDate->get($row->report_date) ?? 0);
 
             return $row;
         });
 
-        $totalVisitors = (clone $query)->whereNotNull('visitor_token')->distinct('visitor_token')->count('visitor_token');
-        $totalSessions = (clone $query)->whereNotNull('session_token')->distinct('session_token')->count('session_token');
-        $totalPageViews = (clone $query)->where('event_name', 'page_view')->count();
+        // Merge with durable daily_metrics rollups for dates where raw events were pruned (EDITS V1 §9, §13-15)
+        $startCairoDate = CarbonImmutable::parse($start)->setTimezone('Africa/Cairo')->toDateString();
+        $endCairoDate = CarbonImmutable::parse($end)->setTimezone('Africa/Cairo')->toDateString();
 
-        $diffDays = $start->diffInDays($end) ?: 1;
-        $prevStart = CarbonImmutable::parse($start)->subDays($diffDays);
-        $prevEnd = CarbonImmutable::parse($start)->subSecond();
+        $historicalMetrics = DailyMetric::whereBetween('metric_date', [$startCairoDate, $endCairoDate])
+            ->get()
+            ->groupBy(function ($metric) {
+                return $metric->metric_date instanceof CarbonInterface
+                    ? $metric->metric_date->toDateString()
+                    : substr((string) $metric->metric_date, 0, 10);
+            });
 
-        $prevQuery = AnalyticsEvent::query()
-            ->whereBetween('created_at', [$prevStart, $prevEnd])
-            ->where('is_bot', false);
+        $hasPrunedDates = false;
+        foreach ($historicalMetrics as $mDate => $metricsForDate) {
+            $mDateStr = (string) $mDate;
+            $existingRow = $dailyRows->firstWhere('report_date', $mDateStr);
 
-        if ($source) {
-            $prevQuery->where('utm_source', $source);
+            $visitorsMetric = $source
+                ? (int) $metricsForDate->where('metric_name', 'visitors_by_source')->where('dimension_value', $source)->sum('count')
+                : (int) $metricsForDate->where('metric_name', 'unique_visitors')->sum('count');
+
+            $sessionsMetric = $source
+                ? (int) $metricsForDate->where('metric_name', 'sessions_by_source')->where('dimension_value', $source)->sum('count')
+                : (int) $metricsForDate->where('metric_name', 'sessions')->sum('count');
+
+            $pvMetric = $source
+                ? (int) $metricsForDate->where('metric_name', 'page_views_by_source')->where('dimension_value', $source)->sum('count')
+                : (int) ($metricsForDate->where('metric_name', 'page_view')->sum('count') ?: $metricsForDate->where('metric_name', 'page_views')->sum('count'));
+
+            $topSourceRow = $metricsForDate->where('metric_name', 'visitors_by_source')->sortByDesc('count')->first();
+            $topSource = $source ?: ($topSourceRow?->dimension_value ?: 'direct');
+
+            $hasMetrics = ($visitorsMetric > 0 || $sessionsMetric > 0 || $pvMetric > 0);
+
+            $isPartiallyPruned = $existingRow && (
+                $existingRow->visitors < $visitorsMetric ||
+                $existingRow->sessions < $sessionsMetric ||
+                $existingRow->page_views < $pvMetric
+            );
+
+            if ($hasMetrics && (! $existingRow || ($existingRow->visitors === 0 && $existingRow->page_views === 0 && $existingRow->sessions === 0) || $isPartiallyPruned)) {
+                $hasPrunedDates = true;
+
+                if ($existingRow) {
+                    $existingRow->visitors = $visitorsMetric;
+                    $existingRow->sessions = $sessionsMetric;
+                    $existingRow->page_views = $pvMetric;
+                    $existingRow->top_source = $topSource;
+                } else {
+                    $dailyRows->push((object) [
+                        'report_date' => $mDateStr,
+                        'visitors' => $visitorsMetric,
+                        'sessions' => $sessionsMetric,
+                        'page_views' => $pvMetric,
+                        'top_source' => $topSource,
+                    ]);
+                }
+            }
         }
 
-        $prevVisitors = (clone $prevQuery)->whereNotNull('visitor_token')->distinct('visitor_token')->count('visitor_token');
-        $prevSessions = (clone $prevQuery)->whereNotNull('session_token')->distinct('session_token')->count('session_token');
-        $prevPageViews = (clone $prevQuery)->where('event_name', 'page_view')->count();
+        $dailyRows = $dailyRows->sortByDesc('report_date')->values();
+
+        $rawEventsExist = (clone $query)->exists();
+        $rawSessionsExist = VisitorSession::query()
+            ->whereBetween('started_at', [$start, $end])
+            ->where('is_bot', false)
+            ->when($source, fn ($q) => $q->where('utm_source', $source))
+            ->exists();
+
+        if (! $hasPrunedDates && ($rawEventsExist || $rawSessionsExist || $dailyRows->isEmpty())) {
+            // Raw events retain exact distinct visitor identity across the full queried period
+            $totalVisitors = (clone $query)->whereNotNull('visitor_token')->distinct('visitor_token')->count('visitor_token');
+            $totalSessions = VisitorSession::query()
+                ->whereBetween('started_at', [$start, $end])
+                ->where('is_bot', false)
+                ->when($source, fn ($q) => $q->where('utm_source', $source))
+                ->count();
+            $totalPageViews = (clone $query)->where('event_name', 'page_view')->count();
+            $visitorsBasis = 'exact_unique_visitors';
+            $visitorsIsDailySum = false;
+        } else {
+            // Pruned history: additive metrics (sessions, page views) sum daily rollups;
+            // distinct visitors across multi-day ranges cannot be deduplicated without raw identity.
+            $totalVisitors = (int) $dailyRows->sum('visitors');
+            $totalSessions = (int) $dailyRows->sum('sessions');
+            $totalPageViews = (int) $dailyRows->sum('page_views');
+
+            $isSingleDay = ($startCairoDate === $endCairoDate);
+            $visitorsBasis = $isSingleDay ? 'exact_unique_visitors' : 'sum_of_daily_uniques';
+            $visitorsIsDailySum = ! $isSingleDay;
+        }
 
         return [
             'rows' => $dailyRows,
-            'summary' => [
-                'visitors' => $totalVisitors,
-                'sessions' => $totalSessions,
-                'page_views' => $totalPageViews,
-                'prev_visitors' => $prevVisitors,
-                'prev_sessions' => $prevSessions,
-                'prev_page_views' => $prevPageViews,
-                'visitor_change_pct' => $prevVisitors > 0 ? round((($totalVisitors - $prevVisitors) / $prevVisitors) * 100, 1) : 0,
-            ],
+            'visitors' => $totalVisitors,
+            'sessions' => $totalSessions,
+            'page_views' => $totalPageViews,
+            'visitors_basis' => $visitorsBasis,
+            'visitors_is_daily_sum' => $visitorsIsDailySum,
+            'has_pruned_dates' => $hasPrunedDates,
         ];
     }
 
@@ -123,6 +268,9 @@ class ReportService
                 'lesson_time_student' => $studentStart->format('H:i').' ('.($b->customer_timezone ?: 'Cairo').')',
                 'source' => $b->source ?: 'Direct / Organic',
                 'campaign' => $b->campaign ?: '—',
+                'content' => $b->content ?: '—',
+                'referrer' => $b->referrer ?: '—',
+                'touch_at' => $b->touch_at ? $b->touch_at->format('Y-m-d H:i') : '—',
                 'created_at' => $b->created_at->format('Y-m-d H:i'),
             ];
         });
@@ -178,6 +326,8 @@ class ReportService
             'outbound_link_clicked',
         ];
 
+        $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
+
         $rows = AnalyticsEvent::query()
             ->whereBetween('created_at', [$start, $end])
             ->whereIn('event_name', $socialEvents)
@@ -185,10 +335,10 @@ class ReportService
             ->select(
                 'event_name',
                 'page',
-                DB::raw('DATE(created_at) as report_date'),
+                DB::raw("{$dateExpr} as report_date"),
                 DB::raw('COUNT(*) as clicks')
             )
-            ->groupBy('event_name', 'page', DB::raw('DATE(created_at)'))
+            ->groupBy('event_name', 'page', 'report_date')
             ->orderByDesc('report_date')
             ->get()
             ->map(function ($row) {
@@ -226,15 +376,17 @@ class ReportService
             $query->where('event_name', $eventName);
         }
 
+        $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
+
         $rows = (clone $query)
             ->select(
                 'event_name',
                 DB::raw('COALESCE(page, "/") as page'),
                 DB::raw('COALESCE(utm_source, "direct") as source'),
-                DB::raw('DATE(created_at) as report_date'),
+                DB::raw("{$dateExpr} as report_date"),
                 DB::raw('COUNT(*) as event_count')
             )
-            ->groupBy('event_name', 'page', 'utm_source', DB::raw('DATE(created_at)'))
+            ->groupBy('event_name', 'page', 'utm_source', 'report_date')
             ->orderByDesc('report_date')
             ->get();
 
@@ -243,5 +395,338 @@ class ReportService
             'total_events' => $rows->sum('event_count'),
             'available_events' => AnalyticsService::ALLOWED_EVENTS,
         ];
+    }
+
+    /**
+     * Granular Campaign & Content Attribution Drilldown (Section 19).
+     * Campaign → Content → Visitor Count → Downstream Bookings (EDITS V1 §18B-19).
+     *
+     * Defines the campaign/content visitor cohort by eligible touch/arrival time within [$start, $end],
+     * and counts subsequent attributed bookings for those same visitors within the 30-day attribution window.
+     * Booking-date creation activity in the period is labeled separately.
+     */
+    public function getCampaignContentReport(CarbonInterface $start, CarbonInterface $end, ?string $campaign = null): array
+    {
+        // 1. Discover visitor campaign touches in [$start, $end] via AnalyticsEvent
+        $eventsQuery = AnalyticsEvent::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->where('is_bot', false)
+            ->whereNotNull('utm_campaign');
+
+        if ($campaign) {
+            $eventsQuery->where('utm_campaign', $campaign);
+        }
+
+        $events = $eventsQuery
+            ->select(
+                'visitor_token',
+                'utm_campaign',
+                DB::raw('COALESCE(utm_content, "(not set)") as utm_content'),
+                DB::raw('COALESCE(utm_source, "direct") as utm_source'),
+                'created_at as touch_time'
+            )
+            ->get();
+
+        // 2. Discover marketing touches in [$start, $end] via MarketingTouch
+        $touchesQuery = MarketingTouch::query()
+            ->whereBetween('touch_at', [$start, $end])
+            ->whereNotNull('utm_campaign');
+
+        if ($campaign) {
+            $touchesQuery->where('utm_campaign', $campaign);
+        }
+
+        $touches = $touchesQuery
+            ->select(
+                'visitor_token',
+                'utm_campaign',
+                DB::raw('COALESCE(utm_content, "(not set)") as utm_content'),
+                DB::raw('COALESCE(utm_source, "direct") as utm_source'),
+                'touch_at as touch_time'
+            )
+            ->get();
+
+        // 3. Assemble visitor cohorts by (source, campaign, content)
+        $cohorts = [];
+
+        foreach ($events as $ev) {
+            $src = (string) $ev->utm_source;
+            $camp = (string) $ev->utm_campaign;
+            $cnt = (string) $ev->utm_content;
+            $key = $src.'::'.$camp.'::'.$cnt;
+
+            if (! isset($cohorts[$key])) {
+                $cohorts[$key] = [
+                    'campaign' => $camp,
+                    'content' => $cnt,
+                    'source' => $src,
+                    'visitors' => [],
+                ];
+            }
+
+            if ($ev->visitor_token) {
+                $time = CarbonImmutable::parse($ev->touch_time);
+                $cohorts[$key]['visitors'][$ev->visitor_token][] = $time;
+            }
+        }
+
+        foreach ($touches as $t) {
+            $src = (string) $t->utm_source;
+            $camp = (string) $t->utm_campaign;
+            $cnt = (string) $t->utm_content;
+            $key = $src.'::'.$camp.'::'.$cnt;
+
+            if (! isset($cohorts[$key])) {
+                $cohorts[$key] = [
+                    'campaign' => $camp,
+                    'content' => $cnt,
+                    'source' => $src,
+                    'visitors' => [],
+                ];
+            }
+
+            if ($t->visitor_token) {
+                $time = CarbonImmutable::parse($t->touch_time);
+                $cohorts[$key]['visitors'][$t->visitor_token][] = $time;
+            }
+        }
+
+        // 4. Query bookings created within the period to label booking-date activity separately
+        $bookingsInPeriodQuery = Booking::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->whereNotNull('campaign');
+
+        if ($campaign) {
+            $bookingsInPeriodQuery->where('campaign', $campaign);
+        }
+
+        $periodBookings = $bookingsInPeriodQuery
+            ->select(
+                'campaign',
+                DB::raw('COALESCE(content, "(not set)") as content'),
+                DB::raw('COALESCE(source, "direct") as source'),
+                DB::raw('COUNT(*) as total_created'),
+                DB::raw('COUNT(CASE WHEN status IN ("confirmed", "completed") THEN 1 END) as confirmed_created')
+            )
+            ->groupBy('campaign', DB::raw('COALESCE(content, "(not set)")'), DB::raw('COALESCE(source, "direct")'))
+            ->get();
+
+        $createdInPeriod = [];
+        $confirmedCreatedInPeriod = [];
+        foreach ($periodBookings as $pb) {
+            $k = $pb->source.'::'.$pb->campaign.'::'.$pb->content;
+            $createdInPeriod[$k] = (int) $pb->total_created;
+            $confirmedCreatedInPeriod[$k] = (int) $pb->confirmed_created;
+        }
+
+        // 5. Calculate downstream bookings and conversion rate strictly for each cohort
+        $allKeys = array_unique(array_merge(array_keys($cohorts), array_keys($createdInPeriod)));
+        $allCampaignContents = [];
+
+        foreach ($allKeys as $key) {
+            $cohort = $cohorts[$key] ?? null;
+            if ($cohort) {
+                $src = $cohort['source'];
+                $camp = $cohort['campaign'];
+                $cnt = $cohort['content'];
+                $visitors = $cohort['visitors'];
+                $visitorTokens = array_keys($visitors);
+                $visitorsCount = count($visitorTokens);
+            } else {
+                [$src, $camp, $cnt] = explode('::', $key, 3);
+                $visitors = [];
+                $visitorTokens = [];
+                $visitorsCount = 0;
+            }
+
+            // Candidate bookings matching this campaign, content, and source
+            $candidateBookings = Booking::query()
+                ->where('campaign', $camp)
+                ->where(function ($q) use ($cnt) {
+                    if ($cnt === '(not set)') {
+                        $q->whereNull('content')->orWhere('content', '')->orWhere('content', '(not set)');
+                    } else {
+                        $q->where('content', $cnt);
+                    }
+                })
+                ->where(function ($q) use ($src) {
+                    if ($src === 'direct') {
+                        $q->whereNull('source')->orWhere('source', '')->orWhere('source', 'direct');
+                    } else {
+                        $q->where('source', $src);
+                    }
+                })
+                ->get();
+
+            $downstreamBookings = 0;
+            $confirmedDownstreamBookings = 0;
+            $unlinkedBookings = 0;
+            $confirmedUnlinkedBookings = 0;
+
+            if ($candidateBookings->isNotEmpty()) {
+                foreach ($candidateBookings as $b) {
+                    $isDownstream = false;
+
+                    // Restrict downstream cohort counts strictly to bookings joined to a qualifying cohort visitor
+                    // where an eligible touch for that visitor in this cohort lies in the booking's 30-day lookback
+                    if ($b->visitor_token && isset($visitors[$b->visitor_token])) {
+                        $createdAt = CarbonImmutable::parse($b->created_at);
+                        $touchTimes = $visitors[$b->visitor_token];
+                        foreach ($touchTimes as $touchTime) {
+                            if ($createdAt->gte($touchTime) && $createdAt->lte($touchTime->addDays(30))) {
+                                $isDownstream = true;
+                                break;
+                            }
+                        }
+
+                        // Also check authoritative attributed touch_at on booking if recorded in period
+                        if (! $isDownstream && $b->touch_at) {
+                            $touchTime = CarbonImmutable::parse($b->touch_at);
+                            if ($touchTime->gte($start) && $touchTime->lte($end) && $createdAt->gte($touchTime) && $createdAt->lte($touchTime->addDays(30))) {
+                                $isDownstream = true;
+                            }
+                        }
+                    }
+
+                    if ($isDownstream) {
+                        $downstreamBookings++;
+                        if (in_array($b->status, ['confirmed', 'completed'], true)) {
+                            $confirmedDownstreamBookings++;
+                        }
+                    } else {
+                        // Unlinked/non-cohort booking activity: either touch_at occurred in period or booking created in period
+                        $bCreatedAt = CarbonImmutable::parse($b->created_at);
+                        $bTouchTime = $b->touch_at ? CarbonImmutable::parse($b->touch_at) : null;
+                        if (($bTouchTime && $bTouchTime->gte($start) && $bTouchTime->lte($end)) || ($bCreatedAt->gte($start) && $bCreatedAt->lte($end))) {
+                            $unlinkedBookings++;
+                            if (in_array($b->status, ['confirmed', 'completed'], true)) {
+                                $confirmedUnlinkedBookings++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            $convRate = $visitorsCount > 0
+                ? round(($confirmedDownstreamBookings / $visitorsCount) * 100, 1)
+                : 0.0;
+
+            $allCampaignContents[$key] = [
+                'campaign' => $camp,
+                'content' => $cnt,
+                'source' => $src,
+                'visitors_count' => $visitorsCount,
+                'bookings_count' => $downstreamBookings,
+                'confirmed_bookings' => $confirmedDownstreamBookings,
+                'conversion_rate' => $convRate,
+                'unlinked_bookings_count' => $unlinkedBookings,
+                'confirmed_unlinked_bookings_count' => $confirmedUnlinkedBookings,
+                'bookings_created_in_period' => $createdInPeriod[$key] ?? 0,
+                'confirmed_created_in_period' => $confirmedCreatedInPeriod[$key] ?? 0,
+            ];
+        }
+
+        $rows = collect($allCampaignContents)->sortByDesc('bookings_count')->values();
+
+        $groupedByCampaign = $rows->groupBy('campaign')->map(function ($items, $camp) {
+            return [
+                'campaign' => $camp,
+                'total_visitors' => $items->sum('visitors_count'),
+                'total_bookings' => $items->sum('bookings_count'),
+                'total_confirmed' => $items->sum('confirmed_bookings'),
+                'total_unlinked_bookings' => $items->sum('unlinked_bookings_count'),
+                'total_created_in_period' => $items->sum('bookings_created_in_period'),
+                'contents' => $items->values(),
+            ];
+        })->values();
+
+        return [
+            'rows' => $rows,
+            'grouped' => $groupedByCampaign,
+            'total_campaigns' => $groupedByCampaign->count(),
+            'total_visitors' => $rows->sum('visitors_count'),
+            'total_bookings' => $rows->sum('bookings_count'),
+            'total_confirmed' => $rows->sum('confirmed_bookings'),
+            'total_unlinked_bookings' => $rows->sum('unlinked_bookings_count'),
+            'total_created_in_period' => $rows->sum('bookings_created_in_period'),
+        ];
+    }
+
+    public function getCairoDateExpression(string $column = 'created_at', ?CarbonInterface $start = null, ?CarbonInterface $end = null): string
+    {
+        if ($start && $end) {
+            $startCairo = CarbonImmutable::parse($start)->setTimezone('Africa/Cairo')->startOfDay();
+            $endCairo = CarbonImmutable::parse($end)->setTimezone('Africa/Cairo')->startOfDay();
+
+            $diff = $startCairo->diffInDays($endCairo);
+            if ($diff >= 0 && $diff <= 1096) {
+                $cases = [];
+                $curr = $startCairo->startOfDay();
+                while ($curr->lte($endCairo)) {
+                    $dayStr = $curr->toDateString();
+                    $nextDay = $curr->addDay()->startOfDay();
+                    $dayStartUtc = $curr->setTimezone('UTC')->toDateTimeString();
+                    $dayEndUtc = $nextDay->setTimezone('UTC')->toDateTimeString();
+                    $cases[] = "WHEN {$column} >= '{$dayStartUtc}' AND {$column} < '{$dayEndUtc}' THEN '{$dayStr}'";
+                    $curr = $nextDay;
+                }
+
+                if (! empty($cases)) {
+                    return '(CASE '.implode(' ', $cases).' ELSE NULL END)';
+                }
+            }
+        }
+
+        // For long ranges >3 years: partition into exact DST transition intervals (EDITS V1 §13-15)
+        $tz = new \DateTimeZone('Africa/Cairo');
+        $startTs = $start ? CarbonImmutable::parse($start)->getTimestamp() : CarbonImmutable::now('Africa/Cairo')->subDays(30)->getTimestamp();
+        $endTs = $end ? CarbonImmutable::parse($end)->getTimestamp() : CarbonImmutable::now('Africa/Cairo')->getTimestamp();
+        $transitions = $tz->getTransitions($startTs, $endTs);
+
+        if (! empty($transitions) && count($transitions) > 1) {
+            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+            $cases = [];
+            $count = count($transitions);
+
+            for ($i = 0; $i < $count; $i++) {
+                $t = $transitions[$i];
+                $offsetHours = (int) ($t['offset'] / 3600);
+                $offsetStr = sprintf('%+03d:00', $offsetHours);
+                $fromUtc = date('Y-m-d H:i:s', $t['ts']);
+
+                $sqlExpr = $isSqlite
+                    ? "DATE(datetime({$column}, '{$offsetHours} hours'))"
+                    : "DATE(CONVERT_TZ({$column}, '+00:00', '{$offsetStr}'))";
+
+                if (isset($transitions[$i + 1])) {
+                    $toUtc = date('Y-m-d H:i:s', $transitions[$i + 1]['ts']);
+                    $cases[] = "WHEN {$column} >= '{$fromUtc}' AND {$column} < '{$toUtc}' THEN {$sqlExpr}";
+                } else {
+                    $cases[] = "WHEN {$column} >= '{$fromUtc}' THEN {$sqlExpr}";
+                }
+            }
+
+            $firstHours = (int) ($transitions[0]['offset'] / 3600);
+            $firstOffset = sprintf('%+03d:00', $firstHours);
+            $firstSqlExpr = $isSqlite
+                ? "DATE(datetime({$column}, '{$firstHours} hours'))"
+                : "DATE(CONVERT_TZ({$column}, '+00:00', '{$firstOffset}'))";
+            $firstFrom = date('Y-m-d H:i:s', $transitions[0]['ts']);
+            array_unshift($cases, "WHEN {$column} < '{$firstFrom}' THEN {$firstSqlExpr}");
+
+            return '(CASE '.implode(' ', $cases).' ELSE NULL END)';
+        }
+
+        $ref = $start ?? CarbonImmutable::now('Africa/Cairo');
+        $refDateTime = new \DateTime($ref->toIso8601String(), new \DateTimeZone('UTC'));
+        $offsetSeconds = (new \DateTimeZone('Africa/Cairo'))->getOffset($refDateTime);
+        $hours = intdiv($offsetSeconds, 3600);
+        $offset = sprintf('%+03d:00', $hours);
+
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return "DATE(datetime({$column}, '{$hours} hours'))";
+        }
+
+        return "DATE(CONVERT_TZ({$column}, '+00:00', '{$offset}'))";
     }
 }
