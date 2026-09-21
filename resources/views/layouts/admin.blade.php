@@ -13,6 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @livewireStyles
 </head>
 <body class="h-full font-sans antialiased bg-slate-100" 
       x-data="adminMobileNav()" 
@@ -20,7 +21,8 @@
       @keydown.window="handleKeydown($event)">
 
     <!-- Mobile Sidebar Backdrop (Section 32) -->
-    <div x-show="sidebarOpen || mobileSidebarOpen"
+    <div id="admin-sidebar-backdrop"
+         x-show="sidebarOpen || mobileSidebarOpen"
          x-cloak
          x-transition:enter="transition-opacity ease-linear duration-300"
          x-transition:enter-start="opacity-0"
@@ -28,9 +30,10 @@
          x-transition:leave="transition-opacity ease-linear duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         :class="(sidebarOpen || mobileSidebarOpen) ? 'pointer-events-auto' : 'pointer-events-none'"
-         class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden"
+         :class="(sidebarOpen || mobileSidebarOpen) ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
+         class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden pointer-events-none cursor-pointer"
          style="display: none;"
+         onclick="if(window.closeAdminSidebar){window.closeAdminSidebar();}else{this.style.display='none';var s=document.getElementById('admin-sidebar');if(s){s.classList.remove('translate-x-0');s.classList.add('-translate-x-full');}document.body.style.overflow='';}"
          @click="closeSidebar()"></div>
 
     <div class="min-h-full flex">
@@ -41,7 +44,7 @@
                aria-modal="true"
                aria-label="Admin Navigation"
                :class="(sidebarOpen || mobileSidebarOpen) ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out md:fixed md:flex-shrink-0">
+               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 md:fixed md:flex-shrink-0">
             
             <!-- Brand / Logo -->
             <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
@@ -55,9 +58,11 @@
                     </div>
                 </a>
                 <button type="button"
+                        id="admin-sidebar-close"
+                        onclick="if(window.closeAdminSidebar){window.closeAdminSidebar();}else{var s=document.getElementById('admin-sidebar');if(s){s.classList.remove('translate-x-0');s.classList.add('-translate-x-full');}var b=document.getElementById('admin-sidebar-backdrop');if(b)b.style.display='none';document.body.style.overflow='';}"
                         @click="closeSidebar()"
                         aria-label="Close Navigation Menu"
-                        class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -238,11 +243,12 @@
                 <div class="flex items-center gap-4 flex-1 max-w-xl">
                     <button type="button"
                             id="admin-menu-toggle"
+                            onclick="if(window.openAdminSidebar){window.openAdminSidebar();}else{var s=document.getElementById('admin-sidebar');if(s){s.classList.remove('-translate-x-full');s.classList.add('translate-x-0');}var b=document.getElementById('admin-sidebar-backdrop');if(b)b.style.display='block';document.body.style.overflow='hidden';}"
                             @click="openSidebar()"
                             aria-controls="admin-sidebar"
                             :aria-expanded="mobileSidebarOpen ? 'true' : 'false'"
                             aria-label="Open Navigation Menu"
-                            class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
 
@@ -309,12 +315,18 @@
     @include('admin.partials.media-picker')
 
     <script>
+    window.adminMobileNavInstance = null;
+
     function adminMobileNav() {
         return {
             sidebarOpen: false,
             mobileSidebarOpen: false,
             previousFocusedElement: null,
             previousBodyOverflow: '',
+
+            init() {
+                window.adminMobileNavInstance = this;
+            },
 
             openSidebar() {
                 this.previousFocusedElement = document.activeElement;
@@ -323,30 +335,63 @@
                 this.mobileSidebarOpen = true;
                 this.sidebarOpen = true;
 
-                this.$nextTick(() => {
-                    const sidebar = document.getElementById('admin-sidebar');
-                    if (!sidebar) return;
-                    const focusable = this.getFocusableElements(sidebar);
-                    if (focusable.length > 0) {
-                        focusable[0].focus();
-                    }
-                });
+                const sidebar = document.getElementById('admin-sidebar');
+                const backdrop = document.getElementById('admin-sidebar-backdrop');
+                const toggle = document.getElementById('admin-menu-toggle');
+                if (sidebar) {
+                    sidebar.classList.remove('-translate-x-full');
+                    sidebar.classList.add('translate-x-0');
+                }
+                if (backdrop) {
+                    backdrop.style.display = 'block';
+                    backdrop.classList.remove('pointer-events-none', 'opacity-0');
+                    backdrop.classList.add('pointer-events-auto', 'opacity-100');
+                }
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', 'true');
+                }
+
+                if (typeof this.$nextTick === 'function') {
+                    this.$nextTick(() => {
+                        if (!sidebar) return;
+                        const focusable = this.getFocusableElements(sidebar);
+                        if (focusable.length > 0) {
+                            focusable[0].focus();
+                        }
+                    });
+                }
             },
 
             closeSidebar() {
-                if (!this.mobileSidebarOpen && !this.sidebarOpen) return;
                 this.mobileSidebarOpen = false;
                 this.sidebarOpen = false;
-                document.body.style.overflow = this.previousBodyOverflow;
+                document.body.style.overflow = this.previousBodyOverflow || '';
 
-                this.$nextTick(() => {
-                    if (this.previousFocusedElement && typeof this.previousFocusedElement.focus === 'function') {
-                        this.previousFocusedElement.focus();
-                    } else {
-                        const toggle = document.getElementById('admin-menu-toggle');
-                        if (toggle) toggle.focus();
-                    }
-                });
+                const sidebar = document.getElementById('admin-sidebar');
+                const backdrop = document.getElementById('admin-sidebar-backdrop');
+                const toggle = document.getElementById('admin-menu-toggle');
+                if (sidebar) {
+                    sidebar.classList.remove('translate-x-0');
+                    sidebar.classList.add('-translate-x-full');
+                }
+                if (backdrop) {
+                    backdrop.style.display = 'none';
+                    backdrop.classList.remove('pointer-events-auto', 'opacity-100');
+                    backdrop.classList.add('pointer-events-none', 'opacity-0');
+                }
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', 'false');
+                }
+
+                if (typeof this.$nextTick === 'function') {
+                    this.$nextTick(() => {
+                        if (this.previousFocusedElement && typeof this.previousFocusedElement.focus === 'function') {
+                            this.previousFocusedElement.focus();
+                        } else if (toggle) {
+                            toggle.focus();
+                        }
+                    });
+                }
             },
 
             handleKeydown(e) {
@@ -390,6 +435,67 @@
             }
         };
     }
+
+    window.adminMobileNav = adminMobileNav;
+
+    window.openAdminSidebar = function() {
+        if (window.adminMobileNavInstance && typeof window.adminMobileNavInstance.openSidebar === 'function') {
+            window.adminMobileNavInstance.openSidebar();
+            return;
+        }
+        const helper = adminMobileNav();
+        helper.openSidebar();
+    };
+
+    window.closeAdminSidebar = function() {
+        if (window.adminMobileNavInstance && typeof window.adminMobileNavInstance.closeSidebar === 'function') {
+            window.adminMobileNavInstance.closeSidebar();
+            return;
+        }
+        const helper = adminMobileNav();
+        helper.closeSidebar();
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('admin-menu-toggle');
+        if (toggle) {
+            toggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.openAdminSidebar();
+            });
+        }
+
+        const closeBtn = document.getElementById('admin-sidebar-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.closeAdminSidebar();
+            });
+        }
+
+        const backdrop = document.getElementById('admin-sidebar-backdrop');
+        if (backdrop) {
+            backdrop.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.closeAdminSidebar();
+            });
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                window.closeAdminSidebar();
+            }
+        });
+    });
+
+    if (window.Alpine) {
+        Alpine.data('adminMobileNav', adminMobileNav);
+    } else {
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('adminMobileNav', adminMobileNav);
+        });
+    }
     </script>
+    @livewireScripts
 </body>
 </html>
