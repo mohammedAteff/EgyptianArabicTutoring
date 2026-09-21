@@ -161,10 +161,11 @@ class CanonicalAvailabilityValidationTest extends TestCase
     public function test_rule_specific_notice_and_horizon_are_enforced(): void
     {
         $businessTz = 'Africa/Cairo';
-        $today = CarbonImmutable::now($businessTz);
+        $soonSlot = CarbonImmutable::now('UTC')->addHours(5)->startOfHour();
+        $slotWeekday = $soonSlot->setTimezone($businessTz)->dayOfWeek;
 
         AvailabilityRule::create([
-            'weekday' => $today->dayOfWeek,
+            'weekday' => $slotWeekday,
             'start_time' => '00:00:00',
             'end_time' => '23:59:00',
             'session_duration_minutes' => 50,
@@ -175,7 +176,6 @@ class CanonicalAvailabilityValidationTest extends TestCase
         ]);
 
         // 1. Slot within 24 hours is rejected
-        $soonSlot = CarbonImmutable::now('UTC')->addHours(5)->startOfHour();
         try {
             $this->availabilityService->resolveSlotConfiguration(
                 sessionType: $this->sessionType,

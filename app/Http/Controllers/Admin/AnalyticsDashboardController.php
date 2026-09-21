@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Models\Setting;
 use App\Http\Controllers\Controller;
@@ -40,6 +41,13 @@ class AnalyticsDashboardController extends Controller
         $resourceFunnel = $this->analyticsService->getResourceFunnel($startDateUtc, $endDateUtc);
         $gameFunnel = $this->analyticsService->getGameFunnel($startDateUtc, $endDateUtc);
         $acquisition = $this->analyticsService->getAcquisitionPerformance($startDateUtc, $endDateUtc);
+        $countryActivity = DailyCountryMetric::query()
+            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
+            ->selectRaw('country_code, SUM(unique_visitors) AS unique_visitors, SUM(sessions) AS sessions, SUM(booking_cta_clicks) AS booking_cta_clicks, SUM(bookings_completed) AS bookings_completed, SUM(resource_requests) AS resource_requests')
+            ->groupBy('country_code')
+            ->orderByDesc('unique_visitors')
+            ->orderBy('country_code')
+            ->get();
 
         return view('admin.analytics.index', [
             'title' => 'First-Party Analytics & Business Funnels',
@@ -52,6 +60,7 @@ class AnalyticsDashboardController extends Controller
             'resourceFunnel' => $resourceFunnel,
             'gameFunnel' => $gameFunnel,
             'acquisition' => $acquisition,
+            'countryActivity' => $countryActivity,
         ]);
     }
 }

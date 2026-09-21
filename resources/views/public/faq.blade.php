@@ -83,7 +83,7 @@
                 {{ __('Book a Session Now') }}
             </a>
             <a href="{{ localized_url('about') }}" class="bg-white border border-stone-300 hover:bg-stone-50 text-stone-700 font-semibold text-sm px-6 py-3 rounded-full">
-                {{ __('Learn More About Ahmad') }}
+                {{ __('Learn More About Abdallah') }}
             </a>
         </div>
     </div>

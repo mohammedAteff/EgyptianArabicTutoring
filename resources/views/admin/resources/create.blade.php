@@ -121,7 +121,7 @@
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Resource File (PDF / ZIP / MP3)</label>
                 <input type="file" name="file" class="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100">
-                <p class="text-xs text-slate-400 mt-1">If omitted during local development, an authenticated fallback sample PDF will be generated automatically.</p>
+                <p class="text-xs text-slate-400 mt-1">Upload the real protected document before publishing. Missing files are rejected rather than replaced with synthetic content.</p>
             </div>
 
             <!-- Submit Buttons -->

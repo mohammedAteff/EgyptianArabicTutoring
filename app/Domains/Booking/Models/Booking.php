@@ -45,6 +45,7 @@ class Booking extends Model
         'cancelled_at',
         'cancellation_reason',
         'completed_at',
+        'detected_country_code',
     ];
 
     protected function casts(): array

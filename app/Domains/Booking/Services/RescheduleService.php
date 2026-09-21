@@ -72,7 +72,7 @@ class RescheduleService
                     throw new BookingPolicyViolationException('Past appointments cannot be rescheduled.');
                 }
 
-                $cutoffHours = (int) Setting::get('booking_cancellation_cutoff_hours', 24);
+                $cutoffHours = (int) Setting::get('booking_reschedule_cutoff_hours', 24);
                 if ($lockedBooking->start_at_utc < now('UTC')->addHours($cutoffHours)) {
                     throw new BookingPolicyViolationException("Appointments cannot be rescheduled within {$cutoffHours} hours of the scheduled start time.");
                 }

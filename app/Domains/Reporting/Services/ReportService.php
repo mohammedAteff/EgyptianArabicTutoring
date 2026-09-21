@@ -12,6 +12,7 @@ use App\Domains\Resources\Models\Resource;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -80,9 +81,8 @@ class ReportService
      */
     protected function resolvePeriodTrafficMetrics(CarbonInterface $start, CarbonInterface $end, ?string $source = null): array
     {
-        $query = AnalyticsEvent::query()
-            ->whereBetween('created_at', [$start, $end])
-            ->where('is_bot', false);
+        $query = $this->nonBotEventQuery()
+            ->whereBetween('created_at', [$start, $end]);
 
         if ($source) {
             $query->where('utm_source', $source);
@@ -103,9 +103,8 @@ class ReportService
 
         // Sessions strictly attributed by session started_at in Cairo day (matching daily_metrics.sessions)
         $sessionDateExpr = $this->getCairoDateExpression('started_at', $start, $end);
-        $sessionsByDate = VisitorSession::query()
+        $sessionsByDate = $this->nonBotSessionQuery()
             ->whereBetween('started_at', [$start, $end])
-            ->where('is_bot', false)
             ->when($source, fn ($q) => $q->where('utm_source', $source))
             ->select(
                 DB::raw("{$sessionDateExpr} as report_date"),
@@ -197,18 +196,16 @@ class ReportService
         $dailyRows = $dailyRows->sortByDesc('report_date')->values();
 
         $rawEventsExist = (clone $query)->exists();
-        $rawSessionsExist = VisitorSession::query()
+        $rawSessionsExist = $this->nonBotSessionQuery()
             ->whereBetween('started_at', [$start, $end])
-            ->where('is_bot', false)
             ->when($source, fn ($q) => $q->where('utm_source', $source))
             ->exists();
 
         if (! $hasPrunedDates && ($rawEventsExist || $rawSessionsExist || $dailyRows->isEmpty())) {
             // Raw events retain exact distinct visitor identity across the full queried period
             $totalVisitors = (clone $query)->whereNotNull('visitor_token')->distinct('visitor_token')->count('visitor_token');
-            $totalSessions = VisitorSession::query()
+            $totalSessions = $this->nonBotSessionQuery()
                 ->whereBetween('started_at', [$start, $end])
-                ->where('is_bot', false)
                 ->when($source, fn ($q) => $q->where('utm_source', $source))
                 ->count();
             $totalPageViews = (clone $query)->where('event_name', 'page_view')->count();
@@ -328,10 +325,9 @@ class ReportService
 
         $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
 
-        $rows = AnalyticsEvent::query()
+        $rows = $this->nonBotEventQuery()
             ->whereBetween('created_at', [$start, $end])
             ->whereIn('event_name', $socialEvents)
-            ->where('is_bot', false)
             ->select(
                 'event_name',
                 'page',
@@ -368,9 +364,8 @@ class ReportService
 
     public function getEventsReport(CarbonInterface $start, CarbonInterface $end, ?string $eventName = null): array
     {
-        $query = AnalyticsEvent::query()
-            ->whereBetween('created_at', [$start, $end])
-            ->where('is_bot', false);
+        $query = $this->nonBotEventQuery()
+            ->whereBetween('created_at', [$start, $end]);
 
         if ($eventName && $eventName !== 'all') {
             $query->where('event_name', $eventName);
@@ -408,9 +403,8 @@ class ReportService
     public function getCampaignContentReport(CarbonInterface $start, CarbonInterface $end, ?string $campaign = null): array
     {
         // 1. Discover visitor campaign touches in [$start, $end] via AnalyticsEvent
-        $eventsQuery = AnalyticsEvent::query()
+        $eventsQuery = $this->nonBotEventQuery()
             ->whereBetween('created_at', [$start, $end])
-            ->where('is_bot', false)
             ->whereNotNull('utm_campaign');
 
         if ($campaign) {
@@ -430,6 +424,9 @@ class ReportService
         // 2. Discover marketing touches in [$start, $end] via MarketingTouch
         $touchesQuery = MarketingTouch::query()
             ->whereBetween('touch_at', [$start, $end])
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            })
             ->whereNotNull('utm_campaign');
 
         if ($campaign) {
@@ -492,7 +489,7 @@ class ReportService
         }
 
         // 4. Query bookings created within the period to label booking-date activity separately
-        $bookingsInPeriodQuery = Booking::query()
+        $bookingsInPeriodQuery = $this->nonBotBookingQuery()
             ->whereBetween('created_at', [$start, $end])
             ->whereNotNull('campaign');
 
@@ -540,7 +537,7 @@ class ReportService
             }
 
             // Candidate bookings matching this campaign, content, and source
-            $candidateBookings = Booking::query()
+            $candidateBookings = $this->nonBotBookingQuery()
                 ->where('campaign', $camp)
                 ->where(function ($q) use ($cnt) {
                     if ($cnt === '(not set)') {
@@ -650,6 +647,61 @@ class ReportService
             'total_unlinked_bookings' => $rows->sum('unlinked_bookings_count'),
             'total_created_in_period' => $rows->sum('bookings_created_in_period'),
         ];
+    }
+
+    /**
+     * Build the canonical non-bot event scope, including defensive checks
+     * against malformed events linked to bot visitors or sessions.
+     */
+    protected function nonBotEventQuery(): Builder
+    {
+        return AnalyticsEvent::query()
+            ->where('is_bot', false)
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('visitors')
+                    ->whereColumn('visitors.visitor_token', 'analytics_events.visitor_token')
+                    ->where('visitors.is_bot', true);
+            })
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('visitor_sessions as bot_sessions')
+                    ->leftJoin('visitors as bot_visitors', 'bot_visitors.id', '=', 'bot_sessions.visitor_id')
+                    ->where(function ($nested): void {
+                        $nested->whereColumn('bot_sessions.session_token', 'analytics_events.session_token')
+                            ->orWhereColumn('bot_sessions.session_id', 'analytics_events.session_token');
+                    })
+                    ->where(function ($nested): void {
+                        $nested->where('bot_sessions.is_bot', true)
+                            ->orWhere('bot_visitors.is_bot', true);
+                    });
+            });
+    }
+
+    /**
+     * Build the canonical non-bot session scope.
+     */
+    protected function nonBotSessionQuery(): Builder
+    {
+        return VisitorSession::query()
+            ->where('is_bot', false)
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            });
+    }
+
+    /**
+     * Exclude bookings that can be traced to a visitor flagged as a bot.
+     */
+    protected function nonBotBookingQuery(): Builder
+    {
+        return Booking::query()
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('visitors')
+                    ->whereColumn('visitors.visitor_token', 'bookings.visitor_token')
+                    ->where('visitors.is_bot', true);
+            });
     }
 
     public function getCairoDateExpression(string $column = 'created_at', ?CarbonInterface $start = null, ?CarbonInterface $end = null): string

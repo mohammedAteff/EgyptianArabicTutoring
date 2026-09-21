@@ -138,6 +138,17 @@ class AdminFunctionsAndCalendarTest extends TestCase
             ->assertSee('Booking Notice')
             ->assertSee('Backup Failure')
             ->assertSee('Worker Alert');
+
+        $backupFailure = AdminNotification::where('type', 'backup_failure')->firstOrFail();
+        $this->actingAs($this->ordinaryAdmin, 'web')
+            ->post(route('admin.notifications.read', $backupFailure))
+            ->assertForbidden();
+        $this->assertNull($backupFailure->fresh()->read_at);
+
+        $this->actingAs($this->ordinaryAdmin, 'web')
+            ->delete(route('admin.notifications.destroy', $backupFailure))
+            ->assertForbidden();
+        $this->assertDatabaseHas('admin_notifications', ['id' => $backupFailure->id]);
     }
 
     public function test_resource_category_crud_and_in_use_deletion_guard(): void

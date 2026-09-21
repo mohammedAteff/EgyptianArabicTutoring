@@ -60,6 +60,7 @@ class AdminDrawerAndSocialAccessibilityTest extends TestCase
         $response->assertSee('e.key === \'Escape\'', false);
         $response->assertSee('e.key === \'Tab\'', false);
         $response->assertSee('this.getFocusableElements(sidebar)', false);
+        $response->assertSee('@click="closeSidebar()"', false);
 
         // Data tables wrapped in overflow-x-auto
         $response->assertSee('overflow-x-auto', false);

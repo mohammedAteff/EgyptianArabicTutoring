@@ -281,7 +281,7 @@
                 </button>
                 <a href="{{ localized_url('booking') }}"
                    class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-sm px-7 py-3 rounded-full shadow-md hover:shadow transition-all">
-                    <span>Practice with Ahmad 1-on-1</span>
+                    <span>Practice with Abdallah 1-on-1</span>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                 </a>
             </div>

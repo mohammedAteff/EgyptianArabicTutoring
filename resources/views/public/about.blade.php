@@ -17,7 +17,7 @@
             {{ __('Native Arabic Educator') }}
         </span>
         <h1 class="text-4xl sm:text-5xl font-extrabold text-stone-900 tracking-tight">
-            {{ $translation->title ?? ($page ? $page->title : __('Meet Your Tutor, Ahmad')) }}
+            {{ $translation->title ?? ($page ? $page->title : __('Meet Your Tutor, Abdallah')) }}
         </h1>
         <p class="text-stone-600 text-lg leading-relaxed">
             Born and raised in Cairo, teaching real, living Egyptian Arabic to students around the globe.
@@ -38,7 +38,7 @@
                 {!! nl2br(e($biography)) !!}
             @else
                 <p>
-                    <strong>Ahlan wa sahlan!</strong> Welcome. My name is Ahmad, and I am an independent Egyptian Arabic language educator based in Cairo, Egypt. Over the past several years, I have helped hundreds of international students—from complete beginners to advanced diplomats and researchers—master the language of Egypt.
+                    <strong>Ahlan wa sahlan!</strong> Welcome. My name is Abdallah, and I am an independent Egyptian Arabic language educator based in Cairo, Egypt. Over the past several years, I have helped hundreds of international students—from complete beginners to advanced diplomats and researchers—master the language of Egypt.
                 </p>
                 <p>
                     Arabic has two distinct worlds: <em>Modern Standard Arabic (Fusha)</em>, which is written in newspapers and formal legal texts, and <em>Egyptian Colloquial Arabic (Amiya)</em>, which is spoken by over 105 million Egyptians in daily life, television, movies, and music across the entire Arab world.

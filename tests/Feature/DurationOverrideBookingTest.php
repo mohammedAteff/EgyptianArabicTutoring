@@ -51,7 +51,7 @@ class DurationOverrideBookingTest extends TestCase
         ]);
     }
 
-    public function test_customer_http_reschedule_into_override_duration_rule(): void
+    public function test_customer_http_reschedule_into_override_duration_rule_is_disabled(): void
     {
         $businessTz = app(TimezoneService::class)->getBusinessTimezone();
         $targetMonday = CarbonImmutable::now($businessTz)->next(CarbonImmutable::MONDAY)->addWeeks(1);
@@ -102,14 +102,10 @@ class DurationOverrideBookingTest extends TestCase
             'reason' => 'Need a quick 30min session on Tuesday',
         ]);
 
-        $response->assertRedirect(route('booking.confirmation', ['token' => $booking->confirmation_token]));
-        $response->assertSessionHas('success');
+        $response->assertForbidden();
 
         $booking->refresh();
-        $this->assertEquals($targetStartUtcTuesday->getTimestamp(), $booking->start_at_utc->getTimestamp());
-        // Verify end time matches 30 minutes, not 50 minutes!
-        $this->assertEquals($targetStartUtcTuesday->addMinutes(30)->getTimestamp(), $booking->end_at_utc->getTimestamp());
-        $this->assertEquals(30, $booking->start_at_utc->diffInMinutes($booking->end_at_utc));
+        $this->assertNotEquals($targetStartUtcTuesday->getTimestamp(), $booking->start_at_utc->getTimestamp());
     }
 
     public function test_admin_http_reschedule_and_manual_create_into_override_duration_rule(): void

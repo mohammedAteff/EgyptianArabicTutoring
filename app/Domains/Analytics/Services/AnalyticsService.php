@@ -9,11 +9,13 @@ use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class AnalyticsService
 {
@@ -49,15 +51,24 @@ class AnalyticsService
         'resource_downloaded',
     ];
 
-    public const DEDUPLICATED_EVENTS = [
+    /**
+     * Events for which browser retries are collapsed for five seconds.
+     *
+     * @var list<string>
+     */
+    public const RAPID_DEDUPLICATED_EVENTS = [
         'booking_cta_clicked',
-        'booking_started',
-        'booking_slot_held',
-        'booking_completed',
         'resource_requested',
-        'resource_downloaded',
-        'whatsapp_clicked',
-        'telegram_clicked',
+    ];
+
+    /**
+     * Events which are recorded at most once during one analytics session.
+     *
+     * @var list<string>
+     */
+    public const SESSION_DEDUPLICATED_EVENTS = [
+        'session_started',
+        'resource_gate_viewed',
     ];
 
     public const ALLOWED_CLIENT_METADATA_KEYS = [
@@ -101,6 +112,44 @@ class AnalyticsService
         );
     }
 
+    public function startSession(?string $visitorToken = null, ?string $countryCode = null): VisitorSession
+    {
+        $token = $visitorToken ?: (string) Str::uuid();
+
+        $visitor = Visitor::where('visitor_token', $token)
+            ->orWhere('visitor_id', $token)
+            ->first();
+
+        if (! $visitor) {
+            $visitor = Visitor::create([
+                'visitor_token' => $token,
+                'visitor_id' => $token,
+                'first_seen_at' => now(),
+                'last_seen_at' => now(),
+                'detected_country_code' => $countryCode,
+            ]);
+        } else {
+            $visitor->update(['last_seen_at' => now()]);
+        }
+
+        return VisitorSession::create([
+            'session_token' => (string) Str::uuid(),
+            'session_id' => (string) Str::uuid(),
+            'visitor_id' => $visitor->id,
+            'started_at' => now(),
+            'last_activity_at' => now(),
+            // A session is bound to the network country observed at its start.
+            // Do not backfill a later unresolved session from the visitor's
+            // immutable acquisition country.
+            'detected_country_code' => $countryCode,
+        ]);
+    }
+
+    public function recordSession(string $visitorToken, ?string $countryCode = null): VisitorSession
+    {
+        return $this->startSession($visitorToken, $countryCode);
+    }
+
     public function track(
         string $eventName,
         array $metadata = [],
@@ -119,7 +168,13 @@ class AnalyticsService
         try {
             $req = $request ?? request();
 
-            $vToken = $visitorToken
+            $sessionVisitorToken = null;
+            if ($req && $req->hasSession()) {
+                $sessionVisitorToken = $req->session()->get('visitor_id') ?? $req->session()->get('analytics_visitor_token');
+            }
+
+            $vToken = $sessionVisitorToken
+                ?? $visitorToken
                 ?? ($req ? $req->attributes->get('analytics_visitor_token') : null)
                 ?? ($req ? $req->cookie('_va_visitor') : null);
 
@@ -127,12 +182,22 @@ class AnalyticsService
                 ?? ($req ? $req->attributes->get('analytics_session_token') : null)
                 ?? ($req ? $req->cookie('_va_session') : null);
 
-            if ($sToken && in_array($eventName, self::DEDUPLICATED_EVENTS, true)) {
-                $dedupKey = "va_dedup_{$eventName}_{$sToken}_".md5(json_encode($metadata));
-                if (Cache::has($dedupKey)) {
+            if ($sToken && in_array($eventName, self::RAPID_DEDUPLICATED_EVENTS, true)) {
+                $dedupMetadata = $metadata;
+                ksort($dedupMetadata);
+                $dedupKey = 'va_dedup_rapid_'.$eventName.'_'.$sToken.'_'.hash('sha256', (string) json_encode($dedupMetadata));
+
+                if (! Cache::add($dedupKey, true, now()->addSeconds(5))) {
                     return null;
                 }
-                Cache::put($dedupKey, true, now()->addSeconds(5));
+            }
+
+            if ($sToken && in_array($eventName, self::SESSION_DEDUPLICATED_EVENTS, true)) {
+                $dedupKey = 'va_dedup_session_'.$eventName.'_'.$sToken;
+
+                if (! Cache::add($dedupKey, true, now()->addMinutes(30))) {
+                    return null;
+                }
             }
 
             $pageUrl = $page ?? ($req ? substr($req->fullUrl(), 0, 500) : '/');
@@ -141,13 +206,15 @@ class AnalyticsService
 
             $visSession = null;
             if ($sToken) {
-                $visSession = VisitorSession::where('session_token', $sToken)->first();
+                $visSession = VisitorSession::where('session_token', $sToken)
+                    ->orWhere('session_id', $sToken)
+                    ->first();
             }
 
             if ($visSession) {
-                if (! $vToken && $visSession->visitor) {
-                    $vToken = $visSession->visitor->visitor_token;
-                }
+                // A session row is the server-side identity boundary. A
+                // browser payload may never substitute another visitor UUID.
+                $vToken = $visSession->visitor?->visitor_token;
                 if ($visSession->is_bot) {
                     $isBot = true;
                 }
@@ -187,12 +254,26 @@ class AnalyticsService
                 ?? (isset($metadata['occurred_at']) ? CarbonImmutable::parse($metadata['occurred_at']) : null)
                 ?? now();
 
-            // Enforce privacy: raw IP and internal timestamps must never be stored in event metadata
-            unset($metadata['ip'], $metadata['_occurred_at'], $metadata['occurred_at']);
+            // Detect server-authoritative country
+            $detectedCountry = null;
+            if ($req) {
+                $detectedCountry = app(GeoIpService::class)->detectCountryFromRequest($req);
+            }
+            if (! $detectedCountry && $visSession) {
+                $detectedCountry = $visSession->detected_country_code;
+            }
+            // Every persisted event carries a normalized snapshot. ZZ means
+            // that the server could not resolve the network country; it is not
+            // a caller-supplied country claim.
+            $metadata['detected_country_code'] = strtoupper($detectedCountry ?: 'ZZ');
+
+            // Enforce privacy: raw IP, client country overrides, and internal timestamps must never be stored in event metadata
+            unset($metadata['ip'], $metadata['country_code'], $metadata['_occurred_at'], $metadata['occurred_at']);
 
             $event = AnalyticsEvent::create([
                 'event_name' => $eventName,
                 'visitor_token' => $vToken ? substr($vToken, 0, 64) : null,
+                'visitor_id' => $vToken ? substr($vToken, 0, 64) : null,
                 'session_token' => $sToken ? substr($sToken, 0, 64) : null,
                 'page' => $pageUrl,
                 'referrer' => $referrer ?: null,
@@ -387,32 +468,68 @@ class AnalyticsService
 
         $time = $touchAt ? CarbonImmutable::parse($touchAt) : CarbonImmutable::now();
 
-        // Rapid duplicate guard: do not create redundant duplicate touch records within 2 seconds
+        $normalized = [
+            'visitor_id' => (string) $visitor->id,
+            'session_token' => $sessionToken,
+            'utm_source' => $source ? substr(trim($source), 0, 100) : null,
+            'utm_medium' => $utmMedium ? substr(trim($utmMedium), 0, 100) : null,
+            'utm_campaign' => $utmCampaign ? substr(trim($utmCampaign), 0, 100) : null,
+            'utm_content' => $utmContent ? substr(trim($utmContent), 0, 100) : null,
+            'utm_term' => $utmTerm ? substr(trim($utmTerm), 0, 100) : null,
+            'referrer' => $referrer ? substr(trim((string) $referrer), 0, 500) : null,
+        ];
+        $dedupeHash = hash('sha256', (string) json_encode([
+            ...$normalized,
+            'time_bucket' => intdiv($time->timestamp, 5),
+        ], JSON_UNESCAPED_SLASHES));
+
+        // Keep a bounded fallback for rows created before the unique hash was
+        // introduced. The hash is the atomic guard for concurrent requests.
         $existing = MarketingTouch::query()
             ->where('visitor_id', $visitor->id)
             ->where('utm_source', $source)
+            ->where('utm_medium', $utmMedium)
             ->where('utm_campaign', $utmCampaign)
             ->where('utm_content', $utmContent)
-            ->where('touch_at', '>=', $time->subSeconds(2))
-            ->where('touch_at', '<=', $time->addSeconds(2))
+            ->where('utm_term', $utmTerm)
+            ->where('referrer', $referrer)
+            ->where('session_token', $sessionToken)
+            ->where(function ($query) use ($dedupeHash, $time): void {
+                $query->where('dedupe_hash', $dedupeHash)
+                    ->orWhere(function ($legacy) use ($time): void {
+                        $legacy->whereNull('dedupe_hash')
+                            ->where('touch_at', '>=', $time->subSeconds(5))
+                            ->where('touch_at', '<=', $time->addSeconds(5));
+                    });
+            })
             ->first();
 
         if ($existing) {
             return $existing;
         }
 
-        return MarketingTouch::create([
-            'visitor_id' => $visitor->id,
-            'visitor_token' => $visitor->visitor_token,
-            'session_token' => $sessionToken,
-            'utm_source' => $source ? substr($source, 0, 100) : null,
-            'utm_medium' => $utmMedium ? substr($utmMedium, 0, 100) : null,
-            'utm_campaign' => $utmCampaign ? substr($utmCampaign, 0, 100) : null,
-            'utm_content' => $utmContent ? substr($utmContent, 0, 100) : null,
-            'utm_term' => $utmTerm ? substr($utmTerm, 0, 100) : null,
-            'referrer' => $referrer ? substr((string) $referrer, 0, 500) : null,
-            'touch_at' => $time,
-        ]);
+        try {
+            return MarketingTouch::create([
+                'visitor_id' => $visitor->id,
+                'visitor_token' => $visitor->visitor_token,
+                'session_token' => $sessionToken,
+                'utm_source' => $normalized['utm_source'],
+                'utm_medium' => $normalized['utm_medium'],
+                'utm_campaign' => $normalized['utm_campaign'],
+                'utm_content' => $normalized['utm_content'],
+                'utm_term' => $normalized['utm_term'],
+                'referrer' => $normalized['referrer'],
+                'is_direct' => ! $source,
+                'dedupe_hash' => $dedupeHash,
+                'touch_at' => $time,
+            ]);
+        } catch (QueryException $exception) {
+            if (! in_array($exception->getCode(), ['23000', '23505'], true)) {
+                throw $exception;
+            }
+
+            return MarketingTouch::where('dedupe_hash', $dedupeHash)->first();
+        }
     }
 
     /**
@@ -426,6 +543,7 @@ class AnalyticsService
         // 1. Authoritative lookup: MarketingTouch table
         $touch = MarketingTouch::query()
             ->where('visitor_token', $visitorToken)
+            ->where('is_direct', false)
             ->where('touch_at', '>=', $lookbackStart)
             ->where('touch_at', '<=', $bookingAt)
             ->orderByDesc('touch_at')

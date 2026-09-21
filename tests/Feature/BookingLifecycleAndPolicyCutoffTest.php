@@ -47,7 +47,8 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
         Setting::set('booking_buffer_minutes', '15', 'booking', true);
         Setting::set('booking_min_notice_hours', '0', 'booking', true);
         Setting::set('booking_max_horizon_days', '90', 'booking', true);
-        Setting::set('booking_cancellation_cutoff_hours', '24', 'booking', true);
+        Setting::set('booking_cancellation_cutoff_hours', '4', 'booking', true);
+        Setting::set('booking_reschedule_cutoff_hours', '24', 'booking', true);
 
         $this->admin = Administrator::create([
             'name' => 'Ahmad Tutor',
@@ -136,6 +137,20 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
         ]);
     }
 
+    public function test_customer_can_cancel_with_at_least_four_hours_notice(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-01 10:00:00');
+
+        $booking = $this->createTestBooking(
+            CarbonImmutable::parse('2026-10-01 14:00:00', 'UTC'),
+            'confirmed'
+        );
+
+        $cancelled = $this->cancellationService->cancel($booking, performedBy: 'customer');
+
+        $this->assertSame('cancelled', $cancelled->status);
+    }
+
     public function test_confirmed_booking_allowed_to_reschedule_outside_cutoff(): void
     {
         CarbonImmutable::setTestNow('2026-10-01 10:00:00');
@@ -173,8 +188,8 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
     {
         CarbonImmutable::setTestNow('2026-10-01 10:00:00');
 
-        // Appointment is 12 hours away (inside 24h cutoff)
-        $startUtc = CarbonImmutable::parse('2026-10-01 22:00:00', 'UTC');
+        // Appointment is 3 hours away (inside the canonical 4-hour cancellation cutoff)
+        $startUtc = CarbonImmutable::parse('2026-10-01 13:00:00', 'UTC');
         $booking = $this->createTestBooking($startUtc, 'confirmed');
 
         // 1. Service direct call throws BookingPolicyViolationException
@@ -182,7 +197,7 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
             $this->cancellationService->cancel($booking, performedBy: 'customer');
             $this->fail('Expected BookingPolicyViolationException was not thrown');
         } catch (BookingPolicyViolationException $e) {
-            $this->assertStringContainsString('24 hours', $e->getMessage());
+            $this->assertStringContainsString('4 hours', $e->getMessage());
         }
 
         // 2. HTTP route rejects with redirect error
@@ -198,7 +213,7 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
     {
         CarbonImmutable::setTestNow('2026-10-01 10:00:00');
 
-        // Appointment is 12 hours away (inside 24h cutoff)
+        // Appointment is 12 hours away (inside the 24-hour direct-contact rescheduling notice)
         $startUtc = CarbonImmutable::parse('2026-10-01 22:00:00', 'UTC');
         $booking = $this->createTestBooking($startUtc, 'confirmed');
 
@@ -218,11 +233,11 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
             $this->assertStringContainsString('24 hours', $e->getMessage());
         }
 
-        // 2. HTTP route rejects
+        // 2. Legacy public HTTP route is disabled entirely under V2.
         $response = $this->post(route('booking.reschedule.submit', ['token' => $booking->confirmation_token]), [
             'new_start_utc' => $alignedNewStart->toDateTimeString(),
         ]);
-        $response->assertSessionHas('error');
+        $response->assertForbidden();
 
         $booking->refresh();
         $this->assertSame($startUtc->toDateTimeString(), $booking->start_at_utc->toDateTimeString());

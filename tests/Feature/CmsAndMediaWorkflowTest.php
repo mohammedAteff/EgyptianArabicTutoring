@@ -239,6 +239,68 @@ class CmsAndMediaWorkflowTest extends TestCase
             ->assertSee('Published V2: Officially launched revision.');
     }
 
+    public function test_page_edit_form_reloads_pending_draft_and_publish_promotes_it_without_loss(): void
+    {
+        $page = Page::create([
+            'title' => 'Live Page',
+            'slug' => 'live-page',
+            'content' => 'Live content',
+            'excerpt' => 'Live excerpt',
+            'status' => 'published',
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.pages.update', $page), [
+                'action' => 'draft',
+                'title' => 'Draft Page',
+                'slug' => 'draft-page',
+                'content' => 'Draft content',
+                'excerpt' => 'Draft excerpt',
+                'seo_title' => 'Draft SEO title',
+                'seo_description' => 'Draft SEO description',
+                'status' => 'draft',
+            ])
+            ->assertRedirect();
+
+        $editResponse = $this->actingAs($this->admin, 'web')
+            ->get(route('admin.pages.edit', $page));
+
+        $editResponse->assertOk()
+            ->assertSee('Draft Page')
+            ->assertSee('Draft content')
+            ->assertSee('draft-page')
+            ->assertSee('Draft Revision')
+            ->assertSee('Discard Draft');
+
+        // Simulate an older tab submitting the still-live values. The server
+        // must promote the stored draft instead of silently publishing V1.
+        $this->actingAs($this->admin, 'web')
+            ->put(route('admin.pages.update', $page), [
+                'action' => 'publish',
+                'title' => 'Live Page',
+                'slug' => 'live-page',
+                'content' => 'Live content',
+                'excerpt' => 'Live excerpt',
+                'status' => 'published',
+            ])
+            ->assertRedirect();
+
+        $page->refresh();
+        $this->assertSame('Draft Page', $page->title);
+        $this->assertSame('draft-page', $page->slug);
+        $this->assertSame('Draft content', $page->content);
+        $this->assertDatabaseHas('content_revisions', [
+            'revisable_id' => $page->id,
+            'status' => 'published',
+            'title' => 'Draft Page',
+        ]);
+        $this->assertDatabaseMissing('content_revisions', [
+            'revisable_id' => $page->id,
+            'status' => 'draft',
+        ]);
+    }
+
     public function test_home_and_about_support_draft_before_publish_workflow(): void
     {
         // 1. Admin saves draft for homepage and about
@@ -495,6 +557,22 @@ class CmsAndMediaWorkflowTest extends TestCase
         $this->get('/resources/pyramid-vocab')
             ->assertOk()
             ->assertSee($media->path);
+    }
+
+    public function test_public_media_upload_rejects_active_svg_content(): void
+    {
+        Storage::fake('public');
+
+        $response = $this->actingAs($this->admin, 'web')
+            ->post(route('admin.media.store'), [
+                'file' => UploadedFile::fake()->createWithContent(
+                    'unsafe.svg',
+                    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+                ),
+            ]);
+
+        $response->assertSessionHasErrors('file');
+        $this->assertDatabaseMissing('media', ['filename' => 'unsafe.svg']);
     }
 
     public function test_referenced_media_cannot_be_silently_deleted(): void

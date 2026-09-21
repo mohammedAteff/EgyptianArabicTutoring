@@ -121,6 +121,7 @@ class LocalizedUrlService
                 : ['key' => 'games'],
             'about', 'a-propos', 'ueber-uns' => ['key' => 'about'],
             'faq' => ['key' => 'faq'],
+            'pricing', 'tarifs', 'preise' => ['key' => 'pricing'],
             'privacy', 'confidentialite', 'datenschutz' => ['key' => 'privacy'],
             'terms', 'conditions', 'agb' => ['key' => 'terms'],
             'p' => ['key' => 'page.show', 'slug' => $slug],
@@ -148,6 +149,11 @@ class LocalizedUrlService
                 'de' => url('/de'),
                 default => url('/'),
             },
+            'pricing' => match ($locale) {
+                'fr' => url('/fr/tarifs'),
+                'de' => url('/de/preise'),
+                default => url('/pricing'),
+            },
             'booking' => match ($locale) {
                 'fr' => url('/fr/reservation'),
                 'de' => url('/de/buchen'),
@@ -156,7 +162,7 @@ class LocalizedUrlService
             'booking.confirmation' => match ($locale) {
                 'fr' => url('/fr/reservation/confirmation/'.$slug),
                 'de' => url('/de/buchen/bestaetigung/'.$slug),
-                default => url('/book/confirmation/'.$slug),
+                default => url('/booking/confirmation/'.$slug),
             },
             'resources' => match ($locale) {
                 'fr' => url('/fr/ressources'),

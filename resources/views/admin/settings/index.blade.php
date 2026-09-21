@@ -33,7 +33,7 @@
                 <!-- Site Name -->
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Website Name</label>
-                    <input type="text" name="site_name" value="{{ old('site_name', $settings['site_name']->value ?? 'Egyptian Arabic Tutoring') }}" required 
+                    <input type="text" name="site_name" value="{{ old('site_name', $settings['site_name']->value ?? config('business.site_name')) }}" required
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
 
@@ -185,7 +185,7 @@
 
         <!-- 3. About Page Content -->
         <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
-            <h2 class="text-lg font-bold font-serif text-slate-900 pb-3 border-b border-slate-100">3. About Ahmad Page Content</h2>
+            <h2 class="text-lg font-bold font-serif text-slate-900 pb-3 border-b border-slate-100">3. About Abdallah Page Content</h2>
 
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Tutor Biography</label>
@@ -203,7 +203,7 @@
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Tutor Portrait Image Path</label>
                 <div class="flex gap-3 items-center">
                     <input type="text" id="about_image_path" name="about_image_path" value="{{ old('about_image_path', $settings['about_image_path']->value ?? '') }}" 
-                           placeholder="media/ahmad-portrait.webp"
+                           placeholder="media/abdallah-portrait.webp"
                            class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     <button type="button" onclick="openMediaPicker('about_image_path', 'about_image_preview')" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 shrink-0 transition-colors">
                         Choose from Media Library
@@ -228,14 +228,21 @@
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation Policy</label>
                 <textarea name="cancellation_policy" rows="3" required 
-                          class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ old('cancellation_policy', $settings['cancellation_policy']->value ?? 'Cancellations and rescheduling are accepted up to 24 hours in advance.') }}</textarea>
+                          class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ old('cancellation_policy', $settings['cancellation_policy']->value ?? 'Cancellations with at least 4 hours notice do not forfeit the session credit. Rescheduling requests must be made directly to Abdallah at least 24 hours before class.') }}</textarea>
             </div>
 
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation & Rescheduling Cutoff (Hours)</label>
-                <input type="number" name="booking_cancellation_cutoff_hours" min="0" max="168" value="{{ old('booking_cancellation_cutoff_hours', $settings['booking_cancellation_cutoff_hours']->value ?? '24') }}" required 
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation Cutoff (Hours)</label>
+                <input type="number" name="booking_cancellation_cutoff_hours" min="0" max="168" value="{{ old('booking_cancellation_cutoff_hours', $settings['booking_cancellation_cutoff_hours']->value ?? '4') }}" required
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
-                <p class="text-[11px] text-slate-400 mt-1">Minimum hours before appointment start required for student self-service cancellation or rescheduling (e.g. 24).</p>
+                <p class="text-[11px] text-slate-400 mt-1">Minimum hours before appointment start required for customer cancellation (the canonical policy is 4 hours).</p>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Rescheduling Request Notice (Hours)</label>
+                <input type="number" name="booking_reschedule_cutoff_hours" min="0" max="168" value="{{ old('booking_reschedule_cutoff_hours', $settings['booking_reschedule_cutoff_hours']->value ?? '24') }}" required
+                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
+                <p class="text-[11px] text-slate-400 mt-1">Minimum notice for direct-contact rescheduling requests; administrators can execute approved changes privately.</p>
             </div>
 
             <div>

@@ -420,6 +420,9 @@ class FunnelProgressionService
 
         // Cohort qualification: visitor belongs to cohort if and only if t_first_seen >= T_start AND t_first_seen < T_end
         $cohortQuery = VisitorFunnelProgression::query()
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            })
             ->where('visitor_at', '>=', $tStartUtc)
             ->where('visitor_at', '<', $tEndUtc);
 

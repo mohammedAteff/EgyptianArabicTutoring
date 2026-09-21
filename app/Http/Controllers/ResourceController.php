@@ -179,12 +179,16 @@ class ResourceController extends Controller
             'resource_id' => $resource->id,
             'contact_id' => $contact->id,
             'request_id' => $resourceRequest->id,
+            'session_id' => $request->session()->getId(),
+            'visitor_token' => $visitorToken,
         ], now()->addMinutes(60));
 
         $request->session()->put("download_token_{$resource->id}", [
             'token' => $downloadToken,
             'contact_id' => $contact->id,
             'request_id' => $resourceRequest->id,
+            'session_id' => $request->session()->getId(),
+            'visitor_token' => $visitorToken,
         ]);
 
         $targetUrl = app(LocalizedUrlService::class)->getLocalizedUrl('resource.detail', app()->getLocale(), $resource->slug);
@@ -205,25 +209,61 @@ class ResourceController extends Controller
             ->firstOrFail();
 
         $tokenData = null;
+        $sessionTokenData = $request->session()->get("download_token_{$resource->id}");
+        $visitorToken = $request->attributes->get('analytics_visitor_token')
+            ?? ($request->hasSession() ? $request->session()->get('analytics_visitor_token') : null)
+            ?? $request->cookie('_va_visitor');
+        $matchesGrant = function (?array $grant) use ($resource, $request, $visitorToken): bool {
+            if (! $grant || ($grant['resource_id'] ?? null) !== $resource->id) {
+                return false;
+            }
+
+            $sameSession = isset($grant['session_id'])
+                && hash_equals((string) $grant['session_id'], (string) $request->session()->getId());
+            $sameVisitor = ! isset($grant['visitor_token'])
+                || ! $grant['visitor_token']
+                || ! $visitorToken
+                || hash_equals((string) $grant['visitor_token'], (string) $visitorToken);
+
+            return $sameSession && $sameVisitor;
+        };
 
         if ($resource->is_gated) {
             $token = $request->query('token');
-            $sessionTokenData = $request->session()->get("download_token_{$resource->id}");
 
             if ($token) {
-                $tokenData = Cache::get("resource_download_token_{$token}");
+                // Validate and consume bearer tokens while holding a per-token
+                // lock. An unauthorized replay must not consume the legitimate
+                // visitor's grant, while two authorized requests cannot both
+                // download the same single-use token.
+                $tokenData = Cache::lock("resource_download_consume_{$token}", 5)->block(2, function () use ($token, $matchesGrant): ?array {
+                    $cacheKey = "resource_download_token_{$token}";
+                    $data = Cache::get($cacheKey);
+
+                    if (! is_array($data) || ! $matchesGrant($data)) {
+                        return null;
+                    }
+
+                    Cache::forget($cacheKey);
+
+                    return $data;
+                });
             }
 
             if (! $tokenData && $sessionTokenData) {
                 $tokenData = $sessionTokenData;
             }
 
-            if (! $tokenData || ($tokenData['resource_id'] ?? null) !== $resource->id) {
+            if (! $matchesGrant($tokenData)) {
                 $targetUrl = app(LocalizedUrlService::class)->getLocalizedUrl('resource.detail', app()->getLocale(), $slug);
 
                 return redirect()->to($targetUrl)
                     ->with('error', 'Please enter your email to get free access to this resource.');
             }
+
+            // The session copy is also single-use. This prevents a second
+            // request without the query token from replaying the grant.
+            $request->session()->forget("download_token_{$resource->id}");
         }
 
         // Verify physical file exists on disk

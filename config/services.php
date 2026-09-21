@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'geoip' => [
+        'database_path' => env('GEOIP_DATABASE_PATH', storage_path('geoip/GeoLite2-Country.mmdb')),
+        'download_url' => env('GEOIP_DOWNLOAD_URL'),
+        'license_key' => env('MAXMIND_LICENSE_KEY'),
+        // Country headers are ignored until the deployment explicitly lists
+        // its reverse-proxy/CDN CIDRs. This prevents direct clients from
+        // spoofing CF-IPCountry or X-Country-Code.
+        'trusted_proxies' => env('GEOIP_TRUSTED_PROXIES', ''),
+    ],
+
 ];

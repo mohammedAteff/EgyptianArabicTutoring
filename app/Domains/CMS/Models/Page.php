@@ -59,4 +59,11 @@ class Page extends Model
     {
         return $this->morphMany(ContentRevision::class, 'revisable');
     }
+
+    public function getCurrentSourceRevisionAttribute(): ?int
+    {
+        return EntityTranslationRevision::where('entity_type', 'page')
+            ->where('entity_id', $this->id)
+            ->max('revision_number') ?: 1;
+    }
 }

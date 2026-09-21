@@ -22,8 +22,10 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ResourceController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,22 +44,46 @@ Route::get('/_arabictutor-landing', [HomeController::class, 'index'])->name('hom
 
 // Native Booking System
 Route::get('/booking', [BookingController::class, 'index'])->name('booking.index');
-Route::permanentRedirect('/book', '/booking');
+Route::get('/book', function (Request $request) {
+    $queryString = $request->server->get('QUERY_STRING') ?: $request->getQueryString();
+
+    return redirect($queryString ? '/booking?'.$queryString : '/booking', 301);
+});
 Route::get('/fr/reservation', [BookingController::class, 'index'])->name('booking.fr');
 Route::get('/de/buchen', [BookingController::class, 'index'])->name('booking.de');
 
-Route::get('/book/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation');
-Route::get('/booking/confirmation/{token}', [BookingController::class, 'confirmation']);
+Route::get('/booking/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation');
+Route::get('/book/confirmation/{token}', function (string $token, Request $request) {
+    $qs = $request->server->get('QUERY_STRING') ?: $request->getQueryString();
+
+    return redirect('/booking/confirmation/'.$token.($qs ? '?'.$qs : ''), 301);
+});
 Route::get('/fr/reservation/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation.fr');
 Route::get('/de/buchen/bestaetigung/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation.de');
-Route::get('/book/confirmation/{token}/ics', [BookingController::class, 'ics'])->name('booking.ics');
-Route::get('/booking/confirmation/{token}/ics', [BookingController::class, 'ics']);
-Route::get('/book/{token}/reschedule', [BookingController::class, 'showReschedule'])->name('booking.reschedule');
-Route::get('/booking/{token}/reschedule', [BookingController::class, 'showReschedule']);
-Route::post('/book/{token}/reschedule', [BookingController::class, 'processReschedule'])->middleware('throttle:booking-reschedule')->name('booking.reschedule.submit');
-Route::post('/booking/{token}/reschedule', [BookingController::class, 'processReschedule'])->middleware('throttle:booking-reschedule');
-Route::post('/book/{token}/cancel', [BookingController::class, 'cancel'])->middleware('throttle:booking-cancel')->name('booking.cancel');
-Route::post('/booking/{token}/cancel', [BookingController::class, 'cancel'])->middleware('throttle:booking-cancel');
+
+Route::get('/booking/confirmation/{token}/ics', [BookingController::class, 'ics'])->name('booking.ics');
+Route::get('/book/confirmation/{token}/ics', function (string $token, Request $request) {
+    $qs = $request->getQueryString();
+
+    return redirect('/booking/confirmation/'.$token.'/ics'.($qs ? '?'.$qs : ''), 301);
+});
+
+Route::get('/booking/{token}/reschedule', [BookingController::class, 'showReschedule'])->name('booking.reschedule');
+Route::get('/book/{token}/reschedule', function (string $token, Request $request) {
+    $qs = $request->getQueryString();
+
+    return redirect('/booking/'.$token.'/reschedule'.($qs ? '?'.$qs : ''), 301);
+});
+Route::post('/booking/{token}/reschedule', [BookingController::class, 'processReschedule'])->middleware('throttle:booking-reschedule')->name('booking.reschedule.submit');
+Route::post('/book/{token}/reschedule', [BookingController::class, 'processReschedule'])->middleware('throttle:booking-reschedule');
+
+Route::post('/booking/{token}/cancel', [BookingController::class, 'cancel'])->middleware('throttle:booking-cancel')->name('booking.cancel');
+Route::post('/book/{token}/cancel', [BookingController::class, 'cancel'])->middleware('throttle:booking-cancel');
+
+// Pricing & Coaching Tracks
+Route::get('/pricing', [PricingController::class, 'index'])->name('pricing');
+Route::get('/fr/tarifs', [PricingController::class, 'index'])->name('pricing.fr');
+Route::get('/de/preise', [PricingController::class, 'index'])->name('pricing.de');
 
 // Resource Library & Gated Access
 Route::get('/resources', [ResourceController::class, 'index'])->name('resources.index');
@@ -120,6 +146,7 @@ Route::middleware(ApplyAdminNoindexHeaders::class)->group(function () {
 
 // First-Party Client Analytics Ingestion
 Route::post('/analytics/event', [AnalyticsController::class, 'track'])->middleware('throttle:60,1')->name('analytics.track');
+Route::post('/api/analytics/events', [AnalyticsController::class, 'track'])->middleware('throttle:60,1')->name('analytics.events');
 
 /*
 |--------------------------------------------------------------------------
@@ -208,6 +235,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         // CMS Custom Pages & Revisions
         Route::resource('pages', App\Http\Controllers\Admin\PageController::class)->except(['show']);
+        Route::delete('/pages/{page}/draft', [App\Http\Controllers\Admin\PageController::class, 'discardDraft'])->name('pages.draft.destroy');
         Route::post('/pages/{page}/revisions/{revision}/restore', [App\Http\Controllers\Admin\PageController::class, 'restoreRevision'])->name('pages.revisions.restore');
 
         // Translations & Multilingual CMS Revisions

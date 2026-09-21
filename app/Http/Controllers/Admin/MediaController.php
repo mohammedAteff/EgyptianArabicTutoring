@@ -56,7 +56,9 @@ class MediaController extends Controller
             'file' => [
                 'required',
                 'file',
-                'mimes:jpeg,jpg,png,webp,gif,svg,pdf',
+                // SVG is intentionally excluded: uploaded SVG is served from
+                // a public disk and can carry active script content.
+                'mimes:jpeg,jpg,png,webp,gif,pdf',
                 'max:10240', // 10 MB
             ],
             'alt_text' => ['nullable', 'string', 'max:255'],

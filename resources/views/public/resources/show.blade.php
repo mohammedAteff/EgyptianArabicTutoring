@@ -168,7 +168,7 @@
                     <div class="text-xs font-bold text-stone-900 mb-1">Want to practice speaking?</div>
                     <p class="text-xs text-stone-500 mb-3">Practice these exact phrases in a private 1-on-1 session.</p>
                     <a href="{{ localized_url('booking') }}" class="text-xs font-bold text-terracotta-600 hover:text-terracotta-700 underline">
-                        Book a Lesson with Ahmad →
+                        Book a Lesson with Abdallah →
                     </a>
                 </div>
             </div>

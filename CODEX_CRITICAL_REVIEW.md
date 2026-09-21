@@ -1,3 +1,5 @@
+> **Historical document:** This V1 review is retained for audit history. It is superseded by the V2 verification in `PROJECT_STATUS.md` and `Gemini.md` (2026-09-21).
+
 # Critical Project Review
 
 Review basis: the current codebase, `ARABIC TUTORING WEBSITE FINAL 16 Sep.md`, `PROJECT_STATUS.md`, and `CODEX_PROJECT_REVIEW.md`. `PROJECT_STATUS.md` is the latest analysis file and was treated as an assertion, not as evidence.

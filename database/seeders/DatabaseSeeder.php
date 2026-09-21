@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Availability\Models\AvailabilityRule;
+use App\Domains\Booking\Actions\SyncDiagnosticSessionType;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Setting;
@@ -47,7 +48,7 @@ class DatabaseSeeder extends Seeder
             }
         }
 
-        // 2. Initial Active Session Type
+        // 2. Session Types (Legacy deactivated, Canonical Diagnostic Active)
         SessionType::updateOrCreate(
             ['slug' => 'egyptian-arabic-session'],
             [
@@ -56,9 +57,11 @@ class DatabaseSeeder extends Seeder
                 'duration_minutes' => 60,
                 'price' => 40.00,
                 'currency' => 'USD',
-                'active' => true,
+                'active' => false,
             ]
         );
+
+        (new SyncDiagnosticSessionType)->execute();
 
         // 3. Weekly Availability Rules (Sunday=0 to Thursday=4 in Cairo time)
         // Two daily intervals: 09:00 - 13:00 and 15:00 - 19:00
@@ -89,16 +92,18 @@ class DatabaseSeeder extends Seeder
 
         // 4. Default Settings
         $settings = [
-            ['key' => 'site_name', 'value' => 'Egyptian Arabic Tutoring', 'group' => 'general', 'is_public' => true],
+            ['key' => 'site_name', 'value' => 'Egyptian Arabic with Abdallah', 'group' => 'general', 'is_public' => true],
             ['key' => 'business_timezone', 'value' => 'Africa/Cairo', 'group' => 'booking', 'is_public' => true],
             ['key' => 'default_language', 'value' => 'en', 'group' => 'general', 'is_public' => true],
             ['key' => 'maintenance_mode', 'value' => '0', 'group' => 'general', 'is_public' => false],
             ['key' => 'active_visitor_window', 'value' => '5', 'group' => 'analytics', 'is_public' => false],
             ['key' => 'session_timeout_minutes', 'value' => '30', 'group' => 'analytics', 'is_public' => false],
             ['key' => 'analytics_retention_days', 'value' => '180', 'group' => 'analytics', 'is_public' => false],
+            ['key' => 'analytics_authoritative_cutover_date', 'value' => now('Africa/Cairo')->toDateString(), 'group' => 'analytics', 'is_public' => false],
             ['key' => 'backup_retention_days', 'value' => '30', 'group' => 'system', 'is_public' => false],
-            ['key' => 'cancellation_policy', 'value' => 'Cancellations and rescheduling are accepted up to 24 hours in advance.', 'group' => 'booking', 'is_public' => true],
-            ['key' => 'booking_cancellation_cutoff_hours', 'value' => '24', 'group' => 'booking', 'is_public' => true],
+            ['key' => 'cancellation_policy', 'value' => 'Cancellations with at least 4 hours notice do not forfeit the session credit. Rescheduling requests must be made directly to Abdallah at least 24 hours before class.', 'group' => 'booking', 'is_public' => true],
+            ['key' => 'booking_cancellation_cutoff_hours', 'value' => '4', 'group' => 'booking', 'is_public' => true],
+            ['key' => 'booking_reschedule_cutoff_hours', 'value' => '24', 'group' => 'booking', 'is_public' => true],
             ['key' => 'rescheduling_policy', 'value' => 'Rescheduling is free and subject to available tutor calendar slots.', 'group' => 'booking', 'is_public' => true],
             ['key' => 'booking_instructions', 'value' => 'Choose your timezone and select a convenient date and time. An instant confirmation and calendar file will be generated for you.', 'group' => 'booking', 'is_public' => true],
             ['key' => 'hero_title', 'value' => 'Speak Egyptian Arabic with Confidence', 'group' => 'homepage', 'is_public' => true],
@@ -172,7 +177,7 @@ class DatabaseSeeder extends Seeder
             ],
             [
                 'question' => 'What if I need to reschedule my session?',
-                'answer' => 'You can easily reschedule your session with at least 24 hours notice directly through your confirmation link or by contacting me.',
+                'answer' => 'You can request a reschedule with at least 24 hours notice by contacting Abdallah directly via WhatsApp, Telegram, or email. Changes are subject to available tutor calendar slots.',
                 'sort_order' => 4,
             ],
         ];
@@ -201,5 +206,8 @@ class DatabaseSeeder extends Seeder
                 'sort_order' => 1,
             ]
         );
+
+        // 9. Policy Pages (Privacy & Terms)
+        $this->call(PolicyPagesSeeder::class);
     }
 }

@@ -55,7 +55,7 @@ class CancellationService
                     throw new BookingPolicyViolationException('Past appointments cannot be cancelled.');
                 }
 
-                $cutoffHours = (int) Setting::get('booking_cancellation_cutoff_hours', 24);
+                $cutoffHours = (int) Setting::get('booking_cancellation_cutoff_hours', 4);
                 if ($lockedBooking->start_at_utc < now('UTC')->addHours($cutoffHours)) {
                     throw new BookingPolicyViolationException("Appointments cannot be cancelled within {$cutoffHours} hours of the scheduled start time.");
                 }

@@ -460,6 +460,33 @@ class FunnelCohortReconciliationAndMaturityTest extends TestCase
         $this->assertEquals(2, $funnel['visitors'], 'Cohort for 2026-09-10 in Cairo must include exactly visitors between 21:00 UTC Sep 9 and 21:00 UTC Sep 10');
     }
 
+    public function test_bot_visitors_are_excluded_from_cohort_funnel_reporting(): void
+    {
+        $firstVisit = CarbonImmutable::parse('2026-09-10 10:00:00', 'UTC');
+        $human = Visitor::create([
+            'visitor_token' => 'vis-human-cohort',
+            'first_seen_at' => $firstVisit,
+            'last_seen_at' => $firstVisit,
+            'is_bot' => false,
+        ]);
+        $bot = Visitor::create([
+            'visitor_token' => 'vis-bot-cohort',
+            'first_seen_at' => $firstVisit,
+            'last_seen_at' => $firstVisit,
+            'is_bot' => true,
+        ]);
+
+        $this->funnelService->recordVisit($human, $firstVisit);
+        $this->funnelService->recordVisit($bot, $firstVisit);
+
+        $funnel = $this->funnelService->getCohortFunnel(
+            CarbonImmutable::parse('2026-09-10', 'Africa/Cairo'),
+            CarbonImmutable::parse('2026-09-10', 'Africa/Cairo'),
+        );
+
+        $this->assertSame(1, $funnel['visitors']);
+    }
+
     public function test_durable_reconciliation_audit_persists_cutover_record(): void
     {
         $firstVisit = CarbonImmutable::now()->subDays(5);

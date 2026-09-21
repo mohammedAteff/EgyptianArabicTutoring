@@ -281,4 +281,61 @@ class AvailabilityTest extends TestCase
         // Visitor A should see BOTH slots (their held slot + remaining slot)
         $this->assertCount(2, $visitorASlots[$dateKey]);
     }
+
+    public function test_active_hold_blocks_adjacent_interval_inside_required_buffer(): void
+    {
+        $nextWed = CarbonImmutable::now('Africa/Cairo')->next(CarbonImmutable::WEDNESDAY)->setTime(0, 0);
+
+        // Separate rules can begin immediately after one another, so the
+        // cross-interval buffer must be enforced by hold validation too.
+        AvailabilityRule::create([
+            'weekday' => 3,
+            'start_time' => '14:00',
+            'end_time' => '15:00',
+            'session_duration_minutes' => 60,
+            'buffer_minutes' => 15,
+            'min_notice_hours' => 0,
+            'enabled' => true,
+        ]);
+        AvailabilityRule::create([
+            'weekday' => 3,
+            'start_time' => '15:00',
+            'end_time' => '16:00',
+            'session_duration_minutes' => 60,
+            'buffer_minutes' => 15,
+            'min_notice_hours' => 0,
+            'enabled' => true,
+        ]);
+
+        $holdStartCairo = CarbonImmutable::parse($nextWed->toDateString().' 14:00:00', 'Africa/Cairo');
+        $holdEndCairo = CarbonImmutable::parse($nextWed->toDateString().' 15:00:00', 'Africa/Cairo');
+
+        BookingHold::create([
+            'session_type_id' => $this->sessionType->id,
+            'slot_start_utc' => $holdStartCairo->setTimezone('UTC'),
+            'slot_end_utc' => $holdEndCairo->setTimezone('UTC'),
+            'visitor_token' => 'visitor-a-token',
+            'status' => 'active',
+            'expires_at' => CarbonImmutable::now('UTC')->addMinutes(10),
+        ]);
+
+        $visitorBSlots = $this->availabilityService->getAvailableSlotsGroupedByDate(
+            $this->sessionType,
+            'Africa/Cairo',
+            $nextWed,
+            $nextWed,
+            'visitor-b-token'
+        );
+
+        $this->assertEmpty($visitorBSlots);
+
+        $candidateStart = CarbonImmutable::parse($nextWed->toDateString().' 15:00:00', 'Africa/Cairo')->setTimezone('UTC');
+        $candidateEnd = $candidateStart->addHour();
+        $this->assertFalse($this->availabilityService->isSlotAvailable(
+            $this->sessionType,
+            $candidateStart,
+            $candidateEnd,
+            'visitor-b-token'
+        ));
+    }
 }

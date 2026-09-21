@@ -4,6 +4,7 @@ namespace App\Domains\Analytics\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class AnalyticsEvent extends Model
 {
@@ -16,6 +17,7 @@ class AnalyticsEvent extends Model
     protected $fillable = [
         'event_name',
         'visitor_token',
+        'visitor_id',
         'session_token',
         'page',
         'referrer',
@@ -29,6 +31,19 @@ class AnalyticsEvent extends Model
         'is_bot',
         'created_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $event): void {
+            if (Schema::hasColumn('analytics_events', 'visitor_id')) {
+                if (! $event->visitor_token && $event->visitor_id) {
+                    $event->visitor_token = $event->visitor_id;
+                } elseif (! $event->visitor_id && $event->visitor_token) {
+                    $event->visitor_id = $event->visitor_token;
+                }
+            }
+        });
+    }
 
     protected function casts(): array
     {

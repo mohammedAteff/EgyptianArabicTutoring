@@ -17,8 +17,9 @@ class TranslationService
         ?int $adminId = null
     ): EntityTranslationRevision {
         return DB::transaction(function () use ($entity, $translatableData, $adminId) {
-            $entityType = $entity->getEntityType();
             $entityId = $entity->getKey();
+            $entity = $entity->newQuery()->whereKey($entityId)->lockForUpdate()->firstOrFail();
+            $entityType = $entity->getEntityType();
 
             // Lock entity revisions for update to prevent concurrent race conditions
             $latestRevision = EntityTranslationRevision::where('entity_type', $entityType)
@@ -127,45 +128,49 @@ class TranslationService
             throw new \InvalidArgumentException('Drafts can only be saved for localized languages (fr, de).');
         }
 
-        $transClass = $entity->getTranslationModelClass();
-        $foreignKey = $entity->getForeignKey();
+        return DB::transaction(function () use ($entity, $locale, $translatableData, $sourceRevisionId) {
+            $entity = $entity->newQuery()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
+            $transClass = $entity->getTranslationModelClass();
+            $foreignKey = $entity->getForeignKey();
 
-        $draft = $transClass::where($foreignKey, $entity->getKey())
-            ->where('locale', $locale)
-            ->where('status', 'draft')
-            ->first();
+            $draft = $transClass::where($foreignKey, $entity->getKey())
+                ->where('locale', $locale)
+                ->where('status', 'draft')
+                ->lockForUpdate()
+                ->first();
 
-        // If sourceRevisionId is explicitly provided (reconciliation save), validate and advance revision
-        if ($sourceRevisionId !== null) {
-            $validRevision = EntityTranslationRevision::where('entity_type', $entity->getEntityType())
-                ->where('entity_id', $entity->getKey())
-                ->where('revision_number', $sourceRevisionId)
-                ->exists();
+            // If sourceRevisionId is explicitly provided (reconciliation save), validate and advance revision
+            if ($sourceRevisionId !== null) {
+                $validRevision = EntityTranslationRevision::where('entity_type', $entity->getEntityType())
+                    ->where('entity_id', $entity->getKey())
+                    ->where('revision_number', $sourceRevisionId)
+                    ->exists();
 
-            if (! $validRevision) {
-                throw new \InvalidArgumentException("Source revision #{$sourceRevisionId} does not belong to this {$entity->getEntityType()}.");
+                if (! $validRevision) {
+                    throw new \InvalidArgumentException("Source revision #{$sourceRevisionId} does not belong to this {$entity->getEntityType()}.");
+                }
+
+                $targetRevision = $sourceRevisionId;
+            } else {
+                // Retain existing draft revision reference if present, otherwise use current English revision
+                $targetRevision = $draft?->source_revision_id ?? ($entity->currentSourceRevision()?->revision_number ?? 1);
             }
 
-            $targetRevision = $sourceRevisionId;
-        } else {
-            // Retain existing draft revision reference if present, otherwise use current English revision
-            $targetRevision = $draft?->source_revision_id ?? ($entity->currentSourceRevision()?->revision_number ?? 1);
-        }
+            $data = array_merge($translatableData, [
+                $foreignKey => $entity->getKey(),
+                'locale' => $locale,
+                'source_revision_id' => $targetRevision,
+                'status' => 'draft',
+            ]);
 
-        $data = array_merge($translatableData, [
-            $foreignKey => $entity->getKey(),
-            'locale' => $locale,
-            'source_revision_id' => $targetRevision,
-            'status' => 'draft',
-        ]);
+            if ($draft) {
+                $draft->update($data);
 
-        if ($draft) {
-            $draft->update($data);
+                return $draft;
+            }
 
-            return $draft;
-        }
-
-        return $transClass::create($data);
+            return $transClass::create($data);
+        });
     }
 
     /**
@@ -175,6 +180,7 @@ class TranslationService
     public function publishTranslation(Model $entity, string $locale): Model
     {
         return DB::transaction(function () use ($entity, $locale) {
+            $entity = $entity->newQuery()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
             $transClass = $entity->getTranslationModelClass();
             $foreignKey = $entity->getForeignKey();
 

@@ -7,7 +7,7 @@
             📅 Direct Calendar Booking
         </span>
         <h1 class="text-3xl sm:text-4xl font-extrabold text-stone-900 tracking-tight">
-            Book Your Private Egyptian Arabic Lesson
+            Book Your Private Egyptian Arabic Lesson with Abdallah
         </h1>
         <p class="text-stone-600 text-base mt-2 leading-relaxed">
             Select a date and time in your local timezone. Instant confirmation with calendar download and lesson links.

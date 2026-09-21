@@ -11,7 +11,7 @@
             {{ __('Egyptian Arabic Workbooks & Guides') }}
         </h1>
         <p class="text-stone-600 text-base sm:text-lg mt-3 leading-relaxed">
-            {{ __('Curated vocabulary cheat-sheets, conversation frameworks, and pronunciation guides prepared directly by Ahmad.') }}
+            {{ __('Curated vocabulary cheat-sheets, conversation frameworks, and pronunciation guides prepared directly by Abdallah.') }}
         </p>
     </div>
 

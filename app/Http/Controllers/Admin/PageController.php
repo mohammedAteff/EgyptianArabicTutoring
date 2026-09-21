@@ -103,11 +103,16 @@ class PageController extends Controller
     public function edit(Page $page): View
     {
         $revisions = $page->revisions()->orderByDesc('revision_number')->get();
+        $draftRevision = $page->revisions()
+            ->where('status', 'draft')
+            ->latest('id')
+            ->first();
 
         return view('admin.pages.edit', [
             'title' => "Edit Page — {$page->title}",
             'page' => $page,
             'revisions' => $revisions,
+            'draftRevision' => $draftRevision,
         ]);
     }
 
@@ -128,16 +133,54 @@ class PageController extends Controller
         $isDraftAction = $action === 'draft' || ($page->status === 'published' && $validated['status'] === 'draft');
 
         $slug = Str::slug($validated['slug']);
+        $pendingDraft = $page->revisions()
+            ->where('status', 'draft')
+            ->latest('id')
+            ->first();
+
+        // A publish action from the edit screen should publish the pending
+        // draft, even if an older browser tab submitted the still-live values.
+        // Explicitly changed fields continue to win over the stored draft.
+        if ($action === 'publish' && $pendingDraft) {
+            $draftContent = $pendingDraft->content ?? [];
+            $draftValues = [
+                'title' => $pendingDraft->title,
+                'content' => $draftContent['body'] ?? null,
+                'excerpt' => $draftContent['excerpt'] ?? null,
+                'seo_title' => $draftContent['seo_title'] ?? null,
+                'seo_description' => $draftContent['seo_description'] ?? null,
+                'og_image_path' => $draftContent['og_image_path'] ?? null,
+            ];
+            foreach (['title', 'content', 'excerpt', 'seo_title', 'seo_description', 'og_image_path'] as $field) {
+                $liveValue = $page->{$field};
+                $draftValue = $draftValues[$field];
+                if (($validated[$field] ?? null) === $liveValue && $draftValue !== $liveValue) {
+                    $validated[$field] = $draftValue;
+                }
+            }
+
+            if ($validated['slug'] === $page->slug && isset($draftContent['slug'])) {
+                $validated['slug'] = $draftContent['slug'];
+                $slug = Str::slug($validated['slug']);
+            }
+        }
+
         $previousData = $page->toArray();
         $nextRevision = ($page->revisions()->max('revision_number') ?? 0) + 1;
 
-        if ($isDraftAction && $page->status === 'published') {
-            ContentRevision::create([
+        if ($isDraftAction) {
+            $draftRevision = $page->revisions()
+                ->where('status', 'draft')
+                ->latest('id')
+                ->first();
+
+            $draftData = [
                 'revisable_type' => Page::class,
                 'revisable_id' => $page->id,
-                'revision_number' => $nextRevision,
+                'revision_number' => $draftRevision?->revision_number ?? $nextRevision,
                 'title' => $validated['title'],
                 'content' => [
+                    'slug' => $slug,
                     'body' => $validated['content'] ?? '',
                     'excerpt' => $validated['excerpt'] ?? null,
                     'og_image_path' => $validated['og_image_path'] ?? null,
@@ -146,7 +189,13 @@ class PageController extends Controller
                 ],
                 'created_by_id' => Auth::id(),
                 'status' => 'draft',
-            ]);
+            ];
+
+            if ($draftRevision) {
+                $draftRevision->update($draftData);
+            } else {
+                ContentRevision::create($draftData);
+            }
 
             AuditLog::create([
                 'administrator_id' => Auth::id(),
@@ -154,14 +203,14 @@ class PageController extends Controller
                 'entity_type' => Page::class,
                 'entity_id' => $page->id,
                 'new_data' => [
-                    'revision_number' => $nextRevision,
+                    'revision_number' => $draftData['revision_number'],
                     'title' => $validated['title'],
                 ],
                 'created_at' => now(),
             ]);
 
             return redirect()->route('admin.pages.edit', $page->id)
-                ->with('success', "Draft saved as Revision #{$nextRevision}. The published version remains live until explicitly published.");
+                ->with('success', "Draft saved as Revision #{$draftData['revision_number']}. The published version remains live until explicitly published.");
         }
 
         $targetStatus = ($action === 'publish' || $validated['status'] === 'published') ? 'published' : $validated['status'];
@@ -172,6 +221,13 @@ class PageController extends Controller
 
         DB::transaction(function () use ($page, $validated, $slug, $targetStatus, $publishedAt, $previousData, $nextRevision) {
             $lockedPage = Page::where('id', $page->id)->lockForUpdate()->firstOrFail();
+            $draftRevision = ContentRevision::query()
+                ->where('revisable_type', Page::class)
+                ->where('revisable_id', $lockedPage->id)
+                ->where('status', 'draft')
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
 
             $lockedPage->update([
                 'title' => $validated['title'],
@@ -193,12 +249,10 @@ class PageController extends Controller
                 'seo_description' => $validated['seo_description'] ?? null,
             ], Auth::id());
 
-            ContentRevision::create([
-                'revisable_type' => Page::class,
-                'revisable_id' => $lockedPage->id,
-                'revision_number' => $nextRevision,
+            $revisionData = [
                 'title' => $validated['title'],
                 'content' => [
+                    'slug' => $slug,
                     'body' => $validated['content'] ?? '',
                     'excerpt' => $validated['excerpt'] ?? null,
                     'og_image_path' => $validated['og_image_path'] ?? null,
@@ -207,7 +261,17 @@ class PageController extends Controller
                 ],
                 'created_by_id' => Auth::id(),
                 'status' => $targetStatus === 'published' ? 'published' : 'draft',
-            ]);
+            ];
+
+            if ($draftRevision) {
+                $draftRevision->update($revisionData);
+            } else {
+                ContentRevision::create(array_merge($revisionData, [
+                    'revisable_type' => Page::class,
+                    'revisable_id' => $lockedPage->id,
+                    'revision_number' => $nextRevision,
+                ]));
+            }
 
             AuditLog::create([
                 'administrator_id' => Auth::id(),
@@ -222,6 +286,37 @@ class PageController extends Controller
 
         return redirect()->route('admin.pages.index')
             ->with('success', "Page '{$page->title}' updated (Revision #{$nextRevision} saved).");
+    }
+
+    public function discardDraft(Page $page): RedirectResponse
+    {
+        $discardedRevision = DB::transaction(function () use ($page): ?ContentRevision {
+            $lockedPage = Page::query()->whereKey($page->id)->lockForUpdate()->firstOrFail();
+            $draft = ContentRevision::query()
+                ->where('revisable_type', Page::class)
+                ->where('revisable_id', $lockedPage->id)
+                ->where('status', 'draft')
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+
+            $draft?->delete();
+
+            return $draft;
+        });
+
+        if ($discardedRevision) {
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'page_draft_discarded',
+                'entity_type' => Page::class,
+                'entity_id' => $page->id,
+                'new_data' => ['revision_number' => $discardedRevision->revision_number],
+                'created_at' => now(),
+            ]);
+        }
+
+        return back()->with('success', 'Page draft discarded. The published version remains unchanged.');
     }
 
     public function restoreRevision(Page $page, ContentRevision $revision): RedirectResponse

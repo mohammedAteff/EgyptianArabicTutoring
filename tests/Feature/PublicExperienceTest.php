@@ -242,6 +242,31 @@ class PublicExperienceTest extends TestCase
 
         // Download route serves PDF with the issued download token
         $downloadToken = session('download_token');
+        $sessionCookie = $requestResponse->getCookie(config('session.cookie'));
+        $visitorCookie = $requestResponse->getCookie('_va_visitor');
+        $analyticsSessionCookie = $requestResponse->getCookie('_va_session');
+
+        // A different browser session cannot consume the grant, and the
+        // rejected attempt must not burn the legitimate visitor's token.
+        if ($sessionCookie) {
+            $this->withCookie(config('session.cookie'), 'invalid-session-cookie');
+            $unauthorizedResponse = $this->get(route('resources.download', [
+                'slug' => $resource->slug,
+                'token' => $downloadToken,
+            ]));
+            $unauthorizedResponse->assertRedirect(route('resources.show', ['slug' => $resource->slug]));
+            $this->assertSame(0, ResourceDownload::where('resource_id', $resource->id)->count());
+        }
+
+        foreach ([
+            [config('session.cookie'), $sessionCookie],
+            ['_va_visitor', $visitorCookie],
+            ['_va_session', $analyticsSessionCookie],
+        ] as [$cookieName, $cookie]) {
+            if ($cookie) {
+                $this->withCookie($cookieName, $cookie->getValue());
+            }
+        }
         $downloadResponse = $this->get(route('resources.download', ['slug' => $resource->slug, 'token' => $downloadToken]));
         $downloadResponse->assertStatus(200);
         $downloadResponse->assertHeader('Content-Type', 'application/pdf');
@@ -250,6 +275,14 @@ class PublicExperienceTest extends TestCase
         $this->assertDatabaseHas('resource_downloads', [
             'resource_id' => $resource->id,
         ]);
+
+        // A gated grant is bound to the issuing session and cannot be replayed.
+        $replayResponse = $this->get(route('resources.download', [
+            'slug' => $resource->slug,
+            'token' => $downloadToken,
+        ]));
+        $replayResponse->assertRedirect(route('resources.show', ['slug' => $resource->slug]));
+        $this->assertSame(1, ResourceDownload::where('resource_id', $resource->id)->count());
 
         // Clean up test file
         Storage::disk('local')->delete($filePath);
@@ -426,7 +459,7 @@ class PublicExperienceTest extends TestCase
 
     public function test_static_pages_load_successfully(): void
     {
-        $this->get(route('about'))->assertStatus(200)->assertSeeText('Meet Your Tutor, Ahmad');
+        $this->get(route('about'))->assertStatus(200)->assertSeeText('Meet Your Tutor, Abdallah');
         $this->get(route('faq'))->assertStatus(200)->assertSeeText('Frequently Asked Questions');
         $this->get(route('terms'))->assertStatus(200)->assertSeeText('Terms of Service & Booking Policy');
         $this->get(route('privacy'))->assertStatus(200)->assertSeeText('Privacy Policy & Data Ethics');

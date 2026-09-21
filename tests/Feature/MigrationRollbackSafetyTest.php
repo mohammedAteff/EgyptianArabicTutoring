@@ -193,7 +193,7 @@ class MigrationRollbackSafetyTest extends TestCase
         $this->assertFalse(Schema::hasTable('entity_translation_revisions'));
     }
 
-    public function test_artisan_rollback_refuses_destructive_reversal_when_reconciliation_audits_or_visitor_tokens_exist(): void
+    public function test_migration_down_refuses_destructive_reversal_when_reconciliation_audits_or_visitor_tokens_exist(): void
     {
         // Populate audit record
         DB::table('analytics_reconciliation_audits')->insert([
@@ -206,14 +206,15 @@ class MigrationRollbackSafetyTest extends TestCase
         ]);
 
         $threw = false;
+        $migration7 = require database_path('migrations/2026_09_19_000007_add_visitor_token_to_bookings_and_reconciliation_audits.php');
         try {
-            Artisan::call('migrate:rollback', ['--step' => 1]);
+            $migration7->down();
         } catch (\RuntimeException $e) {
             $threw = true;
             $this->assertStringContainsString('Cannot rollback migration 2026_09_19_000007', $e->getMessage());
         }
 
-        $this->assertTrue($threw, 'Artisan migrate:rollback must throw RuntimeException when audits exist');
+        $this->assertTrue($threw, 'Migration 000007 down() must throw RuntimeException when audits exist');
         $this->assertTrue(Schema::hasTable('analytics_reconciliation_audits'), 'analytics_reconciliation_audits must not be dropped');
         $this->assertTrue(Schema::hasColumn('bookings', 'visitor_token'), 'bookings.visitor_token must not be dropped');
         $this->assertEquals(1, DB::table('analytics_reconciliation_audits')->count(), 'Audit record must survive intact');
@@ -222,19 +223,15 @@ class MigrationRollbackSafetyTest extends TestCase
         $this->assertDatabaseHas('migrations', [
             'migration' => '2026_09_19_000007_add_visitor_token_to_bookings_and_reconciliation_audits',
         ]);
+
+        // The guarded down() call must not mutate the schema, so the next
+        // test can continue using the same migrated database safely.
     }
 
-    public function test_artisan_rollback_refuses_destructive_reversal_when_marketing_touches_exist(): void
+    public function test_migration_down_refuses_destructive_reversal_when_marketing_touches_exist(): void
     {
-        // Clean batch 8 so we can rollback to batch 6
-        DB::table('analytics_reconciliation_audits')->truncate();
-        DB::table('bookings')->update(['visitor_token' => null]);
-        Artisan::call('migrate:rollback', ['--step' => 1]); // rolls back 000007 cleanly
-
-        // Rollback batch 7 (000006) cleanly
-        Artisan::call('migrate:rollback', ['--step' => 1]); // rolls back 000006 cleanly
-
-        // Now we are at batch 6 (000005). Populate marketing_touches
+        // The migration itself must refuse to mutate historical touch data.
+        DB::table('marketing_touches')->truncate();
         $visitor = Visitor::create([
             'visitor_token' => 'vis-rollback-safety',
             'first_seen_at' => now(),
@@ -251,25 +248,94 @@ class MigrationRollbackSafetyTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $migration5 = require database_path('migrations/2026_09_19_000005_add_attribution_and_marketing_touches.php');
         $threw = false;
         try {
-            Artisan::call('migrate:rollback', ['--step' => 1]);
+            $migration5->down();
         } catch (\RuntimeException $e) {
             $threw = true;
             $this->assertStringContainsString('Cannot rollback migration 2026_09_19_000005', $e->getMessage());
         }
 
-        $this->assertTrue($threw, 'Artisan migrate:rollback must throw RuntimeException when marketing touches exist');
+        $this->assertTrue($threw, 'Migration 000005 down() must throw RuntimeException when marketing touches exist');
         $this->assertTrue(Schema::hasTable('marketing_touches'), 'marketing_touches must not be dropped');
         $this->assertTrue(Schema::hasColumn('bookings', 'touch_at'), 'bookings.touch_at must not be dropped');
         $this->assertEquals(1, DB::table('marketing_touches')->count(), 'Marketing touch record must survive intact');
 
-        // Verify migration record is retained in the migrations ledger
-        $this->assertDatabaseHas('migrations', [
-            'migration' => '2026_09_19_000005_add_attribution_and_marketing_touches',
+        $this->assertTrue(Schema::hasColumn('bookings', 'touch_at'), 'bookings.touch_at must not be dropped');
+    }
+
+    public function test_migration_down_refuses_destructive_reversal_when_country_metrics_exist(): void
+    {
+        DB::table('daily_country_metrics')->insert([
+            'metric_date' => now()->toDateString(),
+            'country_code' => 'EG',
+            'visitors' => 5,
+            'sessions' => 10,
+            'page_views' => 20,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
-        // Re-run migrations to restore batch state for subsequent tests
-        Artisan::call('migrate');
+        $threw = false;
+        $migration4 = require database_path('migrations/2026_09_21_000004_add_country_metric_dimensions_and_touch_direct.php');
+        try {
+            $migration4->down();
+        } catch (\RuntimeException $e) {
+            $threw = true;
+            $this->assertStringContainsString('Cannot rollback 2026_09_21_000004', $e->getMessage());
+        }
+
+        $this->assertTrue($threw, 'Migration 000004 down() must throw RuntimeException when daily_country_metrics exist');
+        $this->assertTrue(Schema::hasTable('daily_country_metrics'), 'daily_country_metrics must not be dropped');
+        $this->assertEquals(1, DB::table('daily_country_metrics')->count());
+
+        $this->assertDatabaseHas('migrations', [
+            'migration' => '2026_09_21_000004_add_country_metric_dimensions_and_touch_direct',
+        ]);
+
+        // The base country-table migration has its own independent guard.
+        $migration2 = require database_path('migrations/2026_09_21_000002_create_daily_country_metrics_table.php');
+        $baseThrew = false;
+        try {
+            $migration2->down();
+        } catch (\RuntimeException $e) {
+            $baseThrew = true;
+            $this->assertStringContainsString('Cannot rollback migration 2026_09_21_000002', $e->getMessage());
+        }
+        $this->assertTrue($baseThrew, 'Base country metric migration must preserve populated history.');
+    }
+
+    public function test_migration_down_refuses_destructive_reversal_when_detected_country_code_exists(): void
+    {
+        // Verify the guard directly so unrelated newer migrations are not
+        // rolled back as a side effect of a test's migration ledger ordering.
+        DB::table('daily_country_metrics')->truncate();
+
+        // Populate detected_country_code in visitors
+        Visitor::create([
+            'visitor_token' => 'vis-country-test',
+            'first_seen_at' => now(),
+            'last_seen_at' => now(),
+            'detected_country_code' => 'US',
+            'is_bot' => false,
+        ]);
+
+        $threw = false;
+        $migration1 = require database_path('migrations/2026_09_21_000001_add_detected_country_code_to_tables.php');
+        try {
+            $migration1->down();
+        } catch (\RuntimeException $e) {
+            $threw = true;
+            $this->assertStringContainsString('Cannot rollback migration 2026_09_21_000001', $e->getMessage());
+        }
+
+        $this->assertTrue($threw, 'Migration 000001 down() must throw RuntimeException when detected_country_code exists');
+        $this->assertTrue(Schema::hasColumn('visitors', 'detected_country_code'));
+
+        $this->assertDatabaseHas('migrations', [
+            'migration' => '2026_09_21_000001_add_detected_country_code_to_tables',
+        ]);
+
     }
 }

@@ -28,7 +28,7 @@
                 {{ __("You're Scheduled!") }}
             </h1>
             <p class="text-stone-600 text-sm mt-2 max-w-md mx-auto">
-                {{ __('Ahmad has received your booking. We have prepared your calendar invitation and direct meeting details below.') }}
+                {{ __('Abdallah has received your booking. We have prepared your calendar invitation and direct meeting details below.') }}
             </p>
         @else
             <div class="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
@@ -152,10 +152,10 @@
         </div>
     </div>
 
-    <!-- Self-Service Reschedule & Cancellation (if confirmed and eligible) -->
+    <!-- Cancellation and direct-contact rescheduling (if confirmed and eligible) -->
     @if($booking->status === 'confirmed')
         @php
-            $cutoffHours = (int) \App\Domains\CMS\Models\Setting::get('booking_cancellation_cutoff_hours', 24);
+            $cutoffHours = (int) \App\Domains\CMS\Models\Setting::get('booking_cancellation_cutoff_hours', 4);
             $nowUtc = now('UTC');
             $isFuture = $booking->start_at_utc > $nowUtc;
             $isOutsideCutoff = $booking->start_at_utc >= $nowUtc->copy()->addHours($cutoffHours);
@@ -164,11 +164,9 @@
 
         @if($canMutate)
             <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-                <a href="{{ route('booking.reschedule', ['token' => $booking->confirmation_token]) }}"
-                   class="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-semibold text-xs rounded-full transition-colors">
-                    <svg class="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                    <span>{{ __('Reschedule Lesson') }}</span>
-                </a>
+                <p class="max-w-md text-center text-xs text-stone-500">
+                    {{ __('Need a different time? Contact Abdallah directly by WhatsApp, Telegram, or email at least 24 hours before the lesson. The tutor will confirm a new available slot.') }}
+                </p>
 
                 <div x-data="{ showCancelModal: false }">
                     <button type="button"

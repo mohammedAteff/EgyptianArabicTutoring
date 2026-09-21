@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Reporting\Services\ReportService;
 use App\Http\Controllers\Controller;
@@ -23,6 +24,12 @@ class ReportController extends Controller
         $range = $request->query('range', '30d');
 
         [$start, $end] = $this->resolveDateRange($range, $request);
+        $cutoverDate = Setting::get('analytics_authoritative_cutover_date');
+        $cutoverDate = is_string($cutoverDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $cutoverDate)
+            ? $cutoverDate
+            : null;
+        $isBeforeCutover = $cutoverDate !== null
+            && $start->setTimezone('Africa/Cairo')->toDateString() < $cutoverDate;
 
         $data = match ($reportType) {
             'bookings' => $this->reportService->getBookingsReport($start, $end, $request->query('status')),
@@ -40,6 +47,8 @@ class ReportController extends Controller
             'start' => $start->setTimezone('Africa/Cairo'),
             'end' => $end->setTimezone('Africa/Cairo'),
             'reportData' => $data,
+            'authoritativeCutoverDate' => $cutoverDate,
+            'isBeforeAuthoritativeCutover' => $isBeforeCutover,
         ]);
     }
 

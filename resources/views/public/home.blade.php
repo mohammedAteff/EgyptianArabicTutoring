@@ -364,7 +364,7 @@
 <section class="py-20 bg-stone-900 text-white text-center">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div class="w-14 h-14 rounded-2xl bg-terracotta-500 text-white flex items-center justify-center font-bold text-2xl font-cairo mx-auto">
-            م
+            <span aria-hidden="true">A</span>
         </div>
         <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
             {{ __($homeCtaTitle ?? 'Ready to Speak Authentic Egyptian Arabic?') }}

@@ -134,7 +134,7 @@ class AnalyticsAndReportsTest extends TestCase
         ]);
     }
 
-    public function test_event_deduplication_prevents_rapid_fire_duplicate_actions(): void
+    public function test_event_deduplication_prevents_rapid_fire_booking_cta_retries(): void
     {
         /** @var AnalyticsService $service */
         $service = app(AnalyticsService::class);
@@ -144,8 +144,8 @@ class AnalyticsAndReportsTest extends TestCase
 
         // First track should succeed
         $event1 = $service->track(
-            eventName: 'resource_downloaded',
-            metadata: ['resource_id' => 10],
+            eventName: 'booking_cta_clicked',
+            metadata: ['target' => '/booking'],
             visitorToken: $visitorToken,
             sessionToken: $sessionToken
         );
@@ -154,8 +154,8 @@ class AnalyticsAndReportsTest extends TestCase
 
         // Immediate identical second track should be deduplicated (within 5 seconds)
         $event2 = $service->track(
-            eventName: 'resource_downloaded',
-            metadata: ['resource_id' => 10],
+            eventName: 'booking_cta_clicked',
+            metadata: ['target' => '/booking'],
             visitorToken: $visitorToken,
             sessionToken: $sessionToken
         );

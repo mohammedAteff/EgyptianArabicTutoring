@@ -7,7 +7,7 @@ Production-grade, self-hosted web application for an independent Egyptian Arabic
 ## 1. Project Purpose
 
 The platform serves three primary visitor conversion flows:
-1. **Book**: Schedule private 1-on-1 Egyptian Arabic tutoring sessions with dual-timezone rendering, hold reservation locks, and strict customer cancellation/reschedule policy enforcement.
+1. **Book**: Schedule private 1-on-1 Egyptian Arabic tutoring sessions with dual-timezone rendering and hold reservation locks. Cancellation remains available through the secure booking link; rescheduling is handled directly by the tutor/admin team.
 2. **Learn**: Browse a structured library of educational resources, download curriculum workbooks, and acquire gated leads.
 3. **Play**: Engage with educational vocabulary games designed for street and conversational fluency.
 
@@ -153,6 +153,7 @@ Configure your host server to invoke the Laravel scheduler every minute:
 - `*/5 * * * * booking:cleanup-holds`: Atomically expires reservation holds older than 10 minutes.
 - `05 00 * * * analytics:aggregate-daily --prune`: Rolls up previous day metrics and prunes old raw visitor sessions.
 - `00 02 * * * backup:run --clean`: Creates a consistent point-in-time backup archive and prunes backups older than 30 days.
+- `00 03 * * * session-cleanup`: Removes expired database sessions according to the configured retention policy.
 
 ---
 
@@ -180,9 +181,9 @@ php artisan queue:work --sleep=3 --tries=3 --timeout=90
    - Converts the hold to a confirmed booking atomically within the date-locked transaction.
    - Prevents booking theft, sequential hold guessing, and double-booking.
 4. **Lifecycle & Policy Enforcement**:
-   - State transition rules: only active `confirmed` or `pending` bookings can be cancelled or rescheduled.
+    - State transition rules: only active `confirmed` or `pending` bookings can be cancelled or rescheduled by authorized workflows.
    - Completed, cancelled, and student no-show records are immutable via public tokens.
-   - Enforces configurable cutoff window (default 24 hours notice) for public cancellations and rescheduling.
+    - Enforces configurable cutoff windows for public cancellation and admin/direct-contact rescheduling.
 
 ---
 

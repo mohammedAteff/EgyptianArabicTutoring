@@ -1,6 +1,16 @@
 @extends('layouts.admin')
 
 @section('content')
+@php
+    $draftContent = $draftRevision?->content ?? [];
+    $editTitle = old('title', $draftRevision?->title ?? $page->title);
+    $editSlug = old('slug', $draftContent['slug'] ?? $page->slug);
+    $editContent = old('content', $draftContent['body'] ?? $page->content);
+    $editExcerpt = old('excerpt', $draftContent['excerpt'] ?? $page->excerpt);
+    $editSeoTitle = old('seo_title', $draftContent['seo_title'] ?? $page->seo_title);
+    $editSeoDescription = old('seo_description', $draftContent['seo_description'] ?? $page->seo_description);
+    $editOgImagePath = old('og_image_path', $draftContent['og_image_path'] ?? $page->og_image_path);
+@endphp
 <div class="space-y-8">
 
     <div class="flex items-center justify-between">
@@ -42,6 +52,17 @@
         </div>
     @endif
 
+    @if($draftRevision)
+        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium flex flex-wrap items-center justify-between gap-3">
+            <span>Draft Revision #{{ $draftRevision->revision_number }} is being edited. The published page remains live until you publish this draft.</span>
+            <form action="{{ route('admin.pages.draft.destroy', $page) }}" method="POST" onsubmit="return confirm('Discard this page draft?');">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 text-xs font-bold hover:bg-amber-100">Discard Draft</button>
+            </form>
+        </div>
+    @endif
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         <!-- Main Form (2 cols) -->
@@ -53,13 +74,13 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="title" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Page Title</label>
-                        <input type="text" id="title" name="title" value="{{ old('title', $page->title) }}" required
+                        <input type="text" id="title" name="title" value="{{ $editTitle }}" required
                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
 
                     <div>
                         <label for="slug" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">URL Slug</label>
-                        <input type="text" id="slug" name="slug" value="{{ old('slug', $page->slug) }}" required
+                        <input type="text" id="slug" name="slug" value="{{ $editSlug }}" required
                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                     </div>
                 </div>
@@ -67,13 +88,13 @@
                 <div>
                     <label for="excerpt" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Short Excerpt / Summary</label>
                     <textarea id="excerpt" name="excerpt" rows="2"
-                              class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ old('excerpt', $page->excerpt) }}</textarea>
+                              class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ $editExcerpt }}</textarea>
                 </div>
 
                 <div>
                     <label for="content" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Page Body Content</label>
                     <textarea id="content" name="content" rows="12"
-                              class="w-full p-4 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none leading-relaxed">{{ old('content', $page->content) }}</textarea>
+                              class="w-full p-4 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none leading-relaxed">{{ $editContent }}</textarea>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
@@ -88,13 +109,13 @@
 
                     <div>
                         <label for="seo_title" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">SEO Meta Title</label>
-                        <input type="text" id="seo_title" name="seo_title" value="{{ old('seo_title', $page->seo_title) }}"
+                        <input type="text" id="seo_title" name="seo_title" value="{{ $editSeoTitle }}"
                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
 
                     <div>
                         <label for="seo_description" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">SEO Meta Description</label>
-                        <input type="text" id="seo_description" name="seo_description" value="{{ old('seo_description', $page->seo_description) }}"
+                        <input type="text" id="seo_description" name="seo_description" value="{{ $editSeoDescription }}"
                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                 </div>
@@ -102,14 +123,14 @@
                 <div class="pt-4 border-t border-slate-100">
                     <label for="og_image_path" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Featured / Social Share Image Path</label>
                     <div class="flex gap-3 items-center">
-                        <input type="text" id="og_image_path" name="og_image_path" value="{{ old('og_image_path', $page->og_image_path) }}"
+                        <input type="text" id="og_image_path" name="og_image_path" value="{{ $editOgImagePath }}"
                                class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                                placeholder="media/about-tutor.webp">
                         <button type="button" onclick="openMediaPicker('og_image_path', 'og_image_preview')" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 shrink-0 transition-colors">
                             Choose from Media Library
                         </button>
-                        <div class="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 {{ $page->og_image_path ? '' : 'hidden' }}">
-                            <img id="og_image_preview" src="{{ $page->og_image_path ? (str_starts_with($page->og_image_path, 'http') ? $page->og_image_path : \Illuminate\Support\Facades\Storage::disk('public')->url($page->og_image_path)) : '' }}" alt="Preview" class="h-full w-full object-cover">
+                        <div class="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 {{ $editOgImagePath ? '' : 'hidden' }}">
+                            <img id="og_image_preview" src="{{ $editOgImagePath ? (str_starts_with($editOgImagePath, 'http') ? $editOgImagePath : \Illuminate\Support\Facades\Storage::disk('public')->url($editOgImagePath)) : '' }}" alt="Preview" class="h-full w-full object-cover">
                         </div>
                     </div>
                     <p class="text-[11px] text-slate-400 mt-1">Select an asset from the <a href="{{ route('admin.media.index') }}" target="_blank" class="text-amber-600 underline">Media Library</a> or enter its relative storage path.</p>

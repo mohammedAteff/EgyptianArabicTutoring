@@ -233,7 +233,7 @@ class AdminManagementAndCmsTest extends TestCase
         Storage::disk('public')->assertMissing($media->path);
     }
 
-    public function test_customer_self_service_reschedule_flow(): void
+    public function test_customer_self_service_reschedule_is_disabled(): void
     {
         $startUtc = CarbonImmutable::now('UTC')->addDays(2)->setTime(10, 0);
         $endUtc = $startUtc->addMinutes(60);
@@ -250,20 +250,25 @@ class AdminManagementAndCmsTest extends TestCase
             'idempotency_key' => 'idemp-resched-1',
         ], isTrustedAdmin: true);
 
-        // 1. Visit reschedule view
+        // V2 requires direct-contact/admin-only rescheduling. The legacy token
+        // route must never render a slot-selection form.
         $viewRes = $this->get(route('booking.reschedule', ['token' => $booking->confirmation_token]));
-        $viewRes->assertOk();
-        $viewRes->assertSee('Reschedule Lesson');
+        $viewRes->assertRedirect(route('booking.confirmation', ['token' => $booking->confirmation_token]));
+        $viewRes->assertSessionHas('info');
+        $legacyView = file_get_contents(resource_path('views/public/reschedule.blade.php'));
+        $this->assertIsString($legacyView);
+        $this->assertStringNotContainsString('<form', $legacyView);
+        $this->assertStringContainsString('direct contact', strtolower($legacyView));
 
-        // 2. Submit reschedule to new slot
+        // A direct POST to the legacy endpoint cannot mutate the booking.
         $newStartUtc = CarbonImmutable::now('UTC')->addDays(3)->setTime(12, 0);
         $rescheduleRes = $this->post(route('booking.reschedule.submit', ['token' => $booking->confirmation_token]), [
             'new_start_utc' => $newStartUtc->toDateTimeString(),
             'reason' => 'Schedule conflict',
         ]);
 
-        $rescheduleRes->assertRedirect(route('booking.confirmation', ['token' => $booking->confirmation_token]));
-        $this->assertEquals($newStartUtc->toDateTimeString(), $booking->fresh()->start_at_utc->toDateTimeString());
+        $rescheduleRes->assertForbidden();
+        $this->assertNotEquals($newStartUtc->toDateTimeString(), $booking->fresh()->start_at_utc->toDateTimeString());
 
         // 3. Cancelled booking cannot be rescheduled
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);

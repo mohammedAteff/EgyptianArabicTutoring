@@ -42,6 +42,7 @@ class NotificationController extends Controller
 
     public function markAsRead(AdminNotification $notification): RedirectResponse
     {
+        $this->authorizeOperationalNotification($notification);
         $notification->markAsRead();
 
         return back()->with('success', 'Notification marked as read.');
@@ -62,8 +63,17 @@ class NotificationController extends Controller
 
     public function destroy(AdminNotification $notification): RedirectResponse
     {
+        $this->authorizeOperationalNotification($notification);
         $notification->delete();
 
         return back()->with('success', 'Notification dismissed.');
+    }
+
+    protected function authorizeOperationalNotification(AdminNotification $notification): void
+    {
+        if (request()->user()?->role !== 'super_admin'
+            && in_array($notification->type, ['backup_failure', 'system_warning'], true)) {
+            abort(403, 'Only a super administrator may manage system notifications.');
+        }
     }
 }

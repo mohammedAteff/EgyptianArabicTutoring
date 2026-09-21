@@ -43,6 +43,14 @@ class AvailabilityService
         $defaultBufferMinutes = (int) Setting::get('booking_buffer_minutes', 15);
         $defaultMaxHorizonDays = (int) Setting::get('booking_max_horizon_days', 60);
 
+        // Fetch enough surrounding holds to evaluate every rule's buffer at
+        // the candidate-slot level. An exact-overlap query would miss a hold
+        // that ends immediately before a slot but still violates its buffer.
+        $maximumBufferMinutes = max(
+            $defaultBufferMinutes,
+            (int) (AvailabilityRule::query()->where('enabled', true)->max('buffer_minutes') ?? 0)
+        );
+
         $ruleMaxHorizon = AvailabilityRule::query()->where('enabled', true)->whereNotNull('max_horizon_days')->max('max_horizon_days');
         $searchHorizonDays = max($defaultMaxHorizonDays, (int) $ruleMaxHorizon);
 
@@ -69,8 +77,8 @@ class AvailabilityService
         $activeHoldsQuery = BookingHold::query()
             ->where('status', 'active')
             ->where('expires_at', '>', $nowUtc)
-            ->where('slot_end_utc', '>', $startSearchUtc)
-            ->where('slot_start_utc', '<', $endSearchUtc);
+            ->where('slot_end_utc', '>', $startSearchUtc->subMinutes($maximumBufferMinutes))
+            ->where('slot_start_utc', '<', $endSearchUtc->addMinutes($maximumBufferMinutes));
 
         if ($currentVisitorToken) {
             $activeHoldsQuery->where('visitor_token', '!=', $currentVisitorToken);
@@ -197,8 +205,12 @@ class AvailabilityService
                     }
 
                     // Check hold collision
-                    $hasHoldCollision = $activeHolds->contains(function ($h) use ($slotStartUtc, $slotEndUtc) {
-                        return $h->slot_start_utc < $slotEndUtc && $h->slot_end_utc > $slotStartUtc;
+                    $hasHoldCollision = $activeHolds->contains(function ($h) use ($slotStartUtc, $slotEndUtc, $bufferMinutes) {
+                        $holdStart = CarbonImmutable::instance($h->slot_start_utc);
+                        $holdEnd = CarbonImmutable::instance($h->slot_end_utc);
+
+                        return $holdStart < $slotEndUtc->addMinutes($bufferMinutes)
+                            && $holdEnd > $slotStartUtc->subMinutes($bufferMinutes);
                     });
 
                     if ($hasHoldCollision) {
@@ -580,8 +592,8 @@ class AvailabilityService
         $holdQuery = BookingHold::query()
             ->where('status', 'active')
             ->where('expires_at', '>', $nowUtc)
-            ->where('slot_start_utc', '<', $end)
-            ->where('slot_end_utc', '>', $start);
+            ->where('slot_start_utc', '<', $end->addMinutes($bufferMinutes))
+            ->where('slot_end_utc', '>', $start->subMinutes($bufferMinutes));
 
         if ($excludeHoldId) {
             $holdQuery->where('id', '!=', $excludeHoldId);

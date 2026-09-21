@@ -42,7 +42,28 @@ class AggregateDailyAnalyticsCommand extends Command
         $baseQuery = AnalyticsEvent::query()
             ->where('created_at', '>=', $startUtc)
             ->where('created_at', '<', $endUtc)
-            ->where('is_bot', false);
+            ->where('is_bot', false)
+            // Do not trust only the event flag: a malformed/replayed event
+            // linked to a bot visitor or bot session is still bot activity.
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('visitors')
+                    ->whereColumn('visitors.visitor_token', 'analytics_events.visitor_token')
+                    ->where('visitors.is_bot', true);
+            })
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('visitor_sessions as bot_sessions')
+                    ->leftJoin('visitors as bot_visitors', 'bot_visitors.id', '=', 'bot_sessions.visitor_id')
+                    ->where(function ($nested): void {
+                        $nested->whereColumn('bot_sessions.session_token', 'analytics_events.session_token')
+                            ->orWhereColumn('bot_sessions.session_id', 'analytics_events.session_token');
+                    })
+                    ->where(function ($nested): void {
+                        $nested->where('bot_sessions.is_bot', true)
+                            ->orWhere('bot_visitors.is_bot', true);
+                    });
+            });
 
         // 1. Overall counts by event_name
         $eventCounts = (clone $baseQuery)
@@ -59,6 +80,9 @@ class AggregateDailyAnalyticsCommand extends Command
         // 3. Unique Sessions strictly attributed by session started_at in Cairo day (EDITS V1 §15)
         $uniqueSessions = VisitorSession::query()
             ->where('is_bot', false)
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            })
             ->where('started_at', '>=', $startUtc)
             ->where('started_at', '<', $endUtc)
             ->count();
@@ -67,6 +91,12 @@ class AggregateDailyAnalyticsCommand extends Command
         $bookingsCreated = DB::table('bookings')
             ->where('created_at', '>=', $startUtc)
             ->where('created_at', '<', $endUtc)
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('visitors')
+                    ->whereColumn('visitors.visitor_token', 'bookings.visitor_token')
+                    ->where('visitors.is_bot', true);
+            })
             ->count();
 
         // 5. Social Link Clicks
@@ -99,6 +129,9 @@ class AggregateDailyAnalyticsCommand extends Command
         // 9. Sessions by Source
         $sessionsBySource = VisitorSession::query()
             ->where('is_bot', false)
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            })
             ->where('started_at', '>=', $startUtc)
             ->where('started_at', '<', $endUtc)
             ->whereNotNull('utm_source')
@@ -223,11 +256,22 @@ class AggregateDailyAnalyticsCommand extends Command
 
         $this->info("Aggregation completed for {$targetDate}.");
 
+        // Aggregate daily country metrics (Section 4). A failed country
+        // aggregation must fail the parent job as well; otherwise the
+        // scheduler would record a successful analytics run while the
+        // required audience rollup was missing.
+        if ($this->call('analytics:aggregate-daily-country', ['--date' => $targetDate]) !== self::SUCCESS) {
+            $this->error("Country aggregation failed for {$targetDate}.");
+
+            return self::FAILURE;
+        }
+
         // Optional Rebuilding of visitor_funnel_progressions (Section 14)
         if ($this->option('rebuild-funnel')) {
             $this->info('Rebuilding visitor_funnel_progressions...');
             $funnelService = app(FunnelProgressionService::class);
-            $visitors = Visitor::all();
+            // Crawlers and link previews are never valid funnel cohort members.
+            $visitors = Visitor::query()->where('is_bot', false)->get();
             $rebuiltCount = 0;
             $reconciledAt = now();
             $retentionDays = (int) Setting::get('analytics_retention_days', 180);

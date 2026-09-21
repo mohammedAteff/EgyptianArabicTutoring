@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Set New Password | Egyptian Arabic Tutor Admin</title>
+    <title>Set New Password | {{ config('business.site_name') }} Admin</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
         
         <div class="text-center mb-8">
             <div class="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 items-center justify-center text-slate-950 text-2xl font-bold font-serif shadow-lg shadow-amber-500/20 mb-4">
-                ع
+                <span aria-hidden="true">A</span>
             </div>
             <h1 class="text-2xl font-bold font-serif tracking-tight text-white">Create New Password</h1>
             <p class="text-sm text-slate-400 mt-1">Please enter your new administrator security credential</p>

@@ -22,6 +22,8 @@ class MarketingTouch extends Model
         'utm_content',
         'utm_term',
         'referrer',
+        'is_direct',
+        'dedupe_hash',
         'touch_at',
     ];
 
@@ -29,6 +31,7 @@ class MarketingTouch extends Model
     {
         return [
             'touch_at' => 'datetime',
+            'is_direct' => 'boolean',
         ];
     }
 

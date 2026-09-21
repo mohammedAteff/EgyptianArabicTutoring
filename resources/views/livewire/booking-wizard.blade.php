@@ -33,14 +33,18 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
             </div>
+            @php
+                $tzDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, now());
+            @endphp
             <div>
                 <div class="text-xs text-stone-500 font-medium">{{ __('Showing times in your timezone:') }}</div>
-                <div class="text-sm font-bold text-stone-900 flex items-center gap-2">
-                    <span>{{ str_replace('_', ' ', $customerTimezone) }}</span>
-                    @php
-                        $cOffset = now($customerTimezone)->format('P');
-                    @endphp
-                    <span class="text-xs font-normal text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">UTC{{ $cOffset }}</span>
+                <div class="text-sm font-bold text-stone-900 flex items-center gap-2 mt-0.5">
+                    <span class="inline-block w-5 h-3.5 shrink-0 shadow-xs border border-stone-200 rounded-xs overflow-hidden" aria-hidden="true">
+                        <img src="{{ $tzDisplay['flag_asset'] }}" alt="" class="w-full h-full object-cover" />
+                    </span>
+                    <span class="sr-only">{{ __('Timezone Country: :country. Timezone:', ['country' => $tzDisplay['timezone_country_name']]) }}</span>
+                    <span class="font-medium text-stone-900">{{ $tzDisplay['city'] }}</span>
+                    <span class="text-xs text-stone-500 font-normal">({{ $customerTimezone }}, {{ $tzDisplay['utc_offset'] }})</span>
                 </div>
             </div>
         </div>
@@ -237,6 +241,11 @@
                     @if($selectedDate && !empty($availableSlotsByDate[$selectedDate]))
                         <div class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                             @foreach($availableSlotsByDate[$selectedDate] as $slot)
+                                @php
+                                    $slotInstant = \Carbon\CarbonImmutable::parse($slot['slot_start_utc'], 'UTC');
+                                    $slotCustomerDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, $slotInstant);
+                                    $slotBusinessDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', $slotInstant);
+                                @endphp
                                 <button type="button"
                                         wire:click="selectSlot('{{ $slot['slot_start_utc'] }}', '{{ $slot['slot_end_utc'] }}', {{ json_encode($slot) }})"
                                         wire:loading.attr="disabled"
@@ -246,7 +255,10 @@
                                             {{ $slot['customer_formatted'] }} - {{ $slot['customer_formatted_end'] }}
                                         </div>
                                         <div class="text-xs text-stone-500 mt-0.5">
-                                            <span>🇪🇬 {{ $slot['business_start_time'] }} Cairo</span>
+                                            <span class="inline-flex items-center gap-1.5">
+                                                <img src="{{ asset($slotBusinessDisplay['flag_asset']) }}" alt="{{ __('Cairo timezone') }}" class="w-4 h-3 object-cover rounded-sm">
+                                                {{ $slotBusinessDisplay['city'] }} · {{ $slotBusinessDisplay['utc_offset'] }} · {{ $slot['business_start_time'] }}
+                                            </span>
                                         </div>
                                     </div>
                                     <div class="text-xs font-semibold text-terracotta-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
@@ -285,7 +297,13 @@
                 </div>
                 <div class="text-xs text-amber-800 font-medium">
                     @if($selectedSlot)
-                        {{ $selectedSlot['customer_formatted'] ?? ($selectedSlot['start_formatted'] ?? '') }} ({{ $customerTimezone }})
+                        @php
+                            $heldSlotDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, \Carbon\CarbonImmutable::parse($selectedSlotStartUtc, 'UTC'));
+                        @endphp
+                        <span class="inline-flex items-center gap-1.5">
+                            <img src="{{ asset($heldSlotDisplay['flag_asset']) }}" alt="{{ $heldSlotDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                            {{ $selectedSlot['customer_formatted'] ?? ($selectedSlot['start_formatted'] ?? '') }} ({{ $heldSlotDisplay['label'] }})
+                        </span>
                     @endif
                 </div>
             </div>
@@ -345,7 +363,7 @@
                     <textarea id="notes"
                               wire:model.live.debounce.250ms="notes"
                               rows="3"
-                              placeholder="{{ __('Tell Ahmad about your Arabic background, goals (e.g. travel, dialect, conversation), or specific topics you want to practice.') }}"
+                              placeholder="{{ __('Tell Abdallah about your Arabic background, goals (e.g. travel, dialect, conversation), or specific topics you want to practice.') }}"
                               class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all"></textarea>
                 </div>
 
@@ -376,9 +394,17 @@
 
             <div class="bg-stone-50 rounded-2xl border border-stone-200/80 p-6 mb-6 space-y-6">
                 <!-- Dual Timezone Breakdown (Spec Requirement) -->
+                @php
+                    $reviewInstant = $selectedSlotStartUtc ? \Carbon\CarbonImmutable::parse($selectedSlotStartUtc, 'UTC') : now('UTC');
+                    $reviewCustomerDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, $reviewInstant);
+                    $reviewBusinessDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', $reviewInstant);
+                @endphp
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-stone-200">
                     <div class="bg-white p-4 rounded-xl border border-stone-200">
-                        <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">🌍 {{ __('Your Local Time') }}</div>
+                        <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
+                            <img src="{{ asset($reviewCustomerDisplay['flag_asset']) }}" alt="{{ $reviewCustomerDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                            {{ __('Your Local Time') }}
+                        </div>
                         <div class="text-base font-bold text-stone-900">
                             {{ \Carbon\CarbonImmutable::parse($selectedDate)->format('l, F j, Y') }}
                         </div>
@@ -386,12 +412,15 @@
                             {{ $selectedSlot['customer_formatted'] ?? '' }} - {{ $selectedSlot['customer_formatted_end'] ?? '' }}
                         </div>
                         <div class="text-xs text-stone-500 mt-1 font-medium">
-                            {{ __('Timezone:') }} {{ str_replace('_', ' ', $customerTimezone) }}
+                            {{ __('Timezone:') }} {{ $reviewCustomerDisplay['label'] }}
                         </div>
                     </div>
 
                     <div class="bg-white p-4 rounded-xl border border-stone-200">
-                        <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">📍 {{ __("Tutor's Time (Cairo)") }}</div>
+                        <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
+                            <img src="{{ asset($reviewBusinessDisplay['flag_asset']) }}" alt="{{ $reviewBusinessDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                            {{ __("Tutor's Time (Cairo)") }}
+                        </div>
                         <div class="text-base font-bold text-stone-900">
                             {{ \Carbon\CarbonImmutable::parse($selectedSlot['business_date'] ?? $selectedDate)->format('l, F j, Y') }}
                         </div>
@@ -399,7 +428,7 @@
                             {{ $selectedSlot['business_start_time'] ?? '' }} - {{ $selectedSlot['business_end_time'] ?? '' }}
                         </div>
                         <div class="text-xs text-stone-500 mt-1 font-medium">
-                            {{ __('Timezone:') }} Africa/Cairo (EEST/EET)
+                            {{ __('Timezone:') }} {{ $reviewBusinessDisplay['label'] }}
                         </div>
                     </div>
                 </div>
@@ -433,7 +462,7 @@
 
             <!-- Booking Policy Notice -->
             <div class="mb-6 p-4 rounded-xl bg-stone-100/70 text-xs text-stone-600 leading-relaxed">
-                <strong>{{ __('Policy Notice:') }}</strong> {{ \App\Domains\CMS\Models\Setting::get('cancellation_policy', 'Cancellations and rescheduling are accepted up to 24 hours in advance.') }}
+                <strong>{{ __('Policy Notice:') }}</strong> {{ \App\Domains\CMS\Models\Setting::get('cancellation_policy', 'Cancellations with at least 4 hours notice do not forfeit the session credit. Rescheduling requests must be made directly to Abdallah at least 24 hours before class.') }}
                 {{ __('Upon confirmation, you will receive an immediate calendar invitation with direct lesson access links.') }}
             </div>
 
@@ -488,11 +517,17 @@
                 <!-- Timezone List -->
                 <div class="max-h-72 overflow-y-auto space-y-1 divide-y divide-stone-50">
                     @forelse($curatedTimezones as $tz)
+                        @php
+                            $selectorDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($tz['id'], now('UTC'));
+                        @endphp
                         <button type="button"
                                 wire:click="selectTimezone('{{ $tz['id'] }}')"
                                 class="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between hover:bg-stone-50 transition-colors {{ $customerTimezone === $tz['id'] ? 'bg-terracotta-50 font-bold text-terracotta-700' : 'text-stone-700' }}">
-                            <span>{{ $tz['label'] }}</span>
-                            <span class="text-xs text-stone-400 font-mono">{{ $tz['offset'] }}</span>
+                            <span class="inline-flex items-center gap-2">
+                                <img src="{{ asset($selectorDisplay['flag_asset']) }}" alt="{{ $selectorDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                                <span>{{ $selectorDisplay['label'] }}</span>
+                            </span>
+                            <span class="text-xs text-stone-400 font-mono">{{ $selectorDisplay['utc_offset'] }}</span>
                         </button>
                     @empty
                         <div class="text-center py-6 text-xs text-stone-400">

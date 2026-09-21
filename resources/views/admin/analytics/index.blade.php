@@ -207,6 +207,58 @@
         </div>
     </div>
 
+    <!-- Audience Activity by Detected Country -->
+    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+        <div class="flex items-start justify-between gap-4 mb-4">
+            <div>
+                <h3 class="text-sm font-bold text-slate-900">Audience Activity by Detected Country</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Country dimensions are separate: visitors use immutable acquisition country, sessions use session-start country, and events/bookings use their server snapshot. ZZ means unresolved.</p>
+            </div>
+            <span class="text-[11px] text-slate-400 whitespace-nowrap">Africa/Cairo calendar days</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-600">
+                <thead class="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-4">Country</th>
+                        <th class="py-3 px-4 text-right">Unique active visitors</th>
+                        <th class="py-3 px-4 text-right">Sessions</th>
+                        <th class="py-3 px-4 text-right">Booking CTAs</th>
+                        <th class="py-3 px-4 text-right">Completed bookings</th>
+                        <th class="py-3 px-4 text-right">Resource requests</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @forelse($countryActivity as $row)
+                        @php
+                            $country = strtoupper((string) $row->country_code);
+                            $countryName = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)
+                                ->resolveCountryName($country === 'ZZ' ? null : $country);
+                            $flagPath = $country !== 'ZZ' && is_file(public_path('assets/flags/4x3/'.strtolower($country).'.svg'))
+                                ? asset('assets/flags/4x3/'.strtolower($country).'.svg')
+                                : asset('assets/flags/4x3/globe.svg');
+                        @endphp
+                        <tr>
+                            <td class="py-3 px-4 font-semibold text-slate-800">
+                                <span class="inline-flex items-center gap-2">
+                                    <img src="{{ $flagPath }}" alt="{{ $countryName }}" class="w-5 h-3.5 object-cover rounded-sm">
+                                    {{ $countryName }} ({{ $country }})
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-right font-medium">{{ number_format((int) $row->unique_visitors) }}</td>
+                            <td class="py-3 px-4 text-right">{{ number_format((int) $row->sessions) }}</td>
+                            <td class="py-3 px-4 text-right">{{ number_format((int) $row->booking_cta_clicks) }}</td>
+                            <td class="py-3 px-4 text-right font-semibold text-emerald-700">{{ number_format((int) $row->bookings_completed) }}</td>
+                            <td class="py-3 px-4 text-right">{{ number_format((int) $row->resource_requests) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="py-8 text-center text-slate-400 italic">No country rollups have been generated for this period yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- UTM Acquisition & Traffic Attribution -->
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
         <div class="flex items-center justify-between mb-4">

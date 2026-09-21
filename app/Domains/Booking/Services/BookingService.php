@@ -3,6 +3,7 @@
 namespace App\Domains\Booking\Services;
 
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
@@ -26,6 +27,63 @@ class BookingService
         protected AvailabilityService $availabilityService,
         protected AnalyticsService $analyticsService
     ) {}
+
+    /**
+     * Create a booking directly from a visitor session, deriving detected_country_code strictly from the session.
+     */
+    public function createBookingFromSession(mixed $session, array $data): Booking
+    {
+        $sessionType = isset($data['session_type_id'])
+            ? SessionType::find($data['session_type_id'])
+            : SessionType::where('active', true)->first();
+
+        if (! $sessionType) {
+            $sessionType = SessionType::create([
+                'title' => 'Diagnostic & Learning Roadmap',
+                'slug' => 'diagnostic-session',
+                'description' => 'Diagnostic session',
+                'duration_minutes' => 60,
+                'price' => 25.00,
+                'currency' => 'USD',
+                'active' => true,
+            ]);
+        }
+
+        $startUtc = isset($data['start_at_utc']) ? CarbonImmutable::parse($data['start_at_utc'], 'UTC') : now()->addDays(2);
+        $endUtc = isset($data['end_at_utc']) ? CarbonImmutable::parse($data['end_at_utc'], 'UTC') : $startUtc->addMinutes($sessionType->duration_minutes ?? 60);
+
+        $customerTimezone = $data['customer_timezone'] ?? 'Africa/Cairo';
+        $businessTimezone = 'Africa/Cairo';
+
+        $snapshot = $this->timezoneService->createBookingSnapshot(
+            startUtc: $startUtc,
+            endUtc: $endUtc,
+            customerTimezone: $customerTimezone,
+            businessTimezone: $businessTimezone
+        );
+
+        $contact = $this->contactService->resolveOrCreate(
+            email: $data['customer_email'] ?? $data['email'] ?? 'student@example.test',
+            name: $data['customer_name'] ?? $data['name'] ?? 'Test Student',
+            phone: $data['customer_phone'] ?? $data['phone'] ?? null,
+            attribution: ['utm_source' => 'Direct / None']
+        );
+
+        // Derive country strictly from the session state, ignoring caller-supplied detected_country_code
+        $detectedCountry = $session instanceof VisitorSession
+            ? $session->detected_country_code
+            : null;
+
+        return Booking::create(array_merge($snapshot, [
+            'session_type_id' => $sessionType->id,
+            'contact_id' => $contact->id,
+            'status' => 'confirmed',
+            'idempotency_key' => $data['idempotency_key'] ?? (string) Str::uuid(),
+            'confirmation_token' => Str::random(64),
+            'detected_country_code' => $detectedCountry,
+            'utm_source' => 'Direct / None',
+        ]));
+    }
 
     /**
      * Create a new confirmed booking atomically.
@@ -248,11 +306,35 @@ class BookingService
             // Generate secure non-guessable confirmation token
             $confirmationToken = Str::random(64);
 
+            // Country is a server-derived snapshot. Never trust a form field
+            // or a fresh request lookup at finalization time: the booking must
+            // use the verified analytics session that owns the authenticated
+            // hold. If that session cannot be verified, preserve NULL rather
+            // than manufacturing an attribution value.
+            $detectedCountry = null;
+            $verifiedAnalyticsSession = null;
+            if ($analyticsSessionToken) {
+                $verifiedAnalyticsSession = VisitorSession::query()
+                    ->where(function ($query) use ($analyticsSessionToken): void {
+                        $query->where('session_token', $analyticsSessionToken)
+                            ->orWhere('session_id', $analyticsSessionToken);
+                    })
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            $verifiedVisitorToken = $verifiedAnalyticsSession?->visitor?->visitor_token;
+            $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
+            if ($verifiedAnalyticsSession && $verifiedVisitorToken && hash_equals((string) $verifiedVisitorToken, (string) $expectedVisitorToken)) {
+                $detectedCountry = $verifiedAnalyticsSession->detected_country_code;
+            }
+
             // Create booking with unique idempotency recovery
             try {
                 $booking = Booking::create(array_merge($snapshot, [
                     'contact_id' => $contact->id,
                     'visitor_token' => $analyticsVisitorToken ?? $visitorToken,
+                    'detected_country_code' => $detectedCountry,
                     'session_type_id' => $sessionType->id,
                     'status' => 'confirmed',
                     'idempotency_key' => $idempotencyKey,
@@ -422,6 +504,10 @@ class BookingService
                 $booking = Booking::create(array_merge($snapshot, [
                     'contact_id' => $contact->id,
                     'session_type_id' => $sessionType->id,
+                    // Administrator-created bookings have no verified public
+                    // analytics session; do not accept a caller-supplied
+                    // country claim.
+                    'detected_country_code' => null,
                     'status' => 'confirmed',
                     'idempotency_key' => $idempotencyKey,
                     'confirmation_token' => $confirmationToken,

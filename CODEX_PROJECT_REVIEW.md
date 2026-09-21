@@ -1,3 +1,5 @@
+> **Historical document:** This pre-V2 review is retained for audit history. It is superseded by the V2 verification in `PROJECT_STATUS.md` and `Gemini.md` (2026-09-21).
+
 # Codex Independent Project Review
 
 Review date: 2026-09-17  

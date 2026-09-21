@@ -23,7 +23,7 @@ class PageController extends Controller
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.about', [
-            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'About Ahmad & The Teaching Methodology'),
+            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'About Abdallah & The Teaching Methodology'),
             'page' => $page,
             'translation' => $resolved['translation'] ?? null,
             'isFallback' => $isFallback,
@@ -82,7 +82,7 @@ class PageController extends Controller
 
         $page = Page::query()->where('slug', 'about')->first();
         $draftRevision = $page?->revisions()->where('status', 'draft')->latest('id')->first();
-        $title = $draftRevision?->title ?? ($page ? $page->title : 'About Ahmad & The Teaching Methodology');
+        $title = $draftRevision?->title ?? ($page ? $page->title : 'About Abdallah & The Teaching Methodology');
         $content = $draftRevision?->content['body'] ?? $page?->content;
         $ogImagePath = $draftRevision?->content['og_image_path'] ?? $page?->og_image_path;
 
@@ -156,25 +156,43 @@ class PageController extends Controller
 
     public function terms(): View
     {
-        $locale = app()->getLocale();
-        $isFallback = ($locale !== 'en');
+        $page = Page::query()
+            ->where('slug', 'terms')
+            ->where('status', 'published')
+            ->with('translations')
+            ->first();
+
+        $resolved = $page?->resolveTranslation();
+        $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.terms', [
-            'title' => 'Terms of Service & Booking Policies',
+            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'Terms of Service & Booking Policy'),
+            'page' => $page,
+            'translation' => $resolved['translation'] ?? null,
+            'content' => $resolved['translation']?->content ?? ($page?->content ?? null),
             'isFallback' => $isFallback,
-            'entityLocales' => ['en'],
+            'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
         ]);
     }
 
     public function privacy(): View
     {
-        $locale = app()->getLocale();
-        $isFallback = ($locale !== 'en');
+        $page = Page::query()
+            ->where('slug', 'privacy')
+            ->where('status', 'published')
+            ->with('translations')
+            ->first();
+
+        $resolved = $page?->resolveTranslation();
+        $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.privacy', [
-            'title' => 'Privacy Policy & Data Protection',
+            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'Privacy Policy & Data Ethics'),
+            'page' => $page,
+            'translation' => $resolved['translation'] ?? null,
+            'content' => $resolved['translation']?->content ?? ($page?->content ?? null),
             'isFallback' => $isFallback,
-            'entityLocales' => ['en'],
+            'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
         ]);
     }
 

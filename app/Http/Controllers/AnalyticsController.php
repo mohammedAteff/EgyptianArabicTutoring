@@ -22,6 +22,8 @@ class AnalyticsController extends Controller
             'event_name' => ['required', 'string', 'max:64'],
             'page' => ['nullable', 'string', 'max:500'],
             'metadata' => ['nullable', 'array'],
+            'visitor_id' => ['nullable', 'string', 'max:64'],
+            'visitor_token' => ['nullable', 'string', 'max:64'],
         ]);
 
         $eventName = $validated['event_name'];

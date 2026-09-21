@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}</title>
+    <title>{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}</title>
     <meta name="description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Master authentic conversational Egyptian Arabic through structured 1-on-1 private lessons with a native educator in Cairo.') }}">
     @php
         $urlService = app(\App\Domains\CMS\Services\LocalizedUrlService::class);
@@ -34,7 +34,7 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}">
+    <meta property="og:title" content="{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}">
     <meta property="og:description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Master authentic conversational Egyptian Arabic.') }}">
     <meta property="og:url" content="{{ $canonicalUrl }}">
 
@@ -61,7 +61,8 @@
             <span class="sm:hidden font-medium mx-auto">Private Egyptian Arabic Lessons</span>
             <div class="hidden sm:flex items-center gap-4 text-stone-300">
                 <span>📍 Cairo, Egypt</span>
-                <span>🕒 {{ now('Africa/Cairo')->format('g:i A') }} Cairo Time</span>
+                @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', now('UTC')); @endphp
+                <span>🕒 {{ now('Africa/Cairo')->format('g:i A') }} Cairo Time ({{ $cairoClock['utc_offset'] }})</span>
             </div>
         </div>
     </div>
@@ -72,15 +73,15 @@
             <div class="flex items-center justify-between h-20">
                 <!-- Brand Logo / Name -->
                 <a href="{{ localized_url('home') }}" class="flex items-center gap-3 group">
-                    <div class="w-11 h-11 rounded-xl bg-terracotta-500 text-white flex items-center justify-center font-bold text-xl shadow-sm transition-transform group-hover:scale-105">
-                        <span class="font-cairo">م</span>
+                        <div class="w-11 h-11 rounded-xl bg-terracotta-500 text-white flex items-center justify-center font-bold text-xl shadow-sm transition-transform group-hover:scale-105">
+                        <span aria-hidden="true">A</span>
                     </div>
                     <div>
                         <div class="font-bold text-lg text-stone-900 leading-snug group-hover:text-terracotta-600 transition-colors">
-                            {{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}
+                            {{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}
                         </div>
                         <div class="text-xs text-stone-500 font-medium flex items-center gap-1.5">
-                            <span>Private Lessons</span>
+                            <span>Private Lessons with {{ config('app.tutor_name') }}</span>
                             <span>•</span>
                             <bdi dir="rtl" lang="ar" class="font-cairo text-stone-600">اتعلم مصري صح</bdi>
                         </div>
@@ -100,6 +101,10 @@
                     <a href="{{ localized_url('games') }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('games*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('Games') }}
+                    </a>
+                    <a href="{{ localized_url('pricing') }}"
+                       class="text-sm font-semibold transition-colors {{ request()->routeIs('pricing*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
+                        {{ __('Pricing') }}
                     </a>
                     <a href="{{ localized_url('about') }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('about*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
@@ -179,6 +184,7 @@
             <a href="{{ localized_url('booking') }}" data-cta="booking" class="block px-3 py-2 text-base font-semibold rounded-lg bg-terracotta-50 text-terracotta-600">📅 {{ __('Book a Lesson') }}</a>
             <a href="{{ localized_url('resources') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">📚 {{ __('Resources') }}</a>
             <a href="{{ localized_url('games') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">🎮 {{ __('Games') }}</a>
+            <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
             <a href="{{ localized_url('about') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('About') }}</a>
             <a href="{{ localized_url('faq') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('FAQ') }}</a>
 
@@ -225,10 +231,10 @@
                 <div class="md:col-span-2 space-y-4">
                     <div class="flex items-center gap-3">
                         <div class="w-9 h-9 rounded-lg bg-terracotta-500 text-white flex items-center justify-center font-bold text-lg font-cairo">
-                            م
+                            <span aria-hidden="true">A</span>
                         </div>
                         <span class="font-bold text-white text-lg tracking-tight">
-                            {{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}
+                            {{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}
                         </span>
                     </div>
                     <p class="text-stone-400 text-sm max-w-md leading-relaxed">
@@ -249,10 +255,13 @@
                     <h3 class="text-xs font-semibold text-stone-200 uppercase tracking-wider mb-4">{{ __('Learn & Practice') }}</h3>
                     <ul class="space-y-2.5 text-sm">
                         <li><a href="{{ localized_url('booking') }}" data-cta="booking" class="hover:text-white transition-colors">{{ __('Book a Lesson') }}</a></li>
+                        <li><a href="{{ localized_url('pricing') }}" class="hover:text-white transition-colors">{{ __('Pricing') }}</a></li>
                         <li><a href="{{ localized_url('resources') }}" class="hover:text-white transition-colors">{{ __('Resources') }}</a></li>
                         <li><a href="{{ localized_url('games') }}" class="hover:text-white transition-colors">{{ __('Games') }}</a></li>
                         <li><a href="{{ localized_url('about') }}" class="hover:text-white transition-colors">{{ __('About') }}</a></li>
                         <li><a href="{{ localized_url('faq') }}" class="hover:text-white transition-colors">{{ __('FAQ') }}</a></li>
+                        <li><a href="{{ localized_url('privacy') }}" class="hover:text-white transition-colors">{{ __('Privacy') }}</a></li>
+                        <li><a href="{{ localized_url('terms') }}" class="hover:text-white transition-colors">{{ __('Terms') }}</a></li>
                     </ul>
                 </div>
 
@@ -319,7 +328,7 @@
             <!-- Bottom Legal Bar -->
             <div class="mt-12 pt-8 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
                 <div>
-                    © {{ date('Y') }} {{ \App\Domains\CMS\Models\Setting::get('site_name', 'Egyptian Arabic Tutoring') }}. {{ __('All rights reserved.') }}
+                    © {{ date('Y') }} {{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}. {{ __('All rights reserved.') }}
                 </div>
                 <div class="flex items-center gap-6">
                     <a href="{{ localized_url('terms') }}" class="hover:text-stone-400 transition-colors">{{ __('Terms') }}</a>
@@ -390,7 +399,7 @@
                 const isActionOrExport = href.includes('.ics') || href.includes('/ics') || href.includes('/reschedule') || href.includes('/cancel') || href.includes('/download');
                 const hasBookingCtaAttr = el.getAttribute('data-cta') === 'booking';
                 const isBookingPath = href === '#booking-section' ||
-                    href === '/book' || href.startsWith('/book?') ||
+                    href === '/booking' || href.startsWith('/booking?') ||
                     href === '/fr/reservation' || href.startsWith('/fr/reservation?') ||
                     href === '/de/buchen' || href.startsWith('/de/buchen?');
 
@@ -410,4 +419,3 @@
     </script>
 </body>
 </html>
-

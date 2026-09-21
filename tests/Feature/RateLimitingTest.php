@@ -81,7 +81,7 @@ class RateLimitingTest extends TestCase
         $throttled->assertStatus(429);
     }
 
-    public function test_booking_reschedule_endpoint_is_rate_limited(): void
+    public function test_booking_reschedule_endpoint_is_not_a_public_mutation_endpoint(): void
     {
         $sessionType = SessionType::create([
             'title' => 'Trial Lesson',
@@ -94,18 +94,10 @@ class RateLimitingTest extends TestCase
 
         $booking = $this->createBooking($sessionType, 'resched_rate@example.com');
 
-        for ($i = 0; $i < 5; $i++) {
-            $response = $this->post(route('booking.reschedule.submit', ['token' => $booking->confirmation_token]), [
-                'new_start_utc' => now()->addDays(6)->toDateTimeString(),
-            ]);
-            $this->assertNotEquals(429, $response->getStatusCode(), "Request {$i} should not be throttled");
-        }
-
-        // 6th request with same token must return 429
-        $throttled = $this->post(route('booking.reschedule.submit', ['token' => $booking->confirmation_token]), [
+        $response = $this->post(route('booking.reschedule.submit', ['token' => $booking->confirmation_token]), [
             'new_start_utc' => now()->addDays(6)->toDateTimeString(),
         ]);
-        $throttled->assertStatus(429);
+        $response->assertForbidden();
     }
 
     public function test_resource_request_endpoint_is_rate_limited(): void

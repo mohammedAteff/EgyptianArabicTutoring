@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Maintenance in Progress | Egyptian Arabic Tutoring</title>
+    <title>Maintenance in Progress | {{ config('business.site_name') }}</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
 <body class="h-full flex items-center justify-center p-6 bg-radial from-stone-900 to-stone-950 font-sans">
     <div class="max-w-md w-full text-center space-y-6">
         <div class="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center justify-center mx-auto text-2xl font-bold font-serif">
-            ع
+            <span aria-hidden="true">A</span>
         </div>
 
         <div class="space-y-2">
@@ -33,7 +33,7 @@
         </div>
 
         <div class="pt-4 text-xs text-stone-500">
-            &copy; {{ date('Y') }} Egyptian Arabic Tutoring. All rights reserved.
+            &copy; {{ date('Y') }} {{ config('business.site_name') }}. All rights reserved.
         </div>
     </div>
 </body>

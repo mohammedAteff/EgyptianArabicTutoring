@@ -557,6 +557,40 @@ class BookingAttributionPersistenceTest extends TestCase
         $this->assertEquals('twitter', $attrNow['utm_source'], 'Touch at exact booking time must qualify');
     }
 
+    public function test_direct_marketing_touch_never_overrides_last_non_direct_booking_attribution(): void
+    {
+        $bookingTime = CarbonImmutable::parse('2026-06-15 12:00:00', 'UTC');
+        $visitor = Visitor::create([
+            'visitor_token' => 'vis-direct-touch',
+            'first_seen_at' => $bookingTime->subDays(10),
+            'last_seen_at' => $bookingTime,
+            'is_bot' => false,
+        ]);
+
+        MarketingTouch::create([
+            'visitor_id' => $visitor->id,
+            'visitor_token' => $visitor->visitor_token,
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'qualified-campaign',
+            'is_direct' => false,
+            'touch_at' => $bookingTime->subHours(2),
+        ]);
+        MarketingTouch::create([
+            'visitor_id' => $visitor->id,
+            'visitor_token' => $visitor->visitor_token,
+            'utm_campaign' => 'direct-label',
+            'is_direct' => true,
+            'touch_at' => $bookingTime->subHour(),
+        ]);
+
+        $attribution = $this->analyticsService->getBookingConversionAttribution($visitor->visitor_token, $bookingTime);
+
+        $this->assertSame('google', $attribution['utm_source']);
+        $this->assertSame('qualified-campaign', $attribution['utm_campaign']);
+        $this->assertSame($bookingTime->subHours(2)->toDateTimeString(), $attribution['touch_at']->toDateTimeString());
+    }
+
     public function test_atomic_first_acquisition_prevents_concurrent_first_touch_overwrite(): void
     {
         $vToken = 'vis-atomic-acquisition';

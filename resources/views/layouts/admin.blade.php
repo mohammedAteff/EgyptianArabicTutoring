@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ $title ?? 'Admin Console' }} | Egyptian Arabic Tutor Admin</title>
+    <title>{{ $title ?? 'Admin Console' }} | {{ config('business.site_name') }} Admin</title>
 
     <!-- Google Fonts: Cairo -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,17 +16,20 @@
 </head>
 <body class="h-full font-sans antialiased bg-slate-100" 
       x-data="adminMobileNav()" 
+      x-init="$watch('sidebarOpen', value => { document.body.style.overflow = value ? 'hidden' : ''; })"
       @keydown.window="handleKeydown($event)">
 
     <!-- Mobile Sidebar Backdrop (Section 32) -->
-    <div x-show="mobileSidebarOpen" 
+    <div x-show="sidebarOpen || mobileSidebarOpen"
+         x-cloak
          x-transition:enter="transition-opacity ease-linear duration-300"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
          x-transition:leave="transition-opacity ease-linear duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-xs lg:hidden"
+         :class="(sidebarOpen || mobileSidebarOpen) ? 'pointer-events-auto' : 'pointer-events-none'"
+         class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden"
          style="display: none;"
          @click="closeSidebar()"></div>
 
@@ -37,24 +40,24 @@
                role="dialog"
                aria-modal="true"
                aria-label="Admin Navigation"
-               :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-               class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out lg:static lg:flex-shrink-0">
+               :class="(sidebarOpen || mobileSidebarOpen) ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out md:fixed md:flex-shrink-0">
             
             <!-- Brand / Logo -->
             <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
                 <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3">
                     <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-bold font-serif shadow-md">
-                        ع
+                        <span aria-hidden="true">A</span>
                     </div>
                     <div>
-                        <div class="font-bold text-white text-base leading-tight tracking-tight">Tutor Admin</div>
+                        <div class="font-bold text-white text-base leading-tight tracking-tight">{{ config('business.tutor_name') }} Admin</div>
                         <div class="text-xs text-amber-400 font-medium">Operations Console</div>
                     </div>
                 </a>
                 <button type="button"
                         @click="closeSidebar()"
                         aria-label="Close Navigation Menu"
-                        class="lg:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -239,7 +242,7 @@
                             aria-controls="admin-sidebar"
                             :aria-expanded="mobileSidebarOpen ? 'true' : 'false'"
                             aria-label="Open Navigation Menu"
-                            class="lg:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
 
@@ -258,7 +261,8 @@
                 <div class="flex items-center gap-4 text-sm font-medium">
                     <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-full text-xs font-semibold">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>Cairo Time: {{ now('Africa/Cairo')->format('H:i') }} (UTC+3)</span>
+                        @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', now('UTC')); @endphp
+                        <span>Cairo Time: {{ now('Africa/Cairo')->format('H:i') }} ({{ $cairoClock['utc_offset'] }})</span>
                     </div>
 
                     <!-- Notification Bell -->
@@ -296,7 +300,8 @@
             @endif
 
             <!-- Main Page Content -->
-            <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <main class="ml-0 md:ml-64 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+                {{ $slot ?? '' }}
                 @yield('content')
             </main>
         </div>
@@ -306,6 +311,7 @@
     <script>
     function adminMobileNav() {
         return {
+            sidebarOpen: false,
             mobileSidebarOpen: false,
             previousFocusedElement: null,
             previousBodyOverflow: '',
@@ -315,6 +321,7 @@
                 this.previousBodyOverflow = document.body.style.overflow || '';
                 document.body.style.overflow = 'hidden';
                 this.mobileSidebarOpen = true;
+                this.sidebarOpen = true;
 
                 this.$nextTick(() => {
                     const sidebar = document.getElementById('admin-sidebar');
@@ -327,8 +334,9 @@
             },
 
             closeSidebar() {
-                if (!this.mobileSidebarOpen) return;
+                if (!this.mobileSidebarOpen && !this.sidebarOpen) return;
                 this.mobileSidebarOpen = false;
+                this.sidebarOpen = false;
                 document.body.style.overflow = this.previousBodyOverflow;
 
                 this.$nextTick(() => {

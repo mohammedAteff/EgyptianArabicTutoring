@@ -11,6 +11,7 @@ use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\RateLimiter;
@@ -33,6 +34,8 @@ class BookingWizard extends Component
     public ?string $analyticsSessionToken = null;
 
     public string $customerTimezone = 'Africa/Cairo';
+
+    public ?string $timezoneCountryCode = 'EG';
 
     public string $calendarMonth; // Y-m format
 
@@ -110,6 +113,7 @@ class BookingWizard extends Component
         // Default timezone
         $defaultTz = Setting::get('business_timezone', 'Africa/Cairo');
         $this->customerTimezone = $defaultTz;
+        $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($this->customerTimezone);
         $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
 
         // Check active session types
@@ -126,6 +130,8 @@ class BookingWizard extends Component
         if (is_array($savedState) && ! empty($savedState['visitor_token'])) {
             if (hash_equals($this->visitorToken, (string) $savedState['visitor_token'])) {
                 $this->customerTimezone = $savedState['customer_timezone'] ?? $this->customerTimezone;
+                $this->timezoneCountryCode = $savedState['timezone_country_code']
+                    ?? app(TimezoneDisplayService::class)->resolveCountryCode($this->customerTimezone);
                 $this->calendarMonth = $savedState['calendar_month'] ?? $this->calendarMonth;
                 $this->selectedDate = $savedState['selected_date'] ?? null;
                 $this->selectedSessionTypeId = $savedState['selected_session_type_id'] ?? $this->selectedSessionTypeId;
@@ -176,6 +182,7 @@ class BookingWizard extends Component
         $timezoneService = app(TimezoneService::class);
         if ($timezoneService->isValid($timezone)) {
             $this->customerTimezone = $timezone;
+            $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
             $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
             // If a date was selected, recalculate slots
         }
@@ -186,6 +193,7 @@ class BookingWizard extends Component
         $timezoneService = app(TimezoneService::class);
         if ($timezoneService->isValid($timezone)) {
             $this->customerTimezone = $timezone;
+            $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
             $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
             $this->showTimezoneModal = false;
             $this->timezoneSearch = '';
@@ -447,6 +455,7 @@ class BookingWizard extends Component
             'current_step' => $this->currentStep,
             'selected_session_type_id' => $this->selectedSessionTypeId,
             'customer_timezone' => $this->customerTimezone,
+            'timezone_country_code' => $this->timezoneCountryCode,
             'calendar_month' => $this->calendarMonth,
             'selected_date' => $this->selectedDate,
             'selected_slot_start_utc' => $this->selectedSlotStartUtc,

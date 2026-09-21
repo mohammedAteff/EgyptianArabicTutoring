@@ -25,6 +25,14 @@
         </div>
     </div>
 
+    @if($isBeforeAuthoritativeCutover && $authoritativeCutoverDate)
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status">
+            <strong>Non-Comparable Historical Data:</strong>
+            this period begins before the authoritative analytics cutover date
+            ({{ $authoritativeCutoverDate }} Africa/Cairo). Historical attribution and country context may not be comparable with post-cutover data.
+        </div>
+    @endif
+
     <!-- 5 Fixed Reports Navigation Tabs -->
     <div class="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-px text-xs font-semibold">
         <a href="{{ route('admin.reports.index', ['type' => 'traffic', 'range' => $range]) }}" 

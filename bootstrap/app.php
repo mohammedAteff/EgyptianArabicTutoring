@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckMaintenanceMode;
 use App\Http\Middleware\EnsureAdminRole;
+use App\Http\Middleware\NormalizeTrailingSlash;
 use App\Http\Middleware\SetRequestLocale;
 use App\Http\Middleware\TrackVisitorSession;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureAdminRole::class,
         ]);
         $middleware->web(append: [
+            NormalizeTrailingSlash::class,
             SetRequestLocale::class,
             CheckMaintenanceMode::class,
             TrackVisitorSession::class,

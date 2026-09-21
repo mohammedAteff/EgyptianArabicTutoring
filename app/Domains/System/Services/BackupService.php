@@ -32,6 +32,12 @@ class BackupService
      */
     public function createBackup(string $type = 'full'): string
     {
+        // The type is a label supplied by an operator/UI. Normalize it before
+        // using it in a filesystem name so it can never introduce path
+        // separators or traversal components.
+        $type = trim((string) preg_replace('/[^A-Za-z0-9_-]/', '_', $type));
+        $type = $type !== '' ? substr($type, 0, 32) : 'full';
+
         $timestamp = CarbonImmutable::now('UTC')->format('Y-m-d-His');
         $zipFilename = "backup-{$type}-{$timestamp}.zip";
         $zipPath = $this->backupDir.DIRECTORY_SEPARATOR.$zipFilename;

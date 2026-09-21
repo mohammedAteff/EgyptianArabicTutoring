@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\Analytics\Services\GeoIpService;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -16,7 +17,8 @@ use Symfony\Component\HttpFoundation\Response;
 class TrackVisitorSession
 {
     public function __construct(
-        protected AnalyticsService $analyticsService
+        protected AnalyticsService $analyticsService,
+        protected GeoIpService $geoIpService
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -46,6 +48,7 @@ class TrackVisitorSession
             }
 
             $deviceType = $this->detectDevice($userAgent);
+            $detectedCountry = $this->geoIpService->detectCountryFromRequest($request);
 
             $visitor = Visitor::firstOrCreate(
                 ['visitor_token' => $visitorToken],
@@ -55,11 +58,16 @@ class TrackVisitorSession
                     'device_type' => $deviceType,
                     'user_agent' => substr($userAgent, 0, 500),
                     'is_bot' => $isBot,
+                    'detected_country_code' => $detectedCountry,
                 ]
             );
 
+            $visitorUpdates = [];
             if (! $visitor->wasRecentlyCreated) {
-                $visitor->update(['last_seen_at' => now()]);
+                $visitorUpdates['last_seen_at'] = now();
+            }
+            if (! empty($visitorUpdates)) {
+                $visitor->update($visitorUpdates);
             }
 
             // 2. Identify or initialize Session
@@ -68,6 +76,12 @@ class TrackVisitorSession
 
             if ($sessionToken) {
                 $session = VisitorSession::where('session_token', $sessionToken)->first();
+
+                // A session cookie is not an identity credential. Never let a
+                // visitor reuse another visitor's session row.
+                if ($session && (int) $session->visitor_id !== (int) $visitor->id) {
+                    $session = null;
+                }
             }
 
             $now = CarbonImmutable::now();
@@ -98,6 +112,10 @@ class TrackVisitorSession
                     'referrer' => $rawReferrer,
                     'landing_page' => substr($request->fullUrl(), 0, 255),
                     'is_bot' => $isBot,
+                    // Session geography is a start-of-session snapshot. An
+                    // unresolved first request stays NULL rather than being
+                    // rewritten from the visitor's acquisition country.
+                    'detected_country_code' => $detectedCountry,
                 ]);
 
                 $newSessionCookie = cookie($sessionCookieName, $sessionToken, $sessionTimeoutMinutes, '/', null, $isSecure, false, false, 'Lax');
@@ -151,6 +169,15 @@ class TrackVisitorSession
                         $sessionStore->put($param, (string) $session->{$param});
                     }
                 }
+            }
+
+            if ($shouldStartNewSession) {
+                $this->analyticsService->track(
+                    eventName: 'session_started',
+                    request: $request,
+                    visitorToken: $visitorToken,
+                    sessionToken: $sessionToken,
+                );
             }
 
             if ($request->isMethod('GET') && ! $request->ajax() && ! $request->prefetch()) {

@@ -130,6 +130,30 @@ class CairoDailyAnalyticsRollupTest extends TestCase
         $this->assertEquals(0, $metric19->count, 'Session crossing midnight must NOT be counted again on 2026-09-19');
     }
 
+    public function test_reports_label_periods_before_the_authoritative_analytics_cutover(): void
+    {
+        Setting::set('analytics_authoritative_cutover_date', '2026-09-21', 'analytics');
+
+        $admin = Administrator::create([
+            'name' => 'Cutover Admin',
+            'email' => 'cutover-admin@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'super_admin',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin, 'web')->get(route('admin.reports.index', [
+            'type' => 'traffic',
+            'range' => 'custom',
+            'start_date' => '2025-01-01',
+            'end_date' => '2025-01-02',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Non-Comparable Historical Data');
+        $response->assertSee('2026-09-21 Africa/Cairo');
+    }
+
     public function test_events_near_cairo_day_boundaries_are_attributed_strictly_to_respective_cairo_dates(): void
     {
         $cairoTz = 'Africa/Cairo';
