@@ -14,6 +14,31 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
+    <style>
+        @media (max-width: 767px) {
+            #admin-sidebar {
+                transform: translateX(-100%) !important;
+                visibility: hidden !important;
+                transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            }
+            #admin-sidebar.sidebar-open,
+            #admin-sidebar.translate-x-0 {
+                transform: translateX(0) !important;
+                visibility: visible !important;
+            }
+            #admin-sidebar.sidebar-closed,
+            #admin-sidebar.-translate-x-full {
+                transform: translateX(-100%) !important;
+                visibility: hidden !important;
+            }
+        }
+        @media (min-width: 768px) {
+            #admin-sidebar {
+                transform: translateX(0) !important;
+                visibility: visible !important;
+            }
+        }
+    </style>
 </head>
 <body class="h-full font-sans antialiased bg-slate-100" 
       x-data="adminMobileNav()" 
@@ -33,7 +58,7 @@
          :class="(sidebarOpen || mobileSidebarOpen) ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
          class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden pointer-events-none cursor-pointer"
          style="display: none;"
-         onclick="if(window.closeAdminSidebar){window.closeAdminSidebar();}else{this.style.display='none';var s=document.getElementById('admin-sidebar');if(s){s.classList.remove('translate-x-0');s.classList.add('-translate-x-full');}document.body.style.overflow='';}"
+         onclick="window.closeAdminSidebar(event)"
          @click="closeSidebar()"></div>
 
     <div class="min-h-full flex">
@@ -44,7 +69,7 @@
                aria-modal="true"
                aria-label="Admin Navigation"
                :class="(sidebarOpen || mobileSidebarOpen) ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 md:fixed md:flex-shrink-0">
+               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 md:fixed md:flex-shrink-0 sidebar-closed">
             
             <!-- Brand / Logo -->
             <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
@@ -59,11 +84,11 @@
                 </a>
                 <button type="button"
                         id="admin-sidebar-close"
-                        onclick="if(window.closeAdminSidebar){window.closeAdminSidebar();}else{var s=document.getElementById('admin-sidebar');if(s){s.classList.remove('translate-x-0');s.classList.add('-translate-x-full');}var b=document.getElementById('admin-sidebar-backdrop');if(b)b.style.display='none';document.body.style.overflow='';}"
+                        onclick="window.closeAdminSidebar(event)"
                         @click="closeSidebar()"
                         aria-label="Close Navigation Menu"
-                        class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer touch-manipulation">
+                    <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
 
@@ -243,13 +268,13 @@
                 <div class="flex items-center gap-4 flex-1 max-w-xl">
                     <button type="button"
                             id="admin-menu-toggle"
-                            onclick="if(window.openAdminSidebar){window.openAdminSidebar();}else{var s=document.getElementById('admin-sidebar');if(s){s.classList.remove('-translate-x-full');s.classList.add('translate-x-0');}var b=document.getElementById('admin-sidebar-backdrop');if(b)b.style.display='block';document.body.style.overflow='hidden';}"
+                            onclick="window.openAdminSidebar(event)"
                             @click="openSidebar()"
                             aria-controls="admin-sidebar"
                             :aria-expanded="mobileSidebarOpen ? 'true' : 'false'"
                             aria-label="Open Navigation Menu"
-                            class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            class="md:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer touch-manipulation">
+                        <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </button>
 
                     <form action="{{ route('admin.search') }}" method="GET" class="w-full">
@@ -339,8 +364,8 @@
                 const backdrop = document.getElementById('admin-sidebar-backdrop');
                 const toggle = document.getElementById('admin-menu-toggle');
                 if (sidebar) {
-                    sidebar.classList.remove('-translate-x-full');
-                    sidebar.classList.add('translate-x-0');
+                    sidebar.classList.remove('-translate-x-full', 'sidebar-closed');
+                    sidebar.classList.add('translate-x-0', 'sidebar-open');
                 }
                 if (backdrop) {
                     backdrop.style.display = 'block';
@@ -371,8 +396,8 @@
                 const backdrop = document.getElementById('admin-sidebar-backdrop');
                 const toggle = document.getElementById('admin-menu-toggle');
                 if (sidebar) {
-                    sidebar.classList.remove('translate-x-0');
-                    sidebar.classList.add('-translate-x-full');
+                    sidebar.classList.remove('translate-x-0', 'sidebar-open');
+                    sidebar.classList.add('-translate-x-full', 'sidebar-closed');
                 }
                 if (backdrop) {
                     backdrop.style.display = 'none';
@@ -438,7 +463,8 @@
 
     window.adminMobileNav = adminMobileNav;
 
-    window.openAdminSidebar = function() {
+    window.openAdminSidebar = function(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
         if (window.adminMobileNavInstance && typeof window.adminMobileNavInstance.openSidebar === 'function') {
             window.adminMobileNavInstance.openSidebar();
             return;
@@ -447,7 +473,8 @@
         helper.openSidebar();
     };
 
-    window.closeAdminSidebar = function() {
+    window.closeAdminSidebar = function(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
         if (window.adminMobileNavInstance && typeof window.adminMobileNavInstance.closeSidebar === 'function') {
             window.adminMobileNavInstance.closeSidebar();
             return;
@@ -459,31 +486,37 @@
     document.addEventListener('DOMContentLoaded', function() {
         const toggle = document.getElementById('admin-menu-toggle');
         if (toggle) {
-            toggle.addEventListener('click', function(e) {
-                e.stopPropagation();
-                window.openAdminSidebar();
+            ['click', 'touchend'].forEach(evt => {
+                toggle.addEventListener(evt, function(e) {
+                    e.stopPropagation();
+                    window.openAdminSidebar(e);
+                });
             });
         }
 
         const closeBtn = document.getElementById('admin-sidebar-close');
         if (closeBtn) {
-            closeBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                window.closeAdminSidebar();
+            ['click', 'touchend'].forEach(evt => {
+                closeBtn.addEventListener(evt, function(e) {
+                    e.stopPropagation();
+                    window.closeAdminSidebar(e);
+                });
             });
         }
 
         const backdrop = document.getElementById('admin-sidebar-backdrop');
         if (backdrop) {
-            backdrop.addEventListener('click', function(e) {
-                e.stopPropagation();
-                window.closeAdminSidebar();
+            ['click', 'touchend'].forEach(evt => {
+                backdrop.addEventListener(evt, function(e) {
+                    e.stopPropagation();
+                    window.closeAdminSidebar(e);
+                });
             });
         }
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' || e.keyCode === 27) {
-                window.closeAdminSidebar();
+                window.closeAdminSidebar(e);
             }
         });
     });
