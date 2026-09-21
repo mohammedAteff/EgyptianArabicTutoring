@@ -17,25 +17,16 @@
     <style>
         @media (max-width: 767px) {
             #admin-sidebar {
-                transform: translateX(-100%) !important;
-                visibility: hidden !important;
-                transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
             }
-            #admin-sidebar.sidebar-open,
-            #admin-sidebar.translate-x-0 {
+            #admin-sidebar.open {
                 transform: translateX(0) !important;
-                visibility: visible !important;
-            }
-            #admin-sidebar.sidebar-closed,
-            #admin-sidebar.-translate-x-full {
-                transform: translateX(-100%) !important;
-                visibility: hidden !important;
             }
         }
         @media (min-width: 768px) {
             #admin-sidebar {
                 transform: translateX(0) !important;
-                visibility: visible !important;
             }
         }
     </style>
@@ -55,8 +46,7 @@
          x-transition:leave="transition-opacity ease-linear duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         :class="(sidebarOpen || mobileSidebarOpen) ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
-         class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden pointer-events-none cursor-pointer"
+         class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden"
          style="display: none;"
          onclick="window.closeAdminSidebar(event)"
          @click="closeSidebar()"></div>
@@ -68,8 +58,8 @@
                role="dialog"
                aria-modal="true"
                aria-label="Admin Navigation"
-               :class="(sidebarOpen || mobileSidebarOpen) ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 md:fixed md:flex-shrink-0 sidebar-closed">
+               :class="(sidebarOpen || mobileSidebarOpen) ? 'open translate-x-0' : '-translate-x-full md:translate-x-0'"
+               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:fixed md:flex-shrink-0">
             
             <!-- Brand / Logo -->
             <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
@@ -364,13 +354,10 @@
                 const backdrop = document.getElementById('admin-sidebar-backdrop');
                 const toggle = document.getElementById('admin-menu-toggle');
                 if (sidebar) {
-                    sidebar.classList.remove('-translate-x-full', 'sidebar-closed');
-                    sidebar.classList.add('translate-x-0', 'sidebar-open');
+                    sidebar.classList.add('open');
                 }
                 if (backdrop) {
                     backdrop.style.display = 'block';
-                    backdrop.classList.remove('pointer-events-none', 'opacity-0');
-                    backdrop.classList.add('pointer-events-auto', 'opacity-100');
                 }
                 if (toggle) {
                     toggle.setAttribute('aria-expanded', 'true');
@@ -396,13 +383,10 @@
                 const backdrop = document.getElementById('admin-sidebar-backdrop');
                 const toggle = document.getElementById('admin-menu-toggle');
                 if (sidebar) {
-                    sidebar.classList.remove('translate-x-0', 'sidebar-open');
-                    sidebar.classList.add('-translate-x-full', 'sidebar-closed');
+                    sidebar.classList.remove('open');
                 }
                 if (backdrop) {
                     backdrop.style.display = 'none';
-                    backdrop.classList.remove('pointer-events-auto', 'opacity-100');
-                    backdrop.classList.add('pointer-events-none', 'opacity-0');
                 }
                 if (toggle) {
                     toggle.setAttribute('aria-expanded', 'false');
@@ -465,22 +449,34 @@
 
     window.openAdminSidebar = function(e) {
         if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-        if (window.adminMobileNavInstance && typeof window.adminMobileNavInstance.openSidebar === 'function') {
-            window.adminMobileNavInstance.openSidebar();
-            return;
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        document.body.style.overflow = 'hidden';
+        const sidebar = document.getElementById('admin-sidebar');
+        const backdrop = document.getElementById('admin-sidebar-backdrop');
+        const toggle = document.getElementById('admin-menu-toggle');
+        if (sidebar) sidebar.classList.add('open');
+        if (backdrop) backdrop.style.display = 'block';
+        if (toggle) toggle.setAttribute('aria-expanded', 'true');
+        if (window.adminMobileNavInstance) {
+            window.adminMobileNavInstance.sidebarOpen = true;
+            window.adminMobileNavInstance.mobileSidebarOpen = true;
         }
-        const helper = adminMobileNav();
-        helper.openSidebar();
     };
 
     window.closeAdminSidebar = function(e) {
         if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-        if (window.adminMobileNavInstance && typeof window.adminMobileNavInstance.closeSidebar === 'function') {
-            window.adminMobileNavInstance.closeSidebar();
-            return;
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        document.body.style.overflow = '';
+        const sidebar = document.getElementById('admin-sidebar');
+        const backdrop = document.getElementById('admin-sidebar-backdrop');
+        const toggle = document.getElementById('admin-menu-toggle');
+        if (sidebar) sidebar.classList.remove('open');
+        if (backdrop) backdrop.style.display = 'none';
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+        if (window.adminMobileNavInstance) {
+            window.adminMobileNavInstance.sidebarOpen = false;
+            window.adminMobileNavInstance.mobileSidebarOpen = false;
         }
-        const helper = adminMobileNav();
-        helper.closeSidebar();
     };
 
     document.addEventListener('DOMContentLoaded', function() {
