@@ -17,7 +17,7 @@
         </h1>
 
         <div class="prose prose-stone max-w-none text-stone-700 leading-relaxed text-base sm:text-lg">
-            {!! $translation->content ?? $page->content !!}
+            {!! $content !!}
         </div>
     </div>
 </div>

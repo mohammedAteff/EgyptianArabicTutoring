@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Page;
+use App\Domains\CMS\Services\RichTextSanitizer;
 use App\Domains\CMS\Services\TranslationService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -37,7 +38,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, RichTextSanitizer $sanitizer): RedirectResponse
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -49,6 +50,7 @@ class PageController extends Controller
             'seo_description' => ['nullable', 'string', 'max:500'],
             'og_image_path' => ['nullable', 'string', 'max:255'],
         ]);
+        $validated['content'] = $sanitizer->sanitize((string) ($validated['content'] ?? ''));
 
         $slug = Str::slug($validated['slug']);
 
@@ -116,7 +118,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function update(Request $request, Page $page): RedirectResponse
+    public function update(Request $request, Page $page, RichTextSanitizer $sanitizer): RedirectResponse
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -128,6 +130,7 @@ class PageController extends Controller
             'seo_description' => ['nullable', 'string', 'max:500'],
             'og_image_path' => ['nullable', 'string', 'max:255'],
         ]);
+        $validated['content'] = $sanitizer->sanitize((string) ($validated['content'] ?? ''));
 
         $action = $request->input('action');
         $isDraftAction = $action === 'draft' || ($page->status === 'published' && $validated['status'] === 'draft');
@@ -319,13 +322,13 @@ class PageController extends Controller
         return back()->with('success', 'Page draft discarded. The published version remains unchanged.');
     }
 
-    public function restoreRevision(Page $page, ContentRevision $revision): RedirectResponse
+    public function restoreRevision(Page $page, ContentRevision $revision, RichTextSanitizer $sanitizer): RedirectResponse
     {
         if ($revision->revisable_type !== Page::class || (int) $revision->revisable_id !== (int) $page->id) {
             return back()->with('error', 'Revision does not belong to this page.');
         }
 
-        $content = $revision->content['body'] ?? '';
+        $content = $sanitizer->sanitize((string) ($revision->content['body'] ?? ''));
         $excerpt = $revision->content['excerpt'] ?? null;
         $ogImagePath = $revision->content['og_image_path'] ?? $page->og_image_path;
         $title = $revision->title ?? $page->title;

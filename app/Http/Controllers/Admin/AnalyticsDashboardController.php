@@ -24,10 +24,10 @@ class AnalyticsDashboardController extends Controller
         $now = CarbonImmutable::now($cairoTz);
         $startCairo = match ($range) {
             'today' => $now->startOfDay(),
-            '7d' => $now->subDays(7)->startOfDay(),
-            '90d' => $now->subDays(90)->startOfDay(),
+            '7d' => $now->subDays(6)->startOfDay(),
+            '90d' => $now->subDays(89)->startOfDay(),
             'month' => $now->startOfMonth(),
-            default => $now->subDays(30)->startOfDay(),
+            default => $now->subDays(29)->startOfDay(),
         };
         $endCairo = $now->endOfDay();
 

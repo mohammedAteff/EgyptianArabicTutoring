@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Services\RichTextSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -34,7 +35,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function preview(Request $request, string $slug): View
+    public function preview(Request $request, string $slug, RichTextSanitizer $sanitizer): View
     {
         if (! Auth::guard('web')->check()) {
             abort(403, 'Preview requires administrator authentication.');
@@ -46,7 +47,7 @@ class PageController extends Controller
 
         $draftRevision = $page->revisions()->where('status', 'draft')->latest('id')->first();
         $title = $draftRevision?->title ?? $page->title;
-        $content = $draftRevision?->content['body'] ?? $page->content;
+        $content = $sanitizer->sanitize((string) ($draftRevision?->content['body'] ?? $page->content));
         $excerpt = $draftRevision?->content['excerpt'] ?? $page->excerpt;
         $ogImagePath = $draftRevision?->content['og_image_path'] ?? $page->og_image_path;
 
@@ -69,6 +70,7 @@ class PageController extends Controller
 
         return view('public.page', [
             'page' => $previewPage,
+            'content' => $content,
             'title' => '[PREVIEW] '.$title,
             'isPreview' => true,
         ]);
@@ -196,7 +198,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function show(string $slug): View
+    public function show(string $slug, RichTextSanitizer $sanitizer): View
     {
         $page = Page::query()
             ->where('slug', $slug)
@@ -205,10 +207,12 @@ class PageController extends Controller
             ->firstOrFail();
 
         $resolved = $page->resolveTranslation();
+        $content = $sanitizer->sanitize((string) ($resolved['translation']?->content ?? $page->content));
 
         return view('public.page', [
             'page' => $page,
             'translation' => $resolved['translation'],
+            'content' => $content,
             'isFallback' => $resolved['is_fallback'],
             'entityLocales' => $page->getAvailableLocales(),
             'title' => $resolved['translation']?->title ?? $page->title,

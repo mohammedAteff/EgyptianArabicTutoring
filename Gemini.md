@@ -8,7 +8,9 @@
 
 ## Remaining Issues
 
-No verified CRITICAL/HIGH application-code fix is currently outstanding after this independent pass. Owner setup is still required to enter the real private lesson-room URL in Owner Settings; no meeting URL was assumed or read from the local database. Remote production deployment and the reported `b11` backup/isolation were not verified from this shell.
+- **FA-004 — HIGH / TODO — Production release drift:** the local V3 student portal and article routes are implemented, but the last independently observed Hostinger release returned 404 for `/arabictutor/student/login` and `/arabictutor/articles`. Deploy the reviewed revision, run the documented migrations/backfill/cache/worker sequence, and smoke-test the real `/arabictutor` base path.
+- **FA-005 — HIGH / TODO — Production operations not proven:** local scheduler, queue-health, backup, off-host, and restore capabilities exist, but target-host cron/worker execution, off-host artifact creation, alerting, and restore evidence are not available from this shell. Configure and prove those operations before production approval.
+- Owner setup is still required to enter the real private lesson-room URL in Owner Settings; no meeting URL was assumed or read from the local database. This is configuration, not an application-code defect.
 
 ## Resolved During This V3 Pass
 
@@ -36,10 +38,13 @@ No verified CRITICAL/HIGH application-code fix is currently outstanding after th
 - **V3 unchecked form metadata:** `FormController::validatedMetadata()` previously left `is_mandatory` and `can_edit_after_submission` unchanged when browser checkboxes were unchecked and omitted from the request. It now normalizes missing values to `false`; `FormsEngineTest::test_unchecked_form_metadata_checkboxes_are_saved_as_false` passes.
 - **V3 canonical admin student search:** `StudentController::index()` previously lowercased the raw query rather than reusing `StudentIdentityService`, causing punctuation-normalized names and formatted E.164 phone searches to miss records. It now searches normalized name/email and validates explicit international phone input without guessing a country. `AdministratorAuthorizationTest::test_admin_student_search_uses_canonical_name_and_international_phone_normalization` passes.
 - **V3 held upcoming bookings:** `DashboardController::index()` previously omitted future `held` bookings from the required Upcoming sessions card. It now includes `held` alongside `confirmed` and legacy `pending`; `StudentReschedulingTest::test_student_dashboard_lists_future_held_bookings_as_upcoming` passes.
+- **Final audit remediation FA-001 (HIGH):** Generic page HTML had a raw public rendering trust boundary. Added `app/Domains/CMS/Services/RichTextSanitizer.php`, applied it to page create/update/translation/draft/restore paths and `PageController` public/preview rendering, and added `tests/Feature/FinalAuditRemediationTest.php` malicious English/translation/restore coverage.
+- **Final audit remediation FA-002 (HIGH):** Authenticated student rescheduling previously shared the empty token limiter bucket. `AppServiceProvider` now keys student attempts by session student and booking while retaining token and IP buckets; cross-student isolation is covered by `FinalAuditRemediationTest`.
+- **Final audit remediation FA-003 (HIGH):** Dashboard/report 7/30/90 presets included an extra Cairo calendar day. `AnalyticsDashboardController` and `ReportController` now use 6/29/89-day offsets; exact-boundary coverage is in `FinalAuditRemediationTest`.
 
 ## Verification Baseline
 
-- Latest full PHPUnit/Laravel run: **INDEPENDENT PASS — 468 tests, 2,919 assertions, 0 failures/errors** on MariaDB using Herd PHP 8.4.25 and `bolt_landing_test`. The prior 465-test / 2,909-assertion baseline is superseded.
+- Latest full PHPUnit/Laravel run: **INDEPENDENT PASS — 472 tests, 2,977 assertions, 0 failures/errors** on MariaDB using Herd PHP 8.4.25 and `bolt_landing_test`. The prior 468-test / 2,919-assertion baseline is superseded.
 - Focused latest regressions for admin settings, meeting-link presentation/ICS, student rescheduling, booking locks, and merge locks: **41 tests, 322 assertions**. Preview/RBAC/CMS focused suite: **25 tests, 239 assertions**.
 - Production frontend build: **INDEPENDENT PASS** (Vite 8.3.0, 2.76 seconds; only the optional Fontaine optimization warning).
 - Laravel Pint: **PASS under Herd PHP 8.4.25**.
@@ -57,5 +62,5 @@ No verified CRITICAL/HIGH application-code fix is currently outstanding after th
 - Frontend production build: **INDEPENDENT PASS — Vite 8.3.0, 2.76 seconds**; optional Fontaine optimization warning only.
 - Test database isolation: `phpunit.xml` points to `bolt_landing_test`; the project `.env` points to `bolt_landing` on port 3307.
 - Migration status: **44 Ran / 0 Pending**; `db:verify-capability` detected MariaDB 10.11.18 and verified the student FK; backfill dry run made no changes and returned zero rows in every outcome category.
-- Full suite: **468 passed / 2,919 assertions**; Pint and Blade compilation passed; scheduler lists five tasks. Herd PHP 8.4.25 was explicitly invoked for PHP checks.
+- Full suite: **472 passed / 2,977 assertions**; Pint and Blade compilation passed; scheduler lists five tasks. Herd PHP 8.4.25 was explicitly invoked for PHP checks.
 - The owner-reported backup and sibling `b11` state remain unverified from this shell, as does any remote production deployment.

@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class TranslationService
 {
+    public function __construct(private RichTextSanitizer $sanitizer) {}
+
     /**
      * Update English source content and handle revisioning + staleness marking.
      */
@@ -16,6 +18,8 @@ class TranslationService
         array $translatableData,
         ?int $adminId = null
     ): EntityTranslationRevision {
+        $translatableData = $this->sanitizeTranslatableData($entity, $translatableData);
+
         return DB::transaction(function () use ($entity, $translatableData, $adminId) {
             $entityId = $entity->getKey();
             $entity = $entity->newQuery()->whereKey($entityId)->lockForUpdate()->firstOrFail();
@@ -90,6 +94,7 @@ class TranslationService
      */
     public function upsertEnglishTranslation(Model $entity, array $translatableData, int $revisionNumber): Model
     {
+        $translatableData = $this->sanitizeTranslatableData($entity, $translatableData);
         $transClass = $entity->getTranslationModelClass();
         $foreignKey = $entity->getForeignKey();
 
@@ -127,6 +132,8 @@ class TranslationService
         if (! in_array($locale, ['fr', 'de'], true)) {
             throw new \InvalidArgumentException('Drafts can only be saved for localized languages (fr, de).');
         }
+
+        $translatableData = $this->sanitizeTranslatableData($entity, $translatableData);
 
         return DB::transaction(function () use ($entity, $locale, $translatableData, $sourceRevisionId) {
             $entity = $entity->newQuery()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
@@ -233,5 +240,21 @@ class TranslationService
         $currentRevisionNumber = $entity->currentSourceRevision()?->revision_number ?? 1;
 
         return (int) $draft->source_revision_id < (int) $currentRevisionNumber;
+    }
+
+    /**
+     * Sanitize rich page content at the service boundary so controller and
+     * programmatic translation writes share the same HTML trust policy.
+     *
+     * @param  array<string, mixed>  $translatableData
+     * @return array<string, mixed>
+     */
+    private function sanitizeTranslatableData(Model $entity, array $translatableData): array
+    {
+        if ($entity->getEntityType() === 'page' && array_key_exists('content', $translatableData)) {
+            $translatableData['content'] = $this->sanitizer->sanitize((string) $translatableData['content']);
+        }
+
+        return $translatableData;
     }
 }

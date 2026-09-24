@@ -70,10 +70,15 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('booking-reschedule', function (Request $request) {
             $token = (string) $request->route('token');
+            $booking = (string) $request->route('booking');
+            $studentId = (string) $request->session()->get('student_id', 'anonymous');
+            $identityKey = $token !== ''
+                ? 'reschedule:token:'.$token
+                : 'reschedule:student:'.$studentId.':booking:'.$booking;
 
             return [
                 Limit::perMinute(10)->by($request->ip()),
-                Limit::perMinute(5)->by('reschedule:token:'.$token),
+                Limit::perMinute(5)->by($identityKey),
             ];
         });
 

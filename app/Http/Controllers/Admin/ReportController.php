@@ -243,11 +243,11 @@ class ReportController extends Controller
 
         [$startCairo, $endCairo] = match ($range) {
             'today' => [$now->startOfDay(), $now->endOfDay()],
-            '7d' => [$now->subDays(7)->startOfDay(), $now->endOfDay()],
-            '90d' => [$now->subDays(90)->startOfDay(), $now->endOfDay()],
+            '7d' => [$now->subDays(6)->startOfDay(), $now->endOfDay()],
+            '90d' => [$now->subDays(89)->startOfDay(), $now->endOfDay()],
             'this_month' => [$now->startOfMonth(), $now->endOfMonth()],
             'last_month' => [$now->subMonth()->startOfMonth(), $now->subMonth()->endOfMonth()],
-            default => [$now->subDays(30)->startOfDay(), $now->endOfDay()],
+            default => [$now->subDays(29)->startOfDay(), $now->endOfDay()],
         };
 
         return [

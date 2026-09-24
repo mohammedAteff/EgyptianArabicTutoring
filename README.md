@@ -7,9 +7,11 @@ Production-grade, self-hosted web application for an independent Egyptian Arabic
 ## 1. Project Purpose
 
 The platform serves three primary visitor conversion flows:
-1. **Book**: Schedule private 1-on-1 Egyptian Arabic tutoring sessions with dual-timezone rendering and hold reservation locks. Cancellation remains available through the secure booking link; rescheduling is handled directly by the tutor/admin team.
+1. **Book**: Schedule private 1-on-1 Egyptian Arabic tutoring sessions with dual-timezone rendering and hold reservation locks. Public booking remains a lightweight intake flow; verified students can use the private portal for package-credit bookings and eligible self-service rescheduling, while cancellation remains available through the secure booking link.
 2. **Learn**: Browse a structured library of educational resources, download curriculum workbooks, and acquire gated leads.
 3. **Play**: Engage with educational vocabulary games designed for street and conversational fluency.
+4. **Student portal**: Verified students can review upcoming lessons, submit versioned forms, use package credits, and manage eligible sessions without exposing another student's records.
+5. **Articles**: Administrators can publish sanitized, revisioned learning articles with safe media and slug redirects.
 
 The platform is designed as a **modular monolith** adhering to:
 > **One application. One database. One source of truth.** No reliance on external booking SaaS (Calendly), analytics SaaS (Google Analytics), or form SaaS (Typeform).
@@ -183,7 +185,7 @@ php artisan queue:work --sleep=3 --tries=3 --timeout=90
 4. **Lifecycle & Policy Enforcement**:
     - State transition rules: only active `confirmed` or `pending` bookings can be cancelled or rescheduled by authorized workflows.
    - Completed, cancelled, and student no-show records are immutable via public tokens.
-    - Enforces configurable cutoff windows for public cancellation and admin/direct-contact rescheduling.
+    - Enforces configurable cutoff windows for public cancellation, authenticated student self-service rescheduling, and admin rescheduling.
 
 ---
 
@@ -257,19 +259,33 @@ php artisan test
 
 ## 13. Deployment Runbook
 
-1. Pull code to production server.
-2. Ensure PHP 8.4, Composer, Node.js, and MariaDB 10.4+ are installed.
-3. Configure production `.env` with `APP_ENV=production`, `APP_DEBUG=false`, and real database/mail credentials.
-4. Run deployment steps:
+1. Put the application in the approved maintenance/release window and take a verified full backup before schema changes.
+2. Pull the reviewed commit to the production server.
+3. Ensure PHP 8.4, Composer, Node.js, and MariaDB 10.4+ are installed.
+4. Configure production `.env` with `APP_ENV=production`, `APP_DEBUG=false`, real database/mail credentials, and a non-local `BACKUP_OFFSITE_DISK` whose disk credentials are supplied by the host secret store.
+5. Verify the database vendor, release, and required student foreign key before applying V3 migrations:
+   ```bash
+   php artisan db:verify-capability
+   php artisan migrate --force
+   php artisan migrate:students-backfill --dry-run
+   php artisan migrate:students-backfill --apply
+   ```
+   Stop if the capability gate, dry run, or backup verification fails. Never disable foreign-key checks to bypass the gate.
+6. Install dependencies and build the reviewed assets:
    ```bash
    composer install --no-dev --optimize-autoloader
    npm ci && npm run build
-   php artisan migrate --force
    php artisan config:cache
    php artisan route:cache
    php artisan view:cache
    php artisan storage:link
    ```
-5. Ensure Supervisor or systemd manages queue worker (`php artisan queue:work`).
-6. Ensure crontab invokes `php artisan schedule:run` every minute.
-7. Verify health dashboard at `/admin/health`.
+7. Restart the supervised queue worker after the release (`php artisan queue:restart`) and ensure Supervisor/systemd continues managing `php artisan queue:work --sleep=3 --tries=3 --timeout=90`.
+8. Ensure crontab invokes `php artisan schedule:run` every minute.
+9. Run and verify the first production backup and off-host copy:
+   ```bash
+   php artisan backup:run --type=full --clean
+   php artisan schedule:list
+   ```
+   Confirm the health dashboard records fresh scheduler, queue, backup, and off-host timestamps. Perform the documented isolated restore drill before removing the previous release.
+10. Smoke-test the actual base path, including `/student/login`, `/articles`, public booking, admin login, authenticated student dashboard/forms/booking/rescheduling, private resource downloads, and `/admin/health`.
