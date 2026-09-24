@@ -59,6 +59,7 @@ class SettingController extends Controller
             'booking_reschedule_cutoff_hours' => ['nullable', 'integer', 'min:0', 'max:168'],
             'rescheduling_policy' => ['required', 'string', 'max:2000'],
             'booking_instructions' => ['required', 'string', 'max:2000'],
+            'video_meeting_url' => ['nullable', 'string', 'max:2048', 'url:https'],
             'maintenance_mode' => ['nullable', 'boolean'],
         ]);
 
@@ -70,7 +71,7 @@ class SettingController extends Controller
         foreach ($validated as $key => $value) {
             $group = match ($key) {
                 'site_name', 'default_language', 'maintenance_mode', 'site_footer_text' => 'general',
-                'business_timezone', 'cancellation_policy', 'booking_cancellation_cutoff_hours', 'booking_reschedule_cutoff_hours', 'rescheduling_policy', 'booking_instructions' => 'booking',
+                'business_timezone', 'cancellation_policy', 'booking_cancellation_cutoff_hours', 'booking_reschedule_cutoff_hours', 'rescheduling_policy', 'booking_instructions', 'video_meeting_url' => 'booking',
                 'hero_title', 'hero_subtitle', 'home_approach_badge', 'home_approach_title', 'home_approach_intro', 'home_resources_badge', 'home_resources_title', 'home_resources_subtitle', 'home_games_badge', 'home_games_title', 'home_games_subtitle', 'home_cta_title', 'home_cta_subtitle', 'home_cta_button' => 'homepage',
                 'about_biography', 'about_philosophy', 'about_image_path' => 'about',
                 default => 'general',

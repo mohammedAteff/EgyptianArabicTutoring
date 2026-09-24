@@ -37,8 +37,13 @@ class SocialLink extends Model
     public function getFormattedUrl(): string
     {
         if ($this->platform === 'whatsapp') {
-            // Strip non-numeric characters from phone
+            if (! preg_match('/^\+?[1-9][0-9\s().-]{6,22}$/', trim($this->url_or_phone))) {
+                return '#';
+            }
             $cleanPhone = preg_replace('/[^0-9]/', '', $this->url_or_phone);
+            if (strlen((string) $cleanPhone) < 8 || strlen((string) $cleanPhone) > 15) {
+                return '#';
+            }
             $url = "https://wa.me/{$cleanPhone}";
             if (! empty($this->default_message)) {
                 $url .= '?text='.urlencode($this->default_message);
@@ -47,12 +52,21 @@ class SocialLink extends Model
             return $url;
         }
 
-        if ($this->platform === 'telegram' && ! str_starts_with($this->url_or_phone, 'http')) {
-            $cleanHandle = ltrim($this->url_or_phone, '@');
+        if ($this->platform === 'telegram' && preg_match('/^@?[A-Za-z0-9_]{5,32}$/', trim($this->url_or_phone))) {
+            $cleanHandle = ltrim(trim($this->url_or_phone), '@');
 
             return "https://t.me/{$cleanHandle}";
         }
 
-        return $this->url_or_phone;
+        $parts = parse_url(trim($this->url_or_phone));
+        if (! is_array($parts)
+            || ! in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || empty($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])) {
+            return '#';
+        }
+
+        return trim($this->url_or_phone);
     }
 }

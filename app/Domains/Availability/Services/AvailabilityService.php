@@ -55,11 +55,11 @@ class AvailabilityService
         $searchHorizonDays = max($defaultMaxHorizonDays, (int) $ruleMaxHorizon);
 
         $startSearchBusiness = $fromDate
-            ? CarbonImmutable::instance($fromDate)->setTimezone($businessTz)->startOfDay()
+            ? CarbonImmutable::instance($fromDate)->setTimezone($customerTz)->startOfDay()->setTimezone($businessTz)->startOfDay()
             : $nowBusiness->startOfDay();
 
         $endSearchBusiness = $toDate
-            ? CarbonImmutable::instance($toDate)->setTimezone($businessTz)->endOfDay()
+            ? CarbonImmutable::instance($toDate)->setTimezone($customerTz)->endOfDay()->setTimezone($businessTz)->endOfDay()
             : $nowBusiness->addDays($searchHorizonDays)->endOfDay();
 
         $startSearchUtc = $startSearchBusiness->setTimezone('UTC');
@@ -245,6 +245,9 @@ class AvailabilityService
                         'business_date' => $dateString,
                         'business_timezone' => $businessTz,
                         'duration_minutes' => $slotDurationMinutes,
+                        'buffer_minutes' => $bufferMinutes,
+                        'min_notice_hours' => $minNotice,
+                        'max_horizon_days' => $maxHorizon,
                     ];
 
                     $groupedSlots[$customerDate][] = $slotData;
@@ -334,26 +337,22 @@ class AvailabilityService
         CarbonInterface $endUtc,
         ?int $bufferMinutes = null
     ): array {
-        $businessTz = $this->timezoneService->getBusinessTimezone();
-        $buffer = $bufferMinutes ?? $this->resolveEffectiveBuffer($startUtc);
+        return $this->acquireCalendarDateLocksForIntervals([[
+            'start' => $startUtc,
+            'end' => $endUtc,
+            'buffer' => $bufferMinutes,
+        ]]);
+    }
 
-        $startUtcImmutable = CarbonImmutable::instance($startUtc);
-        $endUtcImmutable = CarbonImmutable::instance($endUtc);
-
-        $startBusinessWithBuffer = $startUtcImmutable->subMinutes($buffer)->setTimezone($businessTz);
-        $endBusinessWithBuffer = $endUtcImmutable->addMinutes($buffer)->setTimezone($businessTz);
-
-        $dates = [];
-        $current = $startBusinessWithBuffer->startOfDay();
-        $endDay = $endBusinessWithBuffer->startOfDay();
-
-        while ($current <= $endDay) {
-            $dates[] = $current->toDateString();
-            $current = $current->addDay();
-        }
-
-        $dates = array_values(array_unique($dates));
-        sort($dates); // Consistent ordering prevents deadlocks across multi-date spans
+    /**
+     * Acquire all calendar mutex rows for several booking windows in one globally sorted order.
+     *
+     * @param  array<int, array{start: CarbonInterface, end: CarbonInterface, buffer?: int|null}>  $intervals
+     * @return array<int, string>
+     */
+    public function acquireCalendarDateLocksForIntervals(array $intervals): array
+    {
+        $dates = $this->calendarDatesForIntervals($intervals);
 
         foreach ($dates as $date) {
             DB::table('booking_calendar_locks')->insertOrIgnore([
@@ -367,6 +366,36 @@ class AvailabilityService
                 ->lockForUpdate()
                 ->first();
         }
+
+        return $dates;
+    }
+
+    /**
+     * Calculate the business-date mutex keys for booking windows without acquiring them.
+     *
+     * @param  array<int, array{start: CarbonInterface, end: CarbonInterface, buffer?: int|null}>  $intervals
+     * @return array<int, string>
+     */
+    public function calendarDatesForIntervals(array $intervals): array
+    {
+        $businessTz = $this->timezoneService->getBusinessTimezone();
+        $dates = [];
+
+        foreach ($intervals as $interval) {
+            $buffer = $interval['buffer'] ?? $this->resolveEffectiveBuffer($interval['start']);
+            $startBusinessWithBuffer = CarbonImmutable::instance($interval['start'])->subMinutes($buffer)->setTimezone($businessTz);
+            $endBusinessWithBuffer = CarbonImmutable::instance($interval['end'])->addMinutes($buffer)->setTimezone($businessTz);
+            $current = $startBusinessWithBuffer->startOfDay();
+            $endDay = $endBusinessWithBuffer->startOfDay();
+
+            while ($current <= $endDay) {
+                $dates[] = $current->toDateString();
+                $current = $current->addDay();
+            }
+        }
+
+        $dates = array_values(array_unique($dates));
+        sort($dates);
 
         return $dates;
     }

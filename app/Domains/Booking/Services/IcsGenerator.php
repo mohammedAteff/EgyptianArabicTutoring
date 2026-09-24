@@ -3,11 +3,12 @@
 namespace App\Domains\Booking\Services;
 
 use App\Domains\Booking\Models\Booking;
-use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 
 class IcsGenerator
 {
+    public function __construct(private MeetingLinkService $meetingLinks) {}
+
     /**
      * Generate RFC 5545 compliant .ics string for a confirmed booking.
      */
@@ -20,13 +21,13 @@ class IcsGenerator
         $sessionTitle = $this->escape($booking->sessionType?->title ?? config('business.site_name').' Session');
         $confirmationUrl = url("/booking/confirmation/{$booking->confirmation_token}");
 
-        $meetingUrl = Setting::get('video_meeting_url', 'https://meet.google.com');
+        $meetingUrl = $this->meetingLinks->current();
 
         $descriptionText = config('business.site_name').' Session\\n'
             ."Booking Reference: {$booking->confirmation_token}\\n"
             ."Student Time: {$booking->customer_local_date_at_booking?->format('Y-m-d')} {$booking->customer_local_start_time_at_booking} ({$booking->customer_timezone})\\n"
             ."Tutor Time: {$booking->business_local_date_at_booking?->format('Y-m-d')} {$booking->business_local_start_time_at_booking} ({$booking->business_timezone})\\n"
-            ."Video Classroom: {$meetingUrl}\\n"
+            .($meetingUrl ? "Video Classroom: {$meetingUrl}\\n" : '')
             ."Confirmation & Management: {$confirmationUrl}";
 
         $description = $this->escape($descriptionText);
@@ -45,7 +46,7 @@ class IcsGenerator
             "DTEND:{$dtEnd}",
             "SUMMARY:{$sessionTitle}",
             "DESCRIPTION:{$description}",
-            "LOCATION:{$meetingUrl}",
+            ...($meetingUrl ? ["LOCATION:{$meetingUrl}"] : []),
             "URL:{$confirmationUrl}",
             'STATUS:CONFIRMED',
             'END:VEVENT',

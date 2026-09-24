@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\FormController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\PasswordResetController;
@@ -15,16 +16,25 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ResourceCategoryController;
 use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\StudentBillingController;
+use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SystemHealthController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\ArticleController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\Student\AuthController as StudentAuthController;
+use App\Http\Controllers\Student\BookingController as StudentBookingController;
+use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
+use App\Http\Controllers\Student\FormController as StudentFormController;
+use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
+use App\Http\Middleware\EnsureAdminPreviewAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -43,6 +53,21 @@ Route::get('/de', [HomeController::class, 'index'])->name('home.de');
 Route::get('/_arabictutor-landing', [HomeController::class, 'index'])->name('home.internal');
 
 // Native Booking System
+Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders::class)->group(function () {
+    Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
+    Route::middleware('student.auth')->group(function () {
+        Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/forms/{slug}', [StudentFormController::class, 'show'])->name('forms.show');
+        Route::post('/forms/{slug}', [StudentFormController::class, 'save'])->middleware('throttle:student-form-save')->name('forms.save');
+        Route::get('/bookings/create', [StudentBookingController::class, 'create'])->name('bookings.create');
+        Route::post('/bookings', [StudentBookingController::class, 'store'])->middleware('throttle:student-booking-finalize')->name('bookings.store');
+        Route::get('/bookings/{booking}/reschedule', [StudentRescheduleController::class, 'show'])->name('bookings.reschedule');
+        Route::post('/bookings/{booking}/reschedule', [StudentRescheduleController::class, 'update'])->middleware('throttle:booking-reschedule')->name('bookings.reschedule.submit');
+        Route::post('/logout', [StudentAuthController::class, 'logout'])->name('logout');
+    });
+});
+
 Route::get('/booking', [BookingController::class, 'index'])->name('booking.index');
 Route::get('/book', function (Request $request) {
     $queryString = $request->server->get('QUERY_STRING') ?: $request->getQueryString();
@@ -134,8 +159,11 @@ Route::get('/p/{slug}', [PageController::class, 'show'])->name('page.show');
 Route::get('/fr/p/{slug}', [PageController::class, 'show'])->name('page.show.fr');
 Route::get('/de/p/{slug}', [PageController::class, 'show'])->name('page.show.de');
 
-// Authenticated / Signed Draft Preview Routes (Section 49 & Section 33)
-Route::middleware(ApplyAdminNoindexHeaders::class)->group(function () {
+Route::get('/articles', [ArticleController::class, 'index'])->name('articles.index');
+Route::get('/articles/{slug}', [ArticleController::class, 'show'])->where('slug', '[A-Za-z0-9-]+')->name('articles.show');
+
+// Authenticated admin draft previews (Section 49 & Section 33)
+Route::middleware([ApplyAdminNoindexHeaders::class, EnsureAdminPreviewAccess::class])->group(function () {
     Route::get('/preview/home', [HomeController::class, 'preview'])->name('home.preview');
     Route::get('/about/preview', [PageController::class, 'previewAbout'])->name('about.preview');
     Route::get('/p/{slug}/preview', [PageController::class, 'preview'])->name('pages.preview');
@@ -170,97 +198,143 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     |--------------------------------------------------------------------------
     */
     Route::middleware('auth:web')->group(function () {
-        Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
-        Route::get('/dashboard', [DashboardController::class, 'index']);
+        Route::get('/', [DashboardController::class, 'index'])->middleware('role:super_admin,admin')->name('dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('role:super_admin,admin');
 
         // Bookings
         Route::get('/bookings', [App\Http\Controllers\Admin\BookingController::class, 'index'])->name('bookings.index');
-        Route::get('/bookings/create', [App\Http\Controllers\Admin\BookingController::class, 'create'])->name('bookings.create');
-        Route::post('/bookings', [App\Http\Controllers\Admin\BookingController::class, 'store'])->name('bookings.store');
+        Route::get('/bookings/create', [App\Http\Controllers\Admin\BookingController::class, 'create'])->middleware('role:super_admin,admin')->name('bookings.create');
+        Route::post('/bookings', [App\Http\Controllers\Admin\BookingController::class, 'store'])->middleware('role:super_admin,admin')->name('bookings.store');
         Route::get('/bookings/{booking}', [App\Http\Controllers\Admin\BookingController::class, 'show'])->name('bookings.show');
-        Route::patch('/bookings/{booking}/notes', [App\Http\Controllers\Admin\BookingController::class, 'updateNotes'])->name('bookings.notes');
-        Route::post('/bookings/{booking}/complete', [App\Http\Controllers\Admin\BookingController::class, 'complete'])->name('bookings.complete');
-        Route::post('/bookings/{booking}/no-show', [App\Http\Controllers\Admin\BookingController::class, 'markNoShow'])->name('bookings.no-show');
+        Route::patch('/bookings/{booking}/notes', [App\Http\Controllers\Admin\BookingController::class, 'updateNotes'])->middleware('role:super_admin,admin')->name('bookings.notes');
+        Route::post('/bookings/{booking}/complete', [App\Http\Controllers\Admin\BookingController::class, 'complete'])->middleware('role:super_admin,admin')->name('bookings.complete');
+        Route::post('/bookings/{booking}/no-show', [App\Http\Controllers\Admin\BookingController::class, 'markNoShow'])->middleware('role:super_admin,admin')->name('bookings.no-show');
         Route::post('/bookings/{booking}/reschedule', [App\Http\Controllers\Admin\BookingController::class, 'reschedule'])->name('bookings.reschedule');
-        Route::post('/bookings/{booking}/cancel', [App\Http\Controllers\Admin\BookingController::class, 'cancel'])->name('bookings.cancel');
+        Route::post('/bookings/{booking}/cancel', [App\Http\Controllers\Admin\BookingController::class, 'cancel'])->middleware('role:super_admin,admin')->name('bookings.cancel');
 
         // Availability
-        Route::get('/availability', [AvailabilityController::class, 'index'])->name('availability.index');
-        Route::post('/availability/rules', [AvailabilityController::class, 'storeRule'])->name('availability.rules.store');
-        Route::post('/availability/rules/{rule}/toggle', [AvailabilityController::class, 'toggleRule'])->name('availability.toggle');
-        Route::delete('/availability/rules/{rule}', [AvailabilityController::class, 'destroyRule'])->name('availability.destroy');
-        Route::post('/availability/exceptions', [AvailabilityController::class, 'storeException'])->name('availability.exceptions.store');
-        Route::delete('/availability/exceptions/{exception}', [AvailabilityController::class, 'destroyException'])->name('availability.exception.destroy');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/availability', [AvailabilityController::class, 'index'])->name('availability.index');
+            Route::post('/availability/rules', [AvailabilityController::class, 'storeRule'])->name('availability.rules.store');
+            Route::post('/availability/rules/{rule}/toggle', [AvailabilityController::class, 'toggleRule'])->name('availability.toggle');
+            Route::delete('/availability/rules/{rule}', [AvailabilityController::class, 'destroyRule'])->name('availability.destroy');
+            Route::post('/availability/exceptions', [AvailabilityController::class, 'storeException'])->name('availability.exceptions.store');
+            Route::delete('/availability/exceptions/{exception}', [AvailabilityController::class, 'destroyException'])->name('availability.exception.destroy');
+        });
 
         // Contacts & Leads
         Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
         Route::get('/leads', [ContactController::class, 'leads'])->name('leads');
         Route::get('/contacts/duplicates', [ContactController::class, 'duplicates'])->name('contacts.duplicates');
-        Route::post('/contacts/merge', [ContactController::class, 'merge'])->name('contacts.merge');
+        Route::post('/contacts/merge', [ContactController::class, 'merge'])->middleware('role:super_admin,admin')->name('contacts.merge');
         Route::get('/contacts/{contact}', [ContactController::class, 'show'])->name('contacts.show');
-        Route::patch('/contacts/{contact}/notes', [ContactController::class, 'updateNotes'])->name('contacts.notes');
+        Route::patch('/contacts/{contact}/notes', [ContactController::class, 'updateNotes'])->middleware('role:super_admin,admin')->name('contacts.notes');
 
         // Resources & Categories
-        Route::resource('resource-categories', ResourceCategoryController::class)->except(['show']);
-        Route::get('/resources', [App\Http\Controllers\Admin\ResourceController::class, 'index'])->name('resources.index');
-        Route::get('/resources/create', [App\Http\Controllers\Admin\ResourceController::class, 'create'])->name('resources.create');
-        Route::post('/resources', [App\Http\Controllers\Admin\ResourceController::class, 'store'])->name('resources.store');
-        Route::get('/resources/{resource}/edit', [App\Http\Controllers\Admin\ResourceController::class, 'edit'])->name('resources.edit');
-        Route::put('/resources/{resource}', [App\Http\Controllers\Admin\ResourceController::class, 'update'])->name('resources.update');
-        Route::delete('/resources/{resource}', [App\Http\Controllers\Admin\ResourceController::class, 'destroy'])->name('resources.destroy');
-        Route::delete('/resources/{resource}/draft', [App\Http\Controllers\Admin\ResourceController::class, 'discardDraft'])->name('resources.draft.destroy');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::resource('resource-categories', ResourceCategoryController::class)->except(['show']);
+            Route::get('/resources', [App\Http\Controllers\Admin\ResourceController::class, 'index'])->name('resources.index');
+            Route::get('/resources/create', [App\Http\Controllers\Admin\ResourceController::class, 'create'])->name('resources.create');
+            Route::post('/resources', [App\Http\Controllers\Admin\ResourceController::class, 'store'])->name('resources.store');
+            Route::get('/resources/{resource}/edit', [App\Http\Controllers\Admin\ResourceController::class, 'edit'])->name('resources.edit');
+            Route::put('/resources/{resource}', [App\Http\Controllers\Admin\ResourceController::class, 'update'])->name('resources.update');
+            Route::delete('/resources/{resource}', [App\Http\Controllers\Admin\ResourceController::class, 'destroy'])->name('resources.destroy');
+            Route::delete('/resources/{resource}/draft', [App\Http\Controllers\Admin\ResourceController::class, 'discardDraft'])->name('resources.draft.destroy');
+        });
 
         // Games Lifecycle Management
-        Route::get('/games', [App\Http\Controllers\Admin\GameController::class, 'index'])->name('games.index');
-        Route::get('/games/create', [App\Http\Controllers\Admin\GameController::class, 'create'])->name('games.create');
-        Route::post('/games', [App\Http\Controllers\Admin\GameController::class, 'store'])->name('games.store');
-        Route::get('/games/{game}/edit', [App\Http\Controllers\Admin\GameController::class, 'edit'])->name('games.edit');
-        Route::put('/games/{game}', [App\Http\Controllers\Admin\GameController::class, 'update'])->name('games.update');
-        Route::delete('/games/{game}', [App\Http\Controllers\Admin\GameController::class, 'destroy'])->name('games.destroy');
-        Route::delete('/games/{game}/draft', [App\Http\Controllers\Admin\GameController::class, 'discardDraft'])->name('games.draft.destroy');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/games', [App\Http\Controllers\Admin\GameController::class, 'index'])->name('games.index');
+            Route::get('/games/create', [App\Http\Controllers\Admin\GameController::class, 'create'])->name('games.create');
+            Route::post('/games', [App\Http\Controllers\Admin\GameController::class, 'store'])->name('games.store');
+            Route::get('/games/{game}/edit', [App\Http\Controllers\Admin\GameController::class, 'edit'])->name('games.edit');
+            Route::put('/games/{game}', [App\Http\Controllers\Admin\GameController::class, 'update'])->name('games.update');
+            Route::delete('/games/{game}', [App\Http\Controllers\Admin\GameController::class, 'destroy'])->name('games.destroy');
+            Route::delete('/games/{game}/draft', [App\Http\Controllers\Admin\GameController::class, 'discardDraft'])->name('games.draft.destroy');
+        });
 
         // Internal Notifications Center
-        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
-        Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
-        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
-        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+            Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
+            Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+            Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        });
 
         // Content & FAQs
-        Route::get('/content', [ContentController::class, 'index'])->name('content.index');
-        Route::post('/content/faqs', [ContentController::class, 'storeFaq'])->name('content.faq.store');
-        Route::put('/content/faqs/{faq}', [ContentController::class, 'updateFaq'])->name('content.faq.update');
-        Route::delete('/content/faqs/{faq}', [ContentController::class, 'destroyFaq'])->name('content.faq.destroy');
-        Route::delete('/content/faqs/{faq}/draft', [ContentController::class, 'discardFaqDraft'])->name('content.faq.draft.destroy');
-        Route::post('/content/social', [ContentController::class, 'updateSocial'])->name('content.social.update');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/content', [ContentController::class, 'index'])->name('content.index');
+            Route::post('/content/faqs', [ContentController::class, 'storeFaq'])->name('content.faq.store');
+            Route::put('/content/faqs/{faq}', [ContentController::class, 'updateFaq'])->name('content.faq.update');
+            Route::delete('/content/faqs/{faq}', [ContentController::class, 'destroyFaq'])->name('content.faq.destroy');
+            Route::delete('/content/faqs/{faq}/draft', [ContentController::class, 'discardFaqDraft'])->name('content.faq.draft.destroy');
+            Route::post('/content/social', [ContentController::class, 'updateSocial'])->name('content.social.update');
+            Route::post('/content/social/add', [ContentController::class, 'storeSocial'])->name('content.social.store');
+            Route::post('/content/social/{socialLink}/toggle', [ContentController::class, 'toggleSocial'])->name('content.social.toggle');
+        });
 
         // CMS Custom Pages & Revisions
-        Route::resource('pages', App\Http\Controllers\Admin\PageController::class)->except(['show']);
-        Route::delete('/pages/{page}/draft', [App\Http\Controllers\Admin\PageController::class, 'discardDraft'])->name('pages.draft.destroy');
-        Route::post('/pages/{page}/revisions/{revision}/restore', [App\Http\Controllers\Admin\PageController::class, 'restoreRevision'])->name('pages.revisions.restore');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::resource('pages', App\Http\Controllers\Admin\PageController::class)->except(['show']);
+            Route::delete('/pages/{page}/draft', [App\Http\Controllers\Admin\PageController::class, 'discardDraft'])->name('pages.draft.destroy');
+            Route::post('/pages/{page}/revisions/{revision}/restore', [App\Http\Controllers\Admin\PageController::class, 'restoreRevision'])->name('pages.revisions.restore');
+        });
 
         // Translations & Multilingual CMS Revisions
-        Route::post('/translations/{entityType}/{id}/{locale}/draft', [TranslationController::class, 'saveDraft'])->name('translations.save-draft');
-        Route::post('/translations/{entityType}/{id}/{locale}/publish', [TranslationController::class, 'publish'])->name('translations.publish');
-        Route::get('/translations/{entityType}/{id}/{locale}/reconcile', [TranslationController::class, 'reconcile'])->name('translations.reconcile');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::post('/translations/{entityType}/{id}/{locale}/draft', [TranslationController::class, 'saveDraft'])->name('translations.save-draft');
+            Route::post('/translations/{entityType}/{id}/{locale}/publish', [TranslationController::class, 'publish'])->name('translations.publish');
+            Route::get('/translations/{entityType}/{id}/{locale}/reconcile', [TranslationController::class, 'reconcile'])->name('translations.reconcile');
+        });
+
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::patch('/students/{student}', [StudentController::class, 'update'])->name('students.update');
+            Route::post('/students/{student}/packages', [StudentBillingController::class, 'storePackage'])->name('students.packages.store');
+            Route::post('/students/{student}/packages/{package}/payments', [StudentBillingController::class, 'storePayment'])->name('students.payments.store');
+            Route::post('/students/{student}/payments/{payment}/refunds', [StudentBillingController::class, 'storeRefund'])->name('students.refunds.store');
+            Route::post('/students/{student}/packages/{package}/credits', [StudentBillingController::class, 'adjustCredits'])->name('students.credits.adjust');
+
+            Route::resource('articles', App\Http\Controllers\Admin\ArticleController::class)->except(['show', 'destroy']);
+            Route::get('/articles/{article}/preview', [App\Http\Controllers\Admin\ArticleController::class, 'preview'])->name('articles.preview');
+            Route::get('/forms/create', [FormController::class, 'create'])->name('forms.create');
+            Route::post('/forms', [FormController::class, 'store'])->name('forms.store');
+            Route::get('/forms/{form}/edit', [FormController::class, 'edit'])->name('forms.edit');
+            Route::put('/forms/{form}', [FormController::class, 'update'])->name('forms.update');
+            Route::put('/forms/{form}/publish', [FormController::class, 'publish'])->name('forms.publish');
+            Route::post('/forms/{form}/archive', [FormController::class, 'archive'])->name('forms.archive');
+        });
+
+        Route::middleware('role:super_admin,admin,assistant')->group(function () {
+            Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+            Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
+            Route::get('/forms', [FormController::class, 'index'])->name('forms.index');
+            Route::get('/forms/{form}/submissions', [FormController::class, 'submissions'])->name('forms.submissions');
+            Route::get('/forms/{form}/export', [FormController::class, 'export'])->name('forms.export');
+        });
 
         // Media Library
-        Route::get('/media', [MediaController::class, 'index'])->name('media.index');
-        Route::get('/media/picker', [MediaController::class, 'picker'])->name('media.picker');
-        Route::post('/media', [MediaController::class, 'store'])->name('media.store');
-        Route::delete('/media/{media}', [MediaController::class, 'destroy'])->name('media.destroy');
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/media', [MediaController::class, 'index'])->name('media.index');
+            Route::get('/media/picker', [MediaController::class, 'picker'])->name('media.picker');
+            Route::post('/media', [MediaController::class, 'store'])->name('media.store');
+            Route::delete('/media/{media}', [MediaController::class, 'destroy'])->name('media.destroy');
+        });
 
         // Global Search
-        Route::get('/search', [SearchController::class, 'search'])->name('search');
+        Route::get('/search', [SearchController::class, 'search'])->middleware('role:super_admin,admin')->name('search');
 
         // Analytics & Business Funnels
-        Route::get('/analytics', [AnalyticsDashboardController::class, 'index'])->name('analytics');
+        Route::get('/analytics', [AnalyticsDashboardController::class, 'index'])->middleware('role:super_admin,admin')->name('analytics');
 
         // Reports & Data Exports
-        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
-        Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+        Route::get('/reports', [ReportController::class, 'index'])->middleware('role:super_admin,admin')->name('reports.index');
+        Route::get('/reports/export', [ReportController::class, 'export'])->middleware('role:super_admin,admin')->name('reports.export');
 
         // Super Admin Only Privileges
         Route::middleware('role:super_admin')->group(function () {
+            Route::post('/students/{student}/merge', [StudentController::class, 'merge'])->name('students.merge');
+            Route::post('/students/{student}/anonymize', [StudentController::class, 'anonymize'])->name('students.anonymize');
+
             // Settings
             Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
             Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');

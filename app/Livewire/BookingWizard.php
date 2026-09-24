@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
@@ -33,12 +34,17 @@ class BookingWizard extends Component
     #[Locked]
     public ?string $analyticsSessionToken = null;
 
+    #[Locked]
     public string $customerTimezone = 'Africa/Cairo';
+
+    #[Locked]
+    public bool $manualTimezoneSelected = false;
 
     public ?string $timezoneCountryCode = 'EG';
 
     public string $calendarMonth; // Y-m format
 
+    #[Locked]
     public ?string $selectedDate = null; // Y-m-d
 
     #[Locked]
@@ -47,6 +53,10 @@ class BookingWizard extends Component
     #[Locked]
     public ?string $selectedSlotEndUtc = null;
 
+    #[Locked]
+    public ?string $selectedSlotId = null;
+
+    #[Locked]
     public ?array $selectedSlot = null;
 
     #[Locked]
@@ -68,8 +78,10 @@ class BookingWizard extends Component
 
     public string $honeypot = ''; // anti-bot
 
+    #[Locked]
     public string $idempotencyKey = '';
 
+    #[Locked]
     public string $visitorToken = '';
 
     public ?string $errorMessage = null;
@@ -130,6 +142,7 @@ class BookingWizard extends Component
         if (is_array($savedState) && ! empty($savedState['visitor_token'])) {
             if (hash_equals($this->visitorToken, (string) $savedState['visitor_token'])) {
                 $this->customerTimezone = $savedState['customer_timezone'] ?? $this->customerTimezone;
+                $this->manualTimezoneSelected = (bool) ($savedState['manual_timezone_selected'] ?? false);
                 $this->timezoneCountryCode = $savedState['timezone_country_code']
                     ?? app(TimezoneDisplayService::class)->resolveCountryCode($this->customerTimezone);
                 $this->calendarMonth = $savedState['calendar_month'] ?? $this->calendarMonth;
@@ -156,6 +169,7 @@ class BookingWizard extends Component
                         $this->holdExpiresAt = $hold->expires_at->toIso8601String();
                         $this->selectedSlotStartUtc = $savedState['selected_slot_start_utc'] ?? null;
                         $this->selectedSlotEndUtc = $savedState['selected_slot_end_utc'] ?? null;
+                        $this->selectedSlotId = $savedState['selected_slot_id'] ?? null;
                         $this->selectedSlot = $savedState['selected_slot'] ?? null;
                         $this->currentStep = $savedState['current_step'] ?? 3;
                     } else {
@@ -164,6 +178,7 @@ class BookingWizard extends Component
                         $this->holdExpiresAt = null;
                         $this->selectedSlotStartUtc = null;
                         $this->selectedSlotEndUtc = null;
+                        $this->selectedSlotId = null;
                         $this->selectedSlot = null;
                         $this->currentStep = 2;
                         if ($hold && ! $hold->expires_at->isFuture()) {
@@ -179,12 +194,17 @@ class BookingWizard extends Component
 
     public function setDetectedTimezone(string $timezone): void
     {
+        if ($this->manualTimezoneSelected || $this->holdId) {
+            return;
+        }
+
         $timezoneService = app(TimezoneService::class);
         if ($timezoneService->isValid($timezone)) {
             $this->customerTimezone = $timezone;
             $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
             $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
-            // If a date was selected, recalculate slots
+            $this->selectedDate = null;
+            $this->syncSessionState();
         }
     }
 
@@ -193,8 +213,10 @@ class BookingWizard extends Component
         $timezoneService = app(TimezoneService::class);
         if ($timezoneService->isValid($timezone)) {
             $this->customerTimezone = $timezone;
+            $this->manualTimezoneSelected = true;
             $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
             $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
+            $this->selectedDate = null;
             $this->showTimezoneModal = false;
             $this->timezoneSearch = '';
 
@@ -207,20 +229,30 @@ class BookingWizard extends Component
                 $this->selectedSlot = null;
                 $this->selectedSlotStartUtc = null;
                 $this->selectedSlotEndUtc = null;
+                $this->selectedSlotId = null;
                 session()->forget(['active_booking_hold_id', 'active_booking_hold_token']);
                 if ($this->currentStep > 2) {
                     $this->currentStep = 2;
                 }
             }
+
+            $this->syncSessionState();
         }
     }
 
     public function selectSession(int $id): void
     {
+        if (! SessionType::query()->whereKey($id)->where('active', true)->exists()) {
+            $this->errorMessage = 'Please select a valid session type.';
+
+            return;
+        }
+
         $this->selectedSessionTypeId = $id;
         $this->selectedSlot = null;
         $this->selectedSlotStartUtc = null;
         $this->selectedSlotEndUtc = null;
+        $this->selectedSlotId = null;
         $this->currentStep = 2;
     }
 
@@ -249,11 +281,15 @@ class BookingWizard extends Component
 
     public function selectDate(string $date): void
     {
+        if ($this->currentStep !== 2) {
+            return;
+        }
+
         $this->selectedDate = $date;
         $this->errorMessage = null;
     }
 
-    public function selectSlot(string $startUtc, string $endUtc, array $slotData): void
+    public function selectSlot(string $slotId): void
     {
         $this->errorMessage = null;
 
@@ -270,7 +306,7 @@ class BookingWizard extends Component
         RateLimiter::hit($holdIpKey, 60);
         RateLimiter::hit($holdVisitorKey, 60);
 
-        $sessionType = SessionType::find($this->selectedSessionTypeId);
+        $sessionType = SessionType::query()->whereKey($this->selectedSessionTypeId)->where('active', true)->first();
         if (! $sessionType) {
             $this->errorMessage = 'Please select a valid session type.';
 
@@ -278,6 +314,16 @@ class BookingWizard extends Component
         }
 
         try {
+            $slotData = app(SlotResolver::class)->resolve(
+                $slotId,
+                $sessionType,
+                $this->customerTimezone,
+                $this->visitorToken,
+            );
+            $startUtc = $slotData['slot_start_utc'];
+            $endUtc = $slotData['slot_end_utc'];
+            $this->selectedDate = $slotData['customer_date'];
+
             $aVisitor = $this->analyticsVisitorToken ?? session('analytics_visitor_token') ?? request()->cookie('_va_visitor');
             $aSession = $this->analyticsSessionToken ?? session('analytics_session_token') ?? request()->cookie('_va_session');
 
@@ -297,6 +343,7 @@ class BookingWizard extends Component
             $this->holdExpiresAt = $hold->expires_at->toIso8601String();
             $this->selectedSlotStartUtc = $startUtc;
             $this->selectedSlotEndUtc = $endUtc;
+            $this->selectedSlotId = $slotId;
             $this->selectedSlot = $slotData;
 
             session([
@@ -334,6 +381,10 @@ class BookingWizard extends Component
             if ($existing) {
                 $this->holdId = null;
                 $this->holdToken = null;
+                $this->selectedSlotId = null;
+                $this->selectedSlotStartUtc = null;
+                $this->selectedSlotEndUtc = null;
+                $this->selectedSlot = null;
                 session()->forget([
                     'active_booking_hold_id',
                     'active_booking_hold_token',
@@ -369,7 +420,7 @@ class BookingWizard extends Component
         RateLimiter::hit($confirmEmailKey, 300);
 
         $sessionType = SessionType::find($this->selectedSessionTypeId);
-        if (! $sessionType || ! $this->selectedSlotStartUtc || ! $this->selectedSlotEndUtc) {
+        if (! $sessionType || ! $this->selectedSlotId) {
             $this->errorMessage = 'Incomplete booking details. Please select your time slot again.';
             $this->currentStep = 2;
 
@@ -391,8 +442,7 @@ class BookingWizard extends Component
             $bookingService = app(BookingService::class);
             $booking = $bookingService->createPublicBooking([
                 'session_type_id' => $sessionType->id,
-                'start_at_utc' => $this->selectedSlotStartUtc,
-                'end_at_utc' => $this->selectedSlotEndUtc,
+                'slot_id' => $this->selectedSlotId,
                 'customer_timezone' => $this->customerTimezone,
                 'customer_name' => $this->name,
                 'customer_email' => $this->email,
@@ -423,6 +473,7 @@ class BookingWizard extends Component
                 'active_booking_session_type_id',
                 'booking_flow_state',
             ]);
+            $this->selectedSlotId = null;
 
             // Redirect to confirmation page
             $confRoute = match (app()->getLocale()) {
@@ -455,11 +506,14 @@ class BookingWizard extends Component
             'current_step' => $this->currentStep,
             'selected_session_type_id' => $this->selectedSessionTypeId,
             'customer_timezone' => $this->customerTimezone,
+            'active_booking_timezone' => $this->customerTimezone,
+            'manual_timezone_selected' => $this->manualTimezoneSelected,
             'timezone_country_code' => $this->timezoneCountryCode,
             'calendar_month' => $this->calendarMonth,
             'selected_date' => $this->selectedDate,
             'selected_slot_start_utc' => $this->selectedSlotStartUtc,
             'selected_slot_end_utc' => $this->selectedSlotEndUtc,
+            'selected_slot_id' => $this->selectedSlotId,
             'selected_slot' => $this->selectedSlot,
             'hold_id' => $this->holdId,
             'hold_token' => $this->holdToken,
@@ -506,7 +560,9 @@ class BookingWizard extends Component
 
     public function render()
     {
-        $sessionType = $this->selectedSessionTypeId ? SessionType::find($this->selectedSessionTypeId) : null;
+        $sessionType = $this->selectedSessionTypeId
+            ? SessionType::query()->whereKey($this->selectedSessionTypeId)->where('active', true)->first()
+            : null;
         $activeSessionTypes = SessionType::where('active', true)->get();
 
         $availableSlotsByDate = [];
@@ -523,6 +579,15 @@ class BookingWizard extends Component
                 toDate: $monthEnd,
                 currentVisitorToken: $this->visitorToken
             );
+
+            $slotResolver = app(SlotResolver::class);
+            foreach ($availableSlotsByDate as &$slots) {
+                foreach ($slots as &$slot) {
+                    $slot['slot_id'] = $slotResolver->issue($sessionType, $slot, $this->customerTimezone, $this->visitorToken);
+                }
+                unset($slot);
+            }
+            unset($slots);
         }
 
         // Filter timezones for modal

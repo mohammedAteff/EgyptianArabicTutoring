@@ -5,16 +5,20 @@ namespace App\Domains\Booking\Services;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class RescheduleService
 {
@@ -22,7 +26,9 @@ class RescheduleService
         protected TimezoneService $timezoneService,
         protected AuditLogService $auditLogService,
         protected AvailabilityService $availabilityService,
-        protected AnalyticsService $analyticsService
+        protected AnalyticsService $analyticsService,
+        protected SlotResolver $slotResolver,
+        protected DatabaseCapability $databaseCapability,
     ) {}
 
     /**
@@ -38,7 +44,11 @@ class RescheduleService
         CarbonInterface|string|null $newEndUtc = null,
         string $performedBy = 'customer',
         ?int $performedById = null,
-        ?string $reason = null
+        ?string $reason = null,
+        ?string $idempotencyKey = null,
+        ?string $customerTimezone = null,
+        ?string $slotId = null,
+        ?string $slotOwnerToken = null,
     ): Booking {
         $startUtc = $this->timezoneService->toUtc($newStartUtc);
         $nowUtc = CarbonImmutable::now('UTC');
@@ -47,9 +57,65 @@ class RescheduleService
             throw new SlotUnavailableException('Cannot reschedule to a slot in the past.');
         }
 
-        return DB::transaction(function () use ($booking, $startUtc, $newEndUtc, $performedBy, $performedById, $reason) {
-            // 1. Lock the existing booking row to prevent concurrent mutations
+        if ($performedBy === 'student') {
+            if (! $slotId || ! $slotOwnerToken || ! $customerTimezone) {
+                throw new BookingPolicyViolationException('Select a valid server-issued slot.');
+            }
+            $issuedSlot = $this->slotResolver->resolve($slotId, $booking->sessionType, $customerTimezone, $slotOwnerToken);
+            $issuedStart = $this->timezoneService->toUtc($issuedSlot['slot_start_utc']);
+            if (! $issuedStart->equalTo($startUtc)) {
+                throw new BookingPolicyViolationException('The selected time slot is no longer valid.');
+            }
+            $newEndUtc = $issuedSlot['slot_end_utc'];
+        }
+
+        return $this->databaseCapability->transaction(function () use ($booking, $startUtc, $newEndUtc, $performedBy, $performedById, $reason, $idempotencyKey, $customerTimezone, $slotId, $slotOwnerToken) {
+            $candidateConfig = $this->availabilityService->resolveSlotConfiguration(
+                sessionType: $booking->sessionType,
+                startUtc: $startUtc,
+                endUtc: $newEndUtc ? $this->timezoneService->toUtc($newEndUtc) : null
+            );
+            $this->availabilityService->acquireCalendarDateLocks($startUtc, $candidateConfig['end_utc'], $candidateConfig['buffer_minutes']);
+
+            $lockedStudent = null;
+            if ($booking->student_id !== null) {
+                $lockedStudent = Student::withTrashed()->whereKey($booking->student_id)->lockForUpdate()->firstOrFail();
+            }
+
+            if ($performedBy === 'student') {
+                if (! $lockedStudent || $lockedStudent->trashed() || $lockedStudent->identity_status !== 'verified'
+                    || (int) $booking->student_id !== (int) $performedById) {
+                    throw new BookingPolicyViolationException('This booking is not available to the student.');
+                }
+            }
+
+            if ($performedBy === 'student') {
+                $issuedSlot = $this->slotResolver->resolve($slotId, $booking->sessionType, $customerTimezone, $slotOwnerToken);
+                $issuedStart = $this->timezoneService->toUtc($issuedSlot['slot_start_utc']);
+                $issuedEnd = $this->timezoneService->toUtc($issuedSlot['slot_end_utc']);
+                if (! $issuedStart->equalTo($candidateConfig['start_utc']) || ! $issuedEnd->equalTo($candidateConfig['end_utc'])) {
+                    throw new SlotUnavailableException('The selected time slot changed. Select it again.');
+                }
+            }
+
+            // Re-read ownership and lifecycle under the booking row lock.
             $lockedBooking = Booking::query()->where('id', $booking->id)->lockForUpdate()->firstOrFail();
+            if ($lockedBooking->session_type_id !== $booking->session_type_id
+                || (int) $lockedBooking->student_id !== (int) $booking->student_id
+                || ($performedBy === 'student' && (int) $lockedBooking->student_id !== (int) $performedById)) {
+                throw new BookingPolicyViolationException('This booking is not available to the student.');
+            }
+
+            if ($performedBy === 'student' && $idempotencyKey) {
+                $existing = DB::table('session_reschedules')->where('idempotency_key', $idempotencyKey)->first();
+                if ($existing) {
+                    if ((int) $existing->booking_id !== (int) $lockedBooking->id) {
+                        throw new BookingPolicyViolationException('Invalid reschedule request.');
+                    }
+
+                    return $lockedBooking;
+                }
+            }
 
             if ($lockedBooking->status === 'cancelled') {
                 throw new InvalidBookingStatusTransitionException('Cancelled bookings cannot be rescheduled.');
@@ -67,7 +133,11 @@ class RescheduleService
                 throw new InvalidBookingStatusTransitionException("Cannot reschedule a booking with status '{$lockedBooking->status}'.");
             }
 
-            if ($performedBy === 'customer') {
+            if ($performedBy === 'student') {
+                if (! $idempotencyKey || $lockedBooking->start_at_utc < now('UTC')->addHours(24)) {
+                    throw new BookingPolicyViolationException('Contact your tutor to change a session within 24 hours.');
+                }
+            } elseif ($performedBy === 'customer') {
                 if ($lockedBooking->start_at_utc <= now('UTC')) {
                     throw new BookingPolicyViolationException('Past appointments cannot be rescheduled.');
                 }
@@ -79,17 +149,8 @@ class RescheduleService
             }
 
             // Authoritatively resolve target slot configuration without forcing base duration
-            $candidateEndUtc = $newEndUtc ? $this->timezoneService->toUtc($newEndUtc) : null;
-            $slotConfig = $this->availabilityService->resolveSlotConfiguration(
-                sessionType: $lockedBooking->sessionType,
-                startUtc: $startUtc,
-                endUtc: null
-            );
+            $slotConfig = $candidateConfig;
             $endUtc = $slotConfig['end_utc'];
-
-            // 2. Acquire deterministic calendar row locks for buffer-expanded new date(s)
-            $buffer = (int) $slotConfig['buffer_minutes'];
-            $this->availabilityService->acquireCalendarDateLocks($startUtc, $endUtc, $buffer);
 
             // 3. Authoritative slot validation excluding this booking
             $this->availabilityService->validateSlotForBooking(
@@ -117,14 +178,31 @@ class RescheduleService
             $newSnapshot = $this->timezoneService->createBookingSnapshot(
                 startUtc: $startUtc,
                 endUtc: $endUtc,
-                customerTimezone: $lockedBooking->customer_timezone,
+                customerTimezone: $customerTimezone ?: $lockedBooking->customer_timezone,
                 businessTimezone: $currentBusinessTz
             );
+            $oldTimezone = $lockedBooking->customer_timezone;
 
             // 6. Update booking
             $lockedBooking->update(array_merge($newSnapshot, [
                 'status' => 'confirmed',
+                'admin_reconfirmation_needed' => true,
             ]));
+
+            if (in_array($performedBy, ['student', 'admin', 'system'], true)) {
+                DB::table('session_reschedules')->insert([
+                    'booking_id' => $lockedBooking->id,
+                    'actor_type' => $performedBy,
+                    'actor_id' => $performedById,
+                    'old_start_at_utc' => $previousData['start_at_utc'],
+                    'new_start_at_utc' => $startUtc->toDateTimeString(),
+                    'old_timezone' => $oldTimezone,
+                    'new_timezone' => $customerTimezone ?: $oldTimezone,
+                    'idempotency_key' => $idempotencyKey ?: (string) Str::uuid(),
+                    'ip_address' => app()->runningInConsole() ? null : request()->ip(),
+                    'created_at' => now('UTC'),
+                ]);
+            }
 
             $newData = [
                 'start_at_utc' => $startUtc->toDateTimeString(),

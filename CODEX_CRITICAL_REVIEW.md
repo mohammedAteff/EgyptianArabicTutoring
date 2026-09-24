@@ -1,4 +1,4 @@
-> **Historical document:** This V1 review is retained for audit history. It is superseded by the V2 verification in `PROJECT_STATUS.md` and `Gemini.md` (2026-09-21).
+> **Historical document:** This V1 review is retained for audit history only. Its findings and verification baseline predate V2/V3 and are superseded by `PROJECT_STATUS.md` and `Gemini.md` (2026-09-24). Do not use this file as the current issue list or production approval.
 
 # Critical Project Review
 

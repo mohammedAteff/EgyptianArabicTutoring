@@ -9,6 +9,7 @@ use App\Domains\Booking\Services\BookingService;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Games\Models\Game;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
@@ -18,10 +19,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class PublicExperienceTest extends TestCase
 {
+    use IssuesBookingSlotIds;
     use RefreshDatabase;
 
     protected SessionType $sessionType;
@@ -86,23 +89,12 @@ class PublicExperienceTest extends TestCase
         $nextSunday = CarbonImmutable::now('Africa/Cairo')->next(CarbonImmutable::SUNDAY);
         $slotDate = $nextSunday->toDateString();
         $slotStartUtc = CarbonImmutable::parse("{$slotDate} 09:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-        $slotEndUtc = CarbonImmutable::parse("{$slotDate} 10:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-
         $component = Livewire::test(BookingWizard::class)
             ->call('setDetectedTimezone', 'America/New_York')
             ->assertSet('customerTimezone', 'America/New_York')
             ->call('selectDate', $slotDate)
-            ->assertSet('selectedDate', $slotDate)
-            ->call('selectSlot', $slotStartUtc, $slotEndUtc, [
-                'slot_start_utc' => $slotStartUtc,
-                'slot_end_utc' => $slotEndUtc,
-                'customer_formatted' => '5:00 AM',
-                'customer_formatted_end' => '6:00 AM',
-                'customer_date' => $slotDate,
-                'business_start_time' => '09:00',
-                'business_end_time' => '10:00',
-                'business_date' => $slotDate,
-            ])
+            ->assertSet('selectedDate', $slotDate);
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'America/New_York', $component->get('visitorToken')))
             ->assertSet('currentStep', 3)
             ->set('name', 'Laila Vance')
             ->set('email', 'Laila.Vance@Example.com')
@@ -147,6 +139,7 @@ class PublicExperienceTest extends TestCase
         $response->assertSeeText("You're Scheduled!");
         $response->assertSeeText('Europe/London');
         $response->assertSeeText('Africa/Cairo');
+        $response->assertSeeText('Your tutor will share the private video meeting link before the lesson.');
 
         // .ics calendar file download
         $icsResponse = $this->get(route('booking.ics', ['token' => $booking->confirmation_token]));
@@ -154,6 +147,14 @@ class PublicExperienceTest extends TestCase
         $icsResponse->assertHeader('Content-Type', 'text/calendar; charset=utf-8');
         $this->assertStringContainsString('BEGIN:VCALENDAR', $icsResponse->getContent());
         $this->assertStringContainsString($booking->confirmation_token, $icsResponse->getContent());
+        $this->assertStringNotContainsString('meet.google.com', $icsResponse->getContent());
+
+        Setting::set('video_meeting_url', 'https://meet.example.test/arabic-room', 'booking', true);
+        $this->get(route('booking.confirmation', ['token' => $booking->confirmation_token]))
+            ->assertSee('href="https://meet.example.test/arabic-room"', false)
+            ->assertSeeText('Join Video Classroom');
+        $icsResponse = $this->get(route('booking.ics', ['token' => $booking->confirmation_token]));
+        $this->assertStringContainsString('LOCATION:https://meet.example.test/arabic-room', $icsResponse->getContent());
     }
 
     public function test_resources_catalog_and_category_filtering(): void
@@ -245,6 +246,12 @@ class PublicExperienceTest extends TestCase
         $sessionCookie = $requestResponse->getCookie(config('session.cookie'));
         $visitorCookie = $requestResponse->getCookie('_va_visitor');
         $analyticsSessionCookie = $requestResponse->getCookie('_va_session');
+        $requestedContact = Contact::query()->where('email', 'omar.sherif@example.com')->firstOrFail();
+        $canonicalContact = Contact::query()->create([
+            'name' => 'Canonical Download Contact',
+            'email' => 'canonical-download-contact@example.com',
+        ]);
+        app(ContactService::class)->merge($canonicalContact, $requestedContact);
 
         // A different browser session cannot consume the grant, and the
         // rejected attempt must not burn the legitimate visitor's token.
@@ -274,6 +281,11 @@ class PublicExperienceTest extends TestCase
         // Resource download should be recorded
         $this->assertDatabaseHas('resource_downloads', [
             'resource_id' => $resource->id,
+            'contact_id' => $canonicalContact->id,
+        ]);
+        $this->assertDatabaseHas('resource_requests', [
+            'resource_id' => $resource->id,
+            'contact_id' => $canonicalContact->id,
         ]);
 
         // A gated grant is bound to the issuing session and cannot be replayed.

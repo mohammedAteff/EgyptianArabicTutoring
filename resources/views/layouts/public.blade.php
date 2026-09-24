@@ -27,7 +27,7 @@
             'de' => ['label' => 'Deutsch', 'code' => 'DE'],
         ];
     @endphp
-    <link rel="canonical" href="{{ $canonicalUrl }}">
+    <link rel="canonical" href="{{ isset($article) && $article->canonical_url ? $article->canonical_url : $canonicalUrl }}">
     @foreach($hreflangAlternates as $langCode => $altUrl)
         <link rel="alternate" hreflang="{{ $langCode }}" href="{{ $altUrl }}">
     @endforeach
@@ -114,6 +114,7 @@
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('faq*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('FAQ') }}
                     </a>
+                    <a href="{{ route('articles.index') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('articles.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Articles</a>
 
                     <!-- Language Switcher (Desktop) -->
                     <div class="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200/80 text-xs font-semibold" role="group" aria-label="{{ __('Language selector') }}">
@@ -187,6 +188,7 @@
             <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
             <a href="{{ localized_url('about') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('About') }}</a>
             <a href="{{ localized_url('faq') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('FAQ') }}</a>
+            <a href="{{ route('articles.index') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Articles</a>
 
             <!-- Mobile Language Switcher -->
             <div class="pt-3 border-t border-stone-100">

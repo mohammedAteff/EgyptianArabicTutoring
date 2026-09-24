@@ -21,7 +21,7 @@ class AuditLogService
         ?array $newData = null,
         ?int $adminId = null
     ): AuditLog {
-        $administratorId = $adminId ?? Auth::id();
+        $administratorId = $adminId ?? Auth::guard('web')->id();
 
         return AuditLog::create([
             'administrator_id' => $administratorId,
@@ -31,8 +31,36 @@ class AuditLogService
             'previous_data' => $previousData,
             'new_data' => $newData,
             'ip_address' => request()?->ip(),
-            'user_agent' => request()?->userAgent(),
             'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * Record an event performed by an authenticated student without storing submitted identity data.
+     *
+     * @param  array<string, mixed>|null  $previousData
+     * @param  array<string, mixed>|null  $newData
+     */
+    public function logStudent(
+        int $studentId,
+        string $action,
+        string $targetType,
+        ?int $targetId = null,
+        ?array $previousData = null,
+        ?array $newData = null
+    ): AuditLog {
+        return AuditLog::create([
+            'actor_type' => 'student',
+            'actor_student_id' => $studentId,
+            'action' => $action,
+            'entity_type' => $targetType,
+            'entity_id' => $targetId,
+            'target_type' => $targetType,
+            'target_id' => $targetId === null ? null : (string) $targetId,
+            'old_values' => $previousData,
+            'new_values' => $newData,
+            'ip_address' => request()?->ip(),
+            'created_at' => now('UTC'),
         ]);
     }
 }

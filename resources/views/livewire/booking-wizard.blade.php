@@ -40,7 +40,7 @@
                 <div class="text-xs text-stone-500 font-medium">{{ __('Showing times in your timezone:') }}</div>
                 <div class="text-sm font-bold text-stone-900 flex items-center gap-2 mt-0.5">
                     <span class="inline-block w-5 h-3.5 shrink-0 shadow-xs border border-stone-200 rounded-xs overflow-hidden" aria-hidden="true">
-                        <img src="{{ $tzDisplay['flag_asset'] }}" alt="" class="w-full h-full object-cover" />
+                        <x-timezone-flag :display="$tzDisplay" class="w-full h-full object-cover" />
                     </span>
                     <span class="sr-only">{{ __('Timezone Country: :country. Timezone:', ['country' => $tzDisplay['timezone_country_name']]) }}</span>
                     <span class="font-medium text-stone-900">{{ $tzDisplay['city'] }}</span>
@@ -247,7 +247,7 @@
                                     $slotBusinessDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', $slotInstant);
                                 @endphp
                                 <button type="button"
-                                        wire:click="selectSlot('{{ $slot['slot_start_utc'] }}', '{{ $slot['slot_end_utc'] }}', {{ json_encode($slot) }})"
+                                        wire:click="selectSlot('{{ $slot['slot_id'] }}')"
                                         wire:loading.attr="disabled"
                                         class="w-full text-left p-3.5 rounded-xl border border-stone-200 hover:border-terracotta-500 hover:bg-terracotta-50/50 hover:shadow-sm transition-all flex items-center justify-between group">
                                     <div>
@@ -256,7 +256,7 @@
                                         </div>
                                         <div class="text-xs text-stone-500 mt-0.5">
                                             <span class="inline-flex items-center gap-1.5">
-                                                <img src="{{ asset($slotBusinessDisplay['flag_asset']) }}" alt="{{ __('Cairo timezone') }}" class="w-4 h-3 object-cover rounded-sm">
+                                                <x-timezone-flag :display="$slotBusinessDisplay" :alt="__('Cairo timezone')" />
                                                 {{ $slotBusinessDisplay['city'] }} · {{ $slotBusinessDisplay['utc_offset'] }} · {{ $slot['business_start_time'] }}
                                             </span>
                                         </div>
@@ -301,7 +301,7 @@
                             $heldSlotDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, \Carbon\CarbonImmutable::parse($selectedSlotStartUtc, 'UTC'));
                         @endphp
                         <span class="inline-flex items-center gap-1.5">
-                            <img src="{{ asset($heldSlotDisplay['flag_asset']) }}" alt="{{ $heldSlotDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                            <x-timezone-flag :display="$heldSlotDisplay" :alt="$heldSlotDisplay['city']" />
                             {{ $selectedSlot['customer_formatted'] ?? ($selectedSlot['start_formatted'] ?? '') }} ({{ $heldSlotDisplay['label'] }})
                         </span>
                     @endif
@@ -402,7 +402,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-stone-200">
                     <div class="bg-white p-4 rounded-xl border border-stone-200">
                         <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
-                            <img src="{{ asset($reviewCustomerDisplay['flag_asset']) }}" alt="{{ $reviewCustomerDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                            <x-timezone-flag :display="$reviewCustomerDisplay" :alt="$reviewCustomerDisplay['city']" />
                             {{ __('Your Local Time') }}
                         </div>
                         <div class="text-base font-bold text-stone-900">
@@ -418,7 +418,7 @@
 
                     <div class="bg-white p-4 rounded-xl border border-stone-200">
                         <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
-                            <img src="{{ asset($reviewBusinessDisplay['flag_asset']) }}" alt="{{ $reviewBusinessDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                            <x-timezone-flag :display="$reviewBusinessDisplay" :alt="$reviewBusinessDisplay['city']" />
                             {{ __("Tutor's Time (Cairo)") }}
                         </div>
                         <div class="text-base font-bold text-stone-900">
@@ -524,7 +524,7 @@
                                 wire:click="selectTimezone('{{ $tz['id'] }}')"
                                 class="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between hover:bg-stone-50 transition-colors {{ $customerTimezone === $tz['id'] ? 'bg-terracotta-50 font-bold text-terracotta-700' : 'text-stone-700' }}">
                             <span class="inline-flex items-center gap-2">
-                                <img src="{{ asset($selectorDisplay['flag_asset']) }}" alt="{{ $selectorDisplay['city'] }}" class="w-4 h-3 object-cover rounded-sm">
+                                <x-timezone-flag :display="$selectorDisplay" :alt="$selectorDisplay['city']" />
                                 <span>{{ $selectorDisplay['label'] }}</span>
                             </span>
                             <span class="text-xs text-stone-400 font-mono">{{ $selectorDisplay['utc_offset'] }}</span>

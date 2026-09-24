@@ -5,18 +5,25 @@ namespace App\Domains\Booking\Services;
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Audit\Services\AuditLogService;
+use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\CMS\Models\Setting;
-use Illuminate\Support\Facades\DB;
+use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentLedgerService;
+use Carbon\CarbonImmutable;
 
 class CancellationService
 {
     public function __construct(
         protected AuditLogService $auditLogService,
-        protected AnalyticsService $analyticsService
+        protected AnalyticsService $analyticsService,
+        protected AvailabilityService $availabilityService,
+        protected StudentLedgerService $studentLedgerService,
+        protected DatabaseCapability $databaseCapability,
     ) {}
 
     /**
@@ -31,11 +38,30 @@ class CancellationService
         ?int $performedById = null,
         ?string $reason = null
     ): Booking {
-        return DB::transaction(function () use ($booking, $performedBy, $performedById, $reason) {
-            $lockedBooking = Booking::query()->where('id', $booking->id)->lockForUpdate()->firstOrFail();
+        $snapshot = Booking::query()->whereKey($booking->id)->firstOrFail();
+
+        return $this->databaseCapability->transaction(function () use ($snapshot, $performedBy, $performedById, $reason) {
+            if ($snapshot->start_at_utc && $snapshot->end_at_utc) {
+                $this->availabilityService->acquireCalendarDateLocks(
+                    CarbonImmutable::instance($snapshot->start_at_utc),
+                    CarbonImmutable::instance($snapshot->end_at_utc),
+                );
+            }
+
+            if ($snapshot->student_id !== null) {
+                Student::withTrashed()->whereKey($snapshot->student_id)->lockForUpdate()->firstOrFail();
+            }
+
+            $lockedBooking = Booking::query()->whereKey($snapshot->id)->lockForUpdate()->firstOrFail();
+
+            if ((int) $lockedBooking->student_id !== (int) $snapshot->student_id
+                || ! $lockedBooking->start_at_utc->equalTo($snapshot->start_at_utc)
+                || ! $lockedBooking->end_at_utc->equalTo($snapshot->end_at_utc)) {
+                throw new BookingPolicyViolationException('The booking changed while cancellation was being prepared. Reload and try again.');
+            }
 
             if ($lockedBooking->status === 'cancelled') {
-                throw new InvalidBookingStatusTransitionException('This booking has already been cancelled.');
+                return $lockedBooking->fresh(['contact', 'sessionType']);
             }
 
             if ($lockedBooking->status === 'completed') {
@@ -46,8 +72,8 @@ class CancellationService
                 throw new InvalidBookingStatusTransitionException('Cannot cancel a session marked as no-show.');
             }
 
-            if (! in_array($lockedBooking->status, ['confirmed', 'pending'], true)) {
-                throw new InvalidBookingStatusTransitionException("Cannot cancel a booking with status '{$lockedBooking->status}'.");
+            if ($lockedBooking->status !== 'confirmed') {
+                throw new InvalidBookingStatusTransitionException("Only confirmed bookings can be cancelled; current status is '{$lockedBooking->status}'.");
             }
 
             if ($performedBy === 'customer') {
@@ -68,6 +94,11 @@ class CancellationService
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
             ]);
+
+            $this->studentLedgerService->restoreCancellation(
+                booking: $lockedBooking,
+                idempotencyKey: 'booking-cancellation-restore:'.$lockedBooking->id,
+            );
 
             // Record BookingEvent
             BookingEvent::create([

@@ -9,6 +9,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -20,7 +21,8 @@ class BookingHoldService
     public function __construct(
         protected TimezoneService $timezoneService,
         protected AvailabilityService $availabilityService,
-        protected AnalyticsService $analyticsService
+        protected AnalyticsService $analyticsService,
+        protected DatabaseCapability $databaseCapability,
     ) {}
 
     /**
@@ -46,7 +48,7 @@ class BookingHoldService
         $aVisitor = $analyticsVisitorToken ?? (session()->isStarted() ? session('analytics_visitor_token') : null) ?? request()->cookie('_va_visitor') ?? $visitorToken;
         $aSession = $analyticsSessionToken ?? (session()->isStarted() ? session('analytics_session_token') : null) ?? request()->cookie('_va_session') ?? $sessionToken;
 
-        return DB::transaction(function () use ($visitorToken, $sessionToken, $sessionType, $start, $end, $holdDuration, $now, $aVisitor, $aSession) {
+        return $this->databaseCapability->transaction(function () use ($visitorToken, $sessionToken, $sessionType, $start, $end, $holdDuration, $now, $aVisitor, $aSession) {
             // 1. Resolve canonical slot configuration first
             $config = $this->availabilityService->resolveSlotConfiguration(
                 sessionType: $sessionType,

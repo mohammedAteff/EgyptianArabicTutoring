@@ -1,43 +1,57 @@
-# V2 Implementation Walkthrough
+# V3 Implementation Walkthrough
 
-**Updated:** 2026-09-21
-**Authoritative companion:** `PROJECT_STATUS.md`
-**Actionable ledger:** `Gemini.md`
+**Updated:** 2026-09-24
 
-This document replaces the old V1-only walkthrough. The repository was independently rechecked against `Arabic w Abdallah Edits V2.md` and the original specification, then the verified remaining defects were fixed.
+**Specification:** `Arabic w Abdallah EDIT V3.md` (newest priority)
 
-## Fixes Applied During the V2 Pass
+**Current status:** Local V3 release checks were independently run on 2026-09-24 with Herd PHP 8.4.25. The full suite passes at 468 tests / 2,919 assertions against the isolated `bolt_landing_test` database; the production build and Pint pass; the application database has 44/44 migrations, the MariaDB 10.11.18 capability/FK check passes, and the read-only student backfill dry run reports zero rows. Five scheduled tasks are registered. Remote production deployment and the reported `b11` backup/isolation were not verified here.
 
-1. Added the country-analytics schema, trusted-proxy/GeoLite2 pipeline, immutable visitor/session/event/booking country snapshots, Cairo daily activity rollups, bot exclusion, `ZZ` handling, and admin audience reporting.
-2. Added the TimezoneDisplayService, exact slot-instant offset rendering, local SVG flags, UTC/globe fallback, and booking-state timezone-country continuity.
-3. Added the canonical single active Diagnostic & Learning Roadmap session type with transactional MariaDB advisory-lock synchronization and non-destructive legacy deactivation.
-4. Added the dedicated localized pricing pages and translations, direct localized booking CTAs, and manual-invoice disclosures without payment automation.
-5. Added canonical Privacy/Terms CMS parents, revisions, translations, stale/draft/fallback handling, localized URLs, and policy seed content.
-6. Hardened analytics attribution, marketing-touch deduplication, server-only completion events, retention cutover, Cairo DST reporting, durable rollup reconciliation, and source isolation.
-7. Completed route normalization, brand/admin mobile/accessibility corrections, resource/media/game/admin/report/backup/health verification, and the V2 regression matrix.
-8. Corrected the policy mismatch found in final review: cancellation now uses a 4-hour cutoff and direct-contact rescheduling uses a separate 24-hour cutoff. Migration `2026_09_21_000007_split_booking_policy_cutoffs.php` applies this safely to existing installations.
-9. Removed stale admin copy claiming that a missing resource file receives a synthetic PDF fallback.
-10. Added `2026_09_21_000008_reconcile_legacy_brand_setting.php` so existing installations do not retain the pre-V2 generic site name; custom admin branding is preserved.
-11. Added the missing local SVG assets for every country code in the supported timezone mapping and a Tokyo/Japan regression assertion, eliminating incorrect globe fallbacks for mapped zones.
-12. Reconciled the required Privacy Policy operational/legal-review disclosure in the seeder and existing canonical record with immutable revision migration `2026_09_21_000009_reconcile_privacy_policy_disclosure.php`.
-13. Replaced the stale public reschedule slot-selection template with a direct-contact-only notice and regression assertion, keeping the frontend aligned with the disabled customer mutation route.
+## Implemented and Verified
 
-## Tests Added or Corrected
+1. Timezone country detection now uses PHP's IANA timezone location metadata with narrow exception overrides. Public/student booking uses server-authorized slot identity and retains UTC as the appointment source of truth.
+2. Student identity uses Unicode NFKC/name normalization, lowercase email, explicit-region E.164 phone normalization, DOB plus two matching identifiers, verified-only records, generic failure messages, HMAC identity limits, consecutive-failure cooldowns, and no remember-me login.
+3. Student sessions regenerate on login, expire absolutely after 180 minutes, verify live student status on each protected request, and clear only student-scoped session data on logout/expiry.
+4. Student portal booking consumes an eligible package credit atomically using FIFO rules; public intake remains free. Student rescheduling is ownership-checked, slot-resolved server-side, fixed-UTC 24-hour gated, and ledger-neutral.
+5. Merge and anonymization preserve financial/event facts, reassign ownership under deterministic locks, flatten merge pointers, invalidate auth status cache, scrub student identifiers from audit payloads, clear request metadata only on related/redacted audit rows, and use semantically valid anonymized values.
+6. Dynamic form versioning separates the active draft from the published pointer; students and default admin response/CSV views use the published version. Base-version conflicts, frozen versions, server-side conditional logic, canonical answers, immutable submission snapshots, role-based answer visibility, and streamed CSV export are implemented.
+7. Billing uses append-only package/payment/refund/credit records, derived balances, business-timezone expiration, idempotency, and package-level refund locking/ceilings.
+8. Article administration uses HTMLPurifier allow-lists, strict same-origin storage-image path checks including nested-encoding traversal rejection, revisions, optimistic version checks, unique translation grouping, and permanent redirects for changed slugs.
+9. Owner/admin/assistant/student authorization and projections, append-style audit support, social-link validation/icons, and DB capability checks are implemented.
+10. Backfill is bounded and defaults to a read-only dry-run. Independent dry-run verification returned zero rows in every outcome category and confirmed no records changed.
 
-- `PhaseAVerificationTest` through `PhaseEVerificationTest` cover the V2 phases.
-- `BookingPolicyMigrationTest` covers the forward cutoff migration.
-- `BookingLifecycleAndPolicyCutoffTest` covers the 4-hour cancellation and 24-hour rescheduling boundaries.
-- Cairo analytics, funnel, attribution, resource-security, CMS, authorization, concurrency, DST, backup, and scheduler suites were rerun.
-- Stale fixtures in `PhaseBVerificationTest` and `CanonicalAvailabilityValidationTest` were corrected to match the real schema and dynamic clock.
+## Verification and Corrections During This Pass
 
-## Final Verification
+### Latest continuation — independent release verification
 
-- PHPUnit: **404 tests, 2,441 assertions, 0 failures/errors** on Herd PHP 8.4 with MariaDB/InnoDB.
-- Frontend build: **Vite 8.3.0 PASS**.
-- Pint: **PASS**.
-- Blade compilation: **PASS**.
-- Migrations: **32/32 Ran**.
-- Scheduler: **5 registered tasks**.
-- Routes: **158 compiled routes**.
+- Added a dedicated role gate to all six public CMS draft-preview routes. Guest requests retain the established 403 contract, assistants are denied, and Admin/Owner previews remain available.
+- Student upcoming-session cards now show the configured tutor identity and a private HTTPS lesson-room link. Owner Settings validates that URL; confirmation pages and `.ics` files no longer substitute the generic Google Meet homepage when no room is configured.
+- Added SQL-event assertions for the canonical lock-tier order in student booking and merge. Existing independent-process MariaDB concurrency tests remain in place.
 
-No verified CRITICAL or HIGH code issue remains. Production configuration and operational setup are documented in `PROJECT_STATUS.md` and `README.md`.
+- Added cross-IP HMAC student-authentication limit coverage; admin reschedule history/lock-order coverage; Cairo DST cutoff tests; form-trigger assignment and direct-access tests; merged-session invalidation coverage; a pending-cancellation/credit invariant test; and assistant financial-column SQL projection assertions.
+- Updated rescheduling to record admin/system actors and lock linked students before booking mutation. Added a form assignment service enforcing published prompt triggers on dashboard, GET, and transactional POST.
+- Reconciled the reschedule flag with V3: every actor sets `admin_reconfirmation_needed = true`; admin history, flag, ownership, and credit-neutrality regressions are included in the independently passing full suite.
+- Tightened cancellation to confirmed bookings only; the pending-status/event/ledger invariant regression is included in the independent full-suite pass.
+- Added `RefreshDatabase` to `tests/Feature/ExampleTest.php` after a cold-start run exposed that the DB-backed homepage test relied on a previously migrated schema. The focused test passed after its own fresh test migration, then the full suite passed.
+- Final V3 audit fixed three additional requirement gaps: unchecked form metadata checkboxes now persist as `false`; admin student search reuses canonical identity normalization including explicit E.164 phone input; and future `held` bookings now appear in the student Upcoming sessions card. Regression tests cover all three.
+- Final focused tests passed: 16 tests / 155 assertions across forms, admin authorization/search, and student rescheduling/dashboard.
+- Full suite: **468 tests, 2,919 assertions, zero failures/errors** under Herd PHP 8.4.25 using `bolt_landing_test`.
+- `vendor/bin/pint --dirty --format agent` passed; Vite 8.3.0 production build passed in 2.76 seconds (optional Fontaine warning); Blade view cache compilation and `git diff --check` passed.
+- Application DB gates: `migrate:status` showed 44 Ran / 0 Pending; `db:verify-capability` detected MariaDB 10.11.18 and verified the student FK; student backfill dry run returned zero rows and made no changes.
+- `schedule:list` showed five configured jobs. Host-level cron/scheduler invocation was not verified.
+
+- Corrected MariaDB index migration order and a student-admin query that selected a computed accessor as if it were a SQL column.
+- Preserved creation timestamps in privacy/merge paths despite MariaDB TIMESTAMP auto-update behavior.
+- Added sorted calendar/student/booking locks and booking-time drift detection to the backfill apply path.
+- Fixed canonical identity reconciliation in the student backfill: exact matches across available normalized name/email/phone fields now link to the existing active student instead of creating a duplicate; partial matches stay flagged for review, ambiguous matches remain unlinked, and dry-run totals reflect these outcomes. Added a focused feature regression test.
+- Updated an obsolete cancellation test to assert V3 idempotent repeat behavior without duplicate events.
+- Added true independent-process refund concurrency coverage and a MariaDB EXPLAIN assertion for the ledger package index.
+- Fixed form draft leakage into the student flow and made response/export defaults follow the published version; added end-to-end assertions for publication and saved response versioning.
+- Fixed privacy erasure clearing IP/user-agent metadata from unrelated audit rows; added a test proving unrelated audit evidence remains intact.
+- Hardened article image URL validation against nested percent-encoded path traversal and added sanitizer regression coverage.
+- Latest full result: **INDEPENDENT PASS — 468 tests, 2,919 assertions, zero failures/errors**. Previous 465-, 455- and 448-test results are superseded. Focused meeting-link/settings/student/lock-order tests passed (**41 tests, 322 assertions**); preview/RBAC/CMS tests passed (**25 tests, 239 assertions**); final checkbox/search/held-status regressions passed (**16 tests, 155 assertions**).
+
+## Release Verification Notes
+
+The previous **39 Ran / five Pending** snapshot is superseded by the independently observed 44 Ran / 0 Pending on port 3307. The capability command verified MariaDB 10.11.18 and `bookings.student_id → students.id ON DELETE SET NULL`; the backfill dry run returned zero rows. `phpunit.xml` targets the separate `bolt_landing_test` database. The owner-reported safety backup and any remote production database/deployment were not independently verified.
+
+See `PROJECT_STATUS.md` for the verification provenance and `Gemini.md` for the remediation ledger. The DB-backed checks and full suite listed above were independently run in this continuation; external-host deployment remains unverified.

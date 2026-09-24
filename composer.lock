@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4aaa935305c26cf2caafc9e01b624843",
+    "content-hash": "69fa1ed6f10bc091ee20c746ebac4a74",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -812,6 +812,67 @@
             "time": "2025-03-06T22:45:56+00:00"
         },
         {
+            "name": "ezyang/htmlpurifier",
+            "version": "v4.19.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/ezyang/htmlpurifier.git",
+                "reference": "5e0539132d934f936fbae2c88b55d58f9438623f"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/ezyang/htmlpurifier/zipball/5e0539132d934f936fbae2c88b55d58f9438623f",
+                "reference": "5e0539132d934f936fbae2c88b55d58f9438623f",
+                "shasum": ""
+            },
+            "require": {
+                "php": "~5.6.0 || ~7.0.0 || ~7.1.0 || ~7.2.0 || ~7.3.0 || ~7.4.0 || ~8.0.0 || ~8.1.0 || ~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0"
+            },
+            "require-dev": {
+                "cerdic/css-tidy": "^1.7 || ^2.0",
+                "simpletest/simpletest": "dev-master"
+            },
+            "suggest": {
+                "cerdic/css-tidy": "If you want to use the filter 'Filter.ExtractStyleBlocks'.",
+                "ext-bcmath": "Used for unit conversion and imagecrash protection",
+                "ext-iconv": "Converts text to and from non-UTF-8 encodings",
+                "ext-tidy": "Used for pretty-printing HTML"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "library/HTMLPurifier.composer.php"
+                ],
+                "psr-0": {
+                    "HTMLPurifier": "library/"
+                },
+                "exclude-from-classmap": [
+                    "/library/HTMLPurifier/Language/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "LGPL-2.1-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Edward Z. Yang",
+                    "email": "admin@htmlpurifier.org",
+                    "homepage": "http://ezyang.com"
+                }
+            ],
+            "description": "Standards compliant HTML filter written in PHP",
+            "homepage": "http://htmlpurifier.org/",
+            "keywords": [
+                "html"
+            ],
+            "support": {
+                "issues": "https://github.com/ezyang/htmlpurifier/issues",
+                "source": "https://github.com/ezyang/htmlpurifier/tree/v4.19.1"
+            },
+            "time": "2026-09-15T15:42:51+00:00"
+        },
+        {
             "name": "fruitcake/php-cors",
             "version": "v1.4.0",
             "source": {
@@ -939,6 +1000,140 @@
                 "source": "https://github.com/maxmind/GeoIP2-php/tree/v3.4.0"
             },
             "time": "2026-07-16T22:11:20+00:00"
+        },
+        {
+            "name": "giggsey/libphonenumber-for-php",
+            "version": "9.0.39",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/giggsey/libphonenumber-for-php.git",
+                "reference": "268d42f8f6401d94fd3c5c9dddb09290f81ed613"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/giggsey/libphonenumber-for-php/zipball/268d42f8f6401d94fd3c5c9dddb09290f81ed613",
+                "reference": "268d42f8f6401d94fd3c5c9dddb09290f81ed613",
+                "shasum": ""
+            },
+            "require": {
+                "giggsey/locale": "^2.7",
+                "php": "^8.1",
+                "symfony/polyfill-mbstring": "^1.31"
+            },
+            "replace": {
+                "giggsey/libphonenumber-for-php-lite": "self.version"
+            },
+            "require-dev": {
+                "ext-dom": "*",
+                "friendsofphp/php-cs-fixer": "^3.71",
+                "infection/infection": "^0.29|^0.31.0",
+                "nette/php-generator": "^4.1",
+                "php-coveralls/php-coveralls": "^2.7",
+                "phpstan/extension-installer": "^1.4.3",
+                "phpstan/phpstan": "^2.1.7",
+                "phpstan/phpstan-deprecation-rules": "^2.0.1",
+                "phpstan/phpstan-phpunit": "^2.0.4",
+                "phpstan/phpstan-strict-rules": "^2.0.3",
+                "phpunit/phpunit": "^10.5.45",
+                "symfony/console": "^6.4",
+                "symfony/filesystem": "^6.4",
+                "symfony/process": "^6.4"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "9.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "libphonenumber\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Joshua Gigg",
+                    "email": "giggsey@gmail.com",
+                    "homepage": "https://giggsey.com/"
+                }
+            ],
+            "description": "A library for parsing, formatting, storing and validating international phone numbers, a PHP Port of Google's libphonenumber.",
+            "homepage": "https://github.com/giggsey/libphonenumber-for-php",
+            "keywords": [
+                "geocoding",
+                "geolocation",
+                "libphonenumber",
+                "mobile",
+                "phonenumber",
+                "validation"
+            ],
+            "support": {
+                "issues": "https://github.com/giggsey/libphonenumber-for-php/issues",
+                "source": "https://github.com/giggsey/libphonenumber-for-php"
+            },
+            "time": "2026-09-10T13:00:24+00:00"
+        },
+        {
+            "name": "giggsey/locale",
+            "version": "2.9.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/giggsey/Locale.git",
+                "reference": "fe741e99ae6ccbe8132f3d63d8ec89924e689778"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/giggsey/Locale/zipball/fe741e99ae6ccbe8132f3d63d8ec89924e689778",
+                "reference": "fe741e99ae6ccbe8132f3d63d8ec89924e689778",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.1"
+            },
+            "require-dev": {
+                "ext-json": "*",
+                "friendsofphp/php-cs-fixer": "^3.66",
+                "infection/infection": "^0.29|^0.32.0",
+                "php-coveralls/php-coveralls": "^2.7",
+                "phpstan/extension-installer": "^1.4.3",
+                "phpstan/phpstan": "^2.1.7",
+                "phpstan/phpstan-deprecation-rules": "^2.0.1",
+                "phpstan/phpstan-phpunit": "^2.0.4",
+                "phpstan/phpstan-strict-rules": "^2.0.3",
+                "phpunit/phpunit": "^10.5.45",
+                "symfony/console": "^6.4",
+                "symfony/filesystem": "^6.4",
+                "symfony/finder": "^6.4",
+                "symfony/process": "^6.4",
+                "symfony/var-exporter": "^6.4"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Giggsey\\Locale\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joshua Gigg",
+                    "email": "giggsey@gmail.com",
+                    "homepage": "https://giggsey.com/"
+                }
+            ],
+            "description": "Locale functions required by libphonenumber-for-php",
+            "support": {
+                "issues": "https://github.com/giggsey/Locale/issues",
+                "source": "https://github.com/giggsey/Locale/tree/2.9.0"
+            },
+            "time": "2026-02-24T15:32:13+00:00"
         },
         {
             "name": "graham-campbell/result-type",
@@ -2826,6 +3021,84 @@
                 "source": "https://github.com/maxmind/web-service-common-php/tree/v0.11.1"
             },
             "time": "2026-01-13T17:56:03+00:00"
+        },
+        {
+            "name": "mews/purifier",
+            "version": "3.4.4",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mewebstudio/Purifier.git",
+                "reference": "b2705cc6c832ce7229373418e191d71b6c037841"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mewebstudio/Purifier/zipball/b2705cc6c832ce7229373418e191d71b6c037841",
+                "reference": "b2705cc6c832ce7229373418e191d71b6c037841",
+                "shasum": ""
+            },
+            "require": {
+                "ezyang/htmlpurifier": "^4.16.0",
+                "illuminate/config": "^5.8|^6.0|^7.0|^8.0|^9.0|^10.0|^11.0|^12.0|^13.0",
+                "illuminate/filesystem": "^5.8|^6.0|^7.0|^8.0|^9.0|^10.0|^11.0|^12.0|^13.0",
+                "illuminate/support": "^5.8|^6.0|^7.0|^8.0|^9.0|^10.0|^11.0|^12.0|^13.0",
+                "php": "^7.2|^8.0"
+            },
+            "require-dev": {
+                "graham-campbell/testbench": "^3.2|^5.5.1|^6.1",
+                "mockery/mockery": "^1.3.3",
+                "phpunit/phpunit": "^8.0|^9.0|^10.0"
+            },
+            "suggest": {
+                "laravel/framework": "To test the Laravel bindings",
+                "laravel/lumen-framework": "To test the Lumen bindings"
+            },
+            "type": "package",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "Purifier": "Mews\\Purifier\\Facades\\Purifier"
+                    },
+                    "providers": [
+                        "Mews\\Purifier\\PurifierServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/helpers.php"
+                ],
+                "psr-4": {
+                    "Mews\\Purifier\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Muharrem ERİN",
+                    "email": "me@mewebstudio.com",
+                    "homepage": "https://github.com/mewebstudio",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Laravel 5/6/7/8/9/10 HtmlPurifier Package",
+            "homepage": "https://github.com/mewebstudio/purifier",
+            "keywords": [
+                "Laravel Purifier",
+                "Laravel Security",
+                "Purifier",
+                "htmlpurifier",
+                "laravel HtmlPurifier",
+                "security",
+                "xss"
+            ],
+            "support": {
+                "issues": "https://github.com/mewebstudio/Purifier/issues",
+                "source": "https://github.com/mewebstudio/Purifier/tree/3.4.4"
+            },
+            "time": "2026-04-15T16:41:08+00:00"
         },
         {
             "name": "monolog/monolog",

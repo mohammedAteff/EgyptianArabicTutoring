@@ -1,112 +1,112 @@
 # Project Status — Egyptian Arabic with Abdallah
 
-**Authoritative review date:** 2026-09-21
-**Source specifications:** `ARABIC TUTORING WEBSITE FINAL 16 Sep.md` and the newer `Arabic w Abdallah Edits V2.md`
-**Current status:** V2 implementation and regression pass complete; no verified CRITICAL or HIGH application issue remains.
+**Review date:** 2026-09-24
 
-This file supersedes the September 17 status report. The old report’s 91-test/14-migration baseline and customer self-service rescheduling claim were stale.
+**Specification priority:** `Arabic w Abdallah EDIT V3.md` > `Arabic w Abdallah Edits V2.md` > `ARABIC TUTORING WEBSITE FINAL 16 Sep.md`
+
+**Status:** Independently checked on 2026-09-24 with Herd PHP 8.4.25: MariaDB 10.11.18 is connected, all 44 application migrations are Ran, the student FK/capability gate passes, and backfill dry run reports zero rows in every outcome category. The latest full suite passes at 468 tests / 2,919 assertions; Pint, Blade compilation, production frontend build, and five scheduled tasks also pass. Owner-reported local Herd HTTP 200 was not rechecked in this continuation. Remote production deployment and the reported `b11` backup/isolation remain unverified here.
+
+The earlier V2-only status and its 404-test baseline are superseded by this report. Public booking remains the free intake flow; session credits are required only for authenticated student-portal bookings, as clarified by the owner.
+
+## Phase 0 Reconciliation Report
+
+- **Stack:** Composer requires PHP `^8.4.1`; the Herd runtime available here is PHP `8.4.25`. The lockfile pins Laravel `13.32.0` and Livewire `4.4.5`; the frontend lockfile pins Tailwind `4.3.3` and Vite `8.3.0`. The existing UI uses Blade, Alpine directives, and Livewire components.
+- **Primary keys:** Existing and V3 migrations consistently use Laravel `$table->id()` / `foreignId()` big-integer keys.
+- **Database:** BoltLanding's `.env` targets `bolt_landing` at `127.0.0.1:3307` as `root`; the password value was not read. Herd PHP 8.4.25 `artisan migrate:status` independently showed 44 Ran / 0 Pending. `db:verify-capability` detected MariaDB 10.11.18 and verified `bookings.student_id → students.id ON DELETE SET NULL`. The read-only student backfill dry run returned zero in every outcome category. `phpunit.xml` targets the separate `bolt_landing_test` database. Remote production database state remains outside this verification.
+- **Authorization:** Existing admin auth uses `administrators.role` (`super_admin` as owner, `admin`, `assistant`) and `EnsureAdminRole`; student access uses the dedicated `student` guard/session middleware. V3 student actions integrate through these existing boundaries.
+- **Booking integration:** UTC booking snapshots and availability remain in `Booking`, `AvailabilityService`, `TimezoneService`, and the existing `booking_calendar_locks` date rows. Public booking uses a server-side authenticated hold; student booking/rescheduling uses encrypted, expiring, visitor-bound `SlotResolver` identities. `BookingService`, `StudentBookingService`, `RescheduleService`, and `CancellationService` share `DatabaseCapability` transactions and the calendar-date mutex.
+- **Accessible context:** Recent Git history (`git log -20`) and project-root specifications/status files are accessible and were inspected. Only non-secret DB host/port/name/username values were read from `.env`; the password and private keys were not read. Application logs were not inspected during this continuation; external production-host state was not available through this workspace.
+
+This reconciliation is retrospective to the current implementation pass. Read-only checks independently verified the local database/migration gate after the owner confirmed the connection. No additional credentials or server-wide database changes were needed.
 
 ## Executive Summary
 
-The current repository contains the requested V2 architecture and the previously remediated booking, availability, analytics, CMS, resource, games, reporting, backup, and admin systems. The review inspected routes, migrations, models, services, controllers, Livewire, middleware, admin authorization, Blade views, commands, scheduler registration, seeders/factories, dependencies, environment templates, README, and the test suite.
+The current repository includes V3 student identity/authentication, student self-service and rescheduling, dynamic forms, append-only package/credit/payment/refund records, SEO articles with HTMLPurifier, admin RBAC/audit support, backfill tooling, and fail-closed database capability checks. The final full suite on Herd PHP 8.4.25 against isolated MariaDB passed: 468 tests and 2,919 assertions. Production build, Pint, Blade compilation, all 44 application migrations, capability/FK check, read-only backfill dry run, and scheduler listing also passed.
 
-Four material V2 discrepancies were found and fixed during this pass: cancellation incorrectly inherited the 24-hour rescheduling cutoff, several supported timezone country codes had no local SVG flag asset, the persisted canonical Privacy Policy omitted its required operational/legal-review disclosure, and a stale public reschedule view still contained the disabled self-service form. Cancellation is now 4 hours, direct-contact rescheduling remains 24 hours, every country code in the supported timezone mapping has a local flag asset, the privacy correction is stored as a new immutable source revision, and the public reschedule view is now direct-contact-only. Forward migrations update only known legacy defaults without deleting or silently replacing authored settings.
+Independent verification found one test expectation left behind by the older V2 lifecycle: a repeated cancellation was expected to throw, although V3 requires idempotent success. The test now performs a first cancellation, repeats it, and proves it creates no duplicate cancellation event. Two important V3 proof gaps were also closed: refund contention now runs in separate PHP processes, and the MariaDB query plan test verifies the ledger package index is used. A cold-start suite run also exposed that `ExampleTest` lacked `RefreshDatabase`; the trait has been added so the DB-backed homepage test bootstraps its isolated test schema itself.
 
-The local environment is intentionally `APP_ENV=local` with debug enabled and has no production GeoLite2 file/off-site disk configured. Those are deployment configuration tasks, not unresolved application logic defects.
+The current continuation also found that student backfill always created a new legacy profile when a contact had an exact canonical name/email/phone match to one existing active student. Backfill now links that exact match, keeps partial matches in duplicate-review triage, and reports the same distinction in dry-run counts. Its focused regression test is included in the independently passing 468-test suite; the live dry run also returned zero rows in every category.
+
+This final V3 pass found two additional implementation gaps and one proof gap. Assistants could access public CMS draft-preview routes because those routes only checked web authentication; preview URLs now use a dedicated role middleware that returns 403 for guests and assistants while allowing Admin/Owner previews. The student upcoming-session card omitted the required tutor and meeting details, and booking confirmations/calendar files used a generic Google Meet homepage as if it were a room link; Owner Settings now accepts only HTTPS lesson URLs and student cards, confirmations, and `.ics` files use the configured URL or explicitly show that no link is configured. New MariaDB SQL-event tests assert the actual lock tier order for student booking and student merge. The real-process concurrency tests remain in the full suite.
+
+The latest V3 recheck caught three further requirement mismatches: unchecked form metadata checkboxes were omitted from requests and therefore retained their old `true` values; the admin student search did not reuse canonical name/email/phone normalization; and future bookings with status `held` were excluded from the upcoming card. The update handler now persists omitted booleans as `false`, search uses `StudentIdentityService` (including explicitly international E.164 phone input without country guessing), and the dashboard includes `held` while preserving legacy `pending` display. Regression tests cover each behavior.
+
+Read-only application-database checks were run after the owner confirmed the connection: `migrate:status` showed 44 Ran / 0 Pending, the capability command verified MariaDB 10.11.18 and the FK, and the explicit backfill dry run returned zero rows. No migration or backfill apply operation was run. A previous PHP/PDO probe reported `auth_gssapi_client` before the reported auth correction; it is stale and must not be presented as the current connection result. No password or server-wide auth change was made.
+
+## Latest Continuation Delta
+
+- Added HMAC-keyed student-authentication limit coverage across rotating IPs.
+- Rescheduling now records admin/system actions in `session_reschedules` and serializes linked-student mutation in the canonical lock order; regression coverage includes admin history, ownership denial, ledger neutrality, and the fixed UTC cutoff across Cairo DST transitions.
+- **V3 reschedule reconfirmation invariant:** `RescheduleService::reschedule()` sets `admin_reconfirmation_needed = true` for every actor. Admin HTTP/history/flag/ledger-neutrality regressions are included in the independent full-suite pass.
+- **V3 confirmed-only cancellation:** `CancellationService::cancel()` accepts only `confirmed` (while preserving repeated-cancel idempotency). The pending-status/event/ledger regression is included in the independent full-suite pass.
+- Added prompt-trigger form assignment checks to the student dashboard, GET, and transactional submission path, with coverage for booking, reschedule, next-session, and direct-access denial.
+- Added a merge-session invalidation request test and SQL-projection assertions proving assistants do not select payment/financial columns.
+- Read-only local checks now show 44/44 migrations, verified MariaDB 10.11.18 and student FK, and a zero-row backfill dry run. These results supersede the previous 39/5 migration snapshot and the stale historical PDO probe.
+- V3 preview authorization now denies assistant access to home/about/page/resource/game/FAQ drafts with 403 while retaining Admin/Owner access; guest preview requests retain their established 403 behavior.
+- Added an Owner-managed HTTPS lesson-room URL. Student upcoming-session cards now identify the tutor and link to the configured room; public confirmation and `.ics` output no longer invent a generic Google Meet homepage when unset. The actual private meeting URL still requires owner configuration.
+- Added SQL-event assertions that verify booking and merge lock acquisition proceeds through each populated tier in calendar/resource → student → booking → package → payment/refund/ledger order. Existing independent-process booking-vs-merge and refund race checks continue to pass.
+
+## V3 Requirement Verification
+
+| Area | Code verdict | Evidence / qualification |
+| --- | --- | --- |
+| Timezone country resolution and authoritative public slot identity | VERIFIED | `TimezoneDisplayService::resolveCountryCode()` uses `DateTimeZone::getLocation()` plus narrow overrides; signed slot resolution and manual timezone tests pass. |
+| Student identity normalization and passwordless verification | VERIFIED IN FULL SUITE | NFKC/Unicode name normalization, E.164 phone normalization with country context, DOB plus two identifiers, verified-only matching, generic failure, HMAC limits, consecutive cooldown, and canonical admin search are implemented; the 468-test suite independently passes. |
+| Student session/ownership boundary | VERIFIED | No remember-me login; 180-minute absolute expiry, session regeneration, per-request live-status cache check, own-record query scoping, and student-only session key clearing are implemented. |
+| Student portal, credits and rescheduling | VERIFIED IN FULL SUITE | Public intake stays credit-free; student bookings debit FIFO credits atomically; student rescheduling requires a signed slot, ownership check and fixed 24-hour UTC cutoff without ledger mutation. Upcoming-session cards include `confirmed`, `held`, and legacy `pending` future bookings, tutor identity, and a configured HTTPS meeting link; unset links are disclosed instead of faked. Admin-history, ownership, ledger-neutrality, DST-boundary, and lock-order regressions are included in the independent 468-test pass. |
+| Merge and privacy erasure | VERIFIED IN FULL SUITE | Merge reassigns ownership under deterministic calendar/student/booking/package/payment locks, preserves historical facts, flattens merge pointers, invalidates auth cache, and records a redacted audit event; anonymization preserves unrelated audit metadata. The independent full suite passes. |
+| Dynamic forms | VERIFIED IN FULL SUITE | Published and active versions are separate; drafts stay private until publish. Tests cover version freeze, base-version conflicts, server validation, canonical answers, immutable snapshots, assistant visibility, trigger assignment, streamed CSV, and persistence of unchecked metadata flags as `false`; the independent full suite passes. |
+| Billing, refunds and ledger | VERIFIED IN TEST DB | Balances derive from append-only entries; FIFO expiration uses Cairo business dates; refund service locks student/package/payment and enforces per-payment/package ceilings. Sequential, actual cross-process, and EXPLAIN/index tests pass. |
+| Articles CMS | VERIFIED IN FULL SUITE | HTMLPurifier allowlist, same-origin storage-image validation, optimistic locking, revisions and 301 slug redirects are covered by implementation and tests; the independent full suite passes. |
+| RBAC, audit and social links | VERIFIED IN FULL SUITE | Owner/admin/assistant/student access boundaries, explicit assistant projections, assistant denial from all draft previews, semantic PII scrub, and local SVG social icons are covered by tests in the independent full-suite pass. |
+| Backfill and local database gate | VERIFIED LOCALLY | `migrate:students-backfill --dry-run` returned zero rows in all outcomes; all 44 migrations, the student FK, and MariaDB 10.11.18 capability gate independently pass. Remote production database/deployment was not checked. |
+
+## Fixes and Verification Added During This Pass
+
+- Fixed MariaDB migration ordering where dropping a referenced unique index before adding its replacement index failed with error 1553; the supporting index is now added first and removed last.
+- Corrected the student admin eager-load projection to select the actual session-type `title` column rather than the `name` accessor, which is not a physical column.
+- Preserved historical creation timestamps during merge/privacy operations despite MariaDB `TIMESTAMP` auto-update behavior.
+- Reworked student backfill application into bounded transactions with canonical calendar-date locks, sorted student/booking locks, safe national-phone triage, and drift detection.
+- Corrected student backfill identity reconciliation: an exact match across all available normalized contact identifiers links the booking to the existing active student; partial single matches remain new legacy profiles with review pointers, and ambiguous matches remain unlinked for triage. Dry-run counts now account for exact links and duplicate candidates.
+- Prevented idempotent student-booking replay from sending a duplicate admin notification; replaced an unsafe legacy test-only booking helper path with a real hold-backed booking test.
+- Added independently coordinated multi-process coverage for adjacent bookings, booking-vs-merge, and separate-payment refunds; added an EXPLAIN assertion for the ledger package index.
+- Updated the cancellation lifecycle test to match V3 idempotency while retaining the cancelled-reschedule denial assertion.
+- Added the V3 booking/student FK migration and capability verifier. They never disable foreign-key checks; unsupported/unsafe online DDL stops with a logged manual deployment strategy.
+- Fixed form publication isolation: active draft versions no longer replace the student-visible version before publish; student writes use the published pointer, and default admin response/CSV views target the published version. Added persisted-version and admin-view regression assertions.
+- Scoped privacy-erasure request-metadata removal to audit rows tied to the erased student or containing that student's identifiers; unrelated audit IP/user-agent evidence is retained and tested.
+- Hardened article image URL validation against multiply encoded dot-segment/backslash traversal before allowing same-origin `/storage/` URLs.
 
 ## Verification Baseline
 
 | Check | Result |
 | --- | --- |
-| Full PHPUnit/Laravel suite | **PASS — 404 tests, 2,441 assertions, 0 failures, 0 errors**; Herd PHP 8.4, MariaDB/InnoDB |
-| Laravel Pint | **PASS — clean** (`vendor/bin/pint --dirty --format agent`) |
-| Production frontend build | **PASS — Vite 8.3.0** (`npm.cmd run build`) |
-| Blade compilation | **PASS** (`php artisan view:cache`) |
-| Database migrations | **PASS — all 32 migrations Ran**, including the V2 policy, brand, and privacy-disclosure migrations |
-| Scheduler registration | **PASS — 5 tasks**: heartbeat, hold cleanup, analytics/pruning, backup, session cleanup |
-| Route compilation | **PASS — 158 routes**, including localized routes and legacy `/book` redirects |
-| Git whitespace check | **PASS — `git diff --check`** (only normal CRLF normalization warnings) |
+| Latest full Laravel/PHPUnit suite | **INDEPENDENT PASS — 468 tests, 2,919 assertions, 0 failures/errors** on MariaDB via Herd PHP 8.4.25 |
+| Prior full Laravel/PHPUnit suite | **PASS — 448 tests, 2,764 assertions, 0 failures/errors**; superseded by the latest independent result |
+| Focused latest feature regressions | **PASS — 41 tests, 322 assertions** across settings, meeting-link UI/ICS, booking/reschedule and lock ordering; preview/RBAC/CMS focused suite: **25 tests, 239 assertions** |
+| Focused cancellation regression | **PASS — 11 tests, 29 assertions** |
+| Parallel refund regression | **PASS — separate worker processes**; aggregate remains within recorded payments |
+| Ledger hot-path query plan | **PASS — MariaDB EXPLAIN selects the package-leading index using a seek/ref plan** |
+| Laravel Pint | **PASS — clean under Herd PHP 8.4.25** (`vendor/bin/pint --dirty --format agent`) |
+| Production frontend build | **INDEPENDENT PASS — Vite 8.3.0, 2.76 seconds**; non-blocking optional `fontaine` optimization warning |
+| Blade compilation | **PASS** (`artisan view:cache`) |
+| Composer metadata/dependencies | **Valid**; Laravel 13.32.0, Livewire 4.4.5, `mews/purifier` 3.4.4, libphonenumber 9.0.39 |
+| Migration status | **INDEPENDENT PASS — 44 Ran / 0 Pending** on the configured `bolt_landing` database |
+| Composer platform | **PASS — all 24 platform requirements** using Herd PHP 8.4.25 |
+| Changed PHP syntax/style | **INDEPENDENT PASS** — changed PHP files passed Laravel Pint under Herd PHP 8.4.25; the full suite also passed on that runtime |
+| Latest backfill dry-run | **INDEPENDENT PASS — zero rows in every outcome category; no records changed** |
+| Latest Pint check | **INDEPENDENT PASS** under Herd PHP 8.4.25 |
+| Scheduler | **5 tasks listed** on the configured local application. Host invocation remains unverified. |
+| Routes | **PASS — preview route listing confirms six public CMS preview endpoints use `EnsureAdminPreviewAccess`; admin article preview retains Admin/Owner role gate** |
+| Student backfill | **INDEPENDENT PASS — dry run found zero rows in all outcome categories** |
+| Database capability / student FK | **INDEPENDENT PASS** — MariaDB 10.11.18 and `bookings.student_id → students.id ON DELETE SET NULL` |
+| Whitespace | **PASS** (`git diff --check`) |
 
-## V2 Requirement Verification
+| Independent verification in this shell | **PASS FOR LOCAL GATES** — full suite, build, Pint, Blade compilation, migration status, DB capability/FK, backfill dry run, and scheduler listing were independently run using Herd PHP 8.4.25. Remote production deployment and the reported backup/sibling DB preservation were not verified |
 
-| V2 requirement group | Verdict | Evidence |
-| --- | --- | --- |
-| Phase A brand, admin drawer, `/book` 301s | VERIFIED | `config/business.php`, `layouts/public.blade.php`, `layouts/admin.blade.php`, `NormalizeTrailingSlash`, `PhaseAVerificationTest` |
-| Phase B portable country schema and non-destructive session-type sync | VERIFIED | Migrations `2026_09_21_000001`–`000007`, `SyncDiagnosticSessionType`, `PhaseBVerificationTest`, rollback tests |
-| Phase C trusted geolocation and immutable country semantics | VERIFIED | `GeoIpService`, `GeoIpUpdateCommand`, `AnalyticsService`, `TrackVisitorSession`, Phase C tests |
-| Phase C daily Cairo country rollups | VERIFIED | `AggregateDailyCountryMetricsCommand`, `DailyCountryMetric`, bot and idempotency tests |
-| Phase D timezone display and reference-instant offsets | VERIFIED | `TimezoneDisplayService`, Livewire `BookingWizard`, local SVG assets, Phase D tests |
-| Phase D booking/holds/concurrency/idempotency/availability | VERIFIED | `BookingService`, `BookingHoldService`, `AvailabilityService`, `RescheduleService`, MariaDB concurrency suite |
-| Phase E policy localization and pricing | VERIFIED | `PolicyPagesSeeder`, `ContentService`, `TranslationService`, `PricingController`, pricing translations/views |
-| Phase F funnel reconciliation, attribution, retention, reports | VERIFIED | Analytics/reporting services, Cairo rollup/funnel/attribution suites, cutover setting |
-| Admin/CMS/resources/media/games/exports/health/backups | VERIFIED | Admin route/controller matrix and CMS/media/resource/report/backup/health tests |
+## Remaining High-Priority Release Gate
 
-## Material Fixes Completed In This Pass
+No unresolved CRITICAL/HIGH application-code issue was identified in this continuation. The first authorization-suite run exposed a guest preview response changing from 403 to 302; the dedicated preview middleware restores the existing 403 contract and blocks assistants. The final full suite, build, Pint, Blade compile, migration/capability, dry-run, and scheduler checks pass. The owner must configure the actual private lesson-room URL before students see a join link. These local checks do not establish that a remote production deployment/database has been verified or deployed.
 
-### V2 policy cutoff split — HIGH, resolved
+Two V3 business-rule mismatches found earlier were corrected: all reschedules set the admin-reconfirmation flag, and only confirmed bookings can be cancelled. Their regression tests are included in the independently passing suite.
 
-**Root cause:** `CancellationService` and `RescheduleService` both read `booking_cancellation_cutoff_hours`, while V2 requires 4 hours for cancellation and 24 hours for direct-contact rescheduling.
-
-**Changes:**
-
-- `CancellationService` now defaults to `booking_cancellation_cutoff_hours = 4`.
-- `RescheduleService` now reads `booking_reschedule_cutoff_hours = 24`.
-- `Admin\SettingController` validates and persists both settings.
-- Admin settings, booking wizard, confirmation copy, and seed defaults explain the distinct rules.
-- `2026_09_21_000007_split_booking_policy_cutoffs.php` safely migrates the previous known 24-hour default and adds the new setting; rollback is intentionally non-destructive.
-- `BookingLifecycleAndPolicyCutoffTest` proves the 4-hour cancellation and 24-hour rescheduling boundaries; `BookingPolicyMigrationTest` proves migration defaults.
-
-### Legacy persisted brand setting — HIGH, resolved
-
-The existing database still contained the old generic `site_name` value even though the application configuration had moved to Abdallah.
-
-- `2026_09_21_000008_reconcile_legacy_brand_setting.php` updates only the exact old default `Egyptian Arabic Tutoring`, inserts the V2 default when absent, and preserves custom administrator branding on rollback.
-- `BrandSettingMigrationTest` and `PhaseAVerificationTest` prove the migrated value and rendered identity.
-
-### Misleading resource fallback copy — HIGH, resolved
-
-`resources/views/admin/resources/create.blade.php` no longer claims a synthetic sample PDF is generated. Missing protected files remain a 404, as required by the safe resource-download behavior.
-
-### Incomplete mapped timezone flags — HIGH, resolved
-
-`TimezoneDisplayService` supported country mappings beyond the originally bundled flag files, so valid mapped zones could display a generic globe. Local SVG assets were added for every mapped country code and Phase D now checks the complete set plus Tokyo/Japan rendering.
-
-### Missing canonical privacy disclosure — HIGH, resolved
-
-The seeded and persisted English Privacy Policy omitted the V2-required operational disclosure and legal-review note. The seeder now includes it, and `2026_09_21_000009_reconcile_privacy_policy_disclosure.php` reconciles only the known legacy canonical text through a new immutable revision while leaving authored variants untouched.
-
-### Stale public reschedule form — HIGH, resolved
-
-The old public reschedule Blade template still exposed slot-selection controls even though customer rescheduling is prohibited. It now renders only direct-contact instructions, and the feature test proves that no form remains.
-
-### Stale test assumptions — HIGH, resolved
-
-`PhaseBVerificationTest` now supplies the schema-required legacy session-type slug, and `CanonicalAvailabilityValidationTest` derives its availability rule weekday from the actual future slot instead of assuming a same-day clock window. These changes correct test fixtures; application behavior was not weakened.
-
-## Important End-to-End Areas Rechecked
-
-- Booking finalization locks buffer-expanded calendar rows, authenticates hold ID/token/session/visitor identity, validates canonical availability, and preserves idempotency.
-- Rescheduling is administrator-executed; public token rescheduling returns a direct-contact notice/403 and cannot mutate a booking.
-- Expired holds are rejected/cleaned by command; active holds are buffer-aware.
-- UTC appointment instants and Cairo/customer snapshots use IANA zones and DST gap/fold handling; ICS exports remain UTC-canonical.
-- Admin role middleware and controller-level operational authorization prevent ordinary admins from sensitive system/backup/notification actions.
-- Contacts use normalized unique identity and locked merges preserving relationships.
-- Resource gates use bound, one-use, expiring grants; path/MIME checks and missing-file 404s are enforced.
-- Analytics client events are allow-listed, rate-limited/deduplicated, server-only completions are rejected from public ingestion, and country rollups exclude bots.
-- Reports reconcile raw events with durable Cairo daily rollups and disclose non-comparable daily-unique sums; CSV/XLSX output sanitizes formula injection.
-- CMS pages, games, resources, FAQs, policies, translations, drafts, previews, stale states, and revisions have end-to-end admin/public coverage.
-- Backups include database/private/public assets with manifest verification, retention, off-site replication hooks, restore-drill coverage, and health/scheduler checks.
-
-## Deployment Preconditions (Not Code Defects)
-
-Before production release, configure and verify:
-
-- `APP_ENV=production`, `APP_DEBUG=false`, a production `APP_KEY`, HTTPS `APP_URL`, database/mail credentials, and `php artisan config:cache`.
-- A real GeoLite2 database at `storage/geoip/GeoLite2-Country.mmdb` if local country lookup is desired; leave `GEOIP_TRUSTED_PROXIES` empty unless the actual proxy CIDR is known and configured.
-- Off-site backup disk and retention policy; confirm a restore drill on a separate target.
-- Queue worker supervision and a once-per-minute `schedule:run` trigger.
-- `php artisan storage:link`, built assets, writable cache/session/storage paths, and a monitored `/admin/health` endpoint.
-
-## Remaining Critical / High Issues
-
-None verified in the current repository after the final test/build/migration/scheduler pass.
+See `Gemini.md` for the current remediation ledger and `walkthrough.md` for the implementation summary. The older `CODEX_CRITICAL_REVIEW.md` and `CODEX_PROJECT_REVIEW.md` remain historical audit records; their findings predate V2/V3 and are not current verdicts.

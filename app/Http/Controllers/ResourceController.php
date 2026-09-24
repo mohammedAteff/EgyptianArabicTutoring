@@ -14,6 +14,7 @@ use App\Domains\Resources\Models\ResourceRequest as ResourceRequestModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -135,23 +136,26 @@ class ResourceController extends Controller
             'utm_term' => $request->query('utm_term') ?? ($request->hasSession() ? $request->session()->get('utm_term') : null) ?? $visSession?->utm_term,
         ];
 
-        $contact = $contactService->resolveOrCreate(
-            email: $request->input('email'),
-            name: $request->input('name'),
-            attribution: $attribution
-        );
+        [$contact, $resourceRequest] = DB::transaction(function () use ($contactService, $request, $resource, $attribution): array {
+            $contact = $contactService->resolveOrCreate(
+                email: $request->input('email'),
+                name: $request->input('name'),
+                attribution: $attribution
+            );
 
-        // 2. Create resource request record
-        $resourceRequest = ResourceRequestModel::create([
-            'contact_id' => $contact->id,
-            'resource_id' => $resource->id,
-            'source' => $attribution['utm_source'] ?? null,
-            'medium' => $attribution['utm_medium'] ?? null,
-            'campaign' => $attribution['utm_campaign'] ?? null,
-            'content' => $attribution['utm_content'] ?? null,
-            'term' => $attribution['utm_term'] ?? null,
-            'landing_page' => $request->header('referer'),
-        ]);
+            $resourceRequest = ResourceRequestModel::create([
+                'contact_id' => $contact->id,
+                'resource_id' => $resource->id,
+                'source' => $attribution['utm_source'] ?? null,
+                'medium' => $attribution['utm_medium'] ?? null,
+                'campaign' => $attribution['utm_campaign'] ?? null,
+                'content' => $attribution['utm_content'] ?? null,
+                'term' => $attribution['utm_term'] ?? null,
+                'landing_page' => $request->header('referer'),
+            ]);
+
+            return [$contact, $resourceRequest];
+        }, 3);
 
         // 3. Log analytics event
         app(AnalyticsService::class)->trackEvent(
@@ -199,7 +203,7 @@ class ResourceController extends Controller
             ->with('success', 'Your download is ready! Click the button below to get your file.');
     }
 
-    public function download(Request $request, string $slug)
+    public function download(Request $request, string $slug, ContactService $contactService)
     {
         $resource = Resource::query()
             ->where('slug', $slug)
@@ -275,12 +279,18 @@ class ResourceController extends Controller
         }
 
         // Record download
-        ResourceDownload::create([
-            'resource_id' => $resource->id,
-            'contact_id' => $tokenData['contact_id'] ?? null,
-            'request_id' => $tokenData['request_id'] ?? null,
-            'created_at' => now(),
-        ]);
+        DB::transaction(function () use ($resource, $tokenData, $contactService): void {
+            $contact = ! empty($tokenData['contact_id'])
+                ? $contactService->resolveCanonicalContact((int) $tokenData['contact_id'], lock: true)
+                : null;
+
+            ResourceDownload::create([
+                'resource_id' => $resource->id,
+                'contact_id' => $contact?->id,
+                'request_id' => $tokenData['request_id'] ?? null,
+                'created_at' => now(),
+            ]);
+        }, 3);
 
         // Log analytics event
         $visitorToken = $request->session()->get('analytics_visitor_token');

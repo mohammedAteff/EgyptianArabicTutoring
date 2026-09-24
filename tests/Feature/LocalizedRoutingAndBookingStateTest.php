@@ -18,10 +18,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class LocalizedRoutingAndBookingStateTest extends TestCase
 {
+    use IssuesBookingSlotIds;
     use RefreshDatabase;
 
     protected SessionType $sessionType;
@@ -201,16 +203,11 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
     public function test_in_progress_booking_state_preservation_across_language_switch(): void
     {
         $slotStart = CarbonImmutable::now('UTC')->addDays(5)->setTime(10, 0, 0);
-        $slotEnd = $slotStart->addMinutes(60);
-
         // Step 1: Start booking in English
         $component = Livewire::test(BookingWizard::class)
-            ->set('customerTimezone', 'Europe/Paris')
-            ->call('selectDate', $slotStart->format('Y-m-d'))
-            ->call('selectSlot', $slotStart->toIso8601String(), $slotEnd->toIso8601String(), [
-                'start_formatted' => '10:00 AM',
-                'end_formatted' => '11:00 AM',
-            ])
+            ->call('selectTimezone', 'Europe/Paris')
+            ->call('selectDate', $slotStart->setTimezone('Europe/Paris')->format('Y-m-d'));
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Paris', $component->get('visitorToken')))
             ->set('name', 'Nadia Benali')
             ->set('email', 'nadia@example.com')
             ->set('phone', '+33612345678')
@@ -255,13 +252,8 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
     public function test_expired_hold_is_not_restored_on_language_switch(): void
     {
         $slotStart = CarbonImmutable::now('UTC')->addDays(5)->setTime(10, 0, 0);
-        $slotEnd = $slotStart->addMinutes(60);
-
-        $component = Livewire::test(BookingWizard::class)
-            ->call('selectSlot', $slotStart->toIso8601String(), $slotEnd->toIso8601String(), [
-                'start_formatted' => '10:00 AM',
-                'end_formatted' => '11:00 AM',
-            ])
+        $component = Livewire::test(BookingWizard::class);
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Africa/Cairo', $component->get('visitorToken')))
             ->set('name', 'Hans Schmidt')
             ->set('email', 'hans@example.de');
 
@@ -285,10 +277,8 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
     public function test_foreign_session_cannot_hijack_hold_state(): void
     {
         $slotStart = CarbonImmutable::now('UTC')->addDays(5)->setTime(10, 0, 0);
-        $slotEnd = $slotStart->addMinutes(60);
-
-        $component = Livewire::test(BookingWizard::class)
-            ->call('selectSlot', $slotStart->toIso8601String(), $slotEnd->toIso8601String(), [])
+        $component = Livewire::test(BookingWizard::class);
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Africa/Cairo', $component->get('visitorToken')))
             ->set('name', 'Legitimate User');
 
         // Tamper with visitor token in session to simulate foreign attacker

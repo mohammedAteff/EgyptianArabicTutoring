@@ -147,7 +147,13 @@
             </div>
             <div class="flex items-start gap-3">
                 <span class="w-6 h-6 rounded-full bg-stone-100 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
-                <p>{{ __('At lesson time, connect directly via your video meeting link:') }} <a href="{{ \App\Domains\CMS\Models\Setting::get('video_meeting_url', 'https://meet.google.com') }}" target="_blank" class="font-bold text-terracotta-600 hover:text-terracotta-700 underline">{{ __('Join Video Classroom →') }}</a></p>
+                @if($booking->status === 'confirmed' && $meetingUrl)
+                    <p>{{ __('At lesson time, connect directly via your video meeting link:') }} <a href="{{ $meetingUrl }}" target="_blank" rel="noopener noreferrer" class="font-bold text-terracotta-600 hover:text-terracotta-700 underline">{{ __('Join Video Classroom →') }}</a></p>
+                @elseif($booking->status === 'confirmed')
+                    <p>{{ __('Your tutor will share the private video meeting link before the lesson.') }}</p>
+                @else
+                    <p>{{ __('This booking is no longer active, so its meeting link is unavailable.') }}</p>
+                @endif
             </div>
         </div>
     </div>

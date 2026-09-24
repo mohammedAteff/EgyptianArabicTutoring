@@ -276,11 +276,7 @@ class RateLimitingTest extends TestCase
             RateLimiter::hit($holdVisitorKey, 60);
         }
 
-        // Slot on Thursday 2026-10-01 10:50 UTC (12:50 Cairo)
-        $startUtc = '2026-10-01 10:50:00';
-        $endUtc = '2026-10-01 11:40:00';
-
-        $component->call('selectSlot', $startUtc, $endUtc, ['time' => '12:50 PM']);
+        $component->call('selectSlot', 'invalid-slot-id');
 
         $component->assertSet('errorMessage', 'Too many slot reservation attempts. Please wait a moment before selecting another slot.');
         $component->assertSet('holdId', null);
@@ -330,7 +326,8 @@ class RateLimitingTest extends TestCase
             'active' => true,
         ]);
 
-        $idempotencyKey = (string) Str::uuid();
+        $component = Livewire::test(BookingWizard::class);
+        $idempotencyKey = $component->get('idempotencyKey');
 
         // Existing booking with this idempotency key
         $booking = $this->createBooking($sessionType, 'idempotent@example.com', $idempotencyKey);
@@ -341,10 +338,8 @@ class RateLimitingTest extends TestCase
             RateLimiter::hit($confirmEmailKey, 300);
         }
 
-        $component = Livewire::test(BookingWizard::class)
-            ->set('name', 'Existing Customer')
-            ->set('email', 'idempotent@example.com')
-            ->set('idempotencyKey', $idempotencyKey);
+        $component->set('name', 'Existing Customer')
+            ->set('email', 'idempotent@example.com');
 
         // Calling confirmBooking should redirect to confirmation route rather than failing on rate limiter
         $component->call('confirmBooking')

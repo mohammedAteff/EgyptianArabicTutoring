@@ -331,7 +331,7 @@ class BookingHoldAuthenticationTest extends TestCase
         }
     }
 
-    public function test_tampered_interval_fails_interval_mismatch(): void
+    public function test_client_timestamps_cannot_override_the_authenticated_hold_interval(): void
     {
         $hold = $this->holdService->acquireHold(
             visitorToken: 'vis-interval-owner',
@@ -344,28 +344,24 @@ class BookingHoldAuthenticationTest extends TestCase
         $tamperedStart = $this->slotStartUtc->addHours(1);
         $tamperedEnd = $tamperedStart->addMinutes(50);
 
-        $this->expectException(SlotUnavailableException::class);
-        $this->expectExceptionMessage('Reservation hold slot interval mismatch.');
+        $booking = $this->bookingService->createPublicBooking([
+            'session_type_id' => $this->sessionType->id,
+            'start_at_utc' => $tamperedStart,
+            'end_at_utc' => $tamperedEnd,
+            'customer_timezone' => 'UTC',
+            'customer_name' => 'Tampered Interval',
+            'customer_email' => 'tampered@example.com',
+            'visitor_token' => 'vis-interval-owner',
+            'session_token' => 'sess-interval-owner',
+            'hold_id' => $hold->id,
+            'hold_token' => $hold->hold_token,
+            'idempotency_key' => 'idem-tampered-1',
+        ]);
 
-        try {
-            $this->bookingService->createPublicBooking([
-                'session_type_id' => $this->sessionType->id,
-                'start_at_utc' => $tamperedStart,
-                'end_at_utc' => $tamperedEnd,
-                'customer_timezone' => 'UTC',
-                'customer_name' => 'Tampered Interval',
-                'customer_email' => 'tampered@example.com',
-                'visitor_token' => 'vis-interval-owner',
-                'session_token' => 'sess-interval-owner',
-                'hold_id' => $hold->id,
-                'hold_token' => $hold->hold_token,
-                'idempotency_key' => 'idem-tampered-1',
-            ]);
-        } finally {
-            $this->assertDatabaseMissing('contacts', ['email' => 'tampered@example.com']);
-            $this->assertDatabaseCount('bookings', 0);
-            $this->assertEquals('active', $hold->fresh()->status);
-        }
+        $this->assertSame($this->slotStartUtc->toDateTimeString(), $booking->start_at_utc->toDateTimeString());
+        $this->assertSame($this->slotEndUtc->toDateTimeString(), $booking->end_at_utc->toDateTimeString());
+        $this->assertDatabaseHas('booking_holds', ['id' => $hold->id, 'status' => 'converted']);
+        $this->assertDatabaseCount('bookings', 1);
     }
 
     public function test_tampered_session_type_fails_session_type_mismatch(): void

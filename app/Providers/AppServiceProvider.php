@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Students\Services\StudentIdentityService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
@@ -26,6 +27,47 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('student-verification', function (Request $request) {
+            $email = $request->input('email');
+            $phone = $request->input('phone');
+            $dateOfBirth = $request->input('date_of_birth');
+            $phoneCountry = $request->input('phone_country');
+            $fingerprints = app(StudentIdentityService::class)->authFingerprints(
+                is_string($email) ? $email : null,
+                is_string($phone) ? $phone : null,
+                is_string($dateOfBirth) ? $dateOfBirth : null,
+                is_string($phoneCountry) ? $phoneCountry : null,
+            );
+
+            $limits = [
+                Limit::perMinutes(10, 5)->by('student-auth:ip:10m:'.$request->ip()),
+                Limit::perMinutes(1440, 50)->by('student-auth:ip:24h:'.$request->ip()),
+            ];
+            foreach ($fingerprints as $kind => $digest) {
+                $limits[] = Limit::perMinutes(15, 5)->by('student-auth:'.$kind.':'.$digest);
+            }
+
+            return $limits;
+        });
+
+        RateLimiter::for('student-form-save', function (Request $request) {
+            $studentId = (string) $request->session()->get('student_id', 'anonymous');
+
+            return [
+                Limit::perMinute(30)->by('student-form:ip:'.$request->ip()),
+                Limit::perMinute(20)->by('student-form:student:'.$studentId),
+            ];
+        });
+
+        RateLimiter::for('student-booking-finalize', function (Request $request) {
+            $studentId = (string) $request->session()->get('student_id', 'anonymous');
+
+            return [
+                Limit::perMinutes(5, 10)->by('student-booking:ip:'.$request->ip()),
+                Limit::perMinutes(5, 5)->by('student-booking:student:'.$studentId),
+            ];
+        });
+
         RateLimiter::for('booking-reschedule', function (Request $request) {
             $token = (string) $request->route('token');
 

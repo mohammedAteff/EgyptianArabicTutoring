@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Domains\Database\Services\DatabaseCapability;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 if (! class_exists('Symfony\Component\DomCrawler\Crawler')) {
@@ -10,5 +11,13 @@ if (! class_exists('Symfony\Component\DomCrawler\Crawler')) {
 
 abstract class TestCase extends BaseTestCase
 {
-    //
+    protected function setUpTraits(): array
+    {
+        app(DatabaseCapability::class)->assertMatchesReconciledEnvironment(
+            config('database.reconciled.vendor'),
+            config('database.reconciled.version'),
+        );
+
+        return parent::setUpTraits();
+    }
 }

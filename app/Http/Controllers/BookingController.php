@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\IcsGenerator;
+use App\Domains\Booking\Services\MeetingLinkService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -19,7 +20,7 @@ class BookingController extends Controller
         ]);
     }
 
-    public function confirmation(string $token): View
+    public function confirmation(string $token, MeetingLinkService $meetingLinks): View
     {
         $booking = Booking::query()
             ->where('confirmation_token', $token)
@@ -28,6 +29,7 @@ class BookingController extends Controller
 
         return view('public.confirmation', [
             'booking' => $booking,
+            'meetingUrl' => $meetingLinks->current(),
             'title' => 'Booking Confirmed — #'.substr($booking->confirmation_token, 0, 8),
         ]);
     }

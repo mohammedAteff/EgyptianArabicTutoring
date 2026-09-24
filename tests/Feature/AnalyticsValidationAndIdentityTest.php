@@ -15,10 +15,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class AnalyticsValidationAndIdentityTest extends TestCase
 {
+    use IssuesBookingSlotIds;
     use RefreshDatabase;
 
     protected Game $activeGame;
@@ -225,9 +227,7 @@ class AnalyticsValidationAndIdentityTest extends TestCase
 
         $slotDate = CarbonImmutable::now('Africa/Cairo')->addDays(3)->toDateString();
         $slotStartUtc = CarbonImmutable::parse("{$slotDate} 10:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-        $slotEndUtc = CarbonImmutable::parse("{$slotDate} 11:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-
-        Livewire::withQueryParams([
+        $wizard = Livewire::withQueryParams([
             'utm_source' => 'google_ads',
             'utm_medium' => 'cpc',
             'utm_campaign' => 'egyptian_arabic_cairo',
@@ -235,17 +235,8 @@ class AnalyticsValidationAndIdentityTest extends TestCase
             ->test(BookingWizard::class)
             ->call('selectSession', $this->sessionType->id)
             ->call('setDetectedTimezone', 'Africa/Cairo')
-            ->call('selectDate', $slotDate)
-            ->call('selectSlot', $slotStartUtc, $slotEndUtc, [
-                'slot_start_utc' => $slotStartUtc,
-                'slot_end_utc' => $slotEndUtc,
-                'customer_formatted' => '10:00 AM',
-                'customer_formatted_end' => '11:00 AM',
-                'customer_date' => $slotDate,
-                'business_start_time' => '10:00',
-                'business_end_time' => '11:00',
-                'business_date' => $slotDate,
-            ])
+            ->call('selectDate', $slotDate);
+        $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'Africa/Cairo', $wizard->get('visitorToken')))
             ->set('name', 'Attributed Student')
             ->set('email', 'attributed.student@example.com')
             ->call('submitDetails')

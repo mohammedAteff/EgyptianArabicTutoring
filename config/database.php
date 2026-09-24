@@ -19,6 +19,11 @@ return [
 
     'default' => env('DB_CONNECTION', 'sqlite'),
 
+    'reconciled' => [
+        'vendor' => env('DB_RECONCILED_VENDOR'),
+        'version' => env('DB_RECONCILED_VERSION'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Database Connections

@@ -44,36 +44,11 @@ class TimezoneDisplayService
         'Australia/Melbourne' => 'Melbourne',
     ];
 
-    /**
-     * Fallback IANA to ISO-3166-1 alpha-2 country codes.
-     */
-    protected const TIMEZONE_COUNTRY_MAP = [
-        'Africa/Cairo' => 'EG',
-        'Europe/Berlin' => 'DE',
-        'Europe/London' => 'GB',
-        'Europe/Paris' => 'FR',
-        'Europe/Rome' => 'IT',
-        'Europe/Madrid' => 'ES',
-        'Europe/Amsterdam' => 'NL',
-        'Europe/Vienna' => 'AT',
-        'Europe/Brussels' => 'BE',
-        'Europe/Zurich' => 'CH',
-        'America/New_York' => 'US',
-        'America/Chicago' => 'US',
-        'America/Denver' => 'US',
-        'America/Los_Angeles' => 'US',
-        'America/Toronto' => 'CA',
-        'America/Vancouver' => 'CA',
-        'America/Indiana/Indianapolis' => 'US',
-        'America/Argentina/Buenos_Aires' => 'AR',
-        'America/Sao_Paulo' => 'BR',
-        'Asia/Dubai' => 'AE',
-        'Asia/Riyadh' => 'SA',
-        'Asia/Kuwait' => 'KW',
-        'Asia/Tokyo' => 'JP',
-        'Asia/Singapore' => 'SG',
-        'Australia/Sydney' => 'AU',
-        'Australia/Melbourne' => 'AU',
+    protected const TIMEZONE_COUNTRY_OVERRIDES = [
+        'US/Eastern' => 'US',
+        'US/Central' => 'US',
+        'US/Mountain' => 'US',
+        'US/Pacific' => 'US',
     ];
 
     /**
@@ -86,7 +61,8 @@ class TimezoneDisplayService
      *     utc_offset: string,
      *     timezone_country_code: ?string,
      *     timezone_country_name: string,
-     *     flag_asset: string,
+     *     flag_asset: ?string,
+     *     flag_symbol: ?string,
      *     city: string,
      *     label: string,
      *     formatted_time?: string
@@ -124,7 +100,12 @@ class TimezoneDisplayService
             : null;
         $flagAsset = $candidateFlag && is_file($candidateFlag)
             ? '/assets/flags/4x3/'.strtolower($countryCode).'.svg'
-            : '/assets/flags/4x3/globe.svg';
+            : ($countryCode ? null : (str_starts_with($canonicalTz, 'Etc/') || in_array($canonicalTz, ['UTC', 'GMT'], true)
+                ? '/assets/flags/4x3/globe.svg'
+                : null));
+        $flagSymbol = $countryCode
+            ? mb_chr(127397 + ord($countryCode[0]), 'UTF-8').mb_chr(127397 + ord($countryCode[1]), 'UTF-8')
+            : null;
 
         $label = $canonicalTz === 'UTC'
             ? 'UTC (Coordinated Universal Time)'
@@ -135,6 +116,7 @@ class TimezoneDisplayService
             'timezone_country_code' => $countryCode,
             'timezone_country_name' => $countryName,
             'flag_asset' => $flagAsset,
+            'flag_symbol' => $flagSymbol,
             'city' => $city,
             'label' => $label,
         ];
@@ -179,12 +161,8 @@ class TimezoneDisplayService
      */
     public function resolveCountryCode(string $timezone): ?string
     {
-        if (in_array($timezone, ['UTC', 'GMT', 'Etc/UTC'], true)) {
+        if (in_array($timezone, ['UTC', 'GMT'], true) || str_starts_with($timezone, 'Etc/')) {
             return null;
-        }
-
-        if (isset(self::TIMEZONE_COUNTRY_MAP[$timezone])) {
-            return self::TIMEZONE_COUNTRY_MAP[$timezone];
         }
 
         try {
@@ -196,7 +174,7 @@ class TimezoneDisplayService
         } catch (Throwable) {
         }
 
-        return null;
+        return self::TIMEZONE_COUNTRY_OVERRIDES[$timezone] ?? null;
     }
 
     /**

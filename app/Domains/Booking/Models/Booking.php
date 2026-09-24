@@ -3,6 +3,7 @@
 namespace App\Domains\Booking\Models;
 
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\Student;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,8 @@ class Booking extends Model
 
     protected $fillable = [
         'contact_id',
+        'student_id',
+        'admin_reconfirmation_needed',
         'visitor_token',
         'session_type_id',
         'start_at_utc',
@@ -54,6 +57,7 @@ class Booking extends Model
             'start_at_utc' => 'datetime',
             'end_at_utc' => 'datetime',
             'touch_at' => 'datetime',
+            'admin_reconfirmation_needed' => 'boolean',
             'cancelled_at' => 'datetime',
             'completed_at' => 'datetime',
             'business_local_date_at_booking' => 'date',
@@ -64,6 +68,11 @@ class Booking extends Model
     public function contact(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'contact_id');
+    }
+
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
     }
 
     public function sessionType(): BelongsTo

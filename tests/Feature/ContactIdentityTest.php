@@ -3,9 +3,16 @@
 namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SessionType;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
+use App\Domains\Students\Models\Student;
+use App\Domains\Timezone\Services\TimezoneService;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ContactIdentityTest extends TestCase
@@ -150,5 +157,54 @@ class ContactIdentityTest extends TestCase
         $this->assertStringContainsString('Important details from phone call', $canonicalFresh->notes);
         $this->assertEquals('youtube', $canonicalFresh->utm_source);
         $this->assertEquals('spring2026', $canonicalFresh->utm_campaign);
+    }
+
+    public function test_contact_merge_locks_calendar_students_bookings_then_contacts(): void
+    {
+        $canonical = Contact::query()->create(['name' => 'Canonical', 'email' => 'lock-canonical@example.test']);
+        $duplicate = Contact::query()->create(['name' => 'Duplicate', 'email' => 'lock-duplicate@example.test']);
+        $student = Student::factory()->verified()->create();
+        $sessionType = SessionType::query()->create([
+            'title' => 'Lock-order session',
+            'slug' => 'lock-order-session',
+            'duration_minutes' => 60,
+            'price' => '40.00',
+            'currency' => 'USD',
+            'active' => true,
+        ]);
+        $startUtc = CarbonImmutable::now('UTC')->addDays(12)->setTime(12, 0);
+        $snapshot = app(TimezoneService::class)->createBookingSnapshot(
+            $startUtc,
+            $startUtc->addHour(),
+            'Africa/Cairo',
+            'Africa/Cairo',
+        );
+        $booking = Booking::query()->create(array_merge($snapshot, [
+            'contact_id' => $duplicate->id,
+            'student_id' => $student->id,
+            'session_type_id' => $sessionType->id,
+            'status' => 'confirmed',
+            'idempotency_key' => 'contact-lock-order-'.fake()->uuid(),
+            'confirmation_token' => fake()->sha256(),
+        ]));
+        $lockedTables = [];
+        DB::listen(function (QueryExecuted $query) use (&$lockedTables): void {
+            $sql = strtolower($query->sql);
+            if (str_contains($sql, 'for update')) {
+                foreach (['booking_calendar_locks', 'students', 'bookings', 'contacts'] as $table) {
+                    if (str_contains($sql, $table)) {
+                        $lockedTables[] = $table;
+                        break;
+                    }
+                }
+            }
+        });
+
+        $this->contactService->merge($canonical, $duplicate);
+
+        $expectedOrder = ['booking_calendar_locks', 'students', 'bookings', 'contacts'];
+        $this->assertSame($expectedOrder, array_values(array_unique($lockedTables)));
+        $this->assertSame((int) $canonical->id, (int) $booking->fresh()->contact_id);
+        $this->assertSame('lock-canonical@example.test', $canonical->fresh()->email);
     }
 }

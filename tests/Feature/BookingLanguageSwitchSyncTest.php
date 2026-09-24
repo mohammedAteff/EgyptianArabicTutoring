@@ -11,10 +11,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class BookingLanguageSwitchSyncTest extends TestCase
 {
+    use IssuesBookingSlotIds;
     use RefreshDatabase;
 
     protected SessionType $sessionType;
@@ -48,16 +50,11 @@ class BookingLanguageSwitchSyncTest extends TestCase
     public function test_switch_language_action_preserves_unsent_dom_inputs_and_redirects_without_pii(): void
     {
         $slotStart = CarbonImmutable::now('UTC')->addDays(3)->setTime(11, 0, 0);
-        $slotEnd = $slotStart->addMinutes(60);
-
         // Step 1: Initialize wizard, select timezone & slot -> advances to step 3 with active hold
         $component = Livewire::test(BookingWizard::class)
-            ->set('customerTimezone', 'Europe/Paris')
-            ->call('selectDate', $slotStart->format('Y-m-d'))
-            ->call('selectSlot', $slotStart->toIso8601String(), $slotEnd->toIso8601String(), [
-                'start_formatted' => '11:00 AM',
-                'end_formatted' => '12:00 PM',
-            ]);
+            ->call('selectTimezone', 'Europe/Paris')
+            ->call('selectDate', $slotStart->setTimezone('Europe/Paris')->format('Y-m-d'));
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Paris', $component->get('visitorToken')));
 
         $this->assertEquals(3, $component->get('currentStep'));
         $holdId = $component->get('holdId');
@@ -118,15 +115,10 @@ class BookingLanguageSwitchSyncTest extends TestCase
     public function test_switch_language_to_german_at_confirmation_step_preserves_hold_and_details(): void
     {
         $slotStart = CarbonImmutable::now('UTC')->addDays(4)->setTime(14, 0, 0);
-        $slotEnd = $slotStart->addMinutes(60);
-
         $component = Livewire::test(BookingWizard::class)
-            ->set('customerTimezone', 'Europe/Berlin')
-            ->call('selectDate', $slotStart->format('Y-m-d'))
-            ->call('selectSlot', $slotStart->toIso8601String(), $slotEnd->toIso8601String(), [
-                'start_formatted' => '2:00 PM',
-                'end_formatted' => '3:00 PM',
-            ])
+            ->call('selectTimezone', 'Europe/Berlin')
+            ->call('selectDate', $slotStart->setTimezone('Europe/Berlin')->format('Y-m-d'));
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Berlin', $component->get('visitorToken')))
             ->set('name', 'Klaus Mueller')
             ->set('email', 'klaus@example.de')
             ->set('phone', '+49 170 1234567')
@@ -154,15 +146,10 @@ class BookingLanguageSwitchSyncTest extends TestCase
     public function test_switch_language_with_expired_hold_resets_to_step_two_and_retains_contact_data(): void
     {
         $slotStart = CarbonImmutable::now('UTC')->addDays(2)->setTime(9, 0, 0);
-        $slotEnd = $slotStart->addMinutes(60);
-
         $component = Livewire::test(BookingWizard::class)
-            ->set('customerTimezone', 'Europe/Paris')
-            ->call('selectDate', $slotStart->format('Y-m-d'))
-            ->call('selectSlot', $slotStart->toIso8601String(), $slotEnd->toIso8601String(), [
-                'start_formatted' => '9:00 AM',
-                'end_formatted' => '10:00 AM',
-            ])
+            ->call('selectTimezone', 'Europe/Paris')
+            ->call('selectDate', $slotStart->setTimezone('Europe/Paris')->format('Y-m-d'));
+        $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Paris', $component->get('visitorToken')))
             ->set('name', 'Amelie Poulain')
             ->set('email', 'amelie@paris.fr');
 

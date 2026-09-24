@@ -13,6 +13,9 @@ use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\SessionLedgerEntry;
+use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -285,6 +288,40 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
         $this->cancellationService->cancel($booking, performedBy: 'customer');
     }
 
+    public function test_pending_booking_cannot_be_cancelled_or_restore_a_student_credit(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-01 10:00:00 UTC');
+        $student = Student::factory()->verified()->create();
+        $package = StudentPackage::factory()->for($student)->create();
+        $booking = $this->createTestBooking(CarbonImmutable::now('UTC')->addDays(5), 'pending');
+        $booking->update(['student_id' => $student->id]);
+        SessionLedgerEntry::query()->create([
+            'student_id' => $student->id,
+            'student_package_id' => $package->id,
+            'booking_id' => $booking->id,
+            'idempotency_key' => 'pending-booking-credit-consumed',
+            'entry_type' => 'session_consumed',
+            'credit_change' => -1,
+            'description' => 'Legacy pending booking credit fixture',
+            'created_at' => now('UTC'),
+        ]);
+
+        try {
+            $this->cancellationService->cancel($booking, performedBy: 'admin');
+            $this->fail('Expected InvalidBookingStatusTransitionException for a pending booking.');
+        } catch (InvalidBookingStatusTransitionException $exception) {
+            $this->assertStringContainsString('Only confirmed bookings', $exception->getMessage());
+        }
+
+        $this->assertSame('pending', $booking->fresh()->status);
+        $this->assertDatabaseCount('booking_events', 0);
+        $this->assertDatabaseMissing('session_ledger_entries', [
+            'booking_id' => $booking->id,
+            'entry_type' => 'cancellation_restore',
+        ]);
+        $this->assertDatabaseCount('session_ledger_entries', 1);
+    }
+
     public function test_completed_booking_cannot_be_rescheduled(): void
     {
         CarbonImmutable::setTestNow('2026-10-01 10:00:00');
@@ -322,21 +359,21 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
         }
     }
 
-    public function test_cancelled_booking_cannot_be_rescheduled_or_cancelled_again(): void
+    public function test_cancelled_booking_cancellation_is_idempotent_but_cannot_be_rescheduled_again(): void
     {
         CarbonImmutable::setTestNow('2026-10-01 10:00:00');
         $startUtc = CarbonImmutable::parse('2026-10-05 10:00:00', 'UTC');
-        $booking = $this->createTestBooking($startUtc, 'cancelled');
+        $booking = $this->createTestBooking($startUtc, 'confirmed');
 
         $alignedNewStart = CarbonImmutable::parse('2026-10-10 10:50:00', 'Africa/Cairo')->setTimezone('UTC');
         $alignedNewEnd = $alignedNewStart->addMinutes(50);
 
-        try {
-            $this->cancellationService->cancel($booking, performedBy: 'customer');
-            $this->fail('Expected InvalidBookingStatusTransitionException');
-        } catch (InvalidBookingStatusTransitionException $e) {
-            $this->assertStringContainsString('already been cancelled', $e->getMessage());
-        }
+        $cancelledOnce = $this->cancellationService->cancel($booking, performedBy: 'customer');
+        $cancelledAgain = $this->cancellationService->cancel($booking, performedBy: 'customer');
+
+        $this->assertSame('cancelled', $cancelledOnce->status);
+        $this->assertSame('cancelled', $cancelledAgain->status);
+        $this->assertSame(1, BookingEvent::query()->where('booking_id', $booking->id)->where('event_type', 'cancelled')->count());
 
         try {
             $this->rescheduleService->reschedule($booking, $alignedNewStart, $alignedNewEnd, performedBy: 'admin');

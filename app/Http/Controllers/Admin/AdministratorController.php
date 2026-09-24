@@ -38,7 +38,7 @@ class AdministratorController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:administrators,email'],
-            'role' => ['required', 'string', Rule::in(['super_admin', 'admin'])],
+            'role' => ['required', 'string', Rule::in(['super_admin', 'admin', 'assistant'])],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
@@ -79,7 +79,7 @@ class AdministratorController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('administrators')->ignore($administrator->id)],
-            'role' => ['required', 'string', Rule::in(['super_admin', 'admin'])],
+            'role' => ['required', 'string', Rule::in(['super_admin', 'admin', 'assistant'])],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 

@@ -4,11 +4,21 @@ namespace Tests\Feature;
 
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingService;
+use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\PaymentRecord;
+use App\Domains\Students\Models\PaymentRefund;
+use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class MariaDbConcurrencyVerificationTest extends TestCase
@@ -18,6 +28,14 @@ class MariaDbConcurrencyVerificationTest extends TestCase
     protected BookingService $bookingService;
 
     protected SessionType $sessionType;
+
+    private array $raceStudentIds = [];
+
+    private array $raceBookingKeys = [];
+
+    private array $raceContactEmails = [];
+
+    private array $raceCalendarDates = [];
 
     protected function setUp(): void
     {
@@ -54,9 +72,37 @@ class MariaDbConcurrencyVerificationTest extends TestCase
 
     protected function tearDown(): void
     {
+        $bookingIds = DB::table('bookings')
+            ->whereIn('idempotency_key', array_merge(
+                ['unique-key-concurrent-1', 'unique-key-concurrent-2'],
+                $this->raceBookingKeys,
+            ))
+            ->pluck('id');
+        if ($this->raceStudentIds !== []) {
+            $bookingIds = $bookingIds->merge(DB::table('bookings')->whereIn('student_id', $this->raceStudentIds)->pluck('id'))->unique();
+            DB::table('session_ledger_entries')->whereIn('student_id', $this->raceStudentIds)->delete();
+            DB::table('payment_refunds')->whereIn('student_id', $this->raceStudentIds)->delete();
+            DB::table('payment_records')->whereIn('student_id', $this->raceStudentIds)->delete();
+            DB::table('student_packages')->whereIn('student_id', $this->raceStudentIds)->delete();
+            DB::table('session_reschedules')->where('actor_type', 'student')->whereIn('actor_id', $this->raceStudentIds)->delete();
+        }
+        if ($bookingIds->isNotEmpty()) {
+            DB::table('session_ledger_entries')->whereIn('booking_id', $bookingIds)->delete();
+            DB::table('admin_notifications')->whereIn('title', $bookingIds->map(fn (int $id): string => "New Booking #{$id}"))->delete();
+            DB::table('session_reschedules')->whereIn('booking_id', $bookingIds)->delete();
+            DB::table('bookings')->whereIn('id', $bookingIds)->delete();
+        }
+        if ($this->raceContactEmails !== []) {
+            DB::table('contacts')->whereIn('email', $this->raceContactEmails)->delete();
+        }
+        if ($this->raceStudentIds !== []) {
+            DB::table('students')->whereIn('id', $this->raceStudentIds)->delete();
+        }
+        if ($this->raceCalendarDates !== []) {
+            DB::table('booking_calendar_locks')->whereIn('lock_date', $this->raceCalendarDates)->delete();
+        }
         DB::table('bookings')->where('idempotency_key', 'like', 'unique-key-concurrent-%')->delete();
         DB::table('session_types')->where('slug', 'conversational-arabic')->delete();
-        DB::table('booking_calendar_locks')->truncate();
         DB::table('contacts')->whereIn('email', ['first@boltlanding.test', 'second@boltlanding.test'])->delete();
         AvailabilityRule::query()->delete();
         parent::tearDown();
@@ -170,5 +216,330 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             'customer_timezone' => 'UTC',
             'idempotency_key' => 'unique-key-concurrent-2',
         ], isTrustedAdmin: true);
+    }
+
+    public function test_parallel_adjacent_slots_both_succeed_without_deadlock(): void
+    {
+        $date = CarbonImmutable::now('Africa/Cairo')->addDays(4)->startOfDay();
+        $firstStart = $date->setTime(10, 0)->setTimezone('UTC');
+        $secondStart = $date->setTime(11, 0)->setTimezone('UTC');
+        $firstKey = 'lock-order-adjacent-first-'.Str::uuid();
+        $secondKey = 'lock-order-adjacent-second-'.Str::uuid();
+        $this->raceBookingKeys = [$firstKey, $secondKey];
+        $this->raceCalendarDates = [$date->toDateString()];
+
+        $results = $this->runConcurrentWorkers([
+            [
+                'action' => 'book_admin',
+                'session_type_id' => $this->sessionType->id,
+                'start_at_utc' => $firstStart->toDateTimeString(),
+                'end_at_utc' => $firstStart->addHour()->toDateTimeString(),
+                'name' => 'Adjacent Slot First',
+                'email' => 'adjacent-first-'.Str::uuid().'@boltlanding.test',
+                'customer_timezone' => 'Africa/Cairo',
+                'idempotency_key' => $firstKey,
+            ],
+            [
+                'action' => 'book_admin',
+                'session_type_id' => $this->sessionType->id,
+                'start_at_utc' => $secondStart->toDateTimeString(),
+                'end_at_utc' => $secondStart->addHour()->toDateTimeString(),
+                'name' => 'Adjacent Slot Second',
+                'email' => 'adjacent-second-'.Str::uuid().'@boltlanding.test',
+                'customer_timezone' => 'Africa/Cairo',
+                'idempotency_key' => $secondKey,
+            ],
+        ]);
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertDatabaseHas('bookings', ['idempotency_key' => $firstKey, 'status' => 'confirmed']);
+        $this->assertDatabaseHas('bookings', ['idempotency_key' => $secondKey, 'status' => 'confirmed']);
+    }
+
+    public function test_parallel_refunds_from_separate_payments_never_exceed_package_paid_total(): void
+    {
+        $student = Student::factory()->verified()->create();
+        $this->raceStudentIds = [$student->id];
+        $this->raceContactEmails = [$student->email];
+
+        $ledger = app(StudentLedgerService::class);
+        $package = $ledger->createPackage(
+            $student,
+            'Concurrent refund package',
+            2,
+            '200.00',
+            '0.00',
+            'USD',
+            null,
+            'concurrent-refund-package-'.Str::uuid(),
+        );
+        $firstPayment = $ledger->recordPayment($package, '100.00', 'concurrent-payment-a-'.Str::uuid(), null);
+        $secondPayment = $ledger->recordPayment($package, '100.00', 'concurrent-payment-b-'.Str::uuid(), null);
+
+        $results = $this->runConcurrentWorkers([
+            [
+                'action' => 'refund_payment',
+                'payment_id' => $firstPayment->id,
+                'amount' => '100.00',
+                'idempotency_key' => 'concurrent-refund-a-'.Str::uuid(),
+            ],
+            [
+                'action' => 'refund_payment',
+                'payment_id' => $secondPayment->id,
+                'amount' => '100.00',
+                'idempotency_key' => 'concurrent-refund-b-'.Str::uuid(),
+            ],
+        ]);
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertSame(2, PaymentRefund::query()->where('student_package_id', $package->id)->count());
+        $this->assertSame('200.00', number_format((float) PaymentRefund::query()->where('student_package_id', $package->id)->sum('amount_refunded'), 2, '.', ''));
+        $this->assertSame('200.00', number_format((float) PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid'), 2, '.', ''));
+    }
+
+    public function test_parallel_student_booking_and_merge_follow_calendar_student_booking_lock_order(): void
+    {
+        $date = CarbonImmutable::now('Africa/Cairo')->addDays(6)->startOfDay();
+        $this->raceCalendarDates = [$date->toDateString()];
+        $primary = Student::factory()->verified()->create();
+        $secondary = Student::factory()->verified()->create();
+        $this->raceStudentIds = [$primary->id, $secondary->id];
+        $this->raceContactEmails = [$primary->email, $secondary->email];
+
+        $contact = Contact::query()->create([
+            'name' => trim($secondary->first_name.' '.$secondary->last_name),
+            'email' => $secondary->email,
+            'phone' => $secondary->phone,
+        ]);
+        $start = $date->setTime(9, 0)->setTimezone('UTC');
+        $snapshot = app(TimezoneService::class)->createBookingSnapshot(
+            $start,
+            $start->addHour(),
+            'Africa/Cairo',
+            'Africa/Cairo',
+        );
+        $seedBookingKey = 'lock-order-race-seed-'.Str::uuid();
+        $this->raceBookingKeys[] = $seedBookingKey;
+        Booking::query()->create(array_merge($snapshot, [
+            'contact_id' => $contact->id,
+            'student_id' => $secondary->id,
+            'session_type_id' => $this->sessionType->id,
+            'status' => 'confirmed',
+            'idempotency_key' => $seedBookingKey,
+            'confirmation_token' => Str::random(64),
+        ]));
+        app(StudentLedgerService::class)->createPackage(
+            $secondary,
+            'Concurrency package',
+            2,
+            '80.00',
+            '0.00',
+            'USD',
+            null,
+            'lock-order-race-package-'.Str::uuid(),
+        );
+
+        $slotOwnerToken = Str::random(64);
+        $slots = app(AvailabilityService::class)->getAvailableSlotsGroupedByDate(
+            sessionType: $this->sessionType,
+            customerTimezone: 'Africa/Cairo',
+            fromDate: $date,
+            toDate: $date,
+            currentVisitorToken: $slotOwnerToken,
+        );
+        $targetStart = $date->setTime(14, 0)->setTimezone('UTC')->toDateTimeString();
+        $slot = collect($slots)->flatten(1)->first(fn (array $candidate): bool => $candidate['slot_start_utc'] === $targetStart);
+        $this->assertNotNull($slot, 'The student booking worker must receive a server-generated slot identity.');
+        $slotId = app(SlotResolver::class)->issue($this->sessionType, $slot, 'Africa/Cairo', $slotOwnerToken);
+        $studentBookingKey = 'lock-order-race-student-'.Str::uuid();
+        $this->raceBookingKeys[] = $studentBookingKey;
+
+        $results = $this->runConcurrentWorkers([
+            [
+                'action' => 'merge_students',
+                'primary_student_id' => $primary->id,
+                'secondary_student_id' => $secondary->id,
+            ],
+            [
+                'action' => 'book_student',
+                'student_id' => $secondary->id,
+                'slot_id' => $slotId,
+                'session_type_id' => $this->sessionType->id,
+                'customer_timezone' => 'Africa/Cairo',
+                'idempotency_key' => $studentBookingKey,
+                'slot_owner_token' => $slotOwnerToken,
+            ],
+        ]);
+
+        $this->assertSame(0, $results[0]['exit_code'], json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertContains($results[1]['exit_code'], [0, 2], json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertStringStartsWith('RESULT:SUCCESS:', $results[0]['output']);
+        $this->assertSame('merged', Student::withTrashed()->findOrFail($secondary->id)->identity_status);
+
+        $newBooking = Booking::query()->where('idempotency_key', $studentBookingKey)->first();
+        if ($results[1]['exit_code'] === 0) {
+            $this->assertNotNull($newBooking);
+            $this->assertSame($primary->id, (int) $newBooking->student_id);
+            $this->assertDatabaseHas('session_ledger_entries', [
+                'booking_id' => $newBooking->id,
+                'student_id' => $primary->id,
+                'entry_type' => 'session_consumed',
+                'credit_change' => -1,
+            ]);
+        } else {
+            $this->assertStringStartsWith('RESULT:CONFLICT:', $results[1]['output']);
+            $this->assertNull($newBooking);
+        }
+    }
+
+    public function test_parallel_student_booking_and_contact_merge_leave_no_booking_on_a_merged_contact(): void
+    {
+        $date = CarbonImmutable::now('Africa/Cairo')->addDays(14)->startOfDay();
+        $this->raceCalendarDates[] = $date->toDateString();
+        $student = Student::factory()->verified()->create();
+        $this->raceStudentIds[] = $student->id;
+
+        $canonicalEmail = 'contact-race-canonical-'.Str::uuid().'@boltlanding.test';
+        $duplicateEmail = (string) $student->email_normalized;
+        $this->raceContactEmails[] = $canonicalEmail;
+        $this->raceContactEmails[] = $duplicateEmail;
+        $canonical = Contact::query()->create(['name' => 'Canonical Race Contact', 'email' => $canonicalEmail]);
+        $duplicate = Contact::query()->create([
+            'name' => trim($student->first_name.' '.$student->last_name),
+            'email' => $duplicateEmail,
+            'phone' => $student->phone,
+        ]);
+
+        $existingStart = $date->setTime(8, 0)->setTimezone('UTC');
+        $existingSnapshot = app(TimezoneService::class)->createBookingSnapshot(
+            $existingStart,
+            $existingStart->addHour(),
+            'Africa/Cairo',
+            'Africa/Cairo',
+        );
+        $existingKey = 'contact-merge-race-existing-'.Str::uuid();
+        $this->raceBookingKeys[] = $existingKey;
+        Booking::query()->create(array_merge($existingSnapshot, [
+            'contact_id' => $duplicate->id,
+            'student_id' => $student->id,
+            'session_type_id' => $this->sessionType->id,
+            'status' => 'confirmed',
+            'idempotency_key' => $existingKey,
+            'confirmation_token' => Str::random(64),
+        ]));
+        app(StudentLedgerService::class)->createPackage(
+            $student,
+            'Contact merge race package',
+            2,
+            '80.00',
+            '0.00',
+            'USD',
+            null,
+            'contact-merge-race-package-'.Str::uuid(),
+        );
+
+        $slotOwnerToken = Str::random(64);
+        $slots = $this->availabilityService->getAvailableSlotsGroupedByDate(
+            sessionType: $this->sessionType,
+            customerTimezone: 'Africa/Cairo',
+            fromDate: $date,
+            toDate: $date,
+            currentVisitorToken: $slotOwnerToken,
+        );
+        $targetStart = $date->setTime(14, 0)->setTimezone('UTC')->toDateTimeString();
+        $slot = collect($slots)->flatten(1)->first(fn (array $candidate): bool => $candidate['slot_start_utc'] === $targetStart);
+        $this->assertNotNull($slot, 'A separate server-generated slot is required for the concurrent student booking.');
+        $slotId = app(SlotResolver::class)->issue($this->sessionType, $slot, 'Africa/Cairo', $slotOwnerToken);
+        $bookingKey = 'contact-merge-race-booking-'.Str::uuid();
+        $this->raceBookingKeys[] = $bookingKey;
+
+        $results = $this->runConcurrentWorkers([
+            [
+                'action' => 'merge_contacts',
+                'canonical_contact_id' => $canonical->id,
+                'duplicate_contact_id' => $duplicate->id,
+            ],
+            [
+                'action' => 'book_student',
+                'student_id' => $student->id,
+                'slot_id' => $slotId,
+                'session_type_id' => $this->sessionType->id,
+                'customer_timezone' => 'Africa/Cairo',
+                'idempotency_key' => $bookingKey,
+                'slot_owner_token' => $slotOwnerToken,
+            ],
+        ]);
+
+        $this->assertContains($results[0]['exit_code'], [0, 2], json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertSame(0, $results[1]['exit_code'], json_encode($results, JSON_THROW_ON_ERROR));
+        $newBooking = Booking::query()->where('idempotency_key', $bookingKey)->firstOrFail();
+        $duplicateFresh = Contact::withTrashed()->findOrFail($duplicate->id);
+
+        if ($duplicateFresh->merged_into_contact_id !== null) {
+            $this->assertSame((int) $canonical->id, (int) $newBooking->contact_id);
+            $this->assertDatabaseMissing('bookings', ['contact_id' => $duplicate->id]);
+            $this->assertSame('RESULT:SUCCESS:contact-merge', trim($results[0]['output']));
+        } else {
+            $this->assertSame((int) $duplicate->id, (int) $newBooking->contact_id);
+            $this->assertStringStartsWith('RESULT:CONFLICT:', $results[0]['output']);
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $payloads
+     * @return array<int, array{exit_code: int|null, output: string}>
+     */
+    private function runConcurrentWorkers(array $payloads): array
+    {
+        $gate = sys_get_temp_dir().DIRECTORY_SEPARATOR.'boltlanding-v3-'.Str::uuid();
+        $workerPath = base_path('tests/Feature/Concurrency/booking_worker.php');
+        $processes = [];
+        $readyFiles = [];
+
+        try {
+            foreach ($payloads as $index => $payload) {
+                $workerId = 'worker-'.$index;
+                $readyFiles[] = $gate.'.ready.'.$workerId;
+                $payload['start_gate'] = $gate;
+                $payload['worker_id'] = $workerId;
+                $process = new Process([PHP_BINARY, $workerPath, json_encode($payload, JSON_THROW_ON_ERROR)]);
+                $process->setTimeout(20);
+                $process->start();
+                $processes[] = $process;
+            }
+
+            $deadline = microtime(true) + 10;
+            while (microtime(true) < $deadline && count(array_filter($readyFiles, 'is_file')) !== count($readyFiles)) {
+                usleep(10000);
+            }
+            $readyCount = count(array_filter($readyFiles, 'is_file'));
+            if ($readyCount !== count($readyFiles)) {
+                $outputs = array_map(fn (Process $process): string => $process->getOutput().$process->getErrorOutput(), $processes);
+                $this->fail('Concurrent workers did not reach their start gate: '.json_encode($outputs, JSON_THROW_ON_ERROR));
+            }
+
+            file_put_contents($gate, 'start', LOCK_EX);
+            foreach ($processes as $process) {
+                $process->wait();
+            }
+
+            return array_map(fn (Process $process): array => [
+                'exit_code' => $process->getExitCode(),
+                'output' => trim($process->getOutput()),
+            ], $processes);
+        } finally {
+            if (is_file($gate)) {
+                unlink($gate);
+            }
+            foreach ($readyFiles as $readyFile) {
+                if (is_file($readyFile)) {
+                    unlink($readyFile);
+                }
+            }
+            foreach ($processes as $process) {
+                if ($process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
+        }
     }
 }

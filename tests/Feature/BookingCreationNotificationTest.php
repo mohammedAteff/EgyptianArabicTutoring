@@ -13,10 +13,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class BookingCreationNotificationTest extends TestCase
 {
+    use IssuesBookingSlotIds;
     use RefreshDatabase;
 
     protected Administrator $admin;
@@ -65,22 +67,11 @@ class BookingCreationNotificationTest extends TestCase
     {
         $slotDate = CarbonImmutable::now('Africa/Cairo')->addDays(3)->toDateString();
         $slotStartUtc = CarbonImmutable::parse("{$slotDate} 10:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-        $slotEndUtc = CarbonImmutable::parse("{$slotDate} 11:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-
-        Livewire::test(BookingWizard::class)
+        $wizard = Livewire::test(BookingWizard::class)
             ->call('selectSession', $this->sessionType->id)
             ->call('setDetectedTimezone', 'Africa/Cairo')
-            ->call('selectDate', $slotDate)
-            ->call('selectSlot', $slotStartUtc, $slotEndUtc, [
-                'slot_start_utc' => $slotStartUtc,
-                'slot_end_utc' => $slotEndUtc,
-                'customer_formatted' => '10:00 AM',
-                'customer_formatted_end' => '11:00 AM',
-                'customer_date' => $slotDate,
-                'business_start_time' => '10:00',
-                'business_end_time' => '11:00',
-                'business_date' => $slotDate,
-            ])
+            ->call('selectDate', $slotDate);
+        $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'Africa/Cairo', $wizard->get('visitorToken')))
             ->set('name', 'Nadia Mostafa')
             ->set('email', 'nadia@example.com')
             ->call('submitDetails')
@@ -102,22 +93,11 @@ class BookingCreationNotificationTest extends TestCase
     {
         $slotDate = CarbonImmutable::now('Africa/Cairo')->addDays(4)->toDateString();
         $slotStartUtc = CarbonImmutable::parse("{$slotDate} 14:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-        $slotEndUtc = CarbonImmutable::parse("{$slotDate} 15:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
-
         $wizard = Livewire::test(BookingWizard::class)
             ->call('selectSession', $this->sessionType->id)
             ->call('setDetectedTimezone', 'Africa/Cairo')
-            ->call('selectDate', $slotDate)
-            ->call('selectSlot', $slotStartUtc, $slotEndUtc, [
-                'slot_start_utc' => $slotStartUtc,
-                'slot_end_utc' => $slotEndUtc,
-                'customer_formatted' => '2:00 PM',
-                'customer_formatted_end' => '3:00 PM',
-                'customer_date' => $slotDate,
-                'business_start_time' => '14:00',
-                'business_end_time' => '15:00',
-                'business_date' => $slotDate,
-            ])
+            ->call('selectDate', $slotDate);
+        $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'Africa/Cairo', $wizard->get('visitorToken')))
             ->set('name', 'Tariq Zaki')
             ->set('email', 'tariq@example.com')
             ->call('submitDetails');

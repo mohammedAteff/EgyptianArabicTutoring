@@ -12,6 +12,7 @@ use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Contacts\Services\ContactService;
+use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -25,73 +26,16 @@ class BookingService
         protected TimezoneService $timezoneService,
         protected ContactService $contactService,
         protected AvailabilityService $availabilityService,
-        protected AnalyticsService $analyticsService
+        protected AnalyticsService $analyticsService,
+        protected DatabaseCapability $databaseCapability,
     ) {}
-
-    /**
-     * Create a booking directly from a visitor session, deriving detected_country_code strictly from the session.
-     */
-    public function createBookingFromSession(mixed $session, array $data): Booking
-    {
-        $sessionType = isset($data['session_type_id'])
-            ? SessionType::find($data['session_type_id'])
-            : SessionType::where('active', true)->first();
-
-        if (! $sessionType) {
-            $sessionType = SessionType::create([
-                'title' => 'Diagnostic & Learning Roadmap',
-                'slug' => 'diagnostic-session',
-                'description' => 'Diagnostic session',
-                'duration_minutes' => 60,
-                'price' => 25.00,
-                'currency' => 'USD',
-                'active' => true,
-            ]);
-        }
-
-        $startUtc = isset($data['start_at_utc']) ? CarbonImmutable::parse($data['start_at_utc'], 'UTC') : now()->addDays(2);
-        $endUtc = isset($data['end_at_utc']) ? CarbonImmutable::parse($data['end_at_utc'], 'UTC') : $startUtc->addMinutes($sessionType->duration_minutes ?? 60);
-
-        $customerTimezone = $data['customer_timezone'] ?? 'Africa/Cairo';
-        $businessTimezone = 'Africa/Cairo';
-
-        $snapshot = $this->timezoneService->createBookingSnapshot(
-            startUtc: $startUtc,
-            endUtc: $endUtc,
-            customerTimezone: $customerTimezone,
-            businessTimezone: $businessTimezone
-        );
-
-        $contact = $this->contactService->resolveOrCreate(
-            email: $data['customer_email'] ?? $data['email'] ?? 'student@example.test',
-            name: $data['customer_name'] ?? $data['name'] ?? 'Test Student',
-            phone: $data['customer_phone'] ?? $data['phone'] ?? null,
-            attribution: ['utm_source' => 'Direct / None']
-        );
-
-        // Derive country strictly from the session state, ignoring caller-supplied detected_country_code
-        $detectedCountry = $session instanceof VisitorSession
-            ? $session->detected_country_code
-            : null;
-
-        return Booking::create(array_merge($snapshot, [
-            'session_type_id' => $sessionType->id,
-            'contact_id' => $contact->id,
-            'status' => 'confirmed',
-            'idempotency_key' => $data['idempotency_key'] ?? (string) Str::uuid(),
-            'confirmation_token' => Str::random(64),
-            'detected_country_code' => $detectedCountry,
-            'utm_source' => 'Direct / None',
-        ]));
-    }
 
     /**
      * Create a new confirmed booking atomically.
      *
      * @param  array{
      *     session_type_id: int,
-     *     start_at_utc: CarbonInterface|string,
-     *     end_at_utc: CarbonInterface|string,
+     *     slot_id?: string,
      *     customer_timezone: string,
      *     customer_name: string,
      *     customer_email: string,
@@ -116,8 +60,7 @@ class BookingService
      *
      * @param  array{
      *     session_type_id: int,
-     *     start_at_utc: CarbonInterface|string,
-     *     end_at_utc: CarbonInterface|string,
+     *     slot_id?: string,
      *     customer_timezone: string,
      *     customer_name: string,
      *     customer_email: string,
@@ -163,15 +106,29 @@ class BookingService
             throw new SlotUnavailableException('Session authentication token is required.');
         }
 
-        $sessionType = SessionType::findOrFail($data['session_type_id']);
-        $startUtc = $this->timezoneService->toUtc($data['start_at_utc']);
-        $endUtc = $this->timezoneService->toUtc($data['end_at_utc']);
-        $nowUtc = CarbonImmutable::now('UTC');
-
-        if ($startUtc <= $nowUtc) {
-            throw new SlotUnavailableException('Cannot book an appointment in the past.');
+        $sessionType = SessionType::query()->findOrFail($data['session_type_id']);
+        $holdSnapshot = BookingHold::query()->find((int) $holdId);
+        if (! $holdSnapshot) {
+            throw new SlotUnavailableException('Invalid reservation hold authentication.');
         }
 
+        if (! hash_equals((string) $holdSnapshot->hold_token, (string) $holdToken)) {
+            throw new SlotUnavailableException('Invalid reservation hold authentication.');
+        }
+        if (! hash_equals((string) $holdSnapshot->visitor_token, (string) $visitorToken)) {
+            throw new SlotUnavailableException('Reservation hold ownership mismatch.');
+        }
+        if (! hash_equals((string) $holdSnapshot->session_token, (string) $sessionToken)) {
+            throw new SlotUnavailableException('Reservation hold session mismatch.');
+        }
+        if ((int) $holdSnapshot->session_type_id !== (int) $sessionType->id) {
+            throw new SlotUnavailableException('Reservation hold session type mismatch.');
+        }
+
+        // The authenticated server-side hold is the only source of slot timestamps.
+        // Any start/end values supplied by a caller are deliberately ignored.
+        $startUtc = $this->timezoneService->toUtc($holdSnapshot->slot_start_utc);
+        $endUtc = $this->timezoneService->toUtc($holdSnapshot->slot_end_utc);
         $customerTimezone = $this->timezoneService->validate($data['customer_timezone']);
         $businessTimezone = $this->timezoneService->getBusinessTimezone();
 
@@ -181,8 +138,32 @@ class BookingService
         $analyticsSessionToken = $data['analytics_session_token']
             ?? (session()->isStarted() ? session('analytics_session_token') : null)
             ?? request()->cookie('_va_session');
+        $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
+        $existingBooking = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
+        if ($existingBooking) {
+            if (! hash_equals((string) $existingBooking->visitor_token, (string) $expectedVisitorToken)) {
+                throw new SlotUnavailableException('This booking request cannot be verified.');
+            }
 
-        $booking = DB::transaction(function () use (
+            return $existingBooking;
+        }
+
+        if (! $sessionType->active) {
+            throw new SlotUnavailableException('This session type is not currently active.');
+        }
+        if ($startUtc <= CarbonImmutable::now('UTC')) {
+            throw new SlotUnavailableException('Cannot book an appointment in the past.');
+        }
+        $nowUtc = CarbonImmutable::now('UTC');
+
+        $heldSessionType = SessionType::query()->whereKey($holdSnapshot->session_type_id)->first();
+        if (! $heldSessionType) {
+            throw new SlotUnavailableException('This reservation hold is no longer valid.');
+        }
+        $initialConfig = $this->availabilityService->resolveSlotConfiguration($heldSessionType, $startUtc, $endUtc);
+
+        $bookingCreated = false;
+        $booking = $this->databaseCapability->transaction(function () use (
             $data,
             $idempotencyKey,
             $sessionType,
@@ -194,21 +175,19 @@ class BookingService
             $sessionToken,
             $holdId,
             $holdToken,
+            $holdSnapshot,
+            $initialConfig,
             $analyticsVisitorToken,
             $analyticsSessionToken,
-            $nowUtc
+            $nowUtc,
+            &$bookingCreated,
         ) {
-            // Re-check idempotency inside transaction
-            $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
-            if ($existing) {
-                return $existing;
-            }
-
-            // 1. Resolve canonical slot configuration first
-            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $startUtc, $endUtc);
-
-            // 2. Acquire deterministic calendar locks on buffer-expanded business date(s)
-            $this->availabilityService->acquireCalendarDateLocks($startUtc, $config['end_utc'], $config['buffer_minutes']);
+            // Acquire the canonical scheduling mutex before any booking-row lock.
+            $this->availabilityService->acquireCalendarDateLocks(
+                $startUtc,
+                $initialConfig['end_utc'],
+                $initialConfig['buffer_minutes'],
+            );
 
             // 3. Verify hold with strict authentication and ownership
             $hold = BookingHold::query()
@@ -221,12 +200,13 @@ class BookingService
                 throw new SlotUnavailableException('Invalid reservation hold authentication.');
             }
 
-            if ($hold->status !== 'active') {
-                throw new SlotUnavailableException('Your reservation hold is no longer active.');
+            if ((int) $hold->session_type_id !== (int) $sessionType->id) {
+                throw new SlotUnavailableException('Reservation hold session type mismatch.');
             }
 
-            if ($hold->expires_at <= now()) {
-                throw new SlotUnavailableException('Your reservation hold has expired. Please choose a slot again.');
+            if (! $hold->slot_start_utc->equalTo($holdSnapshot->slot_start_utc)
+                || ! $hold->slot_end_utc->equalTo($holdSnapshot->slot_end_utc)) {
+                throw new SlotUnavailableException('The held slot changed while it was being confirmed. Please select a slot again.');
             }
 
             if (! hash_equals((string) $hold->visitor_token, (string) $visitorToken)) {
@@ -237,14 +217,30 @@ class BookingService
                 throw new SlotUnavailableException('Reservation hold session mismatch.');
             }
 
-            if ((int) $hold->session_type_id !== (int) $sessionType->id) {
-                throw new SlotUnavailableException('Reservation hold session type mismatch.');
+            // Check idempotency only after the scheduling mutex and authenticated hold are locked.
+            $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
+            $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+            if ($existing) {
+                if (! hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
+                    throw new SlotUnavailableException('This booking request cannot be verified.');
+                }
+
+                return $existing;
             }
 
-            if (CarbonImmutable::parse($hold->slot_start_utc)->toDateTimeString() !== $startUtc->toDateTimeString() ||
-                CarbonImmutable::parse($hold->slot_end_utc)->toDateTimeString() !== $config['end_utc']->toDateTimeString()) {
-                throw new SlotUnavailableException('Reservation hold slot interval mismatch.');
+            if ($hold->status !== 'active') {
+                throw new SlotUnavailableException('Your reservation hold is no longer active.');
             }
+
+            if ($hold->expires_at <= now()) {
+                throw new SlotUnavailableException('Your reservation hold has expired. Please choose a slot again.');
+            }
+
+            $config = $this->availabilityService->resolveSlotConfiguration(
+                sessionType: $sessionType,
+                startUtc: $hold->slot_start_utc,
+                endUtc: $hold->slot_end_utc,
+            );
 
             // 4. Authoritative slot validation
             $this->availabilityService->validateSlotForBooking(
@@ -348,11 +344,12 @@ class BookingService
                     'referrer' => $referrer,
                     'touch_at' => $touchAt,
                 ]));
+                $bookingCreated = true;
             } catch (QueryException $e) {
                 // If duplicate key error (1062), fetch and return the winning concurrent booking
                 if ($e->getCode() === '23000' || str_contains($e->getMessage(), '1062')) {
                     $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
-                    if ($existing) {
+                    if ($existing && hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
                         return $existing;
                     }
                 }
@@ -400,10 +397,12 @@ class BookingService
             return $booking;
         }, 5);
 
-        try {
-            app(AdminNotificationService::class)->notifyBookingCreated($booking);
-        } catch (\Throwable) {
-            // Notification failures must never roll back or prevent valid bookings
+        if ($bookingCreated) {
+            try {
+                app(AdminNotificationService::class)->notifyBookingCreated($booking);
+            } catch (\Throwable) {
+                // Notification failures must never roll back or prevent valid bookings.
+            }
         }
 
         return $booking;
@@ -448,7 +447,8 @@ class BookingService
         $customerTimezone = $this->timezoneService->validate($data['customer_timezone'] ?? $this->timezoneService->getBusinessTimezone());
         $businessTimezone = $this->timezoneService->getBusinessTimezone();
 
-        $booking = DB::transaction(function () use (
+        $bookingCreated = false;
+        $booking = $this->databaseCapability->transaction(function () use (
             $data,
             $idempotencyKey,
             $sessionType,
@@ -456,17 +456,18 @@ class BookingService
             $endUtc,
             $customerTimezone,
             $businessTimezone,
-            $adminId
+            $adminId,
+            &$bookingCreated,
         ) {
-            // Re-check idempotency inside transaction
+            // Acquire deterministic calendar locks on buffer-expanded business date(s)
+            $buffer = $this->availabilityService->resolveEffectiveBuffer($startUtc);
+            $this->availabilityService->acquireCalendarDateLocks($startUtc, $endUtc, $buffer);
+
+            // Booking locks follow the canonical calendar mutex in the global lock order.
             $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
             if ($existing) {
                 return $existing;
             }
-
-            // Acquire deterministic calendar locks on buffer-expanded business date(s)
-            $buffer = $this->availabilityService->resolveEffectiveBuffer($startUtc);
-            $this->availabilityService->acquireCalendarDateLocks($startUtc, $endUtc, $buffer);
 
             // Authoritative slot validation without hold requirement (trusted admin override)
             $this->availabilityService->validateSlotForBooking(
@@ -520,6 +521,7 @@ class BookingService
                     'referrer' => $data['referrer'] ?? null,
                     'touch_at' => isset($data['touch_at']) ? CarbonImmutable::parse($data['touch_at']) : null,
                 ]));
+                $bookingCreated = true;
             } catch (QueryException $e) {
                 if ($e->getCode() === '23000' || str_contains($e->getMessage(), '1062')) {
                     $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
@@ -549,10 +551,12 @@ class BookingService
             return $booking;
         }, 5);
 
-        try {
-            app(AdminNotificationService::class)->notifyBookingCreated($booking);
-        } catch (\Throwable) {
-            // Notification failures must never roll back or prevent valid bookings
+        if ($bookingCreated) {
+            try {
+                app(AdminNotificationService::class)->notifyBookingCreated($booking);
+            } catch (\Throwable) {
+                // Notification failures must never roll back or prevent valid bookings.
+            }
         }
 
         return $booking;

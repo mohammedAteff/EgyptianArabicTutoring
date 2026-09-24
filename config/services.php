@@ -45,4 +45,8 @@ return [
         'trusted_proxies' => env('GEOIP_TRUSTED_PROXIES', ''),
     ],
 
+    'student_auth' => [
+        'hmac_key' => env('STUDENT_AUTH_HMAC_KEY'),
+    ],
+
 ];

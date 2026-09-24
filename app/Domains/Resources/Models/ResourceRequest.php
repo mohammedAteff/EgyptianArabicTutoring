@@ -37,6 +37,13 @@ class ResourceRequest extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $model): void {
+            $model->created_at ??= now();
+        });
+    }
+
     public function contact(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'contact_id');

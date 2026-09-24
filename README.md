@@ -20,7 +20,7 @@ The platform is designed as a **modular monolith** adhering to:
 
 - **Runtime**: PHP 8.4
 - **Framework**: Laravel 13.32
-- **Database**: MariaDB 10.4 / InnoDB (Strict Mode, Repeatable Read)
+- **Database**: MariaDB/InnoDB; the local MariaDB-B11 greeting reports 10.11.18. Verify and pin the production vendor/version separately.
 - **Frontend**: Blade, Livewire 4, Alpine.js, Tailwind CSS 4, Vite 8
 - **Testing**: PHPUnit 12
 
@@ -74,7 +74,7 @@ app/
    ```
 
 4. **Database Configuration**:
-   Ensure MariaDB is running on port 3306. Create database `bolt_landing` and test database `bolt_landing_test`:
+   Ensure the local MariaDB service is listening on `127.0.0.1:3307`. Create database `bolt_landing` and test database `bolt_landing_test`:
    ```sql
    CREATE DATABASE bolt_landing CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    CREATE DATABASE bolt_landing_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

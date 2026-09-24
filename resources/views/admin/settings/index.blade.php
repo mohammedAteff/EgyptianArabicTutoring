@@ -226,6 +226,13 @@
             </div>
 
             <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Lesson Video Meeting Link</label>
+                <input type="url" name="video_meeting_url" value="{{ old('video_meeting_url', $settings['video_meeting_url']->value ?? '') }}" maxlength="2048" placeholder="https://…" autocomplete="url"
+                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <p class="text-[11px] text-slate-400 mt-1">Use the private lesson-room URL. It appears in confirmed student sessions, booking confirmations, and calendar files. Leave blank until a real join link is available.</p>
+            </div>
+
+            <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation Policy</label>
                 <textarea name="cancellation_policy" rows="3" required 
                           class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ old('cancellation_policy', $settings['cancellation_policy']->value ?? 'Cancellations with at least 4 hours notice do not forfeit the session credit. Rescheduling requests must be made directly to Abdallah at least 24 hours before class.') }}</textarea>

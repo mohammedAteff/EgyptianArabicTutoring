@@ -1,0 +1,99 @@
+<?php
+
+namespace App\Domains\Students\Services;
+
+use InvalidArgumentException;
+use libphonenumber\NumberParseException;
+use libphonenumber\PhoneNumberFormat;
+use libphonenumber\PhoneNumberUtil;
+use Normalizer;
+
+class StudentIdentityService
+{
+    public function normalizeName(string $name): string
+    {
+        $normalized = Normalizer::normalize($name, Normalizer::FORM_KC);
+        if ($normalized === false) {
+            throw new InvalidArgumentException('Invalid student name.');
+        }
+
+        $lowercase = mb_strtolower($normalized, 'UTF-8');
+
+        return trim((string) preg_replace('/[\p{P}\p{Z}\s]+/u', ' ', $lowercase));
+    }
+
+    public function normalizeEmail(?string $email): ?string
+    {
+        $normalized = mb_strtolower(trim((string) $email), 'UTF-8');
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    public function normalizePhone(?string $phone, ?string $countryCode = null): ?string
+    {
+        $raw = trim((string) $phone);
+        if ($raw === '') {
+            return null;
+        }
+        if (strlen($raw) > 40) {
+            throw new InvalidArgumentException('Invalid phone number.');
+        }
+
+        if (! str_starts_with($raw, '+') && ! $countryCode) {
+            throw new InvalidArgumentException('A country is required for national phone numbers.');
+        }
+
+        $region = $countryCode ? strtoupper(trim($countryCode)) : null;
+        $util = PhoneNumberUtil::getInstance();
+        if ($region && ! in_array($region, $util->getSupportedRegions(), true)) {
+            throw new InvalidArgumentException('Invalid phone country.');
+        }
+
+        try {
+            $parsed = $util->parse($raw, $region);
+        } catch (NumberParseException) {
+            throw new InvalidArgumentException('Invalid phone number.');
+        }
+
+        if (! $util->isValidNumber($parsed)) {
+            throw new InvalidArgumentException('Invalid phone number.');
+        }
+
+        return $util->format($parsed, PhoneNumberFormat::E164);
+    }
+
+    public function normalizedFullName(string $firstName, string $lastName): string
+    {
+        return $this->normalizeName($firstName.' '.$lastName);
+    }
+
+    /** @return array<string, string> */
+    public function authFingerprints(?string $email, ?string $phone, ?string $dateOfBirth, ?string $phoneCountry = null): array
+    {
+        $email = $this->normalizeEmail($email);
+        try {
+            $phone = $this->normalizePhone($phone, $phoneCountry);
+        } catch (InvalidArgumentException) {
+            $phone = substr(trim((string) $phone), 0, 80) ?: null;
+        }
+
+        $secret = (string) (config('services.student_auth.hmac_key') ?: config('app.key'));
+        if ($secret === '') {
+            throw new InvalidArgumentException('Student authentication secret is not configured.');
+        }
+
+        $fingerprints = [];
+        foreach (['email' => $email, 'phone' => $phone] as $field => $value) {
+            if ($value === null) {
+                continue;
+            }
+
+            $fingerprints[$field] = $field.':'.hash_hmac('sha256', $value, $secret);
+            if ($dateOfBirth !== null && $dateOfBirth !== '') {
+                $fingerprints['dob_'.$field] = 'dob_'.$field.':'.hash_hmac('sha256', substr($dateOfBirth, 0, 32).'|'.$value, $secret);
+            }
+        }
+
+        return $fingerprints;
+    }
+}

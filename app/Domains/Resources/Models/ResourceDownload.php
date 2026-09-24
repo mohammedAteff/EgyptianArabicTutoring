@@ -31,6 +31,13 @@ class ResourceDownload extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $model): void {
+            $model->created_at ??= now();
+        });
+    }
+
     public function resource(): BelongsTo
     {
         return $this->belongsTo(Resource::class, 'resource_id');

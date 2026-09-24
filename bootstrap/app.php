@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckMaintenanceMode;
 use App\Http\Middleware\EnsureAdminRole;
+use App\Http\Middleware\EnsureStudentAuthenticated;
 use App\Http\Middleware\NormalizeTrailingSlash;
 use App\Http\Middleware\SetRequestLocale;
 use App\Http\Middleware\TrackVisitorSession;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (Request $request) => route('admin.login'));
         $middleware->alias([
             'role' => EnsureAdminRole::class,
+            'student.auth' => EnsureStudentAuthenticated::class,
         ]);
         $middleware->web(append: [
             NormalizeTrailingSlash::class,

@@ -449,6 +449,7 @@ class AdminOperationsTest extends TestCase
             'hero_title' => 'Speak Street Egyptian Arabic Fluently',
             'hero_subtitle' => 'Personalized 1-on-1 private lessons with structured immersion.',
             'booking_instructions' => 'Select your preferred local time slot.',
+            'video_meeting_url' => 'https://meet.example.test/arabic-room',
             'cancellation_policy' => 'Notice required 24 hours in advance.',
             'rescheduling_policy' => 'Free rescheduling up to 24 hours prior.',
             'maintenance_mode' => 0,
@@ -458,6 +459,17 @@ class AdminOperationsTest extends TestCase
 
         $this->assertEquals('Ahmad Arabic Academy', Setting::get('site_name'));
         $this->assertEquals('Speak Street Egyptian Arabic Fluently', Setting::get('hero_title'));
+        $this->assertSame('https://meet.example.test/arabic-room', Setting::get('video_meeting_url'));
+    }
+
+    public function test_admin_settings_reject_non_https_video_meeting_links(): void
+    {
+        $this->actingAs($this->admin, 'web')
+            ->from(route('admin.settings.index'))
+            ->post(route('admin.settings.update'), ['video_meeting_url' => 'javascript:alert(1)'])
+            ->assertSessionHasErrors('video_meeting_url');
+
+        $this->assertNull(Setting::get('video_meeting_url'));
     }
 
     public function test_regular_admin_denied_access_to_super_admin_routes(): void

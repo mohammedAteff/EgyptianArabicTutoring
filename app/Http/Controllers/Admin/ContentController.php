@@ -9,10 +9,13 @@ use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\SocialLink;
 use App\Domains\CMS\Services\TranslationService;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ContentController extends Controller
@@ -185,28 +188,107 @@ class ContentController extends Controller
 
     public function updateSocial(Request $request): RedirectResponse
     {
-        $socials = $request->input('socials', []);
-
-        foreach ($socials as $id => $data) {
-            $link = SocialLink::find($id);
-            if ($link) {
-                $link->update([
-                    'url_or_phone' => $data['url_or_phone'] ?? $link->url_or_phone,
-                    'label' => $data['label'] ?? $link->label,
-                    'default_message' => $data['default_message'] ?? null,
-                    'enabled' => isset($data['enabled']),
-                ]);
-            }
-        }
-
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'social_links_updated',
-            'entity_type' => SocialLink::class,
-            'entity_id' => 0,
-            'created_at' => now(),
+        $validated = $request->validate([
+            'socials' => ['required', 'array', 'max:50'],
+            'socials.*' => ['required', 'array'],
+            'socials.*.url_or_phone' => ['required', 'string', 'max:2048'],
+            'socials.*.label' => ['nullable', 'string', 'max:100'],
+            'socials.*.default_message' => ['nullable', 'string', 'max:1000'],
+            'socials.*.enabled' => ['nullable', 'boolean'],
+            'socials.*.sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
         ]);
 
+        DB::transaction(function () use ($validated): void {
+            $ids = array_map('intval', array_keys($validated['socials']));
+            sort($ids);
+            $links = SocialLink::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            foreach ($validated['socials'] as $id => $data) {
+                $link = $links->get((int) $id);
+                abort_if(! $link, 404);
+                $this->validateSocialTarget($link, $data['url_or_phone']);
+                $link->update([
+                    'url_or_phone' => trim($data['url_or_phone']),
+                    'label' => trim((string) ($data['label'] ?? $link->label)),
+                    'default_message' => $link->platform === 'whatsapp' ? ($data['default_message'] ?? null) : null,
+                    'enabled' => (bool) ($data['enabled'] ?? false),
+                    'sort_order' => (int) $data['sort_order'],
+                ]);
+            }
+
+            AuditLog::create([
+                'administrator_id' => Auth::guard('web')->id(),
+                'action' => 'social_links_updated',
+                'entity_type' => SocialLink::class,
+                'entity_id' => 0,
+                'created_at' => now(),
+            ]);
+        });
+
         return back()->with('success', 'Social links updated.');
+    }
+
+    public function toggleSocial(Request $request, SocialLink $socialLink): JsonResponse
+    {
+        $validated = $request->validate(['enabled' => ['required', 'boolean']]);
+        $socialLink->update(['enabled' => (bool) $validated['enabled']]);
+
+        return response()->json(['enabled' => $socialLink->enabled]);
+    }
+
+    public function storeSocial(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'platform' => ['required', 'string', Rule::in(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'])],
+            'label' => ['required', 'string', 'max:100'],
+            'url_or_phone' => ['required', 'string', 'max:2048'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:10000'],
+        ]);
+        $candidate = new SocialLink(['platform' => $data['platform']]);
+        $this->validateSocialTarget($candidate, $data['url_or_phone']);
+
+        DB::transaction(function () use ($data): void {
+            SocialLink::create([
+                'platform' => $data['platform'],
+                'label' => trim($data['label']),
+                'url_or_phone' => trim($data['url_or_phone']),
+                'sort_order' => $data['sort_order'] ?? ((int) SocialLink::query()->max('sort_order') + 1),
+                'enabled' => false,
+            ]);
+            AuditLog::create([
+                'administrator_id' => Auth::guard('web')->id(),
+                'action' => 'social_link_created',
+                'entity_type' => SocialLink::class,
+                'entity_id' => 0,
+                'created_at' => now(),
+            ]);
+        });
+
+        return back()->with('success', 'Social channel added.');
+    }
+
+    private function validateSocialTarget(SocialLink $link, string $target): void
+    {
+        $target = trim($target);
+        if ($link->platform === 'whatsapp') {
+            $phone = preg_replace('/[^0-9]/', '', $target);
+            if (! preg_match('/^\+?[1-9][0-9\s().-]{6,22}$/', $target) || strlen((string) $phone) < 8 || strlen((string) $phone) > 15) {
+                throw ValidationException::withMessages(['socials' => 'Enter a valid international WhatsApp phone number.']);
+            }
+
+            return;
+        }
+        if ($link->platform === 'telegram' && preg_match('/^@?[A-Za-z0-9_]{5,32}$/', $target)) {
+            return;
+        }
+
+        $parts = parse_url($target);
+        if (! filter_var($target, FILTER_VALIDATE_URL)
+            || ! is_array($parts)
+            || ! in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || empty($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])) {
+            throw ValidationException::withMessages(['socials' => 'Social URLs must be complete http or https URLs without embedded credentials.']);
+        }
     }
 }

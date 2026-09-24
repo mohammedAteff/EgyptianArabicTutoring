@@ -6,7 +6,9 @@ use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Models\MarketingTouch;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\GeoIpService;
+use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Contacts\Models\Contact;
 use App\Http\Middleware\TrackVisitorSession;
 use App\Models\Administrator;
@@ -164,16 +166,61 @@ class PhaseCVerificationTest extends TestCase
         $service->recordSession($visitorId, 'DE');
         $session = $service->recordSession($visitorId, 'EG');
 
-        // Booking created during EG session
-        $booking = app(BookingService::class)->createBookingFromSession($session, [
+        $sessionType = SessionType::query()->create([
+            'title' => 'Country snapshot test',
+            'slug' => 'country-snapshot-'.Str::uuid(),
+            'duration_minutes' => 60,
+            'price' => 25,
+            'currency' => 'USD',
+            'active' => true,
+        ]);
+        $startCairo = CarbonImmutable::now('Africa/Cairo')->addDays(5)->startOfDay()->setTime(10, 0);
+        AvailabilityRule::query()->create([
+            'weekday' => $startCairo->dayOfWeek,
+            'start_time' => '09:00:00',
+            'end_time' => '16:00:00',
+            'session_duration_minutes' => 60,
+            'buffer_minutes' => 0,
+            'min_notice_hours' => 0,
+            'max_horizon_days' => 90,
+            'enabled' => true,
+        ]);
+        $visitorToken = $visitorId;
+        $holdSessionToken = 'country-snapshot-hold-'.Str::uuid();
+        $startUtc = $startCairo->setTimezone('UTC');
+        $endUtc = $startUtc->addHour();
+        $hold = app(BookingHoldService::class)->acquireHold(
+            visitorToken: $visitorToken,
+            sessionToken: $holdSessionToken,
+            sessionType: $sessionType,
+            startUtc: $startUtc,
+            endUtc: $endUtc,
+            analyticsVisitorToken: $visitorId,
+            analyticsSessionToken: $session->session_token,
+        );
+
+        // Booking finalized through the same authenticated hold path as a real public request.
+        $booking = app(BookingService::class)->createPublicBooking([
+            'session_type_id' => $sessionType->id,
             'customer_timezone' => 'Africa/Cairo',
-            'start_at_utc' => now()->addDays(2),
-            // Caller attempts to pass conflicting country parameter
+            'customer_name' => 'Country Snapshot Student',
+            'customer_email' => 'country-snapshot-'.Str::uuid().'@boltlanding.test',
+            'visitor_token' => $visitorToken,
+            'session_token' => $holdSessionToken,
+            'hold_id' => $hold->id,
+            'hold_token' => $hold->hold_token,
+            'analytics_visitor_token' => $visitorId,
+            'analytics_session_token' => $session->session_token,
+            'start_at_utc' => $startUtc->addDays(2),
+            'end_at_utc' => $endUtc->addDays(2),
+            // Caller attempts to pass conflicting country parameter.
             'detected_country_code' => 'US',
+            'idempotency_key' => 'country-snapshot-booking-'.Str::uuid(),
         ]);
 
         // Service derives EG from session, ignoring caller-supplied 'US'
         $this->assertEquals('EG', $booking->detected_country_code);
+        $this->assertSame($startUtc->toDateTimeString(), $booking->start_at_utc->setTimezone('UTC')->toDateTimeString());
 
         // Later session in DE does not alter historical booking snapshot
         $service->recordSession($visitorId, 'DE');

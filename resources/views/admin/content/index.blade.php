@@ -190,9 +190,11 @@
                         <div class="flex items-center gap-3 sm:w-48 shrink-0">
                             <label class="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-900 capitalize">
                                 <input type="checkbox" name="socials[{{ $soc->id }}][enabled]" value="1" {{ $soc->enabled ? 'checked' : '' }}
+                                       data-social-toggle data-url="{{ route('admin.content.social.toggle', $soc) }}"
                                        class="w-4 h-4 rounded-sm border-slate-300 text-amber-600 focus:ring-amber-500">
                                 <span>{{ $soc->platform }}</span>
                             </label>
+                            <span data-toggle-status="{{ $soc->id }}" class="text-[10px] text-slate-500" aria-live="polite"></span>
                         </div>
 
                         <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -217,6 +219,10 @@
                                            class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                                 </div>
                             @endif
+                            <div>
+                                <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Display order</label>
+                                <input type="number" min="0" max="10000" name="socials[{{ $soc->id }}][sort_order]" value="{{ $soc->sort_order }}" required class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg">
+                            </div>
                         </div>
                     </div>
                 @endforeach
@@ -228,7 +234,45 @@
                 </button>
             </div>
         </form>
+        <form action="{{ route('admin.content.social.store') }}" method="POST" class="grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
+            @csrf
+            <label class="text-xs font-semibold text-slate-700">Platform<select name="platform" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">@foreach(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'] as $platform)<option value="{{ $platform }}">{{ ucfirst($platform) }}</option>@endforeach</select></label>
+            <label class="text-xs font-semibold text-slate-700">Label<input name="label" required maxlength="100" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
+            <label class="text-xs font-semibold text-slate-700 sm:col-span-2">http(s) URL or international phone<input name="url_or_phone" required maxlength="2048" placeholder="https://…" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
+            <button type="submit" class="justify-self-start rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Add channel</button>
+        </form>
     </div>
+
+    <script>
+        document.addEventListener('change', async (event) => {
+            const toggle = event.target.closest('[data-social-toggle]');
+            if (!toggle) return;
+            const desired = toggle.checked;
+            const status = document.querySelector(`[data-toggle-status="${toggle.name.match(/socials\[(\d+)\]/)?.[1]}"]`);
+            toggle.disabled = true;
+            if (status) status.textContent = 'Saving…';
+            try {
+                const response = await fetch(toggle.dataset.url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                    body: new URLSearchParams({ enabled: desired ? '1' : '0' }),
+                });
+                if (!response.ok) throw new Error('Toggle failed');
+                const result = await response.json();
+                toggle.checked = Boolean(result.enabled);
+                if (status) status.textContent = 'Saved';
+            } catch (error) {
+                toggle.checked = !desired;
+                if (status) status.textContent = 'Could not save';
+            } finally {
+                toggle.disabled = false;
+            }
+        });
+    </script>
 
     <!-- Modal: Add New FAQ -->
     <div x-show="addFaqModalOpen" 
