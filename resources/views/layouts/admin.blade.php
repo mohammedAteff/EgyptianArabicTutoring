@@ -264,7 +264,7 @@
         </aside>
 
         <!-- Main Content Area -->
-        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-64">
             
             <!-- Topbar Header -->
             <header class="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between shadow-xs">
@@ -336,7 +336,7 @@
             @endif
 
             <!-- Main Page Content -->
-            <main class="ml-0 md:ml-64 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <main class="ml-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                 {{ $slot ?? '' }}
                 @yield('content')
             </main>

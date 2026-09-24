@@ -62,6 +62,11 @@ class AdminDrawerAndSocialAccessibilityTest extends TestCase
         $response->assertSee('this.getFocusableElements(sidebar)', false);
         $response->assertSee('@click="closeSidebar()"', false);
 
+        // Desktop layout reserves the fixed sidebar width for the entire content column,
+        // including the topbar, so the navigation cannot cover the search/header area.
+        $response->assertSee('class="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-64"', false);
+        $response->assertSee('class="ml-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"', false);
+
         // Data tables wrapped in overflow-x-auto
         $response->assertSee('overflow-x-auto', false);
     }
