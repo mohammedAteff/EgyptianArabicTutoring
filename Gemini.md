@@ -1,6 +1,6 @@
 # Gemini Remediation Ledger
 
-**Updated:** 2026-09-24
+**Updated:** 2026-09-25
 
 **Specification priority:** `Arabic w Abdallah EDIT V3.md` > V2 > original specification
 
@@ -8,9 +8,12 @@
 
 ## Remaining Issues
 
-- **FA-004 — HIGH / TODO — Production release drift:** the local V3 student portal and article routes are implemented, but the last independently observed Hostinger release returned 404 for `/arabictutor/student/login` and `/arabictutor/articles`. Deploy the reviewed revision, run the documented migrations/backfill/cache/worker sequence, and smoke-test the real `/arabictutor` base path.
-- **FA-005 — HIGH / TODO — Production operations not proven:** local scheduler, queue-health, backup, off-host, and restore capabilities exist, but target-host cron/worker execution, off-host artifact creation, alerting, and restore evidence are not available from this shell. Configure and prove those operations before production approval.
+- **FA-005 — HIGH / TODO — Production operations/recovery not fully proven:** Hostinger now has the reviewed release, Composer dependencies, migrations, caches, built assets, scheduler cron, and queue cron. Manual scheduler/queue commands pass and a post-migration primary backup archive is integrity-checked, but `BACKUP_OFFSITE_DISK` is not configured, recurring cron timestamps remain stale, alert delivery is not evidenced, and a full isolated database/files restore has not been completed. Configure/prove those items before production approval.
 - Owner setup is still required to enter the real private lesson-room URL in Owner Settings; no meeting URL was assumed or read from the local database. This is configuration, not an application-code defect.
+
+## Resolved Deployment Gate
+
+- **FA-004 — RESOLVED:** Commit `7123f15` was pushed to `origin/main` and deployed to `/home/u494520852/domains/mohamedateff.com/arabictutor_app` on Hostinger. Locked Composer dependencies were installed (including `mews/purifier` and `libphonenumber`), production migrations and the zero-row student backfill dry run completed, config/route/view caches were rebuilt, and the Vite build was synchronized. `/arabictutor/`, `/arabictutor/admin/login`, `/arabictutor/student/login`, and `/arabictutor/articles` returned expected responses; the supplied admin credentials reached the dashboard. The former login 500 was caused by the old `Admin/AuthController` path inserting an `audit_logs` row without required `event_uuid`; the current `AuditLog` creating hook supplies it.
 
 ## Resolved During This V3 Pass
 
@@ -41,6 +44,7 @@
 - **Final audit remediation FA-001 (HIGH):** Generic page HTML had a raw public rendering trust boundary. Added `app/Domains/CMS/Services/RichTextSanitizer.php`, applied it to page create/update/translation/draft/restore paths and `PageController` public/preview rendering, and added `tests/Feature/FinalAuditRemediationTest.php` malicious English/translation/restore coverage.
 - **Final audit remediation FA-002 (HIGH):** Authenticated student rescheduling previously shared the empty token limiter bucket. `AppServiceProvider` now keys student attempts by session student and booking while retaining token and IP buckets; cross-student isolation is covered by `FinalAuditRemediationTest`.
 - **Final audit remediation FA-003 (HIGH):** Dashboard/report 7/30/90 presets included an extra Cairo calendar day. `AnalyticsDashboardController` and `ReportController` now use 6/29/89-day offsets; exact-boundary coverage is in `FinalAuditRemediationTest`.
+- **Deployment verification:** Hostinger is at commit `7123f15`; production migrations are complete, `migrate:students-backfill --dry-run` returned zero outcomes, post-migration backup `backup-full-2026-09-24-210348.zip` passed `unzip -t`, and HPanel lists both the once-per-minute scheduler and bounded queue worker cron entries. A full database restore and off-host copy remain intentionally open under FA-005.
 
 ## Verification Baseline
 
@@ -63,4 +67,4 @@
 - Test database isolation: `phpunit.xml` points to `bolt_landing_test`; the project `.env` points to `bolt_landing` on port 3307.
 - Migration status: **44 Ran / 0 Pending**; `db:verify-capability` detected MariaDB 10.11.18 and verified the student FK; backfill dry run made no changes and returned zero rows in every outcome category.
 - Full suite: **472 passed / 2,977 assertions**; Pint and Blade compilation passed; scheduler lists five tasks. Herd PHP 8.4.25 was explicitly invoked for PHP checks.
-- The owner-reported backup and sibling `b11` state remain unverified from this shell, as does any remote production deployment.
+- Remote deployment is verified at commit `7123f15` with live route/admin-login smoke checks. The sibling `b11` state remains outside this review; Hostinger backup integrity is verified, but off-host storage, recurring timestamps, alerting, and full restore remain open under FA-005.

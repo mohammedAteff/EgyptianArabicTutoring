@@ -1,6 +1,6 @@
 # Final Project Audit
 
-Audit date: 2026-09-24  
+Audit date: 2026-09-25
 Repository: `C:\Users\Ateff\Herd\BoltLanding`  
 Specification priority: original specification → V1 → V2 → V3 (newer edits supersede older ones)
 
@@ -10,12 +10,9 @@ The local Laravel repository now satisfies the reviewed application requirements
 
 The verified local baseline is **472 tests, 2,977 assertions, 0 failures, and 0 errors** against MariaDB/InnoDB. Pint, the Vite production build, all 44 migrations, the MariaDB capability/FK gate, and the five scheduled definitions pass.
 
-Two HIGH release gates remain, and neither can be proven from this local repository alone:
+One HIGH release gate remains: production operations/recovery are only partially evidenced. The reviewed commit `7123f15` is pushed to GitHub and deployed to Hostinger; Composer dependencies, migrations, caches, and built assets were updated, and live route plus authenticated admin-login smoke tests pass under `/arabictutor`. Hostinger cron entries and manual scheduler/queue invocations are verified, and a post-migration backup archive was created and integrity-checked. Off-host backup storage, a fresh recurring-cron observation, alert delivery, and a full isolated database restore have not yet been proven.
 
-1. The reviewed V3 revision must be deployed to Hostinger; the last independently observed production deployment returned 404 for `/arabictutor/student/login` and `/arabictutor/articles` while the local routes exist.
-2. Production scheduler, queue worker, off-host backup, alerting, and restore-drill execution must be configured and evidenced on the target host. Local code capability and tests do not prove host operation.
-
-No CRITICAL application-code issue was reproduced. No required local module is missing. The project is therefore **not yet approved as production-complete until FA-004 and FA-005 are closed with target-host evidence**.
+No CRITICAL application-code issue was reproduced. No required local module is missing. The project is **not fully production-approved until FA-005 is closed**, although the former deployment-drift gate is resolved.
 
 ## 2. Critical Issues
 
@@ -25,33 +22,22 @@ The booking path uses persistent calendar lock rows, buffer-expanded lock dates,
 
 ## 3. High-Priority Issues
 
-### FA-004 — Reviewed V3 release is not proven live
-
-- **Severity:** HIGH
-- **Classification:** deployment regression / missing in production
-- **What is wrong:** Local `routes/web.php` contains the V3 student portal and public article routes, but the last read-only production check observed `https://mohamedateff.com/arabictutor/student/login` and `/articles` returning 404 while older public/admin routes returned 200.
-- **Why it matters:** Student authentication, package-aware self-service workflows, and public articles are unavailable to users if the target host is still running the older release.
-- **Evidence:** Local routes in `routes/web.php`; production HTTP observations recorded in the previous audit. The current shell cannot authenticate to or inspect Hostinger deployment state.
-- **Affected requirements:** V3 student portal/authentication/packages/forms/articles; production delivery requirement.
-- **Minimum fix:** Deploy the reviewed commit, install locked Composer/npm dependencies, build assets, run the documented capability gate and forward migrations/backfill, clear/cache config/routes/views, restart workers, and smoke-test the `/arabictutor` base path.
-- **Acceptance:** Deployed commit is recorded; `/arabictutor/student/login` and `/arabictutor/articles` return expected responses; authenticated dashboard, booking/rescheduling, forms, CSRF/session cookies, and assets work.
-
 ### FA-005 — Production scheduler, queue, backup, and restore operation is unproven
 
 - **Severity:** HIGH
 - **Classification:** operationally unverified / partially implemented
-- **What is wrong:** Application code registers scheduler/health/backup functionality, but target-host execution is not evidenced. The reviewed local runtime had no configured backup disk and no fresh scheduler/backup/off-site health timestamps.
+- **What is wrong:** Application code and the Hostinger deployment provide scheduler/queue/backup functionality, but off-host backup storage, a fresh recurring-cron observation, alert delivery, and a full isolated database restore are not evidenced. The primary production backup is local to application storage.
 - **Why it matters:** Scheduled hold cleanup, analytics retention, backups, queue work, and alerts can silently be inactive; a production incident could expose stale data or no recoverable off-host copy.
-- **Evidence:** `routes/console.php` has five schedules; `BackupService`/health code exists; `php artisan schedule:list` proves registration only. Hostinger cron, queue supervisor, backup destination, alerts, and restore results are outside this shell.
+- **Evidence:** `routes/console.php` has five schedules; HPanel lists scheduler and queue cron entries; manual `schedule:run` and bounded `queue:work` both complete; `backup-full-2026-09-24-210348.zip` passes `unzip -t`; `BACKUP_OFFSITE_DISK` is not configured; scheduler/queue log timestamps remain stale.
 - **Affected requirements:** Original operations, backups, retention, restore, health, scheduler, and deployment-readiness requirements; V3 release safety.
-- **Minimum fix:** Configure persistent queue worker and once-per-minute scheduler; configure private primary plus genuinely off-host backup storage; run and hash a backup; execute an isolated database/files restore drill; alert on stale heartbeat/backup/queue state.
-- **Acceptance:** Target-host timestamps are fresh, off-host artifact exists and verifies, isolated restore succeeds, failed-job/queue health is visible, and an alert test is recorded.
+- **Minimum fix:** Configure a genuinely off-host backup destination and alert target, observe fresh scheduler/queue heartbeat timestamps, and complete a full isolated database/files restore drill. Keep the existing primary backup and HPanel cron/queue definitions.
+- **Acceptance:** Fresh target-host timestamps are observed, an off-host artifact exists and verifies, isolated database/files restore succeeds, failed-job/queue health is visible, and an alert test is recorded.
 
 ## 4. Missing Implementations
 
 No required module is wholly absent from the local repository. The following are implemented locally and tested: booking/availability/holds, student identity and portal, packages/credits/payments/refunds, forms, articles, resources, games, CMS/revisions/translations, analytics/reports/exports, media, backups/restore services, scheduler, and health pages.
 
-The only missing state is external: the V3 student/article modules are not proven available on the live deployment (FA-004), and host operations are not proven (FA-005).
+The only missing state is external operations evidence: off-host backup/restore, fresh recurring execution, and alert delivery (FA-005).
 
 ## 5. Incorrect / Partial Implementations
 
@@ -61,14 +47,13 @@ The three application defects found in the earlier audit are now corrected:
 - The authenticated student reschedule limiter keys by student/session and booking, while token routes retain token identity and all requests retain an IP ceiling.
 - Dashboard and report `7d`, `30d`, and `90d` presets use exactly 7, 30, and 90 inclusive Cairo calendar dates.
 
-Only deployment and target-host operations remain partial (FA-004/FA-005). No local backend/frontend mismatch was found in the reviewed flows.
+Only target-host operations/recovery remain partial (FA-005). No local backend/frontend mismatch was found in the reviewed flows.
 
 ## 6. Risks
 
 | Severity | Risk | Evidence | Realistic impact | Required adjustment |
 | --- | --- | --- | --- | --- |
-| HIGH | Deployment drift | Last production check returned 404 for local V3 entry routes | Users cannot use student/articles modules | Deploy reviewed revision and run base-path smoke gate |
-| HIGH | Unproven automation/recovery | Schedule registration exists but host timestamps/off-host artifact/restore are not evidenced | Silent cleanup failure or unrecoverable production data | Configure, monitor, and document cron/queue/backups/restore |
+| HIGH | Unproven automation/recovery | Hostinger cron entries and manual commands pass, but recurring timestamps, off-host artifact, alerting, and full restore are not evidenced | Silent cleanup failure or unrecoverable production data | Configure/monitor off-host backup, alerting, recurring execution, and restore |
 
 No additional HIGH risk is elevated for style, naming, optional refactoring, or speculative architecture.
 
@@ -113,10 +98,10 @@ No additional HIGH risk is elevated for style, naming, optional refactoring, or 
 | Article CMS, purification, revisions, redirects, media restrictions | VERIFIED COMPLETE locally | Article service/controllers/views/tests. |
 | RBAC, audit/privacy, assistant restrictions | VERIFIED COMPLETE | Role middleware, projections, preview denial, privacy tests. |
 | Public/social/responsive/RTL amendments | VERIFIED COMPLETE locally | Current views/components and markup tests. |
-| Production availability | PARTIAL | Local routes exist; live deployment is stale/unverified (FA-004). |
-| Scheduler/off-host backup/restore/release proof | PARTIAL | Local capability passes; target-host operation remains unproven (FA-005). |
+| Production availability | VERIFIED COMPLETE | Commit `7123f15` is deployed; `/arabictutor/`, admin login, student login, and articles returned expected live responses; actual admin login reached the dashboard. |
+| Scheduler/off-host backup/restore/release proof | PARTIAL | Deployment and cron/queue commands are verified; off-host storage, recurrence, alerting, and full restore remain unproven (FA-005). |
 
-**V3 verdict: PARTIAL as a release, although local application implementation is complete.**
+**V3 verdict: IMPLEMENTATION AND DEPLOYMENT VERIFIED; operational recovery evidence remains partial.**
 
 ## 8. Full Specification Compliance Matrix
 
@@ -128,7 +113,7 @@ No additional HIGH risk is elevated for style, naming, optional refactoring, or 
 | DST gaps/folds, buffers, notice, horizon, granularity | Original/V1 | Server-side availability validation | VERIFIED COMPLETE | availability/DST tests | None found |
 | Empty-slot concurrency serialization | Original | Persistent calendar lock rows and deterministic transactions | VERIFIED COMPLETE | booking lock services/process tests | No race reproduced |
 | Holds/ownership/expiry/cleanup/idempotency | Original | Hold and booking services/commands | VERIFIED COMPLETE | hold/idempotency tests | Host cleanup still needs proof |
-| Reschedule/cancellation lifecycle | Original/V3 | Admin and student paths | VERIFIED COMPLETE | lifecycle/reschedule tests | Production availability is FA-004 |
+| Reschedule/cancellation lifecycle | Original/V3 | Admin and student paths | VERIFIED COMPLETE | lifecycle/reschedule tests | Live deployment smoke passed |
 | `.ics` generation | Original | UTC-safe calendar response | VERIFIED COMPLETE | calendar tests | None found |
 | Canonical contacts/normalization/merge | Original/V3 | Unique normalized identity and merge locks | VERIFIED COMPLETE | contact/merge tests | None found |
 | Private resources/gated downloads/analytics | Original/V1 | Private storage, scoped tokens, allow-listed events | VERIFIED COMPLETE | resource/download tests | None found |
@@ -145,7 +130,7 @@ No additional HIGH risk is elevated for style, naming, optional refactoring, or 
 | Backups/restore/off-host | Original | Services and isolated restore support | PARTIAL | `BackupService`, backup tests | Target host/off-host/restore evidence missing (FA-005) |
 | Scheduler/queue/health | Original/V3 | Five schedules, heartbeat and health code | PARTIAL | `routes/console.php`, health services | Host execution/alerts unproven (FA-005) |
 | V2 content/branding/pricing | V2 | Current settings/views | VERIFIED COMPLETE | public/admin tests | None found |
-| V3 DB gate/student portal/packages/forms/articles | V3 | Complete local implementation | PARTIAL for release | routes/services/tests | Live deployment not proven (FA-004) |
+| V3 DB gate/student portal/packages/forms/articles | V3 | Complete implementation deployed under `/arabictutor` | VERIFIED COMPLETE | routes/services/tests plus live smoke checks | No deployment drift reproduced; owner still must configure the real private lesson-room URL. |
 
 ## 9. Bugs Found
 
@@ -159,7 +144,7 @@ No additional HIGH risk is elevated for style, naming, optional refactoring, or 
 
 ### Remaining
 
-FA-004 and FA-005 remain the two HIGH release gates described in Section 3. They require Hostinger access/configuration and cannot be completed by local source changes alone.
+FA-005 is the remaining HIGH release gate described in Section 3. It requires off-host storage/alert configuration and operational observation that cannot be proven by local source changes alone.
 
 ## 10. Missing Modules / Functions
 
@@ -169,13 +154,13 @@ No genuinely required local module/function is missing. Remaining gaps are deplo
 
 The page CMS raw-HTML trust boundary was fixed. `RichTextSanitizer` applies an explicit purifier allow-list and same-origin storage-image validation; page create/update/translation/restore and preview/show paths use the sanitized content. Student rescheduling now has per-student/booking plus IP limits. Admin/super-admin/assistant and student ownership boundaries, CSRF, password reset, private resources, analytics allow-lists, and media path checks were reviewed with passing tests.
 
-No current CRITICAL/HIGH security or authorization defect was found in local source. Production deployment and runtime configuration still require FA-004/FA-005 smoke/evidence.
+No current CRITICAL/HIGH security or authorization defect was found in local source. Deployment and live login/route smoke passed; runtime recovery configuration still requires FA-005 evidence.
 
 ## 12. Booking / Concurrency / Timezone Review
 
 Booking and rescheduling lock real persistent calendar rows, including buffer-expanded dates, in stable order before conflict checks and writes. Idempotency and hold ownership/expiration are enforced in transaction. Independent MariaDB processes cover competing slots/buffers and related merge/refund races. UTC storage, Cairo business days, IANA customer zones, DST gap/fold handling, midnight/date crossing, and `.ics` output are tested.
 
-No double-booking or timezone HIGH defect remains proven. Production smoke testing is still part of FA-004.
+No double-booking or timezone HIGH defect remains proven. Live route/auth smoke passed; recurring operations remain under FA-005.
 
 ## 13. Data Integrity Review
 
@@ -193,11 +178,11 @@ Pages, FAQs, resources, categories, games, and articles have connected admin per
 
 ## 16. Frontend / Responsive / RTL Review
 
-Public/admin responsive structures, mobile navigation, Tailwind layouts, locale-aware direction, Arabic/English content, social/footer changes, student screens, articles, games, and resources are present. The production build succeeds. No concrete HIGH frontend/layout/RTL omission was found. Live availability remains a deployment question (FA-004), not a local view defect.
+Public/admin responsive structures, mobile navigation, Tailwind layouts, locale-aware direction, Arabic/English content, social/footer changes, student screens, articles, games, and resources are present. The production build succeeds. No concrete HIGH frontend/layout/RTL omission was found. The deployed asset manifest and live route smoke checks passed.
 
 ## 17. Operations / Backup / Scheduler / Health Review
 
-Application capability exists for scheduler heartbeat, hold cleanup, analytics aggregation/pruning, backups/retention, session cleanup, queue health, manifests/hashes, isolated restore support, and admin health visibility. `schedule:list` confirms five registrations, but registration is not execution. Host cron, queue supervision, private/off-host storage, alert delivery, fresh timestamps, and a real target-host restore drill remain unverified (FA-005).
+Application capability exists for scheduler heartbeat, hold cleanup, analytics aggregation/pruning, backups/retention, session cleanup, queue health, manifests/hashes, isolated restore support, and admin health visibility. `schedule:list` confirms five registrations; HPanel cron entries and manual scheduler/queue invocations were also verified. The remaining operational gaps are off-host storage, alert delivery, fresh recurring timestamps, and a full target-host database/files restore drill (FA-005).
 
 ## 18. Test Coverage Gaps
 
@@ -205,25 +190,16 @@ Local code-side coverage now includes malicious page/translation/restore payload
 
 The remaining important gaps are external verification gates:
 
-1. Post-deploy smoke tests against the real `/arabictutor` base path, including student login, articles, authenticated booking/rescheduling/forms, assets, CSRF, and cookies.
-2. Host scheduler/queue heartbeat and failed-job visibility.
-3. Off-host backup object/hash verification, alerting, and isolated target-host restore drill.
+1. Fresh recurring scheduler/queue heartbeat and failed-job visibility after the cron configuration has had time to run.
+2. Off-host backup object/hash verification, alerting, and an isolated target-host database/files restore drill.
 
 ## 19. Incorrect Claims in Existing Analysis Files
 
-Older audit text in the first version of this file claimed FA-001/FA-002/FA-003 were still open; that is now stale and is corrected here. `Gemini.md` and `PROJECT_STATUS.md` previously used a “no remaining application issue” statement without the current 472/2,977 baseline and without separating local completion from unverified deployment/operations. They are updated by this remediation pass to record the three fixes and retain FA-004/FA-005 as external release gates.
+Older audit text in the first version of this file claimed FA-001/FA-002/FA-003 were still open; that is stale and corrected here. The earlier FA-004 deployment-drift claim is also superseded: commit `7123f15` is deployed to Hostinger and live admin/student/article smoke checks pass. `Gemini.md` and `PROJECT_STATUS.md` are being updated to retain only FA-005 as the external release gate.
 
 Historical `CODEX_PROJECT_REVIEW.md` and `CODEX_CRITICAL_REVIEW.md` refer to older repository states and are not the current defect ledger.
 
 ## 20. Required Adjustments
-
-### FA-004 — Deploy and smoke-test reviewed V3 release
-
-- **Severity:** HIGH
-- **Affected systems:** Hostinger deployment, `/arabictutor` base path, assets, migrations/backfill, workers/caches.
-- **Required change:** Deploy the reviewed revision with the README capability/migration/backfill/cache/worker sequence.
-- **Tests required:** Production route and authenticated-flow smoke suite.
-- **Acceptance:** Student login/articles and all critical student/admin flows work under `/arabictutor`; deployed commit is recorded.
 
 ### FA-005 — Activate and prove production operations
 
@@ -233,7 +209,7 @@ Historical `CODEX_PROJECT_REVIEW.md` and `CODEX_CRITICAL_REVIEW.md` refer to old
 - **Tests required:** Timestamp/heartbeat, failed-job, off-host hash, alert, and restore checks.
 - **Acceptance:** Fresh target-host health markers and documented recoverable off-host artifact/restore.
 
-No application-code adjustment remains in dependency order before those release gates.
+No application-code adjustment remains in dependency order; only FA-005's host configuration and operational evidence remain.
 
 ## 21. Final Verification Results
 
@@ -247,22 +223,26 @@ No application-code adjustment remains in dependency order before those release 
 | Database capability/FK | **PASS — MariaDB 10.11.18; booking/student FK verified** |
 | Backfill dry run | **PASS — zero exceptions/orphans/outcomes; no records changed** |
 | Scheduler listing | **PASS — 5 definitions registered** |
+| Hostinger deployment | **PASS — commit `7123f15` deployed; Composer install, migrations, caches, and built assets updated** |
+| Live smoke checks | **PASS — `/arabictutor/`, admin login, student login, and articles returned expected responses; supplied admin credentials reached the dashboard** |
+| Production backup | **PASS — post-migration full archive created and `unzip -t` integrity check passed** |
+| Host scheduler/queue commands | **PASS — HPanel cron entries present; manual scheduler and bounded queue worker completed** |
 | Remaining CRITICAL count | **0** |
-| Remaining HIGH count | **2 (FA-004 and FA-005, external release gates)** |
+| Remaining HIGH count | **1 (FA-005, off-host/recurrence/restore evidence)** |
 | Missing required local module count | **0** |
 | V1 completion | **VERIFIED COMPLETE locally** |
 | V2 completion | **VERIFIED COMPLETE locally** |
-| V3 completion | **PARTIAL as a release; local application code verified** |
+| V3 completion | **IMPLEMENTATION AND DEPLOYMENT VERIFIED; operations/recovery evidence remains partial** |
 
 ## 22. Final Verdict
 
-- **Original specification:** Implemented in the local repository; production operations still require the release gates above.
+- **Original specification:** Implemented in the local repository and deployed; production operations/recovery still require FA-005.
 - **V1:** Verified complete locally.
 - **V2:** Verified complete locally; its direct-contact-only rescheduling rule is intentionally superseded by V3 student self-service.
-- **V3:** Local modules and code are verified, but the live deployment and host operations are not yet proven.
+- **V3:** Local modules, deployment, and live critical-route/auth smoke checks are verified; host operations/recovery remain partial under FA-005.
 - **CRITICAL issues:** None proven.
-- **HIGH issues:** Two external HIGH gates remain: deployment drift and unproven production operations/recovery.
+- **HIGH issues:** One external HIGH gate remains: unproven off-host/recurring operations and full restore.
 - **Missing required modules:** None locally.
-- **Before complete approval:** Close FA-004 and FA-005 with target-host evidence.
+- **Before complete approval:** Close FA-005 with off-host backup, recurring heartbeat, alert, and isolated restore evidence.
 
-**Final decision: NOT YET APPROVED AS PRODUCTION-COMPLETE.** The local implementation is verified; deployment and disaster-recovery operation remain mandatory release gates.
+**Final decision: NOT YET FULLY APPROVED AS PRODUCTION-COMPLETE.** The release is deployed and the live 500/login regression is fixed; off-host disaster-recovery and recurring-operation evidence remain mandatory.

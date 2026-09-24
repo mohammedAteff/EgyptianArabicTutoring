@@ -1,10 +1,10 @@
 # Project Status — Egyptian Arabic with Abdallah
 
-**Review date:** 2026-09-24
+**Review date:** 2026-09-25
 
 **Specification priority:** `Arabic w Abdallah EDIT V3.md` > `Arabic w Abdallah Edits V2.md` > `ARABIC TUTORING WEBSITE FINAL 16 Sep.md`
 
-**Status:** Independently checked on 2026-09-24 with Herd PHP 8.4.25: MariaDB 10.11.18 is connected, all 44 application migrations are Ran, the student FK/capability gate passes, and backfill dry run reports zero rows in every outcome category. The latest full suite passes at **472 tests / 2,977 assertions**; Pint, Blade compilation, production frontend build, and five scheduled tasks also pass. The final audit remediation fixed the three prior local HIGH defects (generic page XSS, cross-student reschedule throttling, and off-by-one report presets). Remote production deployment and target-host scheduler/off-host backup/restore operation remain unverified here and are tracked as FA-004/FA-005.
+**Status:** Independently checked on 2026-09-25 with Herd PHP 8.4.25: MariaDB 10.11.18 is connected, all 44 application migrations are Ran, the student FK/capability gate passes, and backfill dry run reports zero rows in every outcome category. The latest full suite passes at **472 tests / 2,977 assertions**; Pint, Blade compilation, production frontend build, and five scheduled tasks also pass. Commit `7123f15` is pushed to GitHub and deployed to Hostinger; production dependencies, migrations, caches, assets, live routes, and admin login were verified. One external HIGH gate remains: off-host backup/restore, recurring scheduler evidence, and alerting are not yet proven (FA-005).
 
 The earlier V2-only status and its 404-test baseline are superseded by this report. Public booking remains the free intake flow; session credits are required only for authenticated student-portal bookings, as clarified by the owner.
 
@@ -12,10 +12,10 @@ The earlier V2-only status and its 404-test baseline are superseded by this repo
 
 - **Stack:** Composer requires PHP `^8.4.1`; the Herd runtime available here is PHP `8.4.25`. The lockfile pins Laravel `13.32.0` and Livewire `4.4.5`; the frontend lockfile pins Tailwind `4.3.3` and Vite `8.3.0`. The existing UI uses Blade, Alpine directives, and Livewire components.
 - **Primary keys:** Existing and V3 migrations consistently use Laravel `$table->id()` / `foreignId()` big-integer keys.
-- **Database:** BoltLanding's `.env` targets `bolt_landing` at `127.0.0.1:3307` as `root`; the password value was not read. Herd PHP 8.4.25 `artisan migrate:status` independently showed 44 Ran / 0 Pending. `db:verify-capability` detected MariaDB 10.11.18 and verified `bookings.student_id → students.id ON DELETE SET NULL`. The read-only student backfill dry run returned zero in every outcome category. `phpunit.xml` targets the separate `bolt_landing_test` database. Remote production database state remains outside this verification.
+- **Database:** BoltLanding's `.env` targets `bolt_landing` at `127.0.0.1:3307` as `root`; the password value was not read. Herd PHP 8.4.25 `artisan migrate:status` independently showed 44 Ran / 0 Pending. `db:verify-capability` detected MariaDB 10.11.18 and verified `bookings.student_id → students.id ON DELETE SET NULL`. The read-only student backfill dry run returned zero in every outcome category. `phpunit.xml` targets the separate `bolt_landing_test` database. Hostinger migrations and backfill dry run were also completed; a full independent production data audit remains out of scope.
 - **Authorization:** Existing admin auth uses `administrators.role` (`super_admin` as owner, `admin`, `assistant`) and `EnsureAdminRole`; student access uses the dedicated `student` guard/session middleware. V3 student actions integrate through these existing boundaries.
 - **Booking integration:** UTC booking snapshots and availability remain in `Booking`, `AvailabilityService`, `TimezoneService`, and the existing `booking_calendar_locks` date rows. Public booking uses a server-side authenticated hold; student booking/rescheduling uses encrypted, expiring, visitor-bound `SlotResolver` identities. `BookingService`, `StudentBookingService`, `RescheduleService`, and `CancellationService` share `DatabaseCapability` transactions and the calendar-date mutex.
-- **Accessible context:** Recent Git history (`git log -20`) and project-root specifications/status files are accessible and were inspected. Only non-secret DB host/port/name/username values were read from `.env`; the password and private keys were not read. Application logs were not inspected during this continuation; external production-host state was not available through this workspace.
+- **Accessible context:** Recent Git history (`git log -20`) and project-root specifications/status files are accessible and were inspected. Only non-secret DB host/port/name/username values were read from the local `.env`; private keys and secrets were not copied into this report. Hostinger deployment state was inspected through the configured SSH/Browser workflow for the release smoke checks below.
 
 This reconciliation is retrospective to the current implementation pass. Read-only checks independently verified the local database/migration gate after the owner confirmed the connection. No additional credentials or server-wide database changes were needed.
 
@@ -51,7 +51,15 @@ Read-only application-database checks were run after the owner confirmed the con
 - **FA-001 fixed:** Added `app/Domains/CMS/Services/RichTextSanitizer.php` and applied one allow-list/same-origin-image policy to generic page create/update, translation, draft/publish, restore, preview, and public rendering. `ArticleService` reuses the shared sanitizer; `FinalAuditRemediationTest` proves script, event-handler, and `javascript:` payloads are removed.
 - **FA-002 fixed:** `AppServiceProvider::boot()` now keys authenticated student reschedule attempts by student session and booking, while token routes retain token identity and every request retains an IP limit. Cross-student isolation is tested.
 - **FA-003 fixed:** `AnalyticsDashboardController` and `ReportController` now use exact inclusive Cairo 7/30/90-day starts (`subDays(6/29/89)`). Controller-boundary tests cover all three presets.
-- **External gates remain:** FA-004 (deploy/smoke-test current V3 revision on Hostinger) and FA-005 (prove target-host scheduler, queue, off-host backup, alerting, and restore drill). These cannot be verified from local source/tests alone.
+- **External gate remaining:** FA-005 (prove target-host recurring scheduler/queue health, off-host backup, alerting, and full restore drill). The former FA-004 deployment gate is resolved by the Hostinger verification below.
+
+## Production Deployment Verification (2026-09-24/25)
+
+- **Repository:** GitHub `origin/main` contains commit `7123f15` (`Deploy audited V3 release and fix production readiness`). The Hostinger checkout at `/home/u494520852/domains/mohamedateff.com/arabictutor_app` was reset to the same commit; the separate `public_html/arabictutor` wrapper was preserved.
+- **Runtime:** Hostinger PHP 8.4.19; `APP_ENV=production`; `APP_DEBUG=false`; MariaDB 11.8.9 capability variables are present.
+- **Database:** A backup was taken before migrations; both pending migrations completed; `migrate:students-backfill --dry-run` returned zero outcomes; caches were rebuilt.
+- **Live smoke:** `/arabictutor/`, `/arabictutor/admin/login`, `/arabictutor/student/login`, and `/arabictutor/articles` returned expected responses. A real admin login reached `/arabictutor/admin`, confirming the `audit_logs.event_uuid` 500 is fixed.
+- **Operations:** HPanel shows once-per-minute `schedule:run` and bounded `queue:work` cron jobs. Manual scheduler and queue commands completed. A post-migration full backup was created and passed `unzip -t`; the archive manifest reports Laravel 13.32.0, PHP 8.4.19, and SHA-256 `29db51c911f3ab3a13c312f724ddb9f2513006a1f7ab26ac751820e4c472c4b8`.
 
 ## V3 Requirement Verification
 
@@ -66,7 +74,7 @@ Read-only application-database checks were run after the owner confirmed the con
 | Billing, refunds and ledger | VERIFIED IN TEST DB | Balances derive from append-only entries; FIFO expiration uses Cairo business dates; refund service locks student/package/payment and enforces per-payment/package ceilings. Sequential, actual cross-process, and EXPLAIN/index tests pass. |
 | Articles CMS | VERIFIED IN FULL SUITE | HTMLPurifier allowlist, same-origin storage-image validation, optimistic locking, revisions and 301 slug redirects are covered by implementation and tests; the independent full suite passes. |
 | RBAC, audit and social links | VERIFIED IN FULL SUITE | Owner/admin/assistant/student access boundaries, explicit assistant projections, assistant denial from all draft previews, semantic PII scrub, and local SVG social icons are covered by tests in the independent full-suite pass. |
-| Backfill and local database gate | VERIFIED LOCALLY | `migrate:students-backfill --dry-run` returned zero rows in all outcomes; all 44 migrations, the student FK, and MariaDB 10.11.18 capability gate independently pass. Remote production database/deployment was not checked. |
+| Backfill and local database gate | VERIFIED LOCALLY; HOSTING MIGRATION PASS | Local `migrate:students-backfill --dry-run` returned zero rows in all outcomes; all 44 migrations, the student FK, and MariaDB 10.11.18 capability gate independently pass. Hostinger migrations and dry-run backfill also completed successfully. |
 
 ## Fixes and Verification Added During This Pass
 
@@ -102,17 +110,17 @@ Read-only application-database checks were run after the owner confirmed the con
 | Changed PHP syntax/style | **INDEPENDENT PASS** — changed PHP files passed Laravel Pint under Herd PHP 8.4.25; the full suite also passed on that runtime |
 | Latest backfill dry-run | **INDEPENDENT PASS — zero rows in every outcome category; no records changed** |
 | Latest Pint check | **INDEPENDENT PASS** under Herd PHP 8.4.25 |
-| Scheduler | **5 tasks listed** on the configured local application. Host invocation remains unverified. |
+| Scheduler | **5 tasks listed locally; Hostinger cron entry present and manual `schedule:run` completed**. Fresh recurring log evidence remains open under FA-005. |
 | Routes | **PASS — preview route listing confirms six public CMS preview endpoints use `EnsureAdminPreviewAccess`; admin article preview retains Admin/Owner role gate** |
 | Student backfill | **INDEPENDENT PASS — dry run found zero rows in all outcome categories** |
 | Database capability / student FK | **INDEPENDENT PASS** — MariaDB 10.11.18 and `bookings.student_id → students.id ON DELETE SET NULL` |
 | Whitespace | **PASS** (`git diff --check`) |
 
-| Independent verification in this shell | **PASS FOR LOCAL GATES** — full suite, build, Pint, Blade compilation, migration status, DB capability/FK, backfill dry run, and scheduler listing were independently run using Herd PHP 8.4.25. Remote production deployment and the reported backup/sibling DB preservation were not verified |
+| Independent verification in this shell | **PASS FOR LOCAL GATES** — full suite, build, Pint, Blade compilation, migration status, DB capability/FK, backfill dry run, and scheduler listing were independently run using Herd PHP 8.4.25. Hostinger release and live login/route smoke are verified separately; off-host recovery remains open |
 
 ## Remaining High-Priority Release Gates
 
-No unresolved local application-code CRITICAL/HIGH issue remains after the final audit remediation. The three prior local HIGH defects (generic page rich-text sanitization, student reschedule limiter isolation, and exact Cairo report preset boundaries) are fixed and covered by the 472-test suite. Two external HIGH release gates remain: **FA-004**, deployment of the reviewed V3 release and smoke testing under `/arabictutor`; and **FA-005**, target-host scheduler/queue/off-host backup/restore/alert evidence. The owner must also configure the actual private lesson-room URL before students see a join link. These local checks do not establish that a remote production deployment/database or disaster-recovery operation has been verified.
+No unresolved local application-code CRITICAL/HIGH issue remains after the final audit remediation. The three prior local HIGH defects (generic page rich-text sanitization, student reschedule limiter isolation, and exact Cairo report preset boundaries) are fixed and covered by the 472-test suite. The reviewed release is deployed and live route/admin-login smoke passed. One external HIGH release gate remains: **FA-005**, target-host recurring scheduler/queue evidence, off-host backup, alerting, and full restore drill. The owner must also configure the actual private lesson-room URL before students see a join link.
 
 Two V3 business-rule mismatches found earlier were corrected: all reschedules set the admin-reconfirmation flag, and only confirmed bookings can be cancelled. Their regression tests are included in the independently passing suite.
 

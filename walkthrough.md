@@ -1,10 +1,10 @@
 # V3 Implementation Walkthrough
 
-**Updated:** 2026-09-24
+**Updated:** 2026-09-25
 
 **Specification:** `Arabic w Abdallah EDIT V3.md` (newest priority)
 
-**Current status:** Local V3 release checks were independently run on 2026-09-24 with Herd PHP 8.4.25. The full suite passes at 468 tests / 2,919 assertions against the isolated `bolt_landing_test` database; the production build and Pint pass; the application database has 44/44 migrations, the MariaDB 10.11.18 capability/FK check passes, and the read-only student backfill dry run reports zero rows. Five scheduled tasks are registered. Remote production deployment and the reported `b11` backup/isolation were not verified here.
+**Current status:** Local V3 release checks were independently run on 2026-09-25 with Herd PHP 8.4.25. The full suite passes at 472 tests / 2,977 assertions against the isolated `bolt_landing_test` database; the production build and Pint pass; the application database has 44/44 migrations, the MariaDB 10.11.18 capability/FK check passes, and the read-only student backfill dry run reports zero rows. Five scheduled tasks are registered. Commit `7123f15` is deployed to Hostinger, live route/admin-login smoke checks pass, and one operational gate remains for off-host recovery/recurring evidence.
 
 ## Implemented and Verified
 
@@ -34,10 +34,10 @@
 - Added `RefreshDatabase` to `tests/Feature/ExampleTest.php` after a cold-start run exposed that the DB-backed homepage test relied on a previously migrated schema. The focused test passed after its own fresh test migration, then the full suite passed.
 - Final V3 audit fixed three additional requirement gaps: unchecked form metadata checkboxes now persist as `false`; admin student search reuses canonical identity normalization including explicit E.164 phone input; and future `held` bookings now appear in the student Upcoming sessions card. Regression tests cover all three.
 - Final focused tests passed: 16 tests / 155 assertions across forms, admin authorization/search, and student rescheduling/dashboard.
-- Full suite: **468 tests, 2,919 assertions, zero failures/errors** under Herd PHP 8.4.25 using `bolt_landing_test`.
+- Full suite: **472 tests, 2,977 assertions, zero failures/errors** under Herd PHP 8.4.25 using `bolt_landing_test`.
 - `vendor/bin/pint --dirty --format agent` passed; Vite 8.3.0 production build passed in 2.76 seconds (optional Fontaine warning); Blade view cache compilation and `git diff --check` passed.
 - Application DB gates: `migrate:status` showed 44 Ran / 0 Pending; `db:verify-capability` detected MariaDB 10.11.18 and verified the student FK; student backfill dry run returned zero rows and made no changes.
-- `schedule:list` showed five configured jobs. Host-level cron/scheduler invocation was not verified.
+- `schedule:list` showed five configured jobs. Hostinger HPanel lists the scheduler and queue cron entries; manual scheduler and bounded queue commands completed. Fresh recurring log evidence remains open.
 
 - Corrected MariaDB index migration order and a student-admin query that selected a computed accessor as if it were a SQL column.
 - Preserved creation timestamps in privacy/merge paths despite MariaDB TIMESTAMP auto-update behavior.
@@ -48,10 +48,10 @@
 - Fixed form draft leakage into the student flow and made response/export defaults follow the published version; added end-to-end assertions for publication and saved response versioning.
 - Fixed privacy erasure clearing IP/user-agent metadata from unrelated audit rows; added a test proving unrelated audit evidence remains intact.
 - Hardened article image URL validation against nested percent-encoded path traversal and added sanitizer regression coverage.
-- Latest full result: **INDEPENDENT PASS — 468 tests, 2,919 assertions, zero failures/errors**. Previous 465-, 455- and 448-test results are superseded. Focused meeting-link/settings/student/lock-order tests passed (**41 tests, 322 assertions**); preview/RBAC/CMS tests passed (**25 tests, 239 assertions**); final checkbox/search/held-status regressions passed (**16 tests, 155 assertions**).
+- Latest full result: **INDEPENDENT PASS — 472 tests, 2,977 assertions, zero failures/errors**. Previous 468-, 465-, 455- and 448-test results are superseded. Focused meeting-link/settings/student/lock-order tests passed (**41 tests, 322 assertions**); preview/RBAC/CMS tests passed (**25 tests, 239 assertions**); final checkbox/search/held-status regressions passed (**16 tests, 155 assertions**); final audit remediations passed (**3 tests, 54 assertions**).
 
 ## Release Verification Notes
 
-The previous **39 Ran / five Pending** snapshot is superseded by the independently observed 44 Ran / 0 Pending on port 3307. The capability command verified MariaDB 10.11.18 and `bookings.student_id → students.id ON DELETE SET NULL`; the backfill dry run returned zero rows. `phpunit.xml` targets the separate `bolt_landing_test` database. The owner-reported safety backup and any remote production database/deployment were not independently verified.
+The previous **39 Ran / five Pending** snapshot is superseded by the independently observed 44 Ran / 0 Pending on port 3307. The capability command verified MariaDB 10.11.18 and `bookings.student_id → students.id ON DELETE SET NULL`; the backfill dry run returned zero rows. `phpunit.xml` targets the separate `bolt_landing_test` database. Hostinger was updated to commit `7123f15`, production migrations/backfill completed, and a post-migration backup passed archive integrity. Off-host storage, recurring execution, alerting, and a full restore drill remain open.
 
-See `PROJECT_STATUS.md` for the verification provenance and `Gemini.md` for the remediation ledger. The DB-backed checks and full suite listed above were independently run in this continuation; external-host deployment remains unverified.
+See `PROJECT_STATUS.md` for the verification provenance and `Gemini.md` for the remediation ledger. The DB-backed checks, full suite, and Hostinger deployment/smoke checks listed above were independently verified; FA-005 is the remaining operational release gate.
