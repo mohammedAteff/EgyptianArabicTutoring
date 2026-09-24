@@ -54,4 +54,6 @@
 
 The previous **39 Ran / five Pending** snapshot is superseded by the independently observed 44 Ran / 0 Pending on port 3307. The capability command verified MariaDB 10.11.18 and `bookings.student_id → students.id ON DELETE SET NULL`; the backfill dry run returned zero rows. `phpunit.xml` targets the separate `bolt_landing_test` database. Hostinger was updated to commit `7123f15`, production migrations/backfill completed, and a post-migration backup passed archive integrity. Off-host storage, recurring execution, alerting, and a full restore drill remain open.
 
+A Hostinger asset-serving regression was corrected after the release: existing `build` directories were mode `700`, causing 404s for present Vite CSS/JS files. The deployed asset directories are now `755` with files `644`; CSS, JS, and manifest requests return 200, and the README runbook documents the permission check.
+
 See `PROJECT_STATUS.md` for the verification provenance and `Gemini.md` for the remediation ledger. The DB-backed checks, full suite, and Hostinger deployment/smoke checks listed above were independently verified; FA-005 is the remaining operational release gate.

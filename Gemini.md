@@ -14,6 +14,7 @@
 ## Resolved Deployment Gate
 
 - **FA-004 — RESOLVED:** Commit `7123f15` was pushed to `origin/main` and deployed to `/home/u494520852/domains/mohamedateff.com/arabictutor_app` on Hostinger. Locked Composer dependencies were installed (including `mews/purifier` and `libphonenumber`), production migrations and the zero-row student backfill dry run completed, config/route/view caches were rebuilt, and the Vite build was synchronized. `/arabictutor/`, `/arabictutor/admin/login`, `/arabictutor/student/login`, and `/arabictutor/articles` returned expected responses; the supplied admin credentials reached the dashboard. The former login 500 was caused by the old `Admin/AuthController` path inserting an `audit_logs` row without required `event_uuid`; the current `AuditLog` creating hook supplies it.
+- **Deployment asset regression — RESOLVED:** Hostinger's existing `public/build` and wrapper `build` directories were mode `700`, so the web server returned 404 for otherwise-present Vite CSS/JS files. The directories are now `755` and files `644`; the exact CSS, JS, and manifest URLs return `200`, and browser verification shows styled admin/public pages with no console errors. The README runbook now includes the permission check.
 
 ## Resolved During This V3 Pass
 

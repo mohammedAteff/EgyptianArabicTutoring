@@ -225,6 +225,7 @@ No application-code adjustment remains in dependency order; only FA-005's host c
 | Scheduler listing | **PASS — 5 definitions registered** |
 | Hostinger deployment | **PASS — commit `7123f15` deployed; Composer install, migrations, caches, and built assets updated** |
 | Live smoke checks | **PASS — `/arabictutor/`, admin login, student login, and articles returned expected responses; supplied admin credentials reached the dashboard** |
+| Asset serving | **PASS — deployed CSS, JS, and manifest URLs return 200 after correcting `build` directory/file permissions; browser console has no errors** |
 | Production backup | **PASS — post-migration full archive created and `unzip -t` integrity check passed** |
 | Host scheduler/queue commands | **PASS — HPanel cron entries present; manual scheduler and bounded queue worker completed** |
 | Remaining CRITICAL count | **0** |

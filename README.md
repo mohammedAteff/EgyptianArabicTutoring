@@ -280,6 +280,12 @@ php artisan test
    php artisan view:cache
    php artisan storage:link
    ```
+   Ensure the web server can traverse and read the compiled assets after copying them (especially when the host keeps an existing `public/build` directory):
+   ```bash
+   find public/build -type d -exec chmod 755 {} +
+   find public/build -type f -exec chmod 644 {} +
+   ```
+   For a subdirectory wrapper such as `/arabictutor`, apply the same permissions to the wrapper's `build` directory as well. Verify the manifest, CSS, and JavaScript URLs return `200` before opening the release.
 7. Restart the supervised queue worker after the release (`php artisan queue:restart`) and ensure Supervisor/systemd continues managing `php artisan queue:work --sleep=3 --tries=3 --timeout=90`.
 8. Ensure crontab invokes `php artisan schedule:run` every minute.
 9. Run and verify the first production backup and off-host copy:

@@ -59,6 +59,7 @@ Read-only application-database checks were run after the owner confirmed the con
 - **Runtime:** Hostinger PHP 8.4.19; `APP_ENV=production`; `APP_DEBUG=false`; MariaDB 11.8.9 capability variables are present.
 - **Database:** A backup was taken before migrations; both pending migrations completed; `migrate:students-backfill --dry-run` returned zero outcomes; caches were rebuilt.
 - **Live smoke:** `/arabictutor/`, `/arabictutor/admin/login`, `/arabictutor/student/login`, and `/arabictutor/articles` returned expected responses. A real admin login reached `/arabictutor/admin`, confirming the `audit_logs.event_uuid` 500 is fixed.
+- **Asset serving fix:** Hostinger's existing `public/build` and wrapper `build` directories were mode `700`, causing 404s for present Vite CSS/JS files. They are now `755` with files `644`; the exact CSS, JS, and manifest URLs return `200`, and browser verification shows styled admin/public pages with no console errors. The README runbook includes the permission check for future releases.
 - **Operations:** HPanel shows once-per-minute `schedule:run` and bounded `queue:work` cron jobs. Manual scheduler and queue commands completed. A post-migration full backup was created and passed `unzip -t`; the archive manifest reports Laravel 13.32.0, PHP 8.4.19, and SHA-256 `29db51c911f3ab3a13c312f724ddb9f2513006a1f7ab26ac751820e4c472c4b8`. Actual S3 transfer and restore remain unverified.
 
 ## V3 Requirement Verification
