@@ -69,6 +69,13 @@ class DatabaseCapability
         return $this->version;
     }
 
+    public static function onlineForeignKeyAddAlgorithm(string $vendor, string $version): string
+    {
+        return strtolower(trim($vendor)) === 'mariadb' && version_compare($version, '11.2.0', '>=')
+            ? 'COPY'
+            : 'INPLACE';
+    }
+
     public function assertMatchesReconciledEnvironment(?string $expectedVendor, ?string $expectedVersion = null): void
     {
         $expectedVendor = strtolower(trim((string) $expectedVendor));

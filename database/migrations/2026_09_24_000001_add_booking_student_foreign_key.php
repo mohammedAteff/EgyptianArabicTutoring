@@ -56,16 +56,18 @@ return new class extends Migration
             throw new RuntimeException($message);
         }
 
+        $algorithm = DatabaseCapability::onlineForeignKeyAddAlgorithm($capability->vendor(), $capability->version());
+
         try {
             DB::statement(
                 'ALTER TABLE bookings ADD CONSTRAINT '.self::CONSTRAINT.' '
                 .'FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL, '
-                .'ALGORITHM=INPLACE, LOCK=NONE'
+                .'ALGORITHM='.$algorithm.', LOCK=NONE'
             );
         } catch (Throwable $exception) {
             $this->logManualStrategy($capability, $exception->getMessage());
             throw new RuntimeException(
-                'Migration 8B was stopped because the server refused the explicitly requested INPLACE/LOCK=NONE foreign-key change. '
+                "Migration 8B was stopped because the server refused the explicitly requested {$algorithm}/LOCK=NONE foreign-key change. "
                 .'Use the logged maintenance-window or reviewed online-schema-change plan; foreign_key_checks was not disabled.',
                 previous: $exception,
             );
@@ -98,7 +100,9 @@ return new class extends Migration
             .'the exact ALTER TABLE statement only inside a maintenance window or via a reviewed online-schema-change plan. '
             .'Do not disable foreign_key_checks. '
             .'ALTER TABLE bookings ADD CONSTRAINT '.self::CONSTRAINT.' FOREIGN KEY (student_id) '
-            .'REFERENCES students (id) ON DELETE SET NULL, ALGORITHM=INPLACE, LOCK=NONE.';
+            .'REFERENCES students (id) ON DELETE SET NULL, ALGORITHM='
+            .DatabaseCapability::onlineForeignKeyAddAlgorithm($capability->vendor(), $capability->version())
+            .', LOCK=NONE.';
 
         Log::critical($message, [
             'vendor' => $capability->vendor(),
