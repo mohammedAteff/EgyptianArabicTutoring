@@ -51,7 +51,7 @@ Read-only application-database checks were run after the owner confirmed the con
 - **FA-001 fixed:** Added `app/Domains/CMS/Services/RichTextSanitizer.php` and applied one allow-list/same-origin-image policy to generic page create/update, translation, draft/publish, restore, preview, and public rendering. `ArticleService` reuses the shared sanitizer; `FinalAuditRemediationTest` proves script, event-handler, and `javascript:` payloads are removed.
 - **FA-002 fixed:** `AppServiceProvider::boot()` now keys authenticated student reschedule attempts by student session and booking, while token routes retain token identity and every request retains an IP limit. Cross-student isolation is tested.
 - **FA-003 fixed:** `AnalyticsDashboardController` and `ReportController` now use exact inclusive Cairo 7/30/90-day starts (`subDays(6/29/89)`). Controller-boundary tests cover all three presets.
-- **External gate remaining:** FA-005 (prove target-host recurring scheduler/queue health, off-host backup, alerting, and full restore drill). The former FA-004 deployment gate is resolved by the Hostinger verification below.
+- **External gate remaining:** FA-005 (prove target-host recurring scheduler/queue health, off-host backup, alerting, and full restore drill). The former FA-004 deployment gate is resolved by the Hostinger verification below. Production has `BACKUP_OFFSITE_DISK=s3` and AWS setting names, but an actual off-host transfer was not run because it would export production data without explicit egress approval.
 
 ## Production Deployment Verification (2026-09-24/25)
 
@@ -59,7 +59,7 @@ Read-only application-database checks were run after the owner confirmed the con
 - **Runtime:** Hostinger PHP 8.4.19; `APP_ENV=production`; `APP_DEBUG=false`; MariaDB 11.8.9 capability variables are present.
 - **Database:** A backup was taken before migrations; both pending migrations completed; `migrate:students-backfill --dry-run` returned zero outcomes; caches were rebuilt.
 - **Live smoke:** `/arabictutor/`, `/arabictutor/admin/login`, `/arabictutor/student/login`, and `/arabictutor/articles` returned expected responses. A real admin login reached `/arabictutor/admin`, confirming the `audit_logs.event_uuid` 500 is fixed.
-- **Operations:** HPanel shows once-per-minute `schedule:run` and bounded `queue:work` cron jobs. Manual scheduler and queue commands completed. A post-migration full backup was created and passed `unzip -t`; the archive manifest reports Laravel 13.32.0, PHP 8.4.19, and SHA-256 `29db51c911f3ab3a13c312f724ddb9f2513006a1f7ab26ac751820e4c472c4b8`.
+- **Operations:** HPanel shows once-per-minute `schedule:run` and bounded `queue:work` cron jobs. Manual scheduler and queue commands completed. A post-migration full backup was created and passed `unzip -t`; the archive manifest reports Laravel 13.32.0, PHP 8.4.19, and SHA-256 `29db51c911f3ab3a13c312f724ddb9f2513006a1f7ab26ac751820e4c472c4b8`. Actual S3 transfer and restore remain unverified.
 
 ## V3 Requirement Verification
 

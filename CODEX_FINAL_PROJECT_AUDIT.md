@@ -10,7 +10,7 @@ The local Laravel repository now satisfies the reviewed application requirements
 
 The verified local baseline is **472 tests, 2,977 assertions, 0 failures, and 0 errors** against MariaDB/InnoDB. Pint, the Vite production build, all 44 migrations, the MariaDB capability/FK gate, and the five scheduled definitions pass.
 
-One HIGH release gate remains: production operations/recovery are only partially evidenced. The reviewed commit `7123f15` is pushed to GitHub and deployed to Hostinger; Composer dependencies, migrations, caches, and built assets were updated, and live route plus authenticated admin-login smoke tests pass under `/arabictutor`. Hostinger cron entries and manual scheduler/queue invocations are verified, and a post-migration backup archive was created and integrity-checked. Off-host backup storage, a fresh recurring-cron observation, alert delivery, and a full isolated database restore have not yet been proven.
+One HIGH release gate remains: production operations/recovery are only partially evidenced. The reviewed commit `7123f15` is pushed to GitHub and deployed to Hostinger; Composer dependencies, migrations, caches, and built assets were updated, and live route plus authenticated admin-login smoke tests pass under `/arabictutor`. Hostinger cron entries and manual scheduler/queue invocations are verified, and a post-migration backup archive was created and integrity-checked. S3/off-host settings are present in production configuration, but an actual off-host transfer, a fresh recurring-cron observation, alert delivery, and a full isolated database restore have not yet been proven.
 
 No CRITICAL application-code issue was reproduced. No required local module is missing. The project is **not fully production-approved until FA-005 is closed**, although the former deployment-drift gate is resolved.
 
@@ -26,11 +26,11 @@ The booking path uses persistent calendar lock rows, buffer-expanded lock dates,
 
 - **Severity:** HIGH
 - **Classification:** operationally unverified / partially implemented
-- **What is wrong:** Application code and the Hostinger deployment provide scheduler/queue/backup functionality, but off-host backup storage, a fresh recurring-cron observation, alert delivery, and a full isolated database restore are not evidenced. The primary production backup is local to application storage.
+- **What is wrong:** Application code and the Hostinger deployment provide scheduler/queue/backup functionality, and S3/off-host settings are configured, but an actual off-host backup transfer, a fresh recurring-cron observation, alert delivery, and a full isolated database restore are not evidenced. The verified archive is local to application storage.
 - **Why it matters:** Scheduled hold cleanup, analytics retention, backups, queue work, and alerts can silently be inactive; a production incident could expose stale data or no recoverable off-host copy.
-- **Evidence:** `routes/console.php` has five schedules; HPanel lists scheduler and queue cron entries; manual `schedule:run` and bounded `queue:work` both complete; `backup-full-2026-09-24-210348.zip` passes `unzip -t`; `BACKUP_OFFSITE_DISK` is not configured; scheduler/queue log timestamps remain stale.
+- **Evidence:** `routes/console.php` has five schedules; HPanel lists scheduler and queue cron entries; manual `schedule:run` and bounded `queue:work` both complete; `backup-full-2026-09-24-210348.zip` passes `unzip -t`; production `.env` contains `BACKUP_OFFSITE_DISK=s3` and AWS setting names; scheduler/queue log timestamps remain stale. A new S3 transfer was not attempted because it would export the production database/files to an external destination without an explicit approval for that data egress.
 - **Affected requirements:** Original operations, backups, retention, restore, health, scheduler, and deployment-readiness requirements; V3 release safety.
-- **Minimum fix:** Configure a genuinely off-host backup destination and alert target, observe fresh scheduler/queue heartbeat timestamps, and complete a full isolated database/files restore drill. Keep the existing primary backup and HPanel cron/queue definitions.
+- **Minimum fix:** Execute and verify one approved off-host backup transfer, observe fresh scheduler/queue heartbeat timestamps, configure/test an alert target, and complete a full isolated database/files restore drill. Keep the existing primary backup and HPanel cron/queue definitions.
 - **Acceptance:** Fresh target-host timestamps are observed, an off-host artifact exists and verifies, isolated database/files restore succeeds, failed-job/queue health is visible, and an alert test is recorded.
 
 ## 4. Missing Implementations

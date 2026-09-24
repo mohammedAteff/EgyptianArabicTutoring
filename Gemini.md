@@ -8,7 +8,7 @@
 
 ## Remaining Issues
 
-- **FA-005 — HIGH / TODO — Production operations/recovery not fully proven:** Hostinger now has the reviewed release, Composer dependencies, migrations, caches, built assets, scheduler cron, and queue cron. Manual scheduler/queue commands pass and a post-migration primary backup archive is integrity-checked, but `BACKUP_OFFSITE_DISK` is not configured, recurring cron timestamps remain stale, alert delivery is not evidenced, and a full isolated database/files restore has not been completed. Configure/prove those items before production approval.
+- **FA-005 — HIGH / TODO — Production operations/recovery not fully proven:** Hostinger now has the reviewed release, Composer dependencies, migrations, caches, built assets, scheduler cron, and queue cron. Manual scheduler/queue commands pass and a post-migration primary backup archive is integrity-checked. Production has `BACKUP_OFFSITE_DISK=s3` and AWS setting names, but an actual off-host transfer was not run because it would export production data without explicit egress approval; recurring cron timestamps remain stale, alert delivery is not evidenced, and a full isolated database/files restore has not been completed. Configure/prove those items before production approval.
 - Owner setup is still required to enter the real private lesson-room URL in Owner Settings; no meeting URL was assumed or read from the local database. This is configuration, not an application-code defect.
 
 ## Resolved Deployment Gate
@@ -44,7 +44,7 @@
 - **Final audit remediation FA-001 (HIGH):** Generic page HTML had a raw public rendering trust boundary. Added `app/Domains/CMS/Services/RichTextSanitizer.php`, applied it to page create/update/translation/draft/restore paths and `PageController` public/preview rendering, and added `tests/Feature/FinalAuditRemediationTest.php` malicious English/translation/restore coverage.
 - **Final audit remediation FA-002 (HIGH):** Authenticated student rescheduling previously shared the empty token limiter bucket. `AppServiceProvider` now keys student attempts by session student and booking while retaining token and IP buckets; cross-student isolation is covered by `FinalAuditRemediationTest`.
 - **Final audit remediation FA-003 (HIGH):** Dashboard/report 7/30/90 presets included an extra Cairo calendar day. `AnalyticsDashboardController` and `ReportController` now use 6/29/89-day offsets; exact-boundary coverage is in `FinalAuditRemediationTest`.
-- **Deployment verification:** Hostinger is at commit `7123f15`; production migrations are complete, `migrate:students-backfill --dry-run` returned zero outcomes, post-migration backup `backup-full-2026-09-24-210348.zip` passed `unzip -t`, and HPanel lists both the once-per-minute scheduler and bounded queue worker cron entries. A full database restore and off-host copy remain intentionally open under FA-005.
+- **Deployment verification:** Hostinger is at commit `7123f15`; production migrations are complete, `migrate:students-backfill --dry-run` returned zero outcomes, post-migration backup `backup-full-2026-09-24-210348.zip` passed `unzip -t`, and HPanel lists both the once-per-minute scheduler and bounded queue worker cron entries. A full database restore and actual off-host copy remain intentionally open under FA-005.
 
 ## Verification Baseline
 
