@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Students\Models\Student;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -87,10 +88,51 @@ class AdministratorAuthorizationTest extends TestCase
         $this->get(route('admin.articles.create'))->assertOk();
         $this->get(route('admin.forms.create'))->assertOk();
         $this->get(route('home.preview'))->assertOk();
+        $this->get(route('admin.settings.index'))
+            ->assertOk()
+            ->assertSeeText('Settings & Policies')
+            ->assertSeeText('Public maintenance mode is managed by a super administrator.')
+            ->assertDontSee('name="maintenance_mode"', false)
+            ->assertDontSeeText('Backups & Recovery');
 
-        $this->get(route('admin.settings.index'))->assertForbidden();
         $this->get(route('admin.administrators.index'))->assertForbidden();
+        $this->get(route('admin.health'))->assertForbidden();
         $this->post(route('admin.students.merge', 1))->assertForbidden();
+    }
+
+    public function test_settings_are_available_to_admin_but_maintenance_mode_remains_super_admin_only(): void
+    {
+        Setting::set('maintenance_mode', '0', 'general', true);
+        $this->get(route('admin.settings.index'))->assertRedirect(route('admin.login'));
+
+        $admin = $this->createAdministrator('admin');
+        $this->actingAs($admin, 'web')
+            ->post(route('admin.settings.update'), $this->validSettingsPayload([
+                'site_name' => 'Operational Admin Update',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('Operational Admin Update', Setting::get('site_name'));
+
+        $this->actingAs($admin, 'web')
+            ->post(route('admin.settings.update').'?maintenance_mode=1', $this->validSettingsPayload())
+            ->assertForbidden();
+
+        $this->assertSame(0, Setting::get('maintenance_mode'));
+
+        $superAdmin = $this->createAdministrator('super_admin');
+        $this->actingAs($superAdmin, 'web')
+            ->get(route('admin.settings.index'))
+            ->assertOk()
+            ->assertSee('name="maintenance_mode"', false);
+
+        $this->actingAs($superAdmin, 'web')
+            ->post(route('admin.settings.update'), $this->validSettingsPayload([
+                'maintenance_mode' => '1',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame(1, Setting::get('maintenance_mode'));
     }
 
     private function createAdministrator(string $role): Administrator
@@ -101,6 +143,22 @@ class AdministratorAuthorizationTest extends TestCase
             'password' => Hash::make('a-long-test-password'),
             'role' => $role,
         ]);
+    }
+
+    /** @return array<string, string> */
+    private function validSettingsPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'site_name' => 'Tutoring Site',
+            'business_timezone' => 'Africa/Cairo',
+            'default_language' => 'en',
+            'hero_title' => 'Learn Egyptian Arabic',
+            'hero_subtitle' => 'Private lessons with a native tutor.',
+            'booking_instructions' => 'Choose an available appointment time.',
+            'cancellation_policy' => 'Please cancel with notice.',
+            'rescheduling_policy' => 'Rescheduling depends on availability.',
+            'action' => 'publish',
+        ], $overrides);
     }
 
     private function createBooking(): Booking

@@ -8,6 +8,7 @@
         <div>
             <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Content, FAQs & Social Channels</h1>
             <p class="text-sm text-slate-500 mt-1">Manage public frequently asked questions and official social media/WhatsApp contact channels.</p>
+        </div>
         <div class="flex items-center gap-2">
             <a href="{{ route('faq.preview') }}" target="_blank" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors shadow-xs">
                 Preview FAQs &rarr;
@@ -18,6 +19,8 @@
         </div>
     </div>
 
+    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,1fr)]">
+        <div class="min-w-0 space-y-6">
     <!-- FAQs Management -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div>
@@ -145,7 +148,7 @@
 
     <!-- Custom Pages Summary & Quick Links -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-4">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h2 class="text-lg font-bold font-serif text-slate-900">Custom Standalone Pages</h2>
                 <p class="text-xs text-slate-500">Legal notices, curriculum overviews, and student resources with versioned content revisions.</p>
@@ -155,7 +158,7 @@
             </a>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             @forelse($pages->take(3) as $p)
                 <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
                     <div>
@@ -173,9 +176,10 @@
             @endforelse
         </div>
     </div>
+        </div>
 
     <!-- Social Channels & WhatsApp Support (Spec 50 & 51) -->
-    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+        <aside class="min-w-0 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div>
             <h2 class="text-lg font-bold font-serif text-slate-900">Official Social Media & WhatsApp Channels</h2>
             <p class="text-xs text-slate-500">Displayed in footer and contact sections. WhatsApp includes pre-filled conversational intent messages.</p>
@@ -186,8 +190,8 @@
 
             <div class="space-y-4">
                 @foreach($socials as $soc)
-                    <div class="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div class="flex items-center gap-3 sm:w-48 shrink-0">
+                    <div data-social-channel-card="{{ $soc->id }}" class="min-w-0 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4">
+                        <div class="flex items-center justify-between gap-3">
                             <label class="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-900 capitalize">
                                 <input type="checkbox" name="socials[{{ $soc->id }}][enabled]" value="1" {{ $soc->enabled ? 'checked' : '' }}
                                        data-social-toggle data-url="{{ route('admin.content.social.toggle', $soc) }}"
@@ -197,31 +201,31 @@
                             <span data-toggle-status="{{ $soc->id }}" class="text-[10px] text-slate-500" aria-live="polite"></span>
                         </div>
 
-                        <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 gap-4">
                             <div>
                                 <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                                     {{ $soc->platform === 'whatsapp' ? 'Phone Number (Intl)' : 'Profile URL' }}
                                 </label>
                                 <input type="text" name="socials[{{ $soc->id }}][url_or_phone]" value="{{ $soc->url_or_phone }}" required
-                                       class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
+                                       class="w-full min-w-0 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Display Label</label>
+                                <input type="text" name="socials[{{ $soc->id }}][label]" value="{{ $soc->label }}" required maxlength="100"
+                                       class="w-full min-w-0 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             </div>
 
                             @if($soc->platform === 'whatsapp')
                                 <div>
                                     <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Default Pre-filled Message</label>
-                                    <input type="text" name="socials[{{ $soc->id }}][default_message]" value="{{ $soc->default_message }}"
-                                           class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                                </div>
-                            @else
-                                <div>
-                                    <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Display Label</label>
-                                    <input type="text" name="socials[{{ $soc->id }}][label]" value="{{ $soc->label }}" required
-                                           class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                                    <textarea name="socials[{{ $soc->id }}][default_message]" rows="3" maxlength="1000"
+                                              class="w-full min-w-0 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ $soc->default_message }}</textarea>
                                 </div>
                             @endif
                             <div>
                                 <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Display order</label>
-                                <input type="number" min="0" max="10000" name="socials[{{ $soc->id }}][sort_order]" value="{{ $soc->sort_order }}" required class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg">
+                                <input type="number" min="0" max="10000" name="socials[{{ $soc->id }}][sort_order]" value="{{ $soc->sort_order }}" required class="w-full min-w-0 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg">
                             </div>
                         </div>
                     </div>
@@ -229,18 +233,34 @@
             </div>
 
             <div class="flex justify-end">
-                <button type="submit" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors font-serif shadow-xs">
+                <button type="submit" class="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors font-serif shadow-xs">
                     Save Social Channels
                 </button>
             </div>
         </form>
-        <form action="{{ route('admin.content.social.store') }}" method="POST" class="grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
+        <form x-data="{ platform: 'youtube' }" action="{{ route('admin.content.social.store') }}" method="POST" class="space-y-4 border-t border-slate-100 pt-5">
             @csrf
-            <label class="text-xs font-semibold text-slate-700">Platform<select name="platform" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">@foreach(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'] as $platform)<option value="{{ $platform }}">{{ ucfirst($platform) }}</option>@endforeach</select></label>
-            <label class="text-xs font-semibold text-slate-700">Label<input name="label" required maxlength="100" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
-            <label class="text-xs font-semibold text-slate-700 sm:col-span-2">http(s) URL or international phone<input name="url_or_phone" required maxlength="2048" placeholder="https://…" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
-            <button type="submit" class="justify-self-start rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Add channel</button>
+            <div class="grid grid-cols-1 gap-4">
+                <label class="block text-xs font-semibold text-slate-700">Platform
+                    <select name="platform" x-model="platform" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        @foreach(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'] as $platform)
+                            <option value="{{ $platform }}">{{ ucfirst($platform) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="block text-xs font-semibold text-slate-700">Display label
+                    <input name="label" required maxlength="100" class="mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                </label>
+                <label class="block text-xs font-semibold text-slate-700"><span x-text="platform === 'whatsapp' ? 'International phone number' : 'Profile URL'"></span>
+                    <input name="url_or_phone" required maxlength="2048" placeholder="https://…" class="mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                </label>
+                <label x-show="platform === 'whatsapp'" x-cloak class="block text-xs font-semibold text-slate-700">Default pre-filled WhatsApp message
+                    <textarea name="default_message" rows="3" maxlength="1000" class="mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
+                </label>
+            </div>
+            <button type="submit" class="w-full sm:w-auto rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">Add channel</button>
         </form>
+        </aside>
     </div>
 
     <script>

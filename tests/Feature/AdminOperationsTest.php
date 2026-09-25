@@ -7,6 +7,7 @@ use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Models\SocialLink;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
@@ -472,7 +473,81 @@ class AdminOperationsTest extends TestCase
         $this->assertNull(Setting::get('video_meeting_url'));
     }
 
-    public function test_regular_admin_denied_access_to_super_admin_routes(): void
+    public function test_content_page_layout_and_whatsapp_channel_form_are_usable_and_persist_messages(): void
+    {
+        $existingWhatsapp = SocialLink::query()->create([
+            'platform' => 'whatsapp',
+            'url_or_phone' => '+201012345678',
+            'label' => 'Message on WhatsApp',
+            'default_message' => 'I would like to learn Egyptian Arabic.',
+            'enabled' => true,
+            'sort_order' => 1,
+        ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->get(route('admin.content.index'))
+            ->assertOk()
+            ->assertSee('xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,1fr)]', false)
+            ->assertSeeText('Frequently Asked Questions')
+            ->assertSeeText('Custom Standalone Pages')
+            ->assertSeeText('Official Social Media & WhatsApp Channels')
+            ->assertSeeText('Display Label')
+            ->assertSeeText('Default Pre-filled Message')
+            ->assertSeeText('Save Social Channels')
+            ->assertSeeText('Add channel');
+
+        $document = new \DOMDocument;
+        $previousLibxmlState = libxml_use_internal_errors(true);
+        $document->loadHTML($this->get(route('admin.content.index'))->getContent());
+        libxml_clear_errors();
+        libxml_use_internal_errors($previousLibxmlState);
+
+        $xpath = new \DOMXPath($document);
+        $socialCard = $xpath->query(sprintf('//div[@data-social-channel-card="%d"]', $existingWhatsapp->id))->item(0);
+
+        $this->assertInstanceOf(\DOMElement::class, $socialCard);
+        $this->assertSame(1, $xpath->query(sprintf('.//input[@name="socials[%d][url_or_phone]"]', $existingWhatsapp->id), $socialCard)->length);
+        $this->assertSame(1, $xpath->query(sprintf('.//textarea[@name="socials[%d][default_message]"]', $existingWhatsapp->id), $socialCard)->length);
+
+        $this->actingAs($this->admin, 'web')
+            ->post(route('admin.content.social.update'), [
+                'socials' => [
+                    $existingWhatsapp->id => [
+                        'url_or_phone' => '+201012345678',
+                        'label' => 'WhatsApp tutoring support',
+                        'default_message' => 'Hello, I am interested in lessons.',
+                        'enabled' => '1',
+                        'sort_order' => '1',
+                    ],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('social_links', [
+            'id' => $existingWhatsapp->id,
+            'label' => 'WhatsApp tutoring support',
+            'default_message' => 'Hello, I am interested in lessons.',
+        ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->post(route('admin.content.social.store'), [
+                'platform' => 'whatsapp',
+                'label' => 'WhatsApp support',
+                'url_or_phone' => '+201155555555',
+                'default_message' => 'Please tell me about your Arabic classes.',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('social_links', [
+            'platform' => 'whatsapp',
+            'label' => 'WhatsApp support',
+            'url_or_phone' => '+201155555555',
+            'default_message' => 'Please tell me about your Arabic classes.',
+            'enabled' => false,
+        ]);
+    }
+
+    public function test_regular_admin_can_access_normal_settings_but_not_sensitive_system_routes(): void
     {
         $regularAdmin = Administrator::create([
             'name' => 'Regular Staff Admin',
@@ -481,11 +556,11 @@ class AdminOperationsTest extends TestCase
             'role' => 'admin',
         ]);
 
-        // Regular admin attempting to access settings -> 403 Forbidden
+        // Regular admins may operate ordinary business and site settings.
         $settingsResponse = $this->actingAs($regularAdmin, 'web')->get(route('admin.settings.index'));
-        $settingsResponse->assertStatus(403);
+        $settingsResponse->assertOk();
 
-        // Regular admin attempting to access system health -> 403 Forbidden
+        // Sensitive operational and audit screens remain super-admin-only.
         $healthResponse = $this->actingAs($regularAdmin, 'web')->get(route('admin.health'));
         $healthResponse->assertStatus(403);
 

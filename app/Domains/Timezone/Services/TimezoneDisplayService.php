@@ -52,6 +52,15 @@ class TimezoneDisplayService
     ];
 
     /**
+     * These zones do not have a single recognized country or territory flag.
+     *
+     * @var array<int, string>
+     */
+    protected const TIMEZONES_WITHOUT_TERRITORY_FLAG = [
+        'AQ',
+    ];
+
+    /**
      * Format a slot for display using reference-instant timezone calculation.
      * Supports both signature orders:
      * - formatSlotForDisplay(string $timezone, CarbonInterface|DateTimeInterface $instant = null)
@@ -100,12 +109,7 @@ class TimezoneDisplayService
             : null;
         $flagAsset = $candidateFlag && is_file($candidateFlag)
             ? '/assets/flags/4x3/'.strtolower($countryCode).'.svg'
-            : ($countryCode ? null : (str_starts_with($canonicalTz, 'Etc/') || in_array($canonicalTz, ['UTC', 'GMT'], true)
-                ? '/assets/flags/4x3/globe.svg'
-                : null));
-        $flagSymbol = $countryCode
-            ? mb_chr(127397 + ord($countryCode[0]), 'UTF-8').mb_chr(127397 + ord($countryCode[1]), 'UTF-8')
-            : null;
+            : '/assets/flags/4x3/globe.svg';
 
         $label = $canonicalTz === 'UTC'
             ? 'UTC (Coordinated Universal Time)'
@@ -116,7 +120,7 @@ class TimezoneDisplayService
             'timezone_country_code' => $countryCode,
             'timezone_country_name' => $countryName,
             'flag_asset' => $flagAsset,
-            'flag_symbol' => $flagSymbol,
+            'flag_symbol' => null,
             'city' => $city,
             'label' => $label,
         ];
@@ -169,7 +173,11 @@ class TimezoneDisplayService
             $tz = new DateTimeZone($timezone);
             $loc = $tz->getLocation();
             if ($loc && ! empty($loc['country_code']) && preg_match('/^[A-Z]{2}$/i', (string) $loc['country_code'])) {
-                return strtoupper((string) $loc['country_code']);
+                $countryCode = strtoupper((string) $loc['country_code']);
+
+                return in_array($countryCode, self::TIMEZONES_WITHOUT_TERRITORY_FLAG, true)
+                    ? null
+                    : $countryCode;
             }
         } catch (Throwable) {
         }

@@ -65,13 +65,23 @@
     </div>
 
     <!-- Dual Timezone Breakdown Card -->
+    @php
+        $confirmationInstant = \Carbon\CarbonImmutable::instance($booking->start_at_utc);
+        $customerTimezoneDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)
+            ->formatSlotForDisplay($booking->customer_timezone, $confirmationInstant);
+        $businessTimezoneDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)
+            ->formatSlotForDisplay($booking->business_timezone, $confirmationInstant);
+    @endphp
     <div class="bg-white rounded-3xl border border-stone-200/80 p-8 shadow-sm mb-8 space-y-6">
         <h2 class="text-lg font-bold text-stone-900 border-b border-stone-100 pb-3">{{ __('Lesson Schedule') }}</h2>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Customer Timezone Representation -->
             <div class="p-5 rounded-2xl bg-stone-50 border border-stone-200">
-                <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">🌍 {{ __('Your Local Time') }}</div>
+                <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
+                    <x-timezone-flag :display="$customerTimezoneDisplay" :alt="__('Flag for :country', ['country' => $customerTimezoneDisplay['timezone_country_name']])" />
+                    {{ __('Your Local Time') }}
+                </div>
                 <div class="text-lg font-extrabold text-stone-900">
                     {{ \Carbon\CarbonImmutable::instance($booking->start_at_utc)->setTimezone($booking->customer_timezone)->format('l, F j, Y') }}
                 </div>
@@ -81,13 +91,16 @@
                     {{ \Carbon\CarbonImmutable::instance($booking->end_at_utc)->setTimezone($booking->customer_timezone)->format('g:i A') }}
                 </div>
                 <div class="text-xs text-stone-500 mt-1">
-                    {{ str_replace('_', ' ', $booking->customer_timezone) }} (UTC{{ $booking->customer_utc_offset_at_booking }})
+                    {{ $customerTimezoneDisplay['city'] }} · {{ $booking->customer_timezone }} (UTC{{ $booking->customer_utc_offset_at_booking }})
                 </div>
             </div>
 
             <!-- Cairo Tutor Timezone Representation -->
             <div class="p-5 rounded-2xl bg-nile-50/50 border border-nile-100">
-                <div class="text-xs font-bold text-nile-600 uppercase tracking-wider mb-1">📍 {{ __("Tutor's Time (Cairo)") }}</div>
+                <div class="text-xs font-bold text-nile-600 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
+                    <x-timezone-flag :display="$businessTimezoneDisplay" :alt="__('Tutor timezone: :city', ['city' => $businessTimezoneDisplay['city']])" />
+                    {{ __("Tutor's Time (Cairo)") }}
+                </div>
                 <div class="text-lg font-extrabold text-stone-900">
                     {{ \Carbon\CarbonImmutable::instance($booking->start_at_utc)->setTimezone($booking->business_timezone)->format('l, F j, Y') }}
                 </div>
@@ -97,7 +110,7 @@
                     {{ \Carbon\CarbonImmutable::instance($booking->end_at_utc)->setTimezone($booking->business_timezone)->format('g:i A') }}
                 </div>
                 <div class="text-xs text-stone-500 mt-1">
-                    {{ str_replace('_', ' ', $booking->business_timezone) }} (UTC{{ $booking->business_utc_offset_at_booking }})
+                    {{ $businessTimezoneDisplay['city'] }} · {{ $booking->business_timezone }} (UTC{{ $booking->business_utc_offset_at_booking }})
                 </div>
             </div>
         </div>

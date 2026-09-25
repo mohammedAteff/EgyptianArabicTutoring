@@ -62,14 +62,20 @@
                     </select>
                 </div>
 
-                <!-- Maintenance Mode -->
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Maintenance Mode</label>
-                    <select name="maintenance_mode" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                        <option value="0" {{ old('maintenance_mode', $settings['maintenance_mode']->value ?? '0') == '0' ? 'selected' : '' }}>Live (Normal Public Operations)</option>
-                        <option value="1" {{ old('maintenance_mode', $settings['maintenance_mode']->value ?? '0') == '1' ? 'selected' : '' }}>Maintenance Mode (Public Offline)</option>
-                    </select>
-                </div>
+                @if($canManageMaintenance)
+                    <!-- Maintenance Mode -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Maintenance Mode</label>
+                        <select name="maintenance_mode" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            <option value="0" {{ old('maintenance_mode', $settings['maintenance_mode']->value ?? '0') == '0' ? 'selected' : '' }}>Live (Normal Public Operations)</option>
+                            <option value="1" {{ old('maintenance_mode', $settings['maintenance_mode']->value ?? '0') == '1' ? 'selected' : '' }}>Maintenance Mode (Public Offline)</option>
+                        </select>
+                    </div>
+                @else
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:col-span-2">
+                        Public maintenance mode is managed by a super administrator. You can still update the business and site settings on this page.
+                    </div>
+                @endif
             </div>
 
             <div>

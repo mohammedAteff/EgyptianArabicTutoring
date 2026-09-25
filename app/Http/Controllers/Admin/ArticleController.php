@@ -15,26 +15,26 @@ class ArticleController extends Controller
     public function index(): View
     {
         return view('admin.articles.index', [
-            'title' => 'Articles',
+            'title' => 'Blogs',
             'articles' => Article::query()->orderByDesc('updated_at')->paginate(20),
         ]);
     }
 
     public function create(): View
     {
-        return view('admin.articles.form', ['title' => 'Create article', 'article' => null]);
+        return view('admin.articles.form', ['title' => 'Add Blog Post', 'article' => null]);
     }
 
     public function store(Request $request, ArticleService $articles): RedirectResponse
     {
         $article = $articles->create($this->validated($request), (int) $request->user('web')->id);
 
-        return redirect()->route('admin.articles.edit', $article)->with('success', 'Article created.');
+        return redirect()->route('admin.articles.edit', $article)->with('success', 'Blog post created.');
     }
 
     public function edit(Article $article): View
     {
-        return view('admin.articles.form', ['title' => 'Edit article', 'article' => $article]);
+        return view('admin.articles.form', ['title' => 'Edit Blog Post', 'article' => $article]);
     }
 
     public function update(Request $request, Article $article, ArticleService $articles): RedirectResponse
@@ -44,7 +44,7 @@ class ArticleController extends Controller
         unset($data['lock_version']);
         $articles->update($article, $data, $version, (int) $request->user('web')->id);
 
-        return redirect()->route('admin.articles.edit', $article)->with('success', 'Article saved.');
+        return redirect()->route('admin.articles.edit', $article)->with('success', 'Blog post saved.');
     }
 
     public function preview(Article $article): View

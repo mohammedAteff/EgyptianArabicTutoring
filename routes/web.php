@@ -330,14 +330,16 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/reports', [ReportController::class, 'index'])->middleware('role:super_admin,admin')->name('reports.index');
         Route::get('/reports/export', [ReportController::class, 'export'])->middleware('role:super_admin,admin')->name('reports.export');
 
+        // Everyday operational settings are available to both administrator roles.
+        Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+            Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
+        });
+
         // Super Admin Only Privileges
         Route::middleware('role:super_admin')->group(function () {
             Route::post('/students/{student}/merge', [StudentController::class, 'merge'])->name('students.merge');
             Route::post('/students/{student}/anonymize', [StudentController::class, 'anonymize'])->name('students.anonymize');
-
-            // Settings
-            Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
-            Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
 
             // System, Backups & Audit
             Route::get('/health', [SystemHealthController::class, 'index'])->name('health');

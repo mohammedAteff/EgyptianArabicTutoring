@@ -89,7 +89,7 @@
                 </a>
 
                 <!-- Desktop Navigation Links -->
-                <nav class="hidden md:flex items-center gap-7">
+                <nav class="hidden lg:flex items-center gap-7">
                     <a href="{{ localized_url('home') }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('home*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('Home') }}
@@ -114,7 +114,7 @@
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('faq*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('FAQ') }}
                     </a>
-                    <a href="{{ route('articles.index') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('articles.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Articles</a>
+                    <a href="{{ route('articles.index') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('articles.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Blogs</a>
 
                     <!-- Language Switcher (Desktop) -->
                     <div class="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200/80 text-xs font-semibold" role="group" aria-label="{{ __('Language selector') }}">
@@ -149,7 +149,7 @@
                 </nav>
 
                 <!-- Mobile Menu Button -->
-                <div class="flex items-center gap-3 md:hidden">
+                <div class="flex items-center gap-3 lg:hidden">
                     <a href="{{ localized_url('booking') }}"
                        data-cta="booking"
                        class="bg-terracotta-500 text-white text-xs font-semibold px-3.5 py-2 rounded-full shadow-sm">
@@ -180,7 +180,7 @@
              x-transition:leave="transition ease-in duration-150"
              x-transition:leave-start="opacity-100 translate-y-0"
              x-transition:leave-end="opacity-0 -translate-y-2"
-             class="md:hidden bg-white border-b border-stone-200 px-4 pt-2 pb-6 space-y-3 shadow-lg">
+             class="lg:hidden bg-white border-b border-stone-200 px-4 pt-2 pb-6 space-y-3 shadow-lg">
             <a href="{{ localized_url('home') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('Home') }}</a>
             <a href="{{ localized_url('booking') }}" data-cta="booking" class="block px-3 py-2 text-base font-semibold rounded-lg bg-terracotta-50 text-terracotta-600">📅 {{ __('Book a Lesson') }}</a>
             <a href="{{ localized_url('resources') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">📚 {{ __('Resources') }}</a>
@@ -188,7 +188,7 @@
             <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
             <a href="{{ localized_url('about') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('About') }}</a>
             <a href="{{ localized_url('faq') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('FAQ') }}</a>
-            <a href="{{ route('articles.index') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Articles</a>
+            <a href="{{ route('articles.index') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Blogs</a>
 
             <!-- Mobile Language Switcher -->
             <div class="pt-3 border-t border-stone-100">

@@ -244,9 +244,11 @@
                                 @php
                                     $slotInstant = \Carbon\CarbonImmutable::parse($slot['slot_start_utc'], 'UTC');
                                     $slotCustomerDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, $slotInstant);
-                                    $slotBusinessDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', $slotInstant);
+                                    $cairoSlotStart = $slotInstant->setTimezone('Africa/Cairo');
+                                    $cairoSlotEnd = \Carbon\CarbonImmutable::parse($slot['slot_end_utc'], 'UTC')->setTimezone('Africa/Cairo');
                                 @endphp
                                 <button type="button"
+                                        wire:key="booking-slot-{{ $slot['slot_start_utc'] }}"
                                         wire:click="selectSlot('{{ $slot['slot_id'] }}')"
                                         wire:loading.attr="disabled"
                                         class="w-full text-left p-3.5 rounded-xl border border-stone-200 hover:border-terracotta-500 hover:bg-terracotta-50/50 hover:shadow-sm transition-all flex items-center justify-between group">
@@ -254,11 +256,14 @@
                                         <div class="font-bold text-sm text-stone-900 group-hover:text-terracotta-600">
                                             {{ $slot['customer_formatted'] }} - {{ $slot['customer_formatted_end'] }}
                                         </div>
-                                        <div class="text-xs text-stone-500 mt-0.5">
+                                        <div class="text-xs text-stone-600 mt-1">
                                             <span class="inline-flex items-center gap-1.5">
-                                                <x-timezone-flag :display="$slotBusinessDisplay" :alt="__('Cairo timezone')" />
-                                                {{ $slotBusinessDisplay['city'] }} · {{ $slotBusinessDisplay['utc_offset'] }} · {{ $slot['business_start_time'] }}
+                                                <x-timezone-flag :display="$slotCustomerDisplay" :alt="__('Flag for :country', ['country' => $slotCustomerDisplay['timezone_country_name']])" />
+                                                {{ $slotCustomerDisplay['city'] }} · {{ $customerTimezone }} · {{ $slotCustomerDisplay['utc_offset'] }}
                                             </span>
+                                        </div>
+                                        <div class="text-xs text-stone-500 mt-0.5">
+                                            {{ __('Cairo equivalent: :start – :end', ['start' => $cairoSlotStart->format('g:i A'), 'end' => $cairoSlotEnd->format('g:i A')]) }} · Africa/Cairo
                                         </div>
                                     </div>
                                     <div class="text-xs font-semibold text-terracotta-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
@@ -302,7 +307,7 @@
                         @endphp
                         <span class="inline-flex items-center gap-1.5">
                             <x-timezone-flag :display="$heldSlotDisplay" :alt="$heldSlotDisplay['city']" />
-                            {{ $selectedSlot['customer_formatted'] ?? ($selectedSlot['start_formatted'] ?? '') }} ({{ $heldSlotDisplay['label'] }})
+                            {{ $selectedSlot['customer_formatted'] ?? ($selectedSlot['start_formatted'] ?? '') }} – {{ $selectedSlot['customer_formatted_end'] ?? '' }} ({{ $heldSlotDisplay['label'] }})
                         </span>
                     @endif
                 </div>
@@ -493,10 +498,11 @@
     <!-- Timezone Selector Modal -->
     @if($showTimezoneModal)
         <div class="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl border border-stone-200 max-w-lg w-full p-6 shadow-2xl space-y-4"
+            <div role="dialog" aria-modal="true" aria-labelledby="timezone-selector-title" class="bg-white rounded-3xl border border-stone-200 max-w-lg w-full p-6 shadow-2xl space-y-4"
+                 @keydown.escape.window="$wire.set('showTimezoneModal', false)"
                  @click.away="$wire.set('showTimezoneModal', false)">
                 <div class="flex items-center justify-between border-b border-stone-100 pb-3">
-                    <h3 class="text-lg font-bold text-stone-900">{{ __('Select Your Timezone') }}</h3>
+                    <h3 id="timezone-selector-title" class="text-lg font-bold text-stone-900">{{ __('Select Your Timezone') }}</h3>
                     <button type="button"
                             wire:click="$set('showTimezoneModal', false)"
                             class="text-stone-400 hover:text-stone-600 p-1 rounded-lg">
@@ -521,10 +527,12 @@
                             $selectorDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($tz['id'], now('UTC'));
                         @endphp
                         <button type="button"
+                                wire:key="timezone-option-{{ $tz['id'] }}"
+                                aria-pressed="{{ $customerTimezone === $tz['id'] ? 'true' : 'false' }}"
                                 wire:click="selectTimezone('{{ $tz['id'] }}')"
                                 class="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between hover:bg-stone-50 transition-colors {{ $customerTimezone === $tz['id'] ? 'bg-terracotta-50 font-bold text-terracotta-700' : 'text-stone-700' }}">
                             <span class="inline-flex items-center gap-2">
-                                <x-timezone-flag :display="$selectorDisplay" :alt="$selectorDisplay['city']" />
+                                <x-timezone-flag :display="$selectorDisplay" :alt="__('Flag for :country', ['country' => $selectorDisplay['timezone_country_name']])" />
                                 <span>{{ $selectorDisplay['label'] }}</span>
                             </span>
                             <span class="text-xs text-stone-400 font-mono">{{ $selectorDisplay['utc_offset'] }}</span>

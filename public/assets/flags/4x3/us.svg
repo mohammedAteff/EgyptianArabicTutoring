@@ -1,28 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480">
-  <rect width="640" height="480" fill="#bd3d44"/>
-  <rect y="37" width="640" height="37" fill="#ffffff"/>
-  <rect y="111" width="640" height="37" fill="#ffffff"/>
-  <rect y="185" width="640" height="37" fill="#ffffff"/>
-  <rect y="259" width="640" height="37" fill="#ffffff"/>
-  <rect y="333" width="640" height="37" fill="#ffffff"/>
-  <rect y="407" width="640" height="37" fill="#ffffff"/>
-  <rect width="260" height="259" fill="#192f5d"/>
-  <circle cx="50" cy="50" r="10" fill="#ffffff"/>
-  <circle cx="100" cy="50" r="10" fill="#ffffff"/>
-  <circle cx="150" cy="50" r="10" fill="#ffffff"/>
-  <circle cx="200" cy="50" r="10" fill="#ffffff"/>
-  <circle cx="75" cy="90" r="10" fill="#ffffff"/>
-  <circle cx="125" cy="90" r="10" fill="#ffffff"/>
-  <circle cx="175" cy="90" r="10" fill="#ffffff"/>
-  <circle cx="50" cy="130" r="10" fill="#ffffff"/>
-  <circle cx="100" cy="130" r="10" fill="#ffffff"/>
-  <circle cx="150" cy="130" r="10" fill="#ffffff"/>
-  <circle cx="200" cy="130" r="10" fill="#ffffff"/>
-  <circle cx="75" cy="170" r="10" fill="#ffffff"/>
-  <circle cx="125" cy="170" r="10" fill="#ffffff"/>
-  <circle cx="175" cy="170" r="10" fill="#ffffff"/>
-  <circle cx="50" cy="210" r="10" fill="#ffffff"/>
-  <circle cx="100" cy="210" r="10" fill="#ffffff"/>
-  <circle cx="150" cy="210" r="10" fill="#ffffff"/>
-  <circle cx="200" cy="210" r="10" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-us" viewBox="0 0 640 480">
+  <path fill="#bd3d44" d="M0 0h640v480H0"/>
+  <path stroke="#fff" stroke-width="37" d="M0 55.3h640M0 129h640M0 203h640M0 277h640M0 351h640M0 425h640"/>
+  <path fill="#192f5d" d="M0 0h364.8v258.5H0"/>
+  <marker id="us-a" markerHeight="30" markerWidth="30">
+    <path fill="#fff" d="m14 0 9 27L0 10h28L5 27z"/>
+  </marker>
+  <path fill="none" marker-mid="url(#us-a)" d="m0 0 16 11h61 61 61 61 60L47 37h61 61 60 61L16 63h61 61 61 61 60L47 89h61 61 60 61L16 115h61 61 61 61 60L47 141h61 61 60 61L16 166h61 61 61 61 60L47 192h61 61 60 61L16 218h61 61 61 61 60z"/>
 </svg>

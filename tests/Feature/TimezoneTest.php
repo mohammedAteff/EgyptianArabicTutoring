@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Domains\Booking\Exceptions\InvalidTimezoneException;
+use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use DateTimeZone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -51,6 +53,57 @@ class TimezoneTest extends TestCase
         $this->assertContains('Africa/Cairo', $ids);
         $this->assertContains('Europe/Berlin', $ids);
         $this->assertContains('America/New_York', $ids);
+    }
+
+    public function test_all_iana_timezones_resolve_to_a_local_svg_flag_or_globe_fallback(): void
+    {
+        $displayService = app(TimezoneDisplayService::class);
+        $instant = CarbonImmutable::parse('2026-06-15 12:00:00', 'UTC');
+
+        foreach (DateTimeZone::listIdentifiers(DateTimeZone::ALL) as $timezone) {
+            $display = $displayService->formatSlotForDisplay($timezone, $instant);
+            $location = (new DateTimeZone($timezone))->getLocation();
+
+            $this->assertNotEmpty($display['flag_asset'], "No flag or fallback returned for {$timezone}.");
+            $this->assertFileExists(public_path(ltrim($display['flag_asset'], '/')), "Missing SVG asset for {$timezone}.");
+            $this->assertNull($display['flag_symbol'], "Timezone {$timezone} must not rely on platform emoji rendering.");
+
+            if ($location && preg_match('/^[A-Z]{2}$/i', (string) ($location['country_code'] ?? ''))) {
+                $locationCountryCode = strtoupper($location['country_code']);
+                $expectedCountryCode = $locationCountryCode === 'AQ' ? null : $locationCountryCode;
+
+                $this->assertSame($expectedCountryCode, $display['timezone_country_code'], "Incorrect territory mapping for {$timezone}.");
+                $this->assertSame(
+                    $expectedCountryCode ? '/assets/flags/4x3/'.strtolower($expectedCountryCode).'.svg' : '/assets/flags/4x3/globe.svg',
+                    $display['flag_asset'],
+                    "Timezone {$timezone} must use its territory SVG or the world fallback."
+                );
+            }
+        }
+    }
+
+    public function test_representative_timezone_flags_use_complete_country_and_territory_mappings(): void
+    {
+        $displayService = app(TimezoneDisplayService::class);
+        $instant = CarbonImmutable::parse('2026-06-15 12:00:00', 'UTC');
+        $expectedAssets = [
+            'Pacific/Midway' => '/assets/flags/4x3/um.svg',
+            'Pacific/Niue' => '/assets/flags/4x3/nu.svg',
+            'Pacific/Pago_Pago' => '/assets/flags/4x3/as.svg',
+            'Pacific/Rarotonga' => '/assets/flags/4x3/ck.svg',
+            'Pacific/Tahiti' => '/assets/flags/4x3/pf.svg',
+            'Pacific/Honolulu' => '/assets/flags/4x3/us.svg',
+            'Africa/Cairo' => '/assets/flags/4x3/eg.svg',
+            'Europe/Berlin' => '/assets/flags/4x3/de.svg',
+            'America/New_York' => '/assets/flags/4x3/us.svg',
+        ];
+
+        foreach ($expectedAssets as $timezone => $asset) {
+            $this->assertSame($asset, $displayService->formatSlotForDisplay($timezone, $instant)['flag_asset']);
+        }
+
+        $this->assertSame('/assets/flags/4x3/globe.svg', $displayService->formatSlotForDisplay('Antarctica/Casey', $instant)['flag_asset']);
+        $this->assertSame('/assets/flags/4x3/globe.svg', $displayService->formatSlotForDisplay('Etc/GMT', $instant)['flag_asset']);
     }
 
     public function test_converts_between_utc_and_local_accurately(): void

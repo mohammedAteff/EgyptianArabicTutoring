@@ -15,6 +15,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
@@ -202,8 +203,9 @@ class BookingWizard extends Component
         if ($timezoneService->isValid($timezone)) {
             $this->customerTimezone = $timezone;
             $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
-            $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
-            $this->selectedDate = null;
+            $this->calendarMonth = $this->selectedDate
+                ? CarbonImmutable::createFromFormat('!Y-m-d', $this->selectedDate, $this->customerTimezone)->format('Y-m')
+                : now($this->customerTimezone)->format('Y-m');
             $this->syncSessionState();
         }
     }
@@ -215,29 +217,134 @@ class BookingWizard extends Component
             $this->customerTimezone = $timezone;
             $this->manualTimezoneSelected = true;
             $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
-            $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
-            $this->selectedDate = null;
             $this->showTimezoneModal = false;
             $this->timezoneSearch = '';
 
-            // If a slot was previously held, release it when switching timezone
             if ($this->holdId) {
-                app(BookingHoldService::class)->releaseVisitorHolds($this->visitorToken);
-                $this->holdId = null;
-                $this->holdToken = null;
-                $this->holdExpiresAt = null;
-                $this->selectedSlot = null;
-                $this->selectedSlotStartUtc = null;
-                $this->selectedSlotEndUtc = null;
-                $this->selectedSlotId = null;
-                session()->forget(['active_booking_hold_id', 'active_booking_hold_token']);
-                if ($this->currentStep > 2) {
-                    $this->currentStep = 2;
+                if ($this->selectedSlotStartUtc) {
+                    $heldCustomerStart = CarbonImmutable::parse($this->selectedSlotStartUtc, 'UTC')->setTimezone($timezone);
+                    $this->selectedDate = $heldCustomerStart->toDateString();
+                    $this->calendarMonth = $heldCustomerStart->format('Y-m');
                 }
+
+                $this->refreshHeldSlotForTimezone($timezone);
+            } else {
+                $this->calendarMonth = $this->selectedDate
+                    ? CarbonImmutable::createFromFormat('!Y-m-d', $this->selectedDate, $timezone)->format('Y-m')
+                    : now($timezone)->format('Y-m');
             }
 
             $this->syncSessionState();
         }
+    }
+
+    private function refreshHeldSlotForTimezone(string $timezone): void
+    {
+        $hold = BookingHold::query()
+            ->whereKey($this->holdId)
+            ->where('hold_token', (string) $this->holdToken)
+            ->where('visitor_token', $this->visitorToken)
+            ->where('session_token', session()->getId())
+            ->first();
+
+        if (! $hold
+            || $hold->status !== 'active'
+            || ! $hold->expires_at->isFuture()
+            || ! $this->selectedSlotStartUtc
+            || ! $this->selectedSlotEndUtc
+            || $hold->slot_start_utc->toDateTimeString() !== $this->selectedSlotStartUtc
+            || $hold->slot_end_utc->toDateTimeString() !== $this->selectedSlotEndUtc) {
+            $this->clearBookingHoldState('Your reservation has expired or is no longer valid. Please select a time slot again.');
+
+            return;
+        }
+
+        $sessionType = SessionType::query()
+            ->whereKey($hold->session_type_id)
+            ->where('active', true)
+            ->first();
+
+        if (! $sessionType) {
+            $this->releaseOwnedHold($hold);
+            $this->clearBookingHoldState('This lesson type is no longer available. Please select another time slot.');
+
+            return;
+        }
+
+        $slotStartUtc = CarbonImmutable::instance($hold->slot_start_utc)->setTimezone('UTC');
+        $slotEndUtc = CarbonImmutable::instance($hold->slot_end_utc)->setTimezone('UTC');
+        $customerStart = $slotStartUtc->setTimezone($timezone);
+        $customerDate = $customerStart->toDateString();
+        $customerDay = $customerStart->startOfDay();
+        $availableSlots = app(AvailabilityService::class)->getAvailableSlotsGroupedByDate(
+            sessionType: $sessionType,
+            customerTimezone: $timezone,
+            fromDate: $customerDay,
+            toDate: $customerDay,
+            currentVisitorToken: $this->visitorToken,
+        );
+
+        $slot = collect($availableSlots[$customerDate] ?? [])->first(fn (array $candidate): bool => $candidate['slot_start_utc'] === $slotStartUtc->toDateTimeString()
+            && $candidate['slot_end_utc'] === $slotEndUtc->toDateTimeString()
+        );
+
+        if (! $slot) {
+            $this->releaseOwnedHold($hold);
+            $this->clearBookingHoldState('Your reserved time is no longer available. Please choose another slot.');
+
+            return;
+        }
+
+        $slot['slot_id'] = app(SlotResolver::class)->issue(
+            $sessionType,
+            $slot,
+            $timezone,
+            $this->visitorToken,
+        );
+
+        $this->selectedDate = $customerDate;
+        $this->calendarMonth = $customerStart->format('Y-m');
+        $this->selectedSlotStartUtc = $slotStartUtc->toDateTimeString();
+        $this->selectedSlotEndUtc = $slotEndUtc->toDateTimeString();
+        $this->selectedSlotId = $slot['slot_id'];
+        $this->selectedSlot = $slot;
+        $this->holdExpiresAt = $hold->expires_at->toIso8601String();
+    }
+
+    private function releaseOwnedHold(BookingHold $hold): void
+    {
+        DB::transaction(function () use ($hold): void {
+            $lockedHold = BookingHold::query()->whereKey($hold->id)->lockForUpdate()->first();
+
+            if ($lockedHold
+                && $lockedHold->status === 'active'
+                && hash_equals((string) $lockedHold->hold_token, (string) $this->holdToken)
+                && hash_equals((string) $lockedHold->visitor_token, $this->visitorToken)
+                && hash_equals((string) $lockedHold->session_token, (string) session()->getId())) {
+                $lockedHold->release();
+            }
+        });
+    }
+
+    private function clearBookingHoldState(string $message): void
+    {
+        $this->holdId = null;
+        $this->holdToken = null;
+        $this->holdExpiresAt = null;
+        $this->selectedSlot = null;
+        $this->selectedSlotStartUtc = null;
+        $this->selectedSlotEndUtc = null;
+        $this->selectedSlotId = null;
+        $this->currentStep = 2;
+        $this->errorMessage = $message;
+
+        session()->forget([
+            'active_booking_hold_id',
+            'active_booking_hold_token',
+            'active_booking_slot_start_utc',
+            'active_booking_slot_end_utc',
+            'active_booking_session_type_id',
+        ]);
     }
 
     public function selectSession(int $id): void

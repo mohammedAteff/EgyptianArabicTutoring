@@ -33,7 +33,7 @@ class ArticleService
         return DB::transaction(function () use ($article, $data, $baseVersion, $administratorId): Article {
             $locked = Article::query()->whereKey($article->id)->lockForUpdate()->firstOrFail();
             if ($locked->lock_version !== $baseVersion) {
-                throw new ConflictHttpException('This article changed while you were editing. Reload before saving.');
+                throw new ConflictHttpException('This blog post changed while you were editing. Reload before saving.');
             }
 
             $data['slug'] = $this->normalizeSlug((string) $data['slug']);
@@ -82,7 +82,7 @@ class ArticleService
     {
         $normalized = Str::slug(trim($slug));
         if ($normalized === '') {
-            throw ValidationException::withMessages(['slug' => 'A valid article slug is required.']);
+            throw ValidationException::withMessages(['slug' => 'A valid blog post slug is required.']);
         }
 
         return $normalized;

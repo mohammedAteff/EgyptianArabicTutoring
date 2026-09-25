@@ -123,13 +123,14 @@ class V3SlotIdentityTest extends TestCase
         app(SlotResolver::class)->resolve($slotId, $this->sessionType, 'Africa/Cairo', 'visitor-one');
     }
 
-    public function test_geographic_zone_without_local_svg_uses_country_flag_not_globe(): void
+    public function test_geographic_zone_uses_local_country_flag_asset_without_platform_emoji(): void
     {
         $display = app(TimezoneDisplayService::class)->formatSlotForDisplay('Asia/Kolkata', now('UTC'));
 
         $this->assertSame('IN', $display['timezone_country_code']);
-        $this->assertNull($display['flag_asset']);
-        $this->assertNotEmpty($display['flag_symbol']);
+        $this->assertSame('/assets/flags/4x3/in.svg', $display['flag_asset']);
+        $this->assertFileExists(public_path('assets/flags/4x3/in.svg'));
+        $this->assertNull($display['flag_symbol']);
     }
 
     public function test_livewire_rejects_client_fabricated_slot_without_creating_hold(): void

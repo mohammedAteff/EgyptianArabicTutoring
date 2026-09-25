@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Availability\Models\AvailabilityRule;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Livewire\BookingWizard;
@@ -141,6 +142,72 @@ class BookingLanguageSwitchSyncTest extends TestCase
         $this->assertEquals('+49 170 1234567', $deComponent->get('phone'));
         $this->assertEquals('Europe/Berlin', $deComponent->get('customerTimezone'));
         $this->assertEquals($holdId, $deComponent->get('holdId'));
+    }
+
+    public function test_timezone_switches_refresh_customer_slot_display_and_preserve_the_owned_hold(): void
+    {
+        $slotStart = CarbonImmutable::now('UTC')->addDays(3)->setTime(12, 0, 0);
+        $component = Livewire::test(BookingWizard::class)
+            ->call('selectTimezone', 'Africa/Cairo')
+            ->call('selectDate', $slotStart->setTimezone('Africa/Cairo')->format('Y-m-d'));
+
+        $component->assertSee('Cairo · Africa/Cairo · UTC+3')
+            ->assertSee('Cairo equivalent: 3:00 PM – 4:00 PM');
+
+        foreach (['Pacific/Honolulu', 'Europe/Berlin', 'America/New_York'] as $timezone) {
+            $component->call('selectTimezone', $timezone);
+
+            $this->assertSame($timezone, $component->get('customerTimezone'));
+            $this->assertSame($slotStart->setTimezone($timezone)->toDateString(), $component->get('selectedDate'));
+            $component->assertSee($timezone);
+        }
+
+        $visitorToken = $component->get('visitorToken');
+        $component->call('selectSlot', $this->slotIdFor(
+            $this->sessionType,
+            $slotStart->toDateTimeString(),
+            'America/New_York',
+            $visitorToken,
+        ));
+
+        $holdId = $component->get('holdId');
+        $originalSlotId = $component->get('selectedSlotId');
+        $this->assertNotNull($holdId);
+        $this->assertSame(3, $component->get('currentStep'));
+
+        foreach (['Pacific/Honolulu', 'Europe/Berlin', 'America/New_York'] as $timezone) {
+            $component->call('selectTimezone', $timezone);
+            $localStart = $slotStart->setTimezone($timezone);
+
+            $this->assertSame(3, $component->get('currentStep'));
+            $this->assertSame($holdId, $component->get('holdId'));
+            $this->assertSame($slotStart->toDateTimeString(), $component->get('selectedSlotStartUtc'));
+            $this->assertSame($timezone, $component->get('selectedSlot')['customer_timezone']);
+            $this->assertSame($localStart->format('g:i A'), $component->get('selectedSlot')['customer_formatted']);
+            $component->assertSee($localStart->format('g:i A'))
+                ->assertSee($timezone);
+        }
+
+        $this->assertNotSame($originalSlotId, $component->get('selectedSlotId'));
+        $this->assertSame('active', BookingHold::query()->findOrFail($holdId)->status);
+
+        $idempotencyKey = $component->get('idempotencyKey');
+        $component->set('name', 'Timezone Test Student')
+            ->set('email', 'timezone-test@example.test')
+            ->call('submitDetails')
+            ->call('selectTimezone', 'America/New_York')
+            ->assertSee('Your Local Time')
+            ->assertSee('New York (America/New_York, UTC-4)');
+
+        $component->call('confirmBooking');
+        $booking = Booking::query()->where('idempotency_key', $idempotencyKey)->firstOrFail();
+
+        $this->assertSame('America/New_York', $booking->customer_timezone);
+        $this->get(route('booking.confirmation', $booking->confirmation_token))
+            ->assertOk()
+            ->assertSeeText('America/New_York')
+            ->assertSee('assets/flags/4x3/us.svg', false)
+            ->assertSee('assets/flags/4x3/eg.svg', false);
     }
 
     public function test_switch_language_with_expired_hold_resets_to_step_two_and_retains_contact_data(): void

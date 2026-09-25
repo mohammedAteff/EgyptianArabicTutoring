@@ -241,6 +241,7 @@ class ContentController extends Controller
             'platform' => ['required', 'string', Rule::in(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'])],
             'label' => ['required', 'string', 'max:100'],
             'url_or_phone' => ['required', 'string', 'max:2048'],
+            'default_message' => ['nullable', 'string', 'max:1000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:10000'],
         ]);
         $candidate = new SocialLink(['platform' => $data['platform']]);
@@ -251,6 +252,7 @@ class ContentController extends Controller
                 'platform' => $data['platform'],
                 'label' => trim($data['label']),
                 'url_or_phone' => trim($data['url_or_phone']),
+                'default_message' => $data['platform'] === 'whatsapp' ? ($data['default_message'] ?? null) : null,
                 'sort_order' => $data['sort_order'] ?? ((int) SocialLink::query()->max('sort_order') + 1),
                 'enabled' => false,
             ]);

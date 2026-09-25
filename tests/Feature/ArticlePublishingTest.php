@@ -68,6 +68,30 @@ class ArticlePublishingTest extends TestCase
         $this->get(route('articles.index'))->assertOk()->assertDontSee('Private draft');
     }
 
+    public function test_public_and_admin_navigation_use_blogs_terminology_without_renaming_routes(): void
+    {
+        $admin = AdministratorFactory::new()->create(['role' => 'admin']);
+
+        $this->get(route('articles.index'))
+            ->assertOk()
+            ->assertSeeText('Blogs')
+            ->assertSeeText('New blog posts are coming soon.')
+            ->assertDontSeeText('Articles');
+
+        $this->actingAs($admin, 'web')
+            ->get(route('admin.articles.index'))
+            ->assertOk()
+            ->assertSeeText('Blogs')
+            ->assertSeeText('Add Blog Post')
+            ->assertDontSeeText('Articles');
+
+        $this->get(route('admin.articles.create'))
+            ->assertOk()
+            ->assertSeeText('Add Blog Post')
+            ->assertSeeText('Create Blog Post')
+            ->assertDontSeeText('Create article');
+    }
+
     /** @return array<string, mixed> */
     private function articleData(string $body, string $status = 'draft', string $slug = 'article-guide'): array
     {

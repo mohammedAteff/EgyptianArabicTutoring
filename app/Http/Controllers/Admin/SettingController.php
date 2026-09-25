@@ -18,7 +18,7 @@ class SettingController extends Controller
         protected TimezoneService $timezoneService
     ) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
         $settings = Setting::all()->keyBy('key');
         $timezones = $this->timezoneService->getAvailableTimezones();
@@ -27,11 +27,18 @@ class SettingController extends Controller
             'title' => 'System & Business Settings',
             'settings' => $settings,
             'timezones' => $timezones,
+            'canManageMaintenance' => $request->user('web')?->role === 'super_admin',
         ]);
     }
 
     public function update(Request $request): RedirectResponse
     {
+        abort_if(
+            $request->user('web')?->role !== 'super_admin' && $request->has('maintenance_mode'),
+            403,
+            'Only a super administrator can change maintenance mode.'
+        );
+
         $validated = $request->validate([
             'site_name' => ['required', 'string', 'max:100'],
             'business_timezone' => ['required', 'string'],
