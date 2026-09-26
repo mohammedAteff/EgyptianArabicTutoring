@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="max-w-5xl mx-auto space-y-8">
+<div class="space-y-8">
 
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -104,6 +104,7 @@
             <div class="text-xs text-slate-600 mt-1 font-medium">{{ $mailMessage }}</div>
             <div class="text-[11px] text-slate-400 mt-2 truncate">Sender: {{ $mailFrom }}</div>
         </div>
+    </div>
 
     <!-- Maintenance Mode Traffic Diagnostics (Phase 5) -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
@@ -185,12 +186,12 @@
 
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
                 <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Server UTC Clock</span>
-                <span class="font-mono text-xs font-bold text-slate-900 block mt-0.5">{{ $serverTimeUtc }} UTC</span>
+                <span class="font-mono text-xs font-bold text-slate-900 block mt-0.5 truncate whitespace-nowrap">{{ $serverTimeUtc }} UTC</span>
             </div>
 
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
                 <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Cairo Business Clock</span>
-                <span class="font-mono text-xs font-bold text-amber-700 block mt-0.5">{{ $cairoTime }}</span>
+                <span class="font-mono text-xs font-bold text-amber-700 block mt-0.5 truncate whitespace-nowrap">{{ $cairoTime }}</span>
             </div>
         </div>
     </div>
