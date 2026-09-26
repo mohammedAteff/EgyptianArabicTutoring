@@ -29,6 +29,24 @@
                 transform: translateX(0) !important;
             }
         }
+        /* Custom sleek dark scrollbar for admin sidebar */
+        #admin-sidebar-nav::-webkit-scrollbar {
+            width: 5px;
+        }
+        #admin-sidebar-nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #admin-sidebar-nav::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        #admin-sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        #admin-sidebar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: #334155 transparent;
+        }
     </style>
 </head>
 <body class="h-full font-sans antialiased bg-slate-100" 
@@ -51,7 +69,7 @@
          onclick="window.closeAdminSidebar(event)"
          @click="closeSidebar()"></div>
 
-    <div class="min-h-full flex">
+    <div class="h-screen flex overflow-hidden bg-slate-100">
 
         <!-- Sidebar for Desktop & Mobile Drawer (Section 32) -->
         <aside id="admin-sidebar"
@@ -59,7 +77,7 @@
                aria-modal="true"
                aria-label="Admin Navigation"
                :class="(sidebarOpen || mobileSidebarOpen) ? 'open translate-x-0' : '-translate-x-full md:translate-x-0'"
-               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:fixed md:flex-shrink-0">
+               class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:fixed md:flex-shrink-0 border-r border-slate-800">
             
             <!-- Brand / Logo -->
             <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
@@ -83,7 +101,7 @@
             </div>
 
             <!-- Navigation Links -->
-            <nav class="flex-1 overflow-y-auto px-4 py-6 space-y-6 text-sm font-medium">
+            <nav id="admin-sidebar-nav" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 text-sm font-medium">
                 
                 <!-- Overview -->
                 <div>
@@ -271,30 +289,70 @@
             </nav>
 
             <!-- Current User & Logout Footer -->
-            <div class="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-                <div class="flex items-center gap-3 overflow-hidden">
-                    <div class="w-8 h-8 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-xs shrink-0">
-                        {{ strtoupper(substr(auth()->user()->name ?? 'A', 0, 1)) }}
+            <div class="p-3 bg-slate-900 border-t border-slate-800/80 shrink-0">
+                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/60 shadow-xs">
+                    <div class="flex items-center gap-2.5 overflow-hidden">
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                            {{ strtoupper(substr(auth()->user()->name ?? 'A', 0, 1)) }}
+                        </div>
+                        <div class="truncate text-xs">
+                            <div class="font-semibold text-white truncate leading-tight">{{ auth()->user()->name ?? 'Administrator' }}</div>
+                            <div class="text-slate-400 capitalize text-[11px] leading-tight mt-0.5">{{ auth()->user()->role ?? 'admin' }}</div>
+                        </div>
                     </div>
-                    <div class="truncate text-xs">
-                        <div class="font-medium text-white truncate">{{ auth()->user()->name ?? 'Administrator' }}</div>
-                        <div class="text-slate-400 capitalize">{{ auth()->user()->role ?? 'admin' }}</div>
-                    </div>
+                    <form action="{{ route('admin.logout') }}" method="POST" class="shrink-0 ml-1">
+                        @csrf
+                        <button type="submit" title="Sign Out" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700/60 rounded-lg transition-colors cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        </button>
+                    </form>
                 </div>
-                <form action="{{ route('admin.logout') }}" method="POST">
-                    @csrf
-                    <button type="submit" title="Sign Out" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-md transition-colors">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                    </button>
-                </form>
             </div>
         </aside>
+
+        <script>
+            (function() {
+                var nav = document.getElementById('admin-sidebar-nav');
+                if (!nav) return;
+
+                var savedScroll = sessionStorage.getItem('admin_sidebar_scroll');
+                if (savedScroll !== null) {
+                    nav.scrollTop = parseInt(savedScroll, 10);
+                } else {
+                    var active = nav.querySelector('.bg-amber-600');
+                    if (active) {
+                        active.scrollIntoView({ block: 'nearest' });
+                    }
+                }
+
+                var scrollTimeout;
+                nav.addEventListener('scroll', function() {
+                    clearTimeout(scrollTimeout);
+                    scrollTimeout = setTimeout(function() {
+                        sessionStorage.setItem('admin_sidebar_scroll', nav.scrollTop);
+                    }, 50);
+                }, { passive: true });
+
+                nav.addEventListener('click', function(e) {
+                    var link = e.target.closest('a');
+                    if (link) {
+                        sessionStorage.setItem('admin_sidebar_scroll', nav.scrollTop);
+                    }
+                });
+
+                window.addEventListener('beforeunload', function() {
+                    if (nav) {
+                        sessionStorage.setItem('admin_sidebar_scroll', nav.scrollTop);
+                    }
+                });
+            })();
+        </script>
 
         <!-- Main Content Area -->
         <div class="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-64">
             
             <!-- Topbar Header -->
-            <header class="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between shadow-xs">
+            <header class="h-16 shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between shadow-xs z-10">
                 
                 <!-- Left: Hamburger toggle + Global Search Form -->
                 <div class="flex items-center gap-4 flex-1 max-w-xl">
@@ -349,7 +407,7 @@
                 $offsiteBackupCategory = \App\Domains\CMS\Models\Setting::get('last_offsite_backup_category', 's3_replication_failed');
             @endphp
             @if($offsiteBackupStatus && str_starts_with($offsiteBackupStatus, 'failed'))
-                <div class="bg-amber-50 border-b border-amber-300 px-6 py-3 flex items-center justify-between text-sm text-amber-900 shadow-xs">
+                <div class="shrink-0 bg-amber-50 border-b border-amber-300 px-6 py-3 flex items-center justify-between text-sm text-amber-900 shadow-xs">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                         <div>
@@ -362,7 +420,7 @@
             @endif
 
             @if(session('success'))
-                <div class="bg-emerald-50 border-b border-emerald-200 px-6 py-3 flex items-center justify-between text-sm text-emerald-800">
+                <div class="shrink-0 bg-emerald-50 border-b border-emerald-200 px-6 py-3 flex items-center justify-between text-sm text-emerald-800">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <span>{{ session('success') }}</span>
@@ -371,7 +429,7 @@
             @endif
 
             @if(session('error'))
-                <div class="bg-red-50 border-b border-red-200 px-6 py-3 flex items-center justify-between text-sm text-red-800">
+                <div class="shrink-0 bg-red-50 border-b border-red-200 px-6 py-3 flex items-center justify-between text-sm text-red-800">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <span>{{ session('error') }}</span>

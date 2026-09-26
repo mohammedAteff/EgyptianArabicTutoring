@@ -21,25 +21,6 @@
         </div>
     </div>
 
-    <!-- Offsite Backup Alert Banner -->
-    @if(isset($offsiteBackupStatus) && str_starts_with($offsiteBackupStatus, 'failed'))
-        <div class="bg-red-50 border-2 border-red-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-            <div class="flex items-start gap-3">
-                <div class="p-2 bg-red-100 text-red-800 rounded-xl shrink-0">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                </div>
-                <div>
-                    <h2 class="text-base font-bold text-red-900">Warning: Offsite Backup Replication Failed</h2>
-                    <p class="text-xs text-red-800 mt-1">Operational failure category: <code class="font-mono bg-red-100 px-1.5 py-0.5 rounded font-semibold">{{ $offsiteBackupCategory ?? 's3_replication_failed' }}</code>. Offsite S3 replication could not be completed.</p>
-                </div>
-            </div>
-            <a href="{{ route('admin.health') }}" class="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shrink-0 transition-colors shadow-xs">
-                <span>View System Health</span>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-            </a>
-        </div>
-    @endif
-
     <!-- Needs Attention Queue (if any) -->
     @if(count($suspectedDuplicates) > 0 || $recentCancellations->isNotEmpty())
         <div class="space-y-3">
