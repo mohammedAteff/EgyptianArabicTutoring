@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\DailyMetric;
+use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Reporting\Services\ReportService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ClientTelemetryIngestionTest extends TestCase
@@ -152,5 +155,55 @@ class ClientTelemetryIngestionTest extends TestCase
         $this->assertStringContainsString('isWhatsApp', $html);
         $this->assertStringContainsString('isTelegram', $html);
         $this->assertStringContainsString('data-cta="booking"', $html);
+        $this->assertStringContainsString('name="analytics-event-url" content="'.route('analytics.track').'"', $html);
+    }
+
+    public function test_presence_heartbeat_refreshes_session_without_creating_an_analytics_event(): void
+    {
+        $firstResponse = $this->withHeader('User-Agent', 'Mozilla/5.0 Test Browser')->get('/');
+        $firstResponse->assertOk();
+        $visitorCookie = $firstResponse->getCookie('_va_visitor');
+        $sessionCookie = $firstResponse->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
+
+        $session = VisitorSession::query()->latest('id')->firstOrFail();
+        $session->update(['last_activity_at' => now()->subSeconds(50)]);
+        $eventCount = AnalyticsEvent::count();
+
+        $this->withHeader('User-Agent', 'Mozilla/5.0 Test Browser')
+            ->withCredentials()
+            ->withCookie('_va_visitor', $visitorCookie->getValue())
+            ->withCookie('_va_session', $sessionCookie->getValue())
+            ->postJson(route('analytics.track'), [
+                '_token' => csrf_token(),
+                'events' => [[
+                    'event_name' => 'session_activity',
+                    'event_uuid' => (string) Str::uuid(),
+                ]],
+            ])->assertOk()->assertJson(['status' => 'ok']);
+
+        $this->assertTrue(
+            $session->fresh()->last_activity_at->greaterThan(now()->subSeconds(10)),
+            'Session last activity: '.$session->fresh()->last_activity_at->toIso8601String().'; current time: '.now()->toIso8601String().'; session count: '.VisitorSession::count(),
+        );
+        $this->assertSame($eventCount, AnalyticsEvent::count());
+    }
+
+    public function test_client_event_uuid_is_validated_and_legacy_events_receive_a_server_uuid(): void
+    {
+        $this->postJson(route('analytics.track'), [
+            'event_name' => 'section_view',
+            'event_uuid' => 'not-a-uuid',
+            'metadata' => ['section_id' => 'hero', 'page_template' => 'landing', 'path' => '/'],
+        ])->assertStatus(422);
+
+        $this->postJson(route('analytics.track'), [
+            'event_name' => 'section_view',
+            'metadata' => ['section_id' => 'hero', 'page_template' => 'landing', 'path' => '/'],
+        ])->assertOk();
+
+        $event = AnalyticsEvent::query()->where('event_name', 'section_view')->firstOrFail();
+        $this->assertTrue(Str::isUuid($event->event_uuid));
     }
 }

@@ -28,7 +28,7 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         <!-- Main Description (7 cols) -->
-        <div @if($isFallback ?? false) lang="en" dir="ltr" @endif class="lg:col-span-7 space-y-6">
+        <div @if($isFallback ?? false) lang="en" dir="ltr" @endif data-section-id="resource-preview" class="lg:col-span-7 space-y-6">
             <div class="flex items-center gap-3">
                 <span class="text-xs font-bold uppercase tracking-wider text-terracotta-600 bg-terracotta-50 px-3 py-1 rounded-full">
                     {{ $resource->category?->liveTranslation()?->name ?? $resource->category?->name ?? 'Free Resource' }}

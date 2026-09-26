@@ -69,3 +69,9 @@ Schedule::call(function () {
             ->delete();
     }
 })->dailyAt('03:00')->name('session-cleanup');
+
+// 6. Telegram Booking Reminders: dispatches multi-recipient lesson alerts with dynamic milestones
+Schedule::command('booking:send-telegram-reminders')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10)
+    ->name('booking:send-telegram-reminders');

@@ -10,6 +10,7 @@ use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -40,6 +41,8 @@ class AnalyticsService
         'outbound_link_clicked',
         'faq_opened',
         'navigation_click',
+        'section_view',
+        'section_dwell',
     ];
 
     public const SERVER_ONLY_EVENTS = [
@@ -86,6 +89,8 @@ class AnalyticsService
         'outbound_link_clicked' => ['url', 'text', 'placement', 'target', 'destination'],
         'faq_opened' => ['question_id', 'question_text', 'category'],
         'navigation_click' => ['item_text', 'target_url', 'placement'],
+        'section_view' => ['section_id', 'page_template', 'path'],
+        'section_dwell' => ['section_id', 'page_template', 'dwell_seconds', 'path'],
     ];
 
     public function __construct(
@@ -100,7 +105,8 @@ class AnalyticsService
         ?string $visitorToken = null,
         ?string $sessionToken = null,
         array $metadata = [],
-        ?CarbonInterface $occurredAt = null
+        ?CarbonInterface $occurredAt = null,
+        ?string $eventUuid = null
     ): ?AnalyticsEvent {
         return $this->track(
             eventName: $eventType,
@@ -108,7 +114,8 @@ class AnalyticsService
             visitorToken: $visitorToken,
             sessionToken: $sessionToken,
             page: $page,
-            occurredAt: $occurredAt
+            occurredAt: $occurredAt,
+            eventUuid: $eventUuid
         );
     }
 
@@ -157,7 +164,8 @@ class AnalyticsService
         ?string $visitorToken = null,
         ?string $sessionToken = null,
         ?string $page = null,
-        ?CarbonInterface $occurredAt = null
+        ?CarbonInterface $occurredAt = null,
+        ?string $eventUuid = null
     ): ?AnalyticsEvent {
         if (! in_array($eventName, self::ALLOWED_EVENTS, true)) {
             Log::warning("AnalyticsService: rejected unauthorized event '{$eventName}'");
@@ -270,23 +278,30 @@ class AnalyticsService
             // Enforce privacy: raw IP, client country overrides, and internal timestamps must never be stored in event metadata
             unset($metadata['ip'], $metadata['country_code'], $metadata['_occurred_at'], $metadata['occurred_at']);
 
-            $event = AnalyticsEvent::create([
-                'event_name' => $eventName,
-                'visitor_token' => $vToken ? substr($vToken, 0, 64) : null,
-                'visitor_id' => $vToken ? substr($vToken, 0, 64) : null,
-                'session_token' => $sToken ? substr($sToken, 0, 64) : null,
-                'page' => $pageUrl,
-                'referrer' => $referrer ?: null,
-                'utm_source' => $utmSource ? substr($utmSource, 0, 100) : null,
-                'utm_medium' => $utmMedium ? substr($utmMedium, 0, 100) : null,
-                'utm_campaign' => $utmCampaign ? substr($utmCampaign, 0, 100) : null,
-                'utm_content' => $utmContent ? substr($utmContent, 0, 100) : null,
-                'utm_term' => $utmTerm ? substr($utmTerm, 0, 100) : null,
-                'metadata' => ! empty($metadata) ? $metadata : null,
-                'ip_hash' => $ipHash,
-                'is_bot' => $isBot,
-                'created_at' => $eventTime,
-            ]);
+            try {
+                $event = AnalyticsEvent::create([
+                    'event_uuid' => $eventUuid,
+                    'event_name' => $eventName,
+                    'visitor_token' => $vToken ? substr($vToken, 0, 64) : null,
+                    'visitor_id' => $vToken ? substr($vToken, 0, 64) : null,
+                    'session_token' => $sToken ? substr($sToken, 0, 64) : null,
+                    'page' => $pageUrl,
+                    'referrer' => $referrer ?: null,
+                    'utm_source' => $utmSource ? substr($utmSource, 0, 100) : null,
+                    'utm_medium' => $utmMedium ? substr($utmMedium, 0, 100) : null,
+                    'utm_campaign' => $utmCampaign ? substr($utmCampaign, 0, 100) : null,
+                    'utm_content' => $utmContent ? substr($utmContent, 0, 100) : null,
+                    'utm_term' => $utmTerm ? substr($utmTerm, 0, 100) : null,
+                    'metadata' => ! empty($metadata) ? $metadata : null,
+                    'ip_hash' => $ipHash,
+                    'is_bot' => $isBot,
+                    'created_at' => $eventTime,
+                ]);
+            } catch (UniqueConstraintViolationException $e) {
+                Log::info("AnalyticsService: idempotent duplicate event suppressed for UUID {$eventUuid}");
+
+                return $eventUuid ? AnalyticsEvent::where('event_uuid', $eventUuid)->first() : null;
+            }
 
             if (! $isBot && $vToken) {
                 try {
@@ -661,5 +676,33 @@ class AnalyticsService
             ->orderByDesc('visitors')
             ->take(50)
             ->get();
+    }
+
+    /**
+     * Track a visitor hit during maintenance mode.
+     */
+    public function trackMaintenanceVisit(Request $request): void
+    {
+        $visitorToken = $request->cookie('visitor_token')
+            ?: hash('sha256', ($request->ip() ?? 'unknown').($request->userAgent() ?? ''));
+
+        $countryCode = 'XX';
+        try {
+            $countryCode = app(GeoIpService::class)->getCountryCode($request->ip());
+        } catch (\Throwable $e) {
+            $countryCode = 'XX';
+        }
+
+        DB::table('maintenance_visits')->insert([
+            'visitor_id' => substr($visitorToken, 0, 100),
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 500),
+            'country_code' => $countryCode ?: 'XX',
+            'url' => substr($request->fullUrl(), 0, 500),
+            'referrer' => substr((string) $request->header('referer'), 0, 500) ?: null,
+            'is_bounced' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

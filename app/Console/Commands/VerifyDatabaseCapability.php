@@ -32,6 +32,14 @@ class VerifyDatabaseCapability extends Command
         }
 
         if (in_array($capability->vendor(), ['mysql', 'mariadb'], true)) {
+            try {
+                $capability->assertInnoDBAvailable();
+                $this->line('Storage engine: InnoDB verified');
+            } catch (\Throwable $e) {
+                $this->error($e->getMessage());
+                $passed = false;
+            }
+
             $hasStudentForeignKey = DB::table('information_schema.key_column_usage')
                 ->whereRaw('CONSTRAINT_SCHEMA = DATABASE()')
                 ->where('TABLE_NAME', 'bookings')

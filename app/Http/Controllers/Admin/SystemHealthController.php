@@ -4,12 +4,16 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Reporting\Services\ExportService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SystemHealthController extends Controller
 {
@@ -189,6 +193,24 @@ class SystemHealthController extends Controller
             }
         }
 
+        // 8. Maintenance Mode Traffic Diagnostics
+        $maintenanceHitsCount = 0;
+        $maintenanceUniqueVisitors = 0;
+        $maintenanceBounceRate = 100.0;
+        $maintenanceCountries = collect();
+        try {
+            $maintenanceHitsCount = DB::table('maintenance_visits')->count();
+            $maintenanceUniqueVisitors = DB::table('maintenance_visits')->distinct('visitor_id')->count('visitor_id');
+            $maintenanceCountries = DB::table('maintenance_visits')
+                ->select('country_code', DB::raw('count(*) as hits'), DB::raw('count(distinct visitor_id) as visitors'))
+                ->groupBy('country_code')
+                ->orderByDesc('hits')
+                ->limit(10)
+                ->get();
+        } catch (\Throwable) {
+            // Table not ready or empty
+        }
+
         return view('admin.system.health', [
             'title' => 'System Health & Diagnostics',
             'dbStatus' => $dbStatus,
@@ -220,7 +242,53 @@ class SystemHealthController extends Controller
             'cairoTime' => now('Africa/Cairo')->toDateTimeString(),
             'environment' => app()->environment(),
             'debugMode' => config('app.debug'),
+            'maintenanceHitsCount' => $maintenanceHitsCount,
+            'maintenanceUniqueVisitors' => $maintenanceUniqueVisitors,
+            'maintenanceBounceRate' => $maintenanceBounceRate,
+            'maintenanceCountries' => $maintenanceCountries,
         ]);
+    }
+
+    public function exportMaintenanceTraffic(Request $request): StreamedResponse|BinaryFileResponse
+    {
+        $format = $request->query('format', 'csv');
+        $headers = [
+            'Timestamp (UTC)',
+            'Visitor ID',
+            'IP Address',
+            'Country Code',
+            'Requested URL',
+            'Referrer',
+            'Bounced (Intercepted)',
+        ];
+
+        $rowsGenerator = function () {
+            $cursor = DB::table('maintenance_visits')
+                ->orderByDesc('id')
+                ->cursor();
+
+            foreach ($cursor as $row) {
+                yield [
+                    $row->created_at,
+                    $row->visitor_id,
+                    $row->ip_address,
+                    $row->country_code,
+                    $row->url,
+                    $row->referrer ?? 'Direct / None',
+                    $row->is_bounced ? 'Yes' : 'No',
+                ];
+            }
+        };
+
+        $baseFilename = 'maintenance_traffic_'.now()->format('Ymd_His');
+
+        return app(ExportService::class)->export(
+            $baseFilename,
+            $headers,
+            $rowsGenerator(),
+            $format,
+            'Maintenance Traffic'
+        );
     }
 
     public function auditLogs(): View

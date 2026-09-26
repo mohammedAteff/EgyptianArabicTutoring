@@ -21,7 +21,7 @@
     @endif
 
     <!-- Game Container with Alpine Reactive State -->
-    <div @if($isFallback ?? false) lang="en" dir="ltr" @endif class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-10 shadow-sm"
+    <div @if($isFallback ?? false) lang="en" dir="ltr" @endif data-section-id="game-board" class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-10 shadow-sm"
          x-data="{
              gameSlug: @js($game->slug),
              trackingUrl: @js(route('games.track', ['slug' => $game->slug])),

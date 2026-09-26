@@ -27,6 +27,9 @@ class BufferExpandedConcurrencyLockTest extends TestCase
 
     protected SessionType $sessionType;
 
+    /** @var list<Process|resource> */
+    protected array $workerProcesses = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -64,10 +67,43 @@ class BufferExpandedConcurrencyLockTest extends TestCase
 
     protected function tearDown(): void
     {
-        DB::table('bookings')->where('idempotency_key', 'like', 'buffer-test-%')->delete();
-        DB::table('session_types')->where('slug', 'midnight-buffer-session')->delete();
-        DB::table('booking_calendar_locks')->truncate();
-        AvailabilityRule::query()->delete();
+        // 1. Terminate all child worker processes before touching the database
+        if (! empty($this->workerProcesses)) {
+            foreach ($this->workerProcesses as $process) {
+                if (is_resource($process)) {
+                    proc_terminate($process);
+                    proc_close($process);
+                } elseif ($process instanceof Process && $process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
+            $this->workerProcesses = [];
+        }
+
+        // 2. Disconnect and purge secondary PDOs
+        foreach (['conn_a', 'conn_b', 'secondary'] as $connection) {
+            try {
+                DB::disconnect($connection);
+                DB::purge($connection);
+            } catch (\Throwable) {
+                // Connection not initialized
+            }
+        }
+
+        // 3. Child-first database cleanup scoped to isolated concurrency fixtures
+        if (DB::connection()->getPdo()) {
+            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+            DB::table('session_reschedules')->truncate();
+            DB::table('session_ledger_entries')->truncate();
+            DB::table('booking_events')->truncate();
+            DB::table('booking_holds')->truncate();
+            DB::table('bookings')->truncate();
+            DB::table('booking_calendar_locks')->truncate();
+            DB::table('availability_rules')->truncate();
+            DB::table('availability_exceptions')->truncate();
+            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+        }
+
         parent::tearDown();
     }
 
@@ -157,8 +193,11 @@ class BufferExpandedConcurrencyLockTest extends TestCase
         $process1 = new Process([PHP_BINARY, $workerPath, json_encode($payload1)]);
         $process2 = new Process([PHP_BINARY, $workerPath, json_encode($payload2)]);
 
-        $process1->setTimeout(10);
-        $process2->setTimeout(10);
+        $process1->setTimeout(25);
+        $process2->setTimeout(25);
+
+        $this->workerProcesses[] = $process1;
+        $this->workerProcesses[] = $process2;
 
         // Run both worker processes concurrently
         $process1->start();
@@ -323,6 +362,12 @@ class BufferExpandedConcurrencyLockTest extends TestCase
                 'new_end_utc' => $newEndUtc->toDateTimeString(),
             ]),
         ]);
+
+        $procA->setTimeout(25);
+        $procB->setTimeout(25);
+
+        $this->workerProcesses[] = $procA;
+        $this->workerProcesses[] = $procB;
 
         $procA->start();
         $procB->start();

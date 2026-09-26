@@ -58,7 +58,7 @@ class GeoIpService
         // validated proxy headers before GeoLite2 lookup.
         $clientIp = $this->resolveClientIp($request, $remoteAddr);
 
-        return $this->getCountryCode($clientIp);
+        return $this->getCountryCode($clientIp) ?? 'XX';
     }
 
     protected function resolveClientIp(Request $request, string $remoteAddr): ?string
@@ -80,17 +80,17 @@ class GeoIpService
 
     /**
      * Resolve 2-letter ISO country code from an IP address using GeoLite2 database.
-     * Returns null on missing database, invalid/private IP, or unresolvable country.
+     * Returns 'XX' on missing database, invalid/private IP, or unresolvable country.
      */
-    public function getCountryCode(?string $ip): ?string
+    public function getCountryCode(?string $ip, ?string $default = null): ?string
     {
         if (! $ip || ! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-            return null;
+            return $default;
         }
 
         $dbPath = (string) config('services.geoip.database_path', storage_path('geoip/GeoLite2-Country.mmdb'));
         if (! file_exists($dbPath) || ! is_readable($dbPath)) {
-            return null;
+            return $default;
         }
 
         try {
@@ -98,9 +98,9 @@ class GeoIpService
             $record = $reader->country($ip);
             $isoCode = $record->country->isoCode;
 
-            return $this->cleanIsoCode($isoCode);
+            return $this->cleanIsoCode($isoCode) ?? $default;
         } catch (Throwable) {
-            return null;
+            return $default;
         }
     }
 

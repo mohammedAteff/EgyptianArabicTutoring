@@ -575,7 +575,8 @@ class BackupAndMaintenanceTest extends TestCase
 
         $status = Setting::get('last_offsite_backup_status');
         $this->assertNotNull($status);
-        $this->assertStringStartsWith('failed:', $status);
+        $this->assertSame('failed', $status);
+        $this->assertSame('s3_replication_failed', Setting::get('last_offsite_backup_category'));
 
         // Clean up
         $backupService->deleteBackup(basename($backupPath));

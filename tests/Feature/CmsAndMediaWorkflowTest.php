@@ -575,6 +575,27 @@ class CmsAndMediaWorkflowTest extends TestCase
         $this->assertDatabaseMissing('media', ['filename' => 'unsafe.svg']);
     }
 
+    public function test_media_upload_never_uses_a_client_supplied_executable_extension_for_storage(): void
+    {
+        Storage::fake('public');
+
+        $response = $this->actingAs($this->admin, 'web')->post(route('admin.media.store'), [
+            'file' => UploadedFile::fake()->image('disguised.php'),
+        ])->assertRedirect();
+
+        foreach (Storage::disk('public')->allFiles('media') as $path) {
+            $this->assertMatchesRegularExpression('/\.(?:jpe?g|png|webp|gif|pdf)$/i', $path);
+        }
+
+        $storedMedia = Media::query()->where('filename', 'disguised.php')->first();
+        if ($storedMedia) {
+            $this->assertMatchesRegularExpression('/\.(?:jpe?g|png|webp|gif|pdf)$/i', $storedMedia->path);
+            Storage::disk('public')->assertExists($storedMedia->path);
+        } else {
+            $response->assertSessionHasErrors('file');
+        }
+    }
+
     public function test_referenced_media_cannot_be_silently_deleted(): void
     {
         Storage::fake('public');

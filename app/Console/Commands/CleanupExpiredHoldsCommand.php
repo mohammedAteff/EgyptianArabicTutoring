@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domains\Booking\Services\BookingHoldService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class CleanupExpiredHoldsCommand extends Command
 {
@@ -19,7 +20,7 @@ class CleanupExpiredHoldsCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Clean up expired booking holds and update their status to expired';
+    protected $description = 'Clean up expired booking holds and prune historical records older than 30 days';
 
     /**
      * Execute the console command.
@@ -28,6 +29,17 @@ class CleanupExpiredHoldsCommand extends Command
     {
         $expiredCount = $holdService->cleanExpiredHolds();
         $this->info("Cleaned up {$expiredCount} expired booking hold(s).");
+
+        $pruned = DB::table('booking_holds')
+            ->whereIn('status', ['expired', 'released'])
+            ->where('expires_at', '<', now()->subDays(30))
+            ->orderBy('id')
+            ->limit(1000)
+            ->delete();
+
+        if ($pruned > 0) {
+            $this->info("Pruned {$pruned} historical booking hold(s) older than 30 days.");
+        }
 
         return self::SUCCESS;
     }

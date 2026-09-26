@@ -9,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('articles', function (Blueprint $table) {
+        Schema::create('blogs', function (Blueprint $table) {
             $table->id();
             $table->string('title');
             $table->string('slug')->unique();
@@ -29,17 +29,17 @@ return new class extends Migration
             $table->unique(['translation_group_id', 'locale']);
         });
 
-        Schema::create('article_revisions', function (Blueprint $table) {
+        Schema::create('blog_revisions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('article_id')->constrained('articles')->restrictOnDelete();
+            $table->foreignId('blog_id')->constrained('blogs')->restrictOnDelete();
             $table->json('snapshot');
             $table->foreignId('revised_by')->nullable()->constrained('administrators')->nullOnDelete();
             $table->timestamp('created_at');
         });
 
-        Schema::create('article_slug_redirects', function (Blueprint $table) {
+        Schema::create('blog_slug_redirects', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('article_id')->constrained('articles')->restrictOnDelete();
+            $table->foreignId('blog_id')->constrained('blogs')->restrictOnDelete();
             $table->string('old_slug')->unique();
             $table->timestamp('created_at');
         });
@@ -47,14 +47,14 @@ return new class extends Migration
 
     public function down(): void
     {
-        foreach (['article_slug_redirects', 'article_revisions', 'articles'] as $table) {
+        foreach (['blog_slug_redirects', 'blog_revisions', 'blogs'] as $table) {
             if (Schema::hasTable($table) && DB::table($table)->exists()) {
-                throw new RuntimeException('Cannot drop populated article history.');
+                throw new RuntimeException('Cannot drop populated blog history.');
             }
         }
 
-        Schema::dropIfExists('article_slug_redirects');
-        Schema::dropIfExists('article_revisions');
-        Schema::dropIfExists('articles');
+        Schema::dropIfExists('blog_slug_redirects');
+        Schema::dropIfExists('blog_revisions');
+        Schema::dropIfExists('blogs');
     }
 };

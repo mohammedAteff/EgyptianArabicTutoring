@@ -2,18 +2,18 @@
 
 namespace App\Domains\CMS\Services;
 
-use App\Domains\CMS\Models\Article;
+use App\Domains\CMS\Models\Blog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
-class ArticleService
+class BlogService
 {
     public function __construct(private RichTextSanitizer $sanitizer) {}
 
     /** @param array<string, mixed> $data */
-    public function create(array $data, int $administratorId): Article
+    public function create(array $data, int $administratorId): Blog
     {
         $data['slug'] = $this->normalizeSlug((string) $data['slug']);
         $this->assertSlugIsAvailable($data['slug']);
@@ -24,14 +24,14 @@ class ArticleService
             $data['published_at'] = $data['published_at'] ?? now('UTC');
         }
 
-        return Article::create($data);
+        return Blog::create($data);
     }
 
     /** @param array<string, mixed> $data */
-    public function update(Article $article, array $data, int $baseVersion, int $administratorId): Article
+    public function update(Blog $blog, array $data, int $baseVersion, int $administratorId): Blog
     {
-        return DB::transaction(function () use ($article, $data, $baseVersion, $administratorId): Article {
-            $locked = Article::query()->whereKey($article->id)->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($blog, $data, $baseVersion, $administratorId): Blog {
+            $locked = Blog::query()->whereKey($blog->id)->lockForUpdate()->firstOrFail();
             if ($locked->lock_version !== $baseVersion) {
                 throw new ConflictHttpException('This blog post changed while you were editing. Reload before saving.');
             }
@@ -47,8 +47,8 @@ class ArticleService
             }
 
             if ($locked->status === 'published') {
-                DB::table('article_revisions')->insert([
-                    'article_id' => $locked->id,
+                DB::table('blog_revisions')->insert([
+                    'blog_id' => $locked->id,
                     'snapshot' => json_encode($locked->only([
                         'title', 'slug', 'excerpt', 'body', 'featured_image_path',
                         'seo_title', 'seo_description', 'canonical_url', 'status',
@@ -60,8 +60,8 @@ class ArticleService
             }
 
             if ($locked->slug !== $data['slug']) {
-                DB::table('article_slug_redirects')->insert([
-                    'article_id' => $locked->id,
+                DB::table('blog_slug_redirects')->insert([
+                    'blog_id' => $locked->id,
                     'old_slug' => $locked->slug,
                     'created_at' => now('UTC'),
                 ]);
@@ -88,11 +88,11 @@ class ArticleService
         return $normalized;
     }
 
-    private function assertSlugIsAvailable(string $slug, ?Article $article = null): void
+    private function assertSlugIsAvailable(string $slug, ?Blog $blog = null): void
     {
-        $existingArticle = Article::query()->where('slug', $slug)->when($article, fn ($query) => $query->where('id', '<>', $article->id))->exists();
-        $redirectExists = DB::table('article_slug_redirects')->where('old_slug', $slug)->exists();
-        if ($existingArticle || $redirectExists) {
+        $existingBlog = Blog::query()->where('slug', $slug)->when($blog, fn ($query) => $query->where('id', '<>', $blog->id))->exists();
+        $redirectExists = DB::table('blog_slug_redirects')->where('old_slug', $slug)->exists();
+        if ($existingBlog || $redirectExists) {
             throw ValidationException::withMessages(['slug' => 'That slug is already in use or reserved by a redirect.']);
         }
     }

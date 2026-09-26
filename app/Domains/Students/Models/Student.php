@@ -48,6 +48,16 @@ class Student extends Authenticatable
         return StudentFactory::new();
     }
 
+    public function getNameAttribute(): string
+    {
+        return trim(($this->first_name ?? '').' '.($this->last_name ?? ''));
+    }
+
+    public function packages(): HasMany
+    {
+        return $this->hasMany(StudentPackage::class);
+    }
+
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);

@@ -4,6 +4,7 @@ namespace App\Domains\CMS\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class Setting extends Model
 {
@@ -50,5 +51,9 @@ class Setting extends Model
                 'is_public' => $isPublic,
             ]
         );
+
+        if ($key === 'system.maintenance_mode' || $key === 'maintenance_mode') {
+            Cache::forget('system.maintenance_mode');
+        }
     }
 }

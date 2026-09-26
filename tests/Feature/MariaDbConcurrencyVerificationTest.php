@@ -37,6 +37,9 @@ class MariaDbConcurrencyVerificationTest extends TestCase
 
     private array $raceCalendarDates = [];
 
+    /** @var list<Process|resource> */
+    protected array $workerProcesses = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -72,6 +75,33 @@ class MariaDbConcurrencyVerificationTest extends TestCase
 
     protected function tearDown(): void
     {
+        // 1. Terminate all child worker processes before touching the database
+        if (! empty($this->workerProcesses)) {
+            foreach ($this->workerProcesses as $process) {
+                if (is_resource($process)) {
+                    proc_terminate($process);
+                    proc_close($process);
+                } elseif ($process instanceof Process && $process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
+            $this->workerProcesses = [];
+        }
+
+        // 2. Disconnect and purge secondary PDOs
+        foreach (['conn_a', 'conn_b', 'secondary'] as $connection) {
+            try {
+                DB::disconnect($connection);
+                DB::purge($connection);
+            } catch (\Throwable) {
+                // Connection not initialized
+            }
+        }
+
+        if (DB::connection()->getPdo()) {
+            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+        }
+
         $bookingIds = DB::table('bookings')
             ->whereIn('idempotency_key', array_merge(
                 ['unique-key-concurrent-1', 'unique-key-concurrent-2'],
@@ -105,6 +135,11 @@ class MariaDbConcurrencyVerificationTest extends TestCase
         DB::table('session_types')->where('slug', 'conversational-arabic')->delete();
         DB::table('contacts')->whereIn('email', ['first@boltlanding.test', 'second@boltlanding.test'])->delete();
         AvailabilityRule::query()->delete();
+
+        if (DB::connection()->getPdo()) {
+            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+        }
+
         parent::tearDown();
     }
 
@@ -505,6 +540,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
                 $process->setTimeout(20);
                 $process->start();
                 $processes[] = $process;
+                $this->workerProcesses[] = $process;
             }
 
             $deadline = microtime(true) + 10;

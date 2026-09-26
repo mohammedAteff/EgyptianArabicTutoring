@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domains\Analytics\Models\AnalyticsEvent;
+use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
@@ -109,6 +110,19 @@ class AggregateDailyAnalyticsCommand extends Command
             ->where('event_name', 'resource_downloaded')
             ->count();
 
+        // 6b. Bounced sessions within Cairo day (V4 Phase 1 §3)
+        $bouncedSessionsCount = VisitorSession::query()
+            ->where('is_bot', false)
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            })
+            ->where('started_at', '>=', $startUtc)
+            ->where('started_at', '<', $endUtc)
+            ->whereRaw('TIMESTAMPDIFF(SECOND, started_at, last_activity_at) < 10')
+            ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name = "page_view" AND analytics_events.is_bot = 0) = 1')
+            ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name IN ("booking_completed", "booking_cta_clicked", "booking_cta_click", "booking_started") AND analytics_events.is_bot = 0) = 0')
+            ->count();
+
         // 7. Page views by Page
         $pageViewsByPage = (clone $baseQuery)
             ->where('event_name', 'page_view')
@@ -147,6 +161,30 @@ class AggregateDailyAnalyticsCommand extends Command
             ->groupBy('utm_source')
             ->get();
 
+        // 11. Section Dwell Seconds and Views by Section ID (V4 Phase 1 §4 & Phase 2 §2)
+        $sectionDwells = (clone $baseQuery)
+            ->where('event_name', 'section_dwell')
+            ->get(['metadata']);
+        $dwellBySection = [];
+        foreach ($sectionDwells as $evt) {
+            $secId = is_array($evt->metadata) ? ($evt->metadata['section_id'] ?? null) : null;
+            $dwell = is_array($evt->metadata) ? (int) ($evt->metadata['dwell_seconds'] ?? 0) : 0;
+            if ($secId && $dwell > 0) {
+                $dwellBySection[$secId] = ($dwellBySection[$secId] ?? 0) + $dwell;
+            }
+        }
+
+        $sectionViews = (clone $baseQuery)
+            ->where('event_name', 'section_view')
+            ->get(['metadata']);
+        $viewsBySection = [];
+        foreach ($sectionViews as $evt) {
+            $secId = is_array($evt->metadata) ? ($evt->metadata['section_id'] ?? null) : null;
+            if ($secId) {
+                $viewsBySection[$secId] = ($viewsBySection[$secId] ?? 0) + 1;
+            }
+        }
+
         // Atomic rebuild: purge existing date metrics first to eliminate stale dimension rows
         DB::transaction(function () use (
             $targetDate,
@@ -159,7 +197,10 @@ class AggregateDailyAnalyticsCommand extends Command
             $pageViewsByPage,
             $visitorsBySource,
             $sessionsBySource,
-            $pageViewsBySource
+            $pageViewsBySource,
+            $bouncedSessionsCount,
+            $dwellBySection,
+            $viewsBySection
         ) {
             DailyMetric::where('metric_date', $targetDate)->delete();
 
@@ -187,6 +228,14 @@ class AggregateDailyAnalyticsCommand extends Command
                 'dimension_key' => '',
                 'dimension_value' => '',
                 'count' => $uniqueSessions,
+            ]);
+
+            DailyMetric::create([
+                'metric_date' => $targetDate,
+                'metric_name' => 'bounced_sessions',
+                'dimension_key' => '',
+                'dimension_value' => '',
+                'count' => $bouncedSessionsCount,
             ]);
 
             DailyMetric::create([
@@ -250,6 +299,26 @@ class AggregateDailyAnalyticsCommand extends Command
                     'dimension_key' => 'source',
                     'dimension_value' => substr($row->utm_source, 0, 128),
                     'count' => $row->count,
+                ]);
+            }
+
+            foreach ($dwellBySection as $secId => $dwellSecs) {
+                DailyMetric::create([
+                    'metric_date' => $targetDate,
+                    'metric_name' => 'section_dwell_seconds',
+                    'dimension_key' => 'section',
+                    'dimension_value' => substr($secId, 0, 128),
+                    'count' => $dwellSecs,
+                ]);
+            }
+
+            foreach ($viewsBySection as $secId => $viewsCount) {
+                DailyMetric::create([
+                    'metric_date' => $targetDate,
+                    'metric_name' => 'section_views',
+                    'dimension_key' => 'section',
+                    'dimension_value' => substr($secId, 0, 128),
+                    'count' => $viewsCount,
                 ]);
             }
         });
@@ -330,9 +399,10 @@ class AggregateDailyAnalyticsCommand extends Command
                     $hasRollup = DailyMetric::where('metric_date', $dayStr)
                         ->where('metric_name', 'unique_visitors')
                         ->exists();
+                    $hasCountryRollup = DailyCountryMetric::where('metric_date', $dayStr)->exists();
 
-                    if (! $hasRollup) {
-                        $this->warn("Skipping retention pruning for Cairo date {$dayStr}: durable daily rollup is missing.");
+                    if (! $hasRollup || ! $hasCountryRollup) {
+                        $this->warn("Skipping retention pruning for Cairo date {$dayStr}: durable daily or country rollup is missing.");
                         $currDay = $currDay->addDay();
 
                         continue;
@@ -373,6 +443,78 @@ class AggregateDailyAnalyticsCommand extends Command
                     }
                 }
                 $this->info("Cleaned up {$deletedExports} temporary export files.");
+            }
+
+            // Bounded Telemetry & Auth Pruning (V4 Phase 1 §5)
+            $cutoff90Days = CarbonImmutable::now('UTC')->subDays(90);
+            $prunedRawEvents = 0;
+            $ninetyDayCutoffCairo = CarbonImmutable::now('Africa/Cairo')->subDays(90)->startOfDay();
+            $oldestRemainingEvent = AnalyticsEvent::query()
+                ->where('created_at', '<', $ninetyDayCutoffCairo->setTimezone('UTC'))
+                ->min('created_at');
+            if ($oldestRemainingEvent) {
+                $pruneDay = CarbonImmutable::parse($oldestRemainingEvent, 'UTC')->setTimezone('Africa/Cairo')->startOfDay();
+                while ($pruneDay->lt($ninetyDayCutoffCairo)) {
+                    $dayStartUtc = $pruneDay->setTimezone('UTC');
+                    $dayEndUtc = $pruneDay->addDay()->setTimezone('UTC');
+                    $hasRollup = DailyMetric::query()
+                        ->where('metric_date', $pruneDay->toDateString())
+                        ->where('metric_name', 'unique_visitors')
+                        ->exists();
+                    $hasCountryRollup = DailyCountryMetric::query()
+                        ->where('metric_date', $pruneDay->toDateString())
+                        ->exists();
+
+                    if ($hasRollup && $hasCountryRollup) {
+                        do {
+                            $deletedChunk = DB::table('analytics_events')
+                                ->where('created_at', '>=', $dayStartUtc)
+                                ->where('created_at', '<', $dayEndUtc)
+                                ->orderBy('id')
+                                ->limit(1000)
+                                ->delete();
+                            $prunedRawEvents += $deletedChunk;
+                        } while ($deletedChunk === 1000);
+                    } else {
+                        $this->warn("Skipping 90-day event pruning for Cairo date {$pruneDay->toDateString()}: durable daily or country rollup is missing.");
+                    }
+
+                    $pruneDay = $pruneDay->addDay();
+                }
+            }
+
+            $prunedTouches = 0;
+            do {
+                $deletedChunk = DB::table('marketing_touches')
+                    ->where('created_at', '<', $cutoff90Days)
+                    ->orderBy('id')
+                    ->limit(1000)
+                    ->delete();
+                $prunedTouches += $deletedChunk;
+            } while ($deletedChunk === 1000);
+
+            $cutoffAuthCooldown = CarbonImmutable::now('UTC')->subDays(7);
+            $cutoffAuth30Days = CarbonImmutable::now('UTC')->subDays(30);
+            $prunedAuthAttempts = 0;
+            do {
+                $deletedChunk = DB::table('student_auth_attempts')
+                    ->where(function ($query) use ($cutoffAuthCooldown, $cutoffAuth30Days): void {
+                        $query->where('cooldown_until', '<', $cutoffAuthCooldown)
+                            ->orWhere('created_at', '<', $cutoffAuth30Days);
+                    })
+                    ->limit(1000)
+                    ->delete();
+                $prunedAuthAttempts += $deletedChunk;
+            } while ($deletedChunk === 1000);
+
+            if ($prunedRawEvents > 0) {
+                $this->info("Pruned {$prunedRawEvents} historical analytics events older than 90 days.");
+            }
+            if ($prunedTouches > 0) {
+                $this->info("Pruned {$prunedTouches} historical marketing touches older than 90 days.");
+            }
+            if ($prunedAuthAttempts > 0) {
+                $this->info("Pruned {$prunedAuthAttempts} stale student auth attempts.");
             }
         }
 

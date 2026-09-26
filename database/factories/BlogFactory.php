@@ -2,15 +2,15 @@
 
 namespace Database\Factories;
 
-use App\Domains\CMS\Models\Article;
+use App\Domains\CMS\Models\Blog;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Article>
+ * @extends Factory<Blog>
  */
-class ArticleFactory extends Factory
+class BlogFactory extends Factory
 {
-    protected $model = Article::class;
+    protected $model = Blog::class;
 
     /**
      * Define the model's default state.

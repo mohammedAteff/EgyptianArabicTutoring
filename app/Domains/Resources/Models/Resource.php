@@ -35,6 +35,7 @@ class Resource extends Model
         'short_description',
         'full_description',
         'file_path',
+        'external_url',
         'file_type',
         'file_size',
         'cover_image_path',

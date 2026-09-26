@@ -2,7 +2,7 @@
 
 @section('content')
 <!-- Hero Section -->
-<section class="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-28">
+<section id="hero" data-section-id="hero" class="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-28">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             <!-- Left Hero Content (7 cols) -->
@@ -118,7 +118,7 @@
 </section>
 
 <!-- Teaching Approach / Value Pillars -->
-<section class="py-20 bg-white border-y border-stone-200/80">
+<section id="curriculum" data-section-id="curriculum" class="py-20 bg-white border-y border-stone-200/80">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center max-w-3xl mx-auto mb-16">
             <span class="text-xs font-extrabold uppercase tracking-wider text-terracotta-600 bg-terracotta-50 px-3.5 py-1.5 rounded-full">
@@ -171,7 +171,7 @@
 
 <!-- Featured Session Type Booking Preview -->
 @if($sessionType)
-<section class="py-20">
+<section id="pricing" data-section-id="pricing" class="py-20">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="bg-gradient-to-br from-nile-900 to-nile-800 rounded-3xl p-8 sm:p-12 text-white shadow-xl relative overflow-hidden">
             <div class="max-w-2xl space-y-6 relative z-10">
@@ -361,7 +361,7 @@
 @endif
 
 <!-- Final Call to Action -->
-<section class="py-20 bg-stone-900 text-white text-center">
+<section id="tutor-bio" data-section-id="tutor-bio" class="py-20 bg-stone-900 text-white text-center">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div class="w-14 h-14 rounded-2xl bg-terracotta-500 text-white flex items-center justify-center font-bold text-2xl font-cairo mx-auto">
             <span aria-hidden="true">A</span>

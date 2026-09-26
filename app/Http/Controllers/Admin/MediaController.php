@@ -10,7 +10,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class MediaController extends Controller
@@ -66,12 +65,10 @@ class MediaController extends Controller
 
         $uploadedFile = $request->file('file');
         $originalFilename = $uploadedFile->getClientOriginalName();
-        $extension = $uploadedFile->getClientOriginalExtension();
-        $storedFilename = Str::random(32).'.'.$extension;
-        $path = $uploadedFile->storeAs('media', $storedFilename, 'public');
+        $path = $uploadedFile->store('media', 'public');
 
         $dimensions = null;
-        if (str_starts_with($uploadedFile->getMimeType(), 'image/') && $extension !== 'svg') {
+        if (str_starts_with($uploadedFile->getMimeType(), 'image/')) {
             $imageSize = @getimagesize($uploadedFile->getRealPath());
             if ($imageSize) {
                 $dimensions = ['width' => $imageSize[0], 'height' => $imageSize[1]];

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Resources\Models\ResourceDownload;
@@ -93,6 +94,10 @@ class DashboardController extends Controller
             ->take(8)
             ->get();
 
+        // 6. Backup alerts
+        $offsiteBackupStatus = Setting::get('last_offsite_backup_status');
+        $offsiteBackupCategory = Setting::get('last_offsite_backup_category', 's3_replication_failed');
+
         return view('admin.dashboard', [
             'title' => 'Tutor Operations Console',
             'businessTz' => $businessTz,
@@ -103,6 +108,8 @@ class DashboardController extends Controller
             'recentCancellations' => $recentCancellations,
             'kpis' => $kpis,
             'recentAuditLogs' => $recentAuditLogs,
+            'offsiteBackupStatus' => $offsiteBackupStatus,
+            'offsiteBackupCategory' => $offsiteBackupCategory,
         ]);
     }
 }

@@ -105,8 +105,10 @@ class BackupService
                     }
                     Setting::set('last_offsite_backup_status', 'success', 'system');
                 } catch (Throwable $offsiteEx) {
-                    Setting::set('last_offsite_backup_status', 'failed: '.$offsiteEx->getMessage(), 'system');
-                    Log::warning("Failed to replicate backup {$zipFilename} to offsite disk {$offsiteDisk}: ".$offsiteEx->getMessage());
+                    $category = $this->categorizeOffsiteError($offsiteEx);
+                    Setting::set('last_offsite_backup_status', 'failed', 'system');
+                    Setting::set('last_offsite_backup_category', $category, 'system');
+                    Log::error("Failed to replicate backup {$zipFilename} to offsite disk {$offsiteDisk}: [{$category}]", ['exception' => $offsiteEx]);
                 }
             }
 
@@ -706,5 +708,35 @@ class BackupService
         }
 
         return $bytes.' B';
+    }
+
+    public function categorizeOffsiteError(Throwable $e): string
+    {
+        $message = strtolower($e->getMessage());
+
+        if (str_contains($message, 'accessdenied')
+            || str_contains($message, 'forbidden')
+            || str_contains($message, '403')
+            || str_contains($message, 'invalidaccesskey')
+            || str_contains($message, 'signaturedoesnotmatch')
+            || str_contains($message, 'credential')
+            || str_contains($message, 'unauthorized')
+            || str_contains($message, '401')
+        ) {
+            return 's3_authentication_failed';
+        }
+
+        if (str_contains($message, 'curl')
+            || str_contains($message, 'connect')
+            || str_contains($message, 'timeout')
+            || str_contains($message, 'timed out')
+            || str_contains($message, 'resolve host')
+            || str_contains($message, 'unreachable')
+            || str_contains($message, 'network')
+        ) {
+            return 's3_connectivity_unavailable';
+        }
+
+        return 's3_replication_failed';
     }
 }

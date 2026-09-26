@@ -2,58 +2,65 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Domains\CMS\Models\Article;
-use App\Domains\CMS\Services\ArticleService;
+use App\Domains\CMS\Models\Blog;
+use App\Domains\CMS\Services\BlogService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
-class ArticleController extends Controller
+class BlogController extends Controller
 {
     public function index(): View
     {
-        return view('admin.articles.index', [
-            'title' => 'Blogs',
-            'articles' => Article::query()->orderByDesc('updated_at')->paginate(20),
+        return view('admin.blog.index', [
+            'title' => 'Blog',
+            'blogs' => Blog::query()->orderByDesc('updated_at')->paginate(20),
         ]);
     }
 
     public function create(): View
     {
-        return view('admin.articles.form', ['title' => 'Add Blog Post', 'article' => null]);
+        return view('admin.blog.form', ['title' => 'Add Blog Post', 'blog' => null]);
     }
 
-    public function store(Request $request, ArticleService $articles): RedirectResponse
+    public function store(Request $request, BlogService $blogs): RedirectResponse
     {
-        $article = $articles->create($this->validated($request), (int) $request->user('web')->id);
+        $blog = $blogs->create($this->validated($request), (int) $request->user('web')->id);
 
-        return redirect()->route('admin.articles.edit', $article)->with('success', 'Blog post created.');
+        return redirect()->route('admin.blog.edit', $blog)->with('success', 'Blog post created.');
     }
 
-    public function edit(Article $article): View
+    public function edit(Blog $blog): View
     {
-        return view('admin.articles.form', ['title' => 'Edit Blog Post', 'article' => $article]);
+        return view('admin.blog.form', ['title' => 'Edit Blog Post', 'blog' => $blog]);
     }
 
-    public function update(Request $request, Article $article, ArticleService $articles): RedirectResponse
+    public function update(Request $request, Blog $blog, BlogService $blogs): RedirectResponse
     {
         $data = $this->validated($request);
         $version = (int) $data['lock_version'];
         unset($data['lock_version']);
-        $articles->update($article, $data, $version, (int) $request->user('web')->id);
+        $blogs->update($blog, $data, $version, (int) $request->user('web')->id);
 
-        return redirect()->route('admin.articles.edit', $article)->with('success', 'Blog post saved.');
+        return redirect()->route('admin.blog.edit', $blog)->with('success', 'Blog post saved.');
     }
 
-    public function preview(Article $article): View
+    public function destroy(Blog $blog): RedirectResponse
     {
-        return view('articles.show', [
-            'article' => $article,
+        $blog->delete();
+
+        return redirect()->route('admin.blog.index')->with('success', 'Blog post deleted.');
+    }
+
+    public function preview(Blog $blog): View
+    {
+        return view('blog.show', [
+            'blog' => $blog,
             'preview' => true,
-            'title' => $article->seo_title ?: $article->title,
-            'metaDescription' => $article->seo_description ?: $article->excerpt,
+            'title' => $blog->seo_title ?: $blog->title,
+            'metaDescription' => $blog->seo_description ?: $blog->excerpt,
         ]);
     }
 

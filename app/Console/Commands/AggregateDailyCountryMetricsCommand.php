@@ -168,6 +168,26 @@ class AggregateDailyCountryMetricsCommand extends Command
             $metrics['bookings_completed'][$country] = ($metrics['bookings_completed'][$country] ?? 0) + 1;
         }
 
+        // Bounced sessions calculation
+        $bouncedSessionsByCountry = [];
+        $bouncedSessions = VisitorSession::query()
+            ->where('is_bot', false)
+            ->whereHas('visitor', function ($query): void {
+                $query->where('is_bot', false);
+            })
+            ->where('started_at', '>=', $startUtc)
+            ->where('started_at', '<', $endUtc)
+            ->whereRaw('TIMESTAMPDIFF(SECOND, started_at, last_activity_at) < 10')
+            ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name = "page_view" AND analytics_events.is_bot = 0) = 1')
+            ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name IN ("booking_completed", "booking_cta_clicked", "booking_cta_click", "booking_started") AND analytics_events.is_bot = 0) = 0')
+            ->get(['id', 'detected_country_code']);
+
+        foreach ($bouncedSessions as $bSession) {
+            $country = $this->normalizeCountry($bSession->detected_country_code);
+            $bouncedSessionsByCountry[$country] = ($bouncedSessionsByCountry[$country] ?? 0) + 1;
+        }
+        $metrics['bounced_sessions_count'] = $bouncedSessionsByCountry;
+
         $countries = collect($metrics)
             ->flatMap(fn (array $counts): array => array_keys($counts))
             ->push('ZZ')
@@ -196,6 +216,7 @@ class AggregateDailyCountryMetricsCommand extends Command
                     // Compatibility names used by older traffic code.
                     'visitors' => $uniqueVisitors,
                     'page_views' => $pageViews,
+                    'bounced_sessions_count' => (int) ($metrics['bounced_sessions_count'][$country] ?? 0),
                 ]);
             }
         });

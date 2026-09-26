@@ -1,1 +1,1 @@
-//
+import './analytics-telemetry.js';

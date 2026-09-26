@@ -3,7 +3,9 @@
 namespace App\Domains\Administration\Models;
 
 use App\Domains\Administration\Notifications\AdminResetPasswordNotification;
+use App\Domains\CMS\Models\Blog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -56,5 +58,10 @@ class Administrator extends Authenticatable
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {
         $this->notify(new AdminResetPasswordNotification($token));
+    }
+
+    public function blogs(): HasMany
+    {
+        return $this->hasMany(Blog::class, 'author_id');
     }
 }

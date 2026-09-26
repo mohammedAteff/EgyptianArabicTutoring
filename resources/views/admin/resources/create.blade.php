@@ -117,6 +117,16 @@
                 </div>
             </div>
 
+            <!-- External URL -->
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">External Resource URL (Optional)</label>
+                <input type="url" name="external_url" value="{{ old('external_url') }}"
+                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                       placeholder="https://example.com/guide.pdf">
+                <p class="text-xs text-slate-400 mt-1">If provided, visitor downloads will redirect directly to this verified external URL (must use https:// or http://).</p>
+                @error('external_url') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+            </div>
+
             <!-- File Upload -->
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Resource File (PDF / ZIP / MP3)</label>

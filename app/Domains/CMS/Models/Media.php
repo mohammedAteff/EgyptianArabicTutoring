@@ -3,6 +3,7 @@
 namespace App\Domains\CMS\Models;
 
 use App\Domains\Games\Models\Game;
+use App\Domains\Marketing\Models\Promotion;
 use App\Domains\Resources\Models\Resource;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -74,6 +75,30 @@ class Media extends Model
             $refs[] = "Game: {$g->title}";
         }
 
+        $blogs = Blog::query()
+            ->where('featured_image_path', $this->path)
+            ->orWhere('featured_image_path', $this->url())
+            ->get(['id', 'title']);
+        foreach ($blogs as $blog) {
+            $refs[] = "Blog: {$blog->title}";
+        }
+
+        $promotions = Promotion::query()
+            ->where('banner_image_path', $this->path)
+            ->orWhere('banner_image_path', $this->url())
+            ->get(['id', 'title']);
+        foreach ($promotions as $promotion) {
+            $refs[] = "Promotion: {$promotion->title}";
+        }
+
+        $blogRevisions = BlogRevision::query()
+            ->where('snapshot->featured_image_path', $this->path)
+            ->orWhere('snapshot->featured_image_path', $this->url())
+            ->get(['id']);
+        foreach ($blogRevisions as $revision) {
+            $refs[] = "Blog revision #{$revision->id}";
+        }
+
         // Check Settings
         $settings = Setting::query()
             ->where('value', $this->path)
@@ -139,6 +164,18 @@ class Media extends Model
 
         // Check Games
         if (Game::query()->where('thumbnail_path', $normalized)->orWhere('thumbnail_path', $path)->exists()) {
+            return true;
+        }
+
+        if (Blog::query()->where('featured_image_path', $normalized)->orWhere('featured_image_path', $path)->exists()) {
+            return true;
+        }
+
+        if (Promotion::query()->where('banner_image_path', $normalized)->orWhere('banner_image_path', $path)->exists()) {
+            return true;
+        }
+
+        if (BlogRevision::query()->where('snapshot->featured_image_path', $normalized)->orWhere('snapshot->featured_image_path', $path)->exists()) {
             return true;
         }
 

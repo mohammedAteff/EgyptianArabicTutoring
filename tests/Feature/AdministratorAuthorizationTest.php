@@ -62,7 +62,7 @@ class AdministratorAuthorizationTest extends TestCase
             route('admin.content.index'),
             route('admin.media.index'),
             route('admin.reports.index'),
-            route('admin.articles.create'),
+            route('admin.blog.create'),
             route('admin.forms.create'),
             route('admin.settings.index'),
             route('admin.administrators.index'),
@@ -85,7 +85,7 @@ class AdministratorAuthorizationTest extends TestCase
         $this->actingAs($admin, 'web');
 
         $this->get(route('admin.reports.index'))->assertOk();
-        $this->get(route('admin.articles.create'))->assertOk();
+        $this->get(route('admin.blog.create'))->assertOk();
         $this->get(route('admin.forms.create'))->assertOk();
         $this->get(route('home.preview'))->assertOk();
         $this->get(route('admin.settings.index'))

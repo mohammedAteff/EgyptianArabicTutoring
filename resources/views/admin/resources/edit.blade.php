@@ -27,6 +27,7 @@
     $valIsGated = old('is_gated', isset($draftContent['is_gated']) ? ($draftContent['is_gated'] ? '1' : '0') : ($resource->is_gated ? '1' : '0'));
     $valStatus = old('status', $resource->status);
     $valCover = old('cover_image_path', $draftContent['cover_image_path'] ?? $resource->cover_image_path);
+    $valExternalUrl = old('external_url', $draftContent['external_url'] ?? $resource->external_url);
     $activeFile = $draftContent['file_path'] ?? $resource->file_path;
 @endphp
 
@@ -147,6 +148,16 @@
                     <img id="cover_image_preview" src="{{ $valCover ? (str_starts_with($valCover, 'http') ? $valCover : \Illuminate\Support\Facades\Storage::disk('public')->url($valCover)) : '' }}" alt="Current Cover" class="h-14 w-14 rounded-xl object-cover border border-slate-200">
                     <span class="text-xs text-slate-500 font-mono">{{ $valCover }}</span>
                 </div>
+            </div>
+
+            <!-- External URL -->
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">External Resource URL (Optional)</label>
+                <input type="url" name="external_url" value="{{ $valExternalUrl }}"
+                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                       placeholder="https://example.com/guide.pdf">
+                <p class="text-xs text-slate-400 mt-1">If provided, visitor downloads will redirect directly to this verified external URL (must use https:// or http://).</p>
+                @error('external_url') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
             </div>
 
             <!-- File Upload -->

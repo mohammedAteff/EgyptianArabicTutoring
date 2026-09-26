@@ -56,6 +56,7 @@ class ResourceController extends Controller
             'featured' => ['nullable', 'boolean'],
             'status' => ['required', 'in:draft,published,archived'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+            'external_url' => ['nullable', 'string', 'max:500', $this->validateExternalUrlRule()],
             'file' => ['nullable', 'file', 'mimes:pdf,zip,doc,docx,mp3,wav,m4a', 'max:51200'], // 50MB max
             'cover_image_path' => ['nullable', 'string', 'max:255'],
             'cover_file' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:10240'],
@@ -99,6 +100,7 @@ class ResourceController extends Controller
             'short_description' => $description,
             'file_type' => $validated['file_type'],
             'file_path' => $filePath,
+            'external_url' => $validated['external_url'] ?? null,
             'file_size' => $fileSize,
             'cover_image_path' => $coverImagePath,
             'is_gated' => $request->boolean('is_gated', true),
@@ -152,6 +154,7 @@ class ResourceController extends Controller
             'featured' => ['nullable', 'boolean'],
             'status' => ['required', 'in:draft,published,archived'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+            'external_url' => ['nullable', 'string', 'max:500', $this->validateExternalUrlRule()],
             'file' => ['nullable', 'file', 'mimes:pdf,zip,doc,docx,mp3,wav,m4a', 'max:51200'],
             'cover_image_path' => ['nullable', 'string', 'max:255'],
             'cover_file' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:10240'],
@@ -173,6 +176,7 @@ class ResourceController extends Controller
             'category_id' => $validated['category_id'],
             'short_description' => $description,
             'file_type' => $validated['file_type'],
+            'external_url' => $validated['external_url'] ?? null,
             'is_gated' => $request->boolean('is_gated', true),
             'featured' => $request->boolean('featured'),
             'status' => $validated['status'],
@@ -256,6 +260,7 @@ class ResourceController extends Controller
                     'file_path' => $draftFilePath,
                     'file_size' => $draftFileSize,
                     'cover_image_path' => $draftCoverPath,
+                    'external_url' => $validated['external_url'] ?? $resource->external_url,
                     'is_gated' => $request->boolean('is_gated', true),
                     'featured' => $request->boolean('featured'),
                     'sort_order' => $validated['sort_order'] ?? 0,
@@ -427,5 +432,43 @@ class ResourceController extends Controller
 
         return redirect()->route('admin.resources.edit', $resource)
             ->with('success', 'Draft revision discarded. Reverted to live published values.');
+    }
+
+    private function validateExternalUrlRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if ($value === null || trim((string) $value) === '') {
+                return;
+            }
+
+            $url = trim((string) $value);
+
+            if (str_starts_with($url, '//')) {
+                $fail('The external URL must not be protocol-relative and must explicitly use http:// or https://.');
+
+                return;
+            }
+
+            $lowered = strtolower($url);
+            if (str_starts_with($lowered, 'javascript:') || str_starts_with($lowered, 'data:') || str_starts_with($lowered, 'file:')) {
+                $fail('The external URL contains an unapproved scheme.');
+
+                return;
+            }
+
+            $parsed = parse_url($url);
+            if ($parsed === false || empty($parsed['scheme']) || empty($parsed['host'])) {
+                $fail('The external URL must be a valid absolute URL with scheme and host.');
+
+                return;
+            }
+
+            $scheme = strtolower($parsed['scheme']);
+            if (! in_array($scheme, ['https', 'http'], true)) {
+                $fail('The external URL must use strictly https:// or http://.');
+
+                return;
+            }
+        };
     }
 }

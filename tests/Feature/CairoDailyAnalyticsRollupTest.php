@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Analytics\Models\AnalyticsEvent;
+use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
@@ -1457,6 +1458,14 @@ class CairoDailyAnalyticsRollupTest extends TestCase
             'dimension_value' => '',
             'count' => 1,
         ]);
+        DailyCountryMetric::create([
+            'metric_date' => $day2DateStr,
+            'country_code' => 'ZZ',
+            'unique_visitors' => 1,
+            'sessions' => 1,
+            'visitors' => 1,
+            'page_views' => 1,
+        ]);
 
         // Run retention pruning
         Artisan::call('analytics:aggregate-daily', ['--prune' => true]);
@@ -1468,6 +1477,44 @@ class CairoDailyAnalyticsRollupTest extends TestCase
         // Day 2 HAS rollup -> raw records must be pruned safely
         $this->assertDatabaseMissing('analytics_events', ['id' => $e2->id]);
         $this->assertDatabaseMissing('visitor_sessions', ['id' => $s2->id]);
+    }
+
+    public function test_ninety_day_event_cleanup_never_deletes_an_unaggregated_cairo_day(): void
+    {
+        Setting::set('analytics_retention_days', 180);
+        $dayCairo = CarbonImmutable::now('Africa/Cairo')->subDays(120)->startOfDay();
+        $event = AnalyticsEvent::create([
+            'event_name' => 'page_view',
+            'page' => '/',
+            'created_at' => $dayCairo->addHours(12)->setTimezone('UTC'),
+            'is_bot' => false,
+        ]);
+
+        Artisan::call('analytics:aggregate-daily', ['--prune' => true]);
+        $this->assertDatabaseHas('analytics_events', ['id' => $event->id]);
+
+        DailyMetric::create([
+            'metric_date' => $dayCairo->toDateString(),
+            'metric_name' => 'unique_visitors',
+            'dimension_key' => '',
+            'dimension_value' => '',
+            'count' => 1,
+        ]);
+
+        Artisan::call('analytics:aggregate-daily', ['--prune' => true]);
+        $this->assertDatabaseHas('analytics_events', ['id' => $event->id]);
+
+        DailyCountryMetric::create([
+            'metric_date' => $dayCairo->toDateString(),
+            'country_code' => 'ZZ',
+            'unique_visitors' => 1,
+            'sessions' => 0,
+            'visitors' => 1,
+            'page_views' => 1,
+        ]);
+
+        Artisan::call('analytics:aggregate-daily', ['--prune' => true]);
+        $this->assertDatabaseMissing('analytics_events', ['id' => $event->id]);
     }
 
     public function test_previous_period_comparison_across_cairo_spring_and_fall_dst_transitions(): void

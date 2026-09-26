@@ -209,5 +209,26 @@ class DatabaseSeeder extends Seeder
 
         // 9. Policy Pages (Privacy & Terms)
         $this->call(PolicyPagesSeeder::class);
+
+        // 10. Social Proof Counters (Phase 2)
+        Setting::set('counters.learning_hours.public_enabled', false, 'counters', true);
+        Setting::set('counters.learning_hours.window_days', 7, 'counters', true);
+        Setting::set('counters.learning_hours.headline', 'Globally, Line of Action students have put in...', 'counters', true);
+        Setting::set('counters.learning_hours.subtitle', 'of practice time in the last 7 days', 'counters', true);
+
+        Setting::set('counters.monthly_traffic.public_enabled', false, 'counters', true);
+        Setting::set('counters.monthly_traffic.source', 'unique_visitors', 'counters', true);
+        Setting::set('counters.monthly_traffic.template_visitors', 'We welcomed {count} visitors last month', 'counters', true);
+        Setting::set('counters.monthly_traffic.template_sessions', 'We had {count} website sessions last month', 'counters', true);
+
+        Setting::set('counters.live_users.public_enabled', false, 'counters', true);
+        Setting::set('counters.live_users.template', '{count} active visitors online right now', 'counters', true);
+
+        // 11. Telegram Notifications (Phase 6)
+        Setting::set('telegram.reminder_windows', [1440, 60], 'telegram', false);
+        Setting::set('telegram.notification_chat_ids', [], 'telegram', false);
+
+        // 12. Blog Content (Phase 7)
+        $this->call(BlogSeeder::class);
     }
 }

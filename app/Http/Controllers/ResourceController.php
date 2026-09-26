@@ -270,6 +270,40 @@ class ResourceController extends Controller
             $request->session()->forget("download_token_{$resource->id}");
         }
 
+        if (! empty($resource->external_url)) {
+            // Record download
+            DB::transaction(function () use ($resource, $tokenData, $contactService): void {
+                $contact = ! empty($tokenData['contact_id'])
+                    ? $contactService->resolveCanonicalContact((int) $tokenData['contact_id'], lock: true)
+                    : null;
+
+                ResourceDownload::create([
+                    'resource_id' => $resource->id,
+                    'contact_id' => $contact?->id,
+                    'request_id' => $tokenData['request_id'] ?? null,
+                    'created_at' => now(),
+                ]);
+            }, 3);
+
+            // Log analytics event
+            $visitorToken = $request->session()->get('analytics_visitor_token');
+            $sessionToken = $request->session()->get('analytics_session_token');
+
+            app(AnalyticsService::class)->trackEvent(
+                eventType: 'resource_downloaded',
+                page: '/'.ltrim($request->path(), '/'),
+                visitorToken: $visitorToken,
+                sessionToken: $sessionToken,
+                metadata: [
+                    'resource_slug' => $resource->slug,
+                    'resource_title' => $resource->title,
+                    'external_url' => $resource->external_url,
+                ]
+            );
+
+            return redirect()->away($resource->external_url);
+        }
+
         // Verify physical file exists on disk
         $disk = Storage::disk('local');
         $filePath = $resource->file_path;

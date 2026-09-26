@@ -27,7 +27,7 @@
             'de' => ['label' => 'Deutsch', 'code' => 'DE'],
         ];
     @endphp
-    <link rel="canonical" href="{{ isset($article) && $article->canonical_url ? $article->canonical_url : $canonicalUrl }}">
+    <link rel="canonical" href="{{ isset($blog) && $blog->canonical_url ? $blog->canonical_url : $canonicalUrl }}">
     @foreach($hreflangAlternates as $langCode => $altUrl)
         <link rel="alternate" hreflang="{{ $langCode }}" href="{{ $altUrl }}">
     @endforeach
@@ -41,6 +41,11 @@
     <!-- Google Fonts Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- CSRF Token -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="analytics-event-url" content="{{ route('analytics.track') }}">
+    <meta name="analytics-base-path" content="{{ parse_url(route('home'), PHP_URL_PATH) }}">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
@@ -66,6 +71,12 @@
             </div>
         </div>
     </div>
+
+    <!-- Social Proof Engagement Banner (Phase 2) -->
+    <x-social-proof-banner />
+
+    <!-- Promotional Offers Banner / Modal (Phase 4) -->
+    <x-promotional-banner />
 
     <!-- Navigation Header -->
     <header class="sticky top-0 z-40 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80">
@@ -114,7 +125,7 @@
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('faq*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('FAQ') }}
                     </a>
-                    <a href="{{ route('articles.index') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('articles.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Blogs</a>
+                    <a href="{{ route('blog.index') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('blog.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Blog</a>
 
                     <!-- Language Switcher (Desktop) -->
                     <div class="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200/80 text-xs font-semibold" role="group" aria-label="{{ __('Language selector') }}">
@@ -188,7 +199,7 @@
             <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
             <a href="{{ localized_url('about') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('About') }}</a>
             <a href="{{ localized_url('faq') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('FAQ') }}</a>
-            <a href="{{ route('articles.index') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Blogs</a>
+            <a href="{{ route('blog.index') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Blog</a>
 
             <!-- Mobile Language Switcher -->
             <div class="pt-3 border-t border-stone-100">

@@ -10,13 +10,72 @@
             <p class="text-sm text-slate-500 mt-1">First-party telemetry measuring real student acquisition and conversion actions.</p>
         </div>
 
-        <!-- Range Pills -->
-        <div class="inline-flex bg-slate-200/80 p-1 rounded-xl text-xs font-semibold text-slate-700">
-            <a href="{{ route('admin.analytics', ['range' => 'today']) }}" class="px-3 py-1.5 rounded-lg {{ $range === 'today' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">Today</a>
-            <a href="{{ route('admin.analytics', ['range' => '7d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '7d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">7 Days</a>
-            <a href="{{ route('admin.analytics', ['range' => '30d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '30d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">30 Days</a>
-            <a href="{{ route('admin.analytics', ['range' => 'month']) }}" class="px-3 py-1.5 rounded-lg {{ $range === 'month' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">This Month</a>
-            <a href="{{ route('admin.analytics', ['range' => '90d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '90d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">90 Days</a>
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Range Pills -->
+            <div class="inline-flex bg-slate-200/80 p-1 rounded-xl text-xs font-semibold text-slate-700">
+                <a href="{{ route('admin.analytics', ['range' => 'today']) }}" class="px-3 py-1.5 rounded-lg {{ $range === 'today' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">Today</a>
+                <a href="{{ route('admin.analytics', ['range' => '7d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '7d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">7 Days</a>
+                <a href="{{ route('admin.analytics', ['range' => '30d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '30d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">30 Days</a>
+                <a href="{{ route('admin.analytics', ['range' => 'month']) }}" class="px-3 py-1.5 rounded-lg {{ $range === 'month' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">This Month</a>
+                <a href="{{ route('admin.analytics', ['range' => '90d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '90d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">90 Days</a>
+            </div>
+
+            <!-- Dual-Format Export Buttons -->
+            <div class="inline-flex items-center gap-1.5">
+                <a href="{{ route('admin.analytics.overview.export', ['range' => $range, 'format' => 'csv']) }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-xs transition-colors">
+                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>CSV</span>
+                </a>
+                <a href="{{ route('admin.analytics.overview.export', ['range' => $range, 'format' => 'xlsx']) }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-xs font-semibold text-emerald-800 shadow-xs transition-colors">
+                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>Excel (.xlsx)</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core KPIs Row with Universal Bounce Rate -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Audience Reach</span>
+            <div class="text-2xl font-black text-slate-900 mt-2">{{ number_format($primaryFunnel['visitors']) }}</div>
+            <p class="text-xs text-slate-500 mt-1">Unique visitors in period</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Sessions</span>
+            <div class="text-2xl font-black text-slate-900 mt-2">{{ number_format($siteSessions) }}</div>
+            <p class="text-xs text-slate-500 mt-1">Non-bot sessions recorded</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Site Bounce Rate</span>
+                <span class="text-[11px] font-bold px-2 py-0.5 rounded {{ $siteBounceRate > 70 ? 'bg-rose-100 text-rose-800' : ($siteBounceRate < 40 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') }}">
+                    {{ $siteBounceRate }}%
+                </span>
+            </div>
+            <div class="text-2xl font-black text-amber-700 mt-2">{{ $siteBounceRate }}%</div>
+            <p class="text-xs text-slate-500 mt-1">{{ number_format($siteBounces) }} bounced sessions (&lt; 10s)</p>
+
+            <!-- Sparkline Trend Visualization -->
+            @if(!empty($bounceTrend))
+                <div class="mt-3 pt-2 border-t border-slate-100 flex items-end gap-1 h-6">
+                    @foreach($bounceTrend as $day => $data)
+                        <div class="flex-1 bg-amber-200 hover:bg-amber-500 rounded-t-xs transition-colors"
+                             style="height: {{ max(4, min(100, $data['rate'])) }}%;"
+                             title="{{ $day }}: {{ $data['rate'] }}% ({{ $data['bounces'] }}/{{ $data['sessions'] }})"></div>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Funnel Conversion</span>
+            <div class="text-2xl font-black text-emerald-700 mt-2">{{ $primaryFunnel['overall_conversion'] }}%</div>
+            <p class="text-xs text-slate-500 mt-1">{{ number_format($primaryFunnel['booking_completed']) }} confirmed lessons</p>
         </div>
     </div>
 
@@ -214,7 +273,12 @@
                 <h3 class="text-sm font-bold text-slate-900">Audience Activity by Detected Country</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Country dimensions are separate: visitors use immutable acquisition country, sessions use session-start country, and events/bookings use their server snapshot. ZZ means unresolved.</p>
             </div>
-            <span class="text-[11px] text-slate-400 whitespace-nowrap">Africa/Cairo calendar days</span>
+            <div class="flex items-center gap-3">
+                <span class="text-[11px] text-slate-400 whitespace-nowrap">Africa/Cairo calendar days</span>
+                <a href="{{ route('admin.analytics.countries', ['range' => $range]) }}" class="text-xs font-semibold text-amber-700 hover:text-amber-800">
+                    Full Country Breakdown →
+                </a>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-600">
@@ -223,6 +287,7 @@
                         <th class="py-3 px-4">Country</th>
                         <th class="py-3 px-4 text-right">Unique active visitors</th>
                         <th class="py-3 px-4 text-right">Sessions</th>
+                        <th class="py-3 px-4 text-right">Bounce Rate (%)</th>
                         <th class="py-3 px-4 text-right">Booking CTAs</th>
                         <th class="py-3 px-4 text-right">Completed bookings</th>
                         <th class="py-3 px-4 text-right">Resource requests</th>
@@ -237,6 +302,9 @@
                             $flagPath = $country !== 'ZZ' && is_file(public_path('assets/flags/4x3/'.strtolower($country).'.svg'))
                                 ? asset('assets/flags/4x3/'.strtolower($country).'.svg')
                                 : asset('assets/flags/4x3/globe.svg');
+                            $sessionsCount = (int) $row->sessions;
+                            $bouncedCount = (int) ($row->bounced_sessions_count ?? 0);
+                            $countryBounceRate = $sessionsCount > 0 ? round(($bouncedCount / $sessionsCount) * 100, 1) : 0.0;
                         @endphp
                         <tr>
                             <td class="py-3 px-4 font-semibold text-slate-800">
@@ -246,13 +314,16 @@
                                 </span>
                             </td>
                             <td class="py-3 px-4 text-right font-medium">{{ number_format((int) $row->unique_visitors) }}</td>
-                            <td class="py-3 px-4 text-right">{{ number_format((int) $row->sessions) }}</td>
+                            <td class="py-3 px-4 text-right">{{ number_format($sessionsCount) }}</td>
+                            <td class="py-3 px-4 text-right font-medium {{ $countryBounceRate > 70 ? 'text-rose-600' : ($countryBounceRate < 40 ? 'text-emerald-600' : 'text-amber-700') }}">
+                                {{ $countryBounceRate }}%
+                            </td>
                             <td class="py-3 px-4 text-right">{{ number_format((int) $row->booking_cta_clicks) }}</td>
                             <td class="py-3 px-4 text-right font-semibold text-emerald-700">{{ number_format((int) $row->bookings_completed) }}</td>
                             <td class="py-3 px-4 text-right">{{ number_format((int) $row->resource_requests) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="py-8 text-center text-slate-400 italic">No country rollups have been generated for this period yet.</td></tr>
+                        <tr><td colspan="7" class="py-8 text-center text-slate-400 italic">No country rollups have been generated for this period yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>

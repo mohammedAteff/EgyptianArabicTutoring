@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Notifications\Services\TelegramNotificationService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\View\View;
 
 class SettingController extends Controller
@@ -68,6 +70,26 @@ class SettingController extends Controller
             'booking_instructions' => ['required', 'string', 'max:2000'],
             'video_meeting_url' => ['nullable', 'string', 'max:2048', 'url:https'],
             'maintenance_mode' => ['nullable', 'boolean'],
+
+            // Social Proof Counters (Phase 2)
+            'counters_learning_hours_public_enabled' => ['nullable', 'boolean'],
+            'counters_learning_hours_window_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'counters_learning_hours_headline' => ['nullable', 'string', 'max:255'],
+            'counters_learning_hours_subtitle' => ['nullable', 'string', 'max:255'],
+            'counters_monthly_traffic_public_enabled' => ['nullable', 'boolean'],
+            'counters_monthly_traffic_source' => ['nullable', 'string', 'in:unique_visitors,sessions'],
+            'counters_monthly_traffic_template_visitors' => ['nullable', 'string', 'max:255'],
+            'counters_monthly_traffic_template_sessions' => ['nullable', 'string', 'max:255'],
+            'counters_live_users_public_enabled' => ['nullable', 'boolean'],
+            'counters_live_users_template' => ['nullable', 'string', 'max:255'],
+
+            // Telegram Reminders (Phase 6)
+            'telegram_reminders_enabled' => ['nullable', 'boolean'],
+            'telegram_bot_token' => ['nullable', 'string', 'max:255'],
+            'telegram_reminder_windows' => ['nullable', 'array', 'max:30'],
+            'telegram_reminder_windows.*' => ['required', 'integer', 'min:1', 'max:525600', 'distinct'],
+            'telegram_notification_chat_ids' => ['nullable', 'array', 'max:30'],
+            'telegram_notification_chat_ids.*' => ['required', 'string', 'regex:/^-?[0-9]{1,20}$/', 'distinct'],
         ]);
 
         $action = $request->input('action', 'publish');
@@ -75,7 +97,47 @@ class SettingController extends Controller
 
         $prev = Setting::all()->pluck('value', 'key')->toArray();
 
+        // Process standard settings
+        $counterMap = [
+            'counters_learning_hours_public_enabled' => ['key' => 'counters.learning_hours.public_enabled', 'type' => 'bool'],
+            'counters_learning_hours_window_days' => ['key' => 'counters.learning_hours.window_days', 'type' => 'int'],
+            'counters_learning_hours_headline' => ['key' => 'counters.learning_hours.headline', 'type' => 'string'],
+            'counters_learning_hours_subtitle' => ['key' => 'counters.learning_hours.subtitle', 'type' => 'string'],
+            'counters_monthly_traffic_public_enabled' => ['key' => 'counters.monthly_traffic.public_enabled', 'type' => 'bool'],
+            'counters_monthly_traffic_source' => ['key' => 'counters.monthly_traffic.source', 'type' => 'string'],
+            'counters_monthly_traffic_template_visitors' => ['key' => 'counters.monthly_traffic.template_visitors', 'type' => 'string'],
+            'counters_monthly_traffic_template_sessions' => ['key' => 'counters.monthly_traffic.template_sessions', 'type' => 'string'],
+            'counters_live_users_public_enabled' => ['key' => 'counters.live_users.public_enabled', 'type' => 'bool'],
+            'counters_live_users_template' => ['key' => 'counters.live_users.template', 'type' => 'string'],
+        ];
+
+        foreach ($counterMap as $inputKey => $meta) {
+            if ($meta['type'] === 'bool') {
+                $val = $request->boolean($inputKey);
+                Setting::set($meta['key'], $val, 'counters', true);
+            } elseif (array_key_exists($inputKey, $validated) && $validated[$inputKey] !== null) {
+                $val = $meta['type'] === 'int' ? (int) $validated[$inputKey] : (string) $validated[$inputKey];
+                Setting::set($meta['key'], $val, 'counters', true);
+            }
+        }
+
+        if ($request->boolean('telegram_settings_present')) {
+            Setting::set('telegram.reminders_enabled', $request->boolean('telegram_reminders_enabled'), 'telegram', false);
+
+            if ($request->filled('telegram_bot_token')) {
+                $token = trim((string) $request->input('telegram_bot_token'));
+                Setting::set('telegram.bot_token', Crypt::encryptString($token), 'telegram', false);
+            }
+
+            Setting::set('telegram.reminder_windows', array_map('intval', $validated['telegram_reminder_windows'] ?? []), 'telegram', false);
+            Setting::set('telegram.notification_chat_ids', array_values($validated['telegram_notification_chat_ids'] ?? []), 'telegram', false);
+        }
+
         foreach ($validated as $key => $value) {
+            if (isset($counterMap[$key]) || in_array($key, ['telegram_reminders_enabled', 'telegram_bot_token', 'telegram_reminder_windows', 'telegram_notification_chat_ids'])) {
+                continue;
+            }
+
             $group = match ($key) {
                 'site_name', 'default_language', 'maintenance_mode', 'site_footer_text' => 'general',
                 'business_timezone', 'cancellation_policy', 'booking_cancellation_cutoff_hours', 'booking_reschedule_cutoff_hours', 'rescheduling_policy', 'booking_instructions', 'video_meeting_url' => 'booking',
@@ -111,5 +173,31 @@ class SettingController extends Controller
             : 'Settings published successfully.';
 
         return back()->with('success', $message);
+    }
+
+    public function testTelegram(Request $request): RedirectResponse
+    {
+        $chatIds = Setting::get('telegram.notification_chat_ids', []);
+        if (is_string($chatIds)) {
+            $chatIds = json_decode($chatIds, true) ?: array_filter(array_map('trim', explode(',', $chatIds)));
+        }
+
+        if (empty($chatIds)) {
+            return back()->with('error', 'No notification chat IDs configured in Telegram settings.');
+        }
+
+        $service = app(TelegramNotificationService::class);
+        $success = 0;
+        foreach ($chatIds as $cid) {
+            if ($service->sendTestNotification((string) $cid)) {
+                $success++;
+            }
+        }
+
+        if ($success > 0) {
+            return back()->with('success', "Test notification dispatched successfully to {$success} chat(s).");
+        }
+
+        return back()->with('error', 'Telegram test notification failed. Please verify Bot Token and Chat IDs.');
     }
 }

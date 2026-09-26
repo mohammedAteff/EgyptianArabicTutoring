@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\FormController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\PasswordResetController;
+use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ResourceCategoryController;
 use App\Http\Controllers\Admin\SearchController;
@@ -21,7 +22,7 @@ use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SystemHealthController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\AnalyticsController;
-use App\Http\Controllers\ArticleController;
+use App\Http\Controllers\BlogController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
@@ -159,8 +160,8 @@ Route::get('/p/{slug}', [PageController::class, 'show'])->name('page.show');
 Route::get('/fr/p/{slug}', [PageController::class, 'show'])->name('page.show.fr');
 Route::get('/de/p/{slug}', [PageController::class, 'show'])->name('page.show.de');
 
-Route::get('/articles', [ArticleController::class, 'index'])->name('articles.index');
-Route::get('/articles/{slug}', [ArticleController::class, 'show'])->where('slug', '[A-Za-z0-9-]+')->name('articles.show');
+Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
+Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[A-Za-z0-9-]+')->name('blog.show');
 
 // Authenticated admin draft previews (Section 49 & Section 33)
 Route::middleware([ApplyAdminNoindexHeaders::class, EnsureAdminPreviewAccess::class])->group(function () {
@@ -288,14 +289,38 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         });
 
         Route::middleware('role:super_admin,admin')->group(function () {
+            // Billing & Cashier Operations Hub (Phase 3)
+            Route::get('/billing/cashier', [StudentBillingController::class, 'cashier'])->name('billing.cashier');
+            Route::get('/billing/check-diagnostic-credit/{student}', [StudentBillingController::class, 'checkDiagnosticCredit'])->name('billing.check_diagnostic');
+            Route::get('/billing/export', [StudentBillingController::class, 'exportFinancials'])->name('billing.export');
+            Route::get('/billing/reconcile', [StudentBillingController::class, 'reconcile'])->name('billing.reconcile');
+            Route::get('/billing/reconcile/export', [StudentBillingController::class, 'exportReconciliation'])->name('billing.reconcile.export');
+
             Route::patch('/students/{student}', [StudentController::class, 'update'])->name('students.update');
             Route::post('/students/{student}/packages', [StudentBillingController::class, 'storePackage'])->name('students.packages.store');
             Route::post('/students/{student}/packages/{package}/payments', [StudentBillingController::class, 'storePayment'])->name('students.payments.store');
             Route::post('/students/{student}/payments/{payment}/refunds', [StudentBillingController::class, 'storeRefund'])->name('students.refunds.store');
             Route::post('/students/{student}/packages/{package}/credits', [StudentBillingController::class, 'adjustCredits'])->name('students.credits.adjust');
 
-            Route::resource('articles', App\Http\Controllers\Admin\ArticleController::class)->except(['show', 'destroy']);
-            Route::get('/articles/{article}/preview', [App\Http\Controllers\Admin\ArticleController::class, 'preview'])->name('articles.preview');
+            // Promotions Management Portal
+            Route::get('/promotions', [PromotionController::class, 'index'])->name('promotions.index');
+            Route::get('/promotions/create', [PromotionController::class, 'create'])->name('promotions.create');
+            Route::post('/promotions', [PromotionController::class, 'store'])->name('promotions.store');
+            Route::get('/promotions/{promotion}/edit', [PromotionController::class, 'edit'])->name('promotions.edit');
+            Route::put('/promotions/{promotion}', [PromotionController::class, 'update'])->name('promotions.update');
+            Route::post('/promotions/{promotion}/toggle', [PromotionController::class, 'toggle'])->name('promotions.toggle');
+            Route::delete('/promotions/{promotion}', [PromotionController::class, 'destroy'])->name('promotions.destroy');
+            Route::get('/promotions/{promotion}/preview', [PromotionController::class, 'preview'])->middleware('admin.preview')->name('promotions.preview');
+
+            Route::prefix('blog')->name('blog.')->group(function () {
+                Route::get('/', [App\Http\Controllers\Admin\BlogController::class, 'index'])->name('index');
+                Route::get('/create', [App\Http\Controllers\Admin\BlogController::class, 'create'])->name('create');
+                Route::post('/', [App\Http\Controllers\Admin\BlogController::class, 'store'])->name('store');
+                Route::get('/{blog}/edit', [App\Http\Controllers\Admin\BlogController::class, 'edit'])->name('edit');
+                Route::put('/{blog}', [App\Http\Controllers\Admin\BlogController::class, 'update'])->name('update');
+                Route::delete('/{blog}', [App\Http\Controllers\Admin\BlogController::class, 'destroy'])->name('destroy');
+                Route::get('/{blog}/preview', [App\Http\Controllers\Admin\BlogController::class, 'preview'])->name('preview');
+            });
             Route::get('/forms/create', [FormController::class, 'create'])->name('forms.create');
             Route::post('/forms', [FormController::class, 'store'])->name('forms.store');
             Route::get('/forms/{form}/edit', [FormController::class, 'edit'])->name('forms.edit');
@@ -324,7 +349,12 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/search', [SearchController::class, 'search'])->middleware('role:super_admin,admin')->name('search');
 
         // Analytics & Business Funnels
-        Route::get('/analytics', [AnalyticsDashboardController::class, 'index'])->middleware('role:super_admin,admin')->name('analytics');
+        Route::get('/analytics', [AnalyticsDashboardController::class, 'index'])->middleware('admin.role:super_admin,admin')->name('analytics');
+        Route::get('/analytics/overview/export', [AnalyticsDashboardController::class, 'exportOverview'])->middleware('admin.role:super_admin,admin')->name('analytics.overview.export');
+        Route::get('/analytics/countries', [AnalyticsDashboardController::class, 'countries'])->middleware('admin.role:super_admin,admin')->name('analytics.countries');
+        Route::get('/analytics/countries/export', [AnalyticsDashboardController::class, 'exportCountries'])->middleware('admin.role:super_admin,admin')->name('analytics.countries.export');
+        Route::get('/analytics/sections', [AnalyticsDashboardController::class, 'sections'])->middleware('admin.role:super_admin,admin')->name('analytics.sections');
+        Route::get('/analytics/sections/export', [AnalyticsDashboardController::class, 'exportSections'])->middleware('admin.role:super_admin,admin')->name('analytics.sections.export');
 
         // Reports & Data Exports
         Route::get('/reports', [ReportController::class, 'index'])->middleware('role:super_admin,admin')->name('reports.index');
@@ -334,6 +364,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::middleware('role:super_admin,admin')->group(function () {
             Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
             Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
+            Route::post('/settings/telegram/test', [SettingController::class, 'testTelegram'])->name('settings.telegram.test');
         });
 
         // Super Admin Only Privileges
@@ -343,6 +374,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
             // System, Backups & Audit
             Route::get('/health', [SystemHealthController::class, 'index'])->name('health');
+            Route::get('/health/maintenance-visitors/export', [SystemHealthController::class, 'exportMaintenanceTraffic'])->name('health.maintenance-visitors.export');
             Route::get('/audit-logs', [SystemHealthController::class, 'auditLogs'])->name('audit-logs');
             Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
             Route::post('/backups', [BackupController::class, 'create'])->name('backups.create');

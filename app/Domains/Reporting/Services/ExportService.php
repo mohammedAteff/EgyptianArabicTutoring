@@ -19,11 +19,31 @@ class ExportService
         }
 
         $trimmed = ltrim($value);
-        if ($trimmed !== '' && in_array($trimmed[0], ['=', '+', '-', '@'], true)) {
+        if ($trimmed !== '' && in_array($trimmed[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'".$value;
+        }
+
+        if (strlen($value) > 0 && in_array($value[0], ["\t", "\r"], true)) {
             return "'".$value;
         }
 
         return $value;
+    }
+
+    public function export(
+        string $baseFilename,
+        array $headers,
+        iterable $rows,
+        string $format = 'csv',
+        string $sheetTitle = 'Report'
+    ): StreamedResponse|BinaryFileResponse {
+        $format = strtolower(trim($format)) === 'xlsx' ? 'xlsx' : 'csv';
+
+        if ($format === 'xlsx') {
+            return $this->exportXlsx($baseFilename.'.xlsx', $headers, $rows, $sheetTitle);
+        }
+
+        return $this->exportCsv($baseFilename.'.csv', $headers, $rows);
     }
 
     public function exportCsv(string $filename, array $headers, iterable $rows): StreamedResponse

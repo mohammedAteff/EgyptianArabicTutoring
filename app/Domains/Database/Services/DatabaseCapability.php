@@ -29,9 +29,12 @@ class DatabaseCapability
             $this->vendor = 'pgsql';
             $this->version = $this->extractVersion($this->rawVersion);
         } elseif (in_array($this->driver, ['mysql', 'mariadb'], true)) {
-            $isMariaDb = $this->driver === 'mariadb' || stripos($this->rawVersion, 'MariaDB') !== false;
+            $cleanedVersion = (string) preg_replace('/^5\.5\.5-/', '', $this->rawVersion);
+            $isMariaDb = $this->driver === 'mariadb'
+                || stripos($this->rawVersion, 'MariaDB') !== false
+                || preg_match('/^(?:10\.(?:4|5|6|11)\..*|11\..*)/', $cleanedVersion) === 1;
             $this->vendor = $isMariaDb ? 'mariadb' : 'mysql';
-            $versionText = $isMariaDb ? (string) preg_replace('/^5\.5\.5-/', '', $this->rawVersion) : $this->rawVersion;
+            $versionText = $isMariaDb ? $cleanedVersion : $this->rawVersion;
             $this->version = $this->extractVersion($versionText);
         } else {
             throw new UnsupportedDatabaseVendorException("Unsupported database driver [{$this->driver}]. Use a reconciled MySQL, MariaDB, or PostgreSQL release.");
@@ -86,6 +89,18 @@ class DatabaseCapability
 
         if ($this->driver === 'sqlite' || $this->vendor !== $expectedVendor || $this->version !== $this->extractVersion($expectedVersion)) {
             throw new RuntimeException("Database verification gate failed: expected {$expectedVendor} {$expectedVersion}; detected driver {$this->driver}, vendor {$this->vendor}, version {$this->version}. Concurrency sign-off on SQLite is prohibited.");
+        }
+
+        $this->assertInnoDBAvailable();
+    }
+
+    public function assertInnoDBAvailable(): void
+    {
+        if (in_array($this->vendor, ['mysql', 'mariadb'], true)) {
+            $support = DB::scalar("SELECT SUPPORT FROM information_schema.ENGINES WHERE ENGINE = 'InnoDB'");
+            if (! in_array(strtoupper((string) $support), ['DEFAULT', 'YES'], true)) {
+                throw new UnsupportedDatabaseVendorException("InnoDB storage engine is not available on {$this->vendor}.");
+            }
         }
     }
 

@@ -16,9 +16,159 @@ use InvalidArgumentException;
 
 class StudentLedgerService
 {
+    public const PRESETS = [
+        'diagnostic_roadmap' => [
+            'key' => 'diagnostic_roadmap',
+            'name' => 'Diagnostic & Roadmap',
+            'sessions' => 1,
+            'duration_minutes' => 60,
+            'price' => '25.00',
+            'validity_days' => 14,
+            'audience' => 'Mandatory Entry',
+        ],
+        'foundation_track' => [
+            'key' => 'foundation_track',
+            'name' => 'Foundation Coaching Track',
+            'sessions' => 8,
+            'duration_minutes' => 120,
+            'price' => '280.00',
+            'discounted_price' => '255.00',
+            'validity_days' => 75,
+            'audience' => 'Core Track',
+        ],
+        'fluency_track' => [
+            'key' => 'fluency_track',
+            'name' => 'Fluency Immersion Track',
+            'sessions' => 12,
+            'duration_minutes' => 120,
+            'price' => '390.00',
+            'discounted_price' => '365.00',
+            'validity_days' => 100,
+            'audience' => 'Core Track (Priority)',
+        ],
+        'payg_maintenance' => [
+            'key' => 'payg_maintenance',
+            'name' => 'Pay-As-You-Go Maintenance',
+            'sessions' => 1,
+            'duration_minutes' => 120,
+            'price' => '48.00',
+            'validity_days' => 30,
+            'audience' => 'Alumni Only (Unlisted)',
+        ],
+        'advanced_conversational' => [
+            'key' => 'advanced_conversational',
+            'name' => 'Advanced Conversational',
+            'sessions' => 1,
+            'duration_minutes' => 60,
+            'price' => '28.00',
+            'validity_days' => 30,
+            'audience' => 'C1+ Debate (Unlisted)',
+        ],
+    ];
+
     public function __construct(private TimezoneService $timezones, private DatabaseCapability $database) {}
 
-    public function createPackage(Student $student, string $name, int $sessions, string $originalPrice, string $discountAmount, string $currency, ?string $expirationDate, string $idempotencyKey, ?int $administratorId = null): StudentPackage
+    /**
+     * Check if a student is eligible for the 48-Hour Diagnostic Credit (-$25.00).
+     *
+     * @return array{eligible: bool, credit_amount: string, payment_id: int, paid_at: string}|null
+     */
+    public function checkDiagnosticCreditEligibility(int $studentId): ?array
+    {
+        $cutoff = CarbonImmutable::now('UTC')->subHours(48);
+        $diagnosticPackages = StudentPackage::query()
+            ->where('student_id', $studentId)
+            ->where('package_name', self::PRESETS['diagnostic_roadmap']['name'])
+            ->where('total_sessions_allocated', 1)
+            ->where('currency', 'USD')
+            ->whereHas('ledgerEntries', function ($query) use ($studentId): void {
+                $query->where('entry_type', 'session_consumed')
+                    ->whereIn('booking_id', Booking::query()
+                        ->where('student_id', $studentId)
+                        ->where('status', 'completed')
+                        ->select('id'));
+            })
+            ->with(['payments', 'refunds'])
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($diagnosticPackages as $package) {
+            $transactions = [];
+            foreach ($package->payments as $payment) {
+                $transactions[] = ['at' => $payment->paid_at, 'amount' => (string) $payment->amount_paid, 'payment_id' => $payment->id, 'order' => 0];
+            }
+            foreach ($package->refunds as $refund) {
+                $transactions[] = ['at' => $refund->refunded_at, 'amount' => '-'.(string) $refund->amount_refunded, 'payment_id' => null, 'order' => 1];
+            }
+            usort($transactions, fn (array $first, array $second): int => $first['at']->getTimestamp() <=> $second['at']->getTimestamp()
+                ?: $first['order'] <=> $second['order']);
+
+            $netPaid = '0.00';
+            $settledAt = null;
+            $settlingPaymentId = null;
+            foreach ($transactions as $transaction) {
+                $previousNet = $netPaid;
+                $netPaid = bcadd($netPaid, $transaction['amount'], 2);
+                if (bccomp($netPaid, (string) $package->final_price, 2) < 0) {
+                    $settledAt = null;
+                    $settlingPaymentId = null;
+                } elseif (bccomp($previousNet, (string) $package->final_price, 2) < 0 && $transaction['payment_id']) {
+                    $settledAt = $transaction['at'];
+                    $settlingPaymentId = $transaction['payment_id'];
+                }
+            }
+
+            if (! $settledAt || $settledAt->lessThan($cutoff) || bccomp($netPaid, '25.00', 2) < 0) {
+                continue;
+            }
+
+            $alreadyClaimed = StudentPackage::query()
+                ->where('student_id', $studentId)
+                ->where('created_at', '>=', $package->created_at)
+                ->whereIn('package_name', [self::PRESETS['foundation_track']['name'], self::PRESETS['fluency_track']['name']])
+                ->where('discount_amount', '25.00')
+                ->exists();
+
+            if (! $alreadyClaimed) {
+                return [
+                    'eligible' => true,
+                    'credit_amount' => '25.00',
+                    'payment_id' => $settlingPaymentId,
+                    'paid_at' => $settledAt->toDateTimeString(),
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Calculate package expiration date from settlement instant (evaluated at Cairo midnight + validity days).
+     */
+    public function calculateExpirationDate(?\DateTimeInterface $settlementDate, int $validityDays): string
+    {
+        $settlement = $settlementDate instanceof CarbonImmutable
+            ? $settlementDate
+            : CarbonImmutable::instance($settlementDate ?? now('UTC'));
+
+        $cairoMidnight = $settlement->setTimezone('Africa/Cairo')->startOfDay();
+
+        return $cairoMidnight->addDays($validityDays)->toDateString();
+    }
+
+    /**
+     * Calculate remaining monetary balance for a package using strict bcmath.
+     */
+    public function calculateRemainingBalance(StudentPackage $package): string
+    {
+        $paid = (string) (PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid') ?: '0.00');
+        $refunded = (string) (PaymentRefund::query()->where('student_package_id', $package->id)->sum('amount_refunded') ?: '0.00');
+        $netPaid = bcsub($paid, $refunded, 2);
+
+        return bcsub((string) $package->final_price, $netPaid, 2);
+    }
+
+    public function createPackage(Student $student, string $name, int $sessions, string $originalPrice, string $discountAmount, string $currency, ?string $expirationDate, string $idempotencyKey, ?int $administratorId = null, ?string $presetKey = null, ?string $overrideNotes = null): StudentPackage
     {
         $originalCents = $this->toCents($originalPrice);
         $discountCents = $this->toCents($discountAmount);
@@ -26,7 +176,7 @@ class StudentLedgerService
             throw new InvalidArgumentException('Invalid package terms.');
         }
 
-        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId): StudentPackage {
+        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes): StudentPackage {
             $lockedStudent = Student::withTrashed()->whereKey($student->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged') {
                 throw new InvalidArgumentException('Packages cannot be assigned to an inactive student record.');
@@ -40,15 +190,32 @@ class StudentLedgerService
                 return StudentPackage::findOrFail($existing->student_package_id);
             }
 
+            $effectiveName = $name;
+            $effectiveSessions = $sessions;
+            $effectiveOriginalCents = $originalCents;
+            $effectiveDiscountCents = $discountCents;
+            $effectiveCurrency = strtoupper($currency);
+            $effectiveExpirationDate = $expirationDate;
+            if ($presetKey !== null && isset(self::PRESETS[$presetKey]) && trim((string) $overrideNotes) === '') {
+                $preset = self::PRESETS[$presetKey];
+                $effectiveName = $preset['name'];
+                $effectiveSessions = $preset['sessions'];
+                $effectiveOriginalCents = $this->toCents($preset['price']);
+                $effectiveDiscountCents = in_array($presetKey, ['foundation_track', 'fluency_track'], true)
+                    && $this->checkDiagnosticCreditEligibility($student->id) !== null ? 2500 : 0;
+                $effectiveCurrency = 'USD';
+                $effectiveExpirationDate = null;
+            }
+
             $package = StudentPackage::create([
                 'student_id' => $student->id,
-                'package_name' => $name,
-                'original_price' => $this->fromCents($originalCents),
-                'discount_amount' => $this->fromCents($discountCents),
-                'final_price' => $this->fromCents($originalCents - $discountCents),
-                'currency' => strtoupper($currency),
-                'total_sessions_allocated' => $sessions,
-                'expiration_date' => $expirationDate,
+                'package_name' => $effectiveName,
+                'original_price' => $this->fromCents($effectiveOriginalCents),
+                'discount_amount' => $this->fromCents($effectiveDiscountCents),
+                'final_price' => $this->fromCents($effectiveOriginalCents - $effectiveDiscountCents),
+                'currency' => $effectiveCurrency,
+                'total_sessions_allocated' => $effectiveSessions,
+                'expiration_date' => $effectiveExpirationDate,
                 'status' => 'active',
             ]);
             SessionLedgerEntry::create([
@@ -56,7 +223,7 @@ class StudentLedgerService
                 'student_package_id' => $package->id,
                 'idempotency_key' => $idempotencyKey,
                 'entry_type' => 'package_grant',
-                'credit_change' => $sessions,
+                'credit_change' => $effectiveSessions,
                 'description' => 'Package credit grant',
                 'created_by' => $administratorId,
                 'created_at' => now('UTC'),
@@ -188,7 +355,7 @@ class StudentLedgerService
                 return $existing;
             }
 
-            return PaymentRecord::create([
+            $recordedPayment = PaymentRecord::create([
                 'student_package_id' => $package->id,
                 'student_id' => $package->student_id,
                 'idempotency_key' => $idempotencyKey,
@@ -201,17 +368,30 @@ class StudentLedgerService
                 'notes' => $notes,
                 'created_at' => now('UTC'),
             ]);
+
+            $preset = $this->presetForPackage($lockedPackage);
+            if ($preset && $lockedPackage->expiration_date === null) {
+                $totalPaid = (string) PaymentRecord::query()->where('student_package_id', $lockedPackage->id)->sum('amount_paid');
+                $totalRefunded = (string) PaymentRefund::query()->where('student_package_id', $lockedPackage->id)->sum('amount_refunded');
+                if (bccomp(bcsub($totalPaid, $totalRefunded, 2), (string) $lockedPackage->final_price, 2) >= 0) {
+                    $lockedPackage->update([
+                        'expiration_date' => $this->calculateExpirationDate($recordedPayment->paid_at, $preset['validity_days']),
+                    ]);
+                }
+            }
+
+            return $recordedPayment;
         }, 5);
     }
 
-    public function refund(PaymentRecord $payment, string $amount, string $idempotencyKey, ?int $administratorId, ?string $reason = null): PaymentRefund
+    public function refund(PaymentRecord $payment, string $amount, string $idempotencyKey, ?int $administratorId, ?string $reason = null, int $forfeitCredits = 0): PaymentRefund
     {
         $cents = $this->toCents($amount);
-        if ($cents <= 0) {
-            throw new InvalidArgumentException('Refund amount must be positive.');
+        if ($cents <= 0 || $forfeitCredits < 0) {
+            throw new InvalidArgumentException('Refund amount must be positive and forfeited credits cannot be negative.');
         }
 
-        return $this->database->transaction(function () use ($payment, $cents, $idempotencyKey, $administratorId, $reason): PaymentRefund {
+        return $this->database->transaction(function () use ($payment, $cents, $idempotencyKey, $administratorId, $reason, $forfeitCredits): PaymentRefund {
             $lockedStudent = Student::withTrashed()->whereKey($payment->student_id)->lockForUpdate()->firstOrFail();
             $package = StudentPackage::query()->whereKey($payment->student_package_id)->lockForUpdate()->firstOrFail();
             $lockedPayment = PaymentRecord::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
@@ -245,7 +425,19 @@ class StudentLedgerService
                 throw new InvalidArgumentException('Refund exceeds the refundable payment or package amount.');
             }
 
-            return PaymentRefund::create([
+            if ($forfeitCredits > 0) {
+                $remainingCredits = (int) SessionLedgerEntry::query()
+                    ->where('student_package_id', $package->id)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get(['id', 'credit_change'])
+                    ->sum('credit_change');
+                if ($forfeitCredits > $remainingCredits) {
+                    throw new InvalidArgumentException('Cannot forfeit more than the package remaining credits.');
+                }
+            }
+
+            $refund = PaymentRefund::create([
                 'payment_record_id' => $lockedPayment->id,
                 'student_package_id' => $package->id,
                 'student_id' => $payment->student_id,
@@ -257,6 +449,21 @@ class StudentLedgerService
                 'recorded_by' => $administratorId,
                 'created_at' => now('UTC'),
             ]);
+
+            if ($forfeitCredits > 0) {
+                SessionLedgerEntry::create([
+                    'student_id' => $lockedStudent->id,
+                    'student_package_id' => $package->id,
+                    'idempotency_key' => 'forfeit_refund_'.$refund->id,
+                    'entry_type' => 'expiration_forfeit',
+                    'credit_change' => -$forfeitCredits,
+                    'description' => "Credits forfeited upon refund #{$refund->id}",
+                    'created_by' => $administratorId,
+                    'created_at' => now('UTC'),
+                ]);
+            }
+
+            return $refund;
         }, 5);
     }
 
@@ -329,13 +536,27 @@ class StudentLedgerService
             return false;
         }
         if (! $package->expiration_date) {
-            return true;
+            return $this->presetForPackage($package) === null;
         }
 
         $expiresAtUtc = CarbonImmutable::parse($package->expiration_date->toDateString(), $this->timezones->getBusinessTimezone())
             ->endOfDay()->setTimezone('UTC');
 
         return now('UTC')->lessThanOrEqualTo($expiresAtUtc);
+    }
+
+    /** @return array<string, int|string>|null */
+    private function presetForPackage(StudentPackage $package): ?array
+    {
+        foreach (self::PRESETS as $preset) {
+            if ($package->package_name === $preset['name']
+                && (int) $package->total_sessions_allocated === $preset['sessions']
+                && $package->currency === 'USD') {
+                return $preset;
+            }
+        }
+
+        return null;
     }
 
     private function toCents(string $amount): int
