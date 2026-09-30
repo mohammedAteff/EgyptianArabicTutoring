@@ -11,14 +11,24 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Forms\Models\Form;
+use App\Domains\Forms\Models\FormAnswer;
+use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Forms\Models\FormVersion;
+use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
+use App\Domains\Students\Exceptions\StudentIdentityConflictException;
+use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class BookingService
 {
@@ -28,7 +38,10 @@ class BookingService
         protected AvailabilityService $availabilityService,
         protected AnalyticsService $analyticsService,
         protected DatabaseCapability $databaseCapability,
-    ) {}
+        protected ?StudentIdentityService $studentIdentityService = null,
+    ) {
+        $this->studentIdentityService = $studentIdentityService ?? app(StudentIdentityService::class);
+    }
 
     /**
      * Create a new confirmed booking atomically.
@@ -62,9 +75,15 @@ class BookingService
      *     session_type_id: int,
      *     slot_id?: string,
      *     customer_timezone: string,
-     *     customer_name: string,
-     *     customer_email: string,
+     *     customer_name?: string|null,
+     *     customer_email?: string|null,
      *     customer_phone?: string|null,
+     *     first_name?: string|null,
+     *     last_name?: string|null,
+     *     email?: string|null,
+     *     phone?: string|null,
+     *     date_of_birth?: string|null,
+     *     phone_country?: string|null,
      *     notes?: string|null,
      *     idempotency_key: string,
      *     hold_id: int,
@@ -75,12 +94,15 @@ class BookingService
      *     medium?: string|null,
      *     campaign?: string|null,
      *     content?: string|null,
-     *     term?: string|null
+     *     term?: string|null,
+     *     intake_answers?: array<string|int, mixed>,
+     *     form_version_id?: int|null
      * }  $data
+     * @param  array<string|int, mixed>  $intakeAnswers
      *
      * @throws SlotUnavailableException
      */
-    public function createPublicBooking(array $data): Booking
+    public function createPublicBooking(array $data, array $intakeAnswers = [], ?int $formVersionId = null): Booking
     {
         $idempotencyKey = trim($data['idempotency_key'] ?? '');
         if (empty($idempotencyKey)) {
@@ -162,240 +184,451 @@ class BookingService
         }
         $initialConfig = $this->availabilityService->resolveSlotConfiguration($heldSessionType, $startUtc, $endUtc);
 
-        $bookingCreated = false;
-        $booking = $this->databaseCapability->transaction(function () use (
-            $data,
-            $idempotencyKey,
-            $sessionType,
-            $startUtc,
-            $endUtc,
-            $customerTimezone,
-            $businessTimezone,
-            $visitorToken,
-            $sessionToken,
-            $holdId,
-            $holdToken,
-            $holdSnapshot,
-            $initialConfig,
-            $analyticsVisitorToken,
-            $analyticsSessionToken,
-            $nowUtc,
-            &$bookingCreated,
-        ) {
-            // Acquire the canonical scheduling mutex before any booking-row lock.
-            $this->availabilityService->acquireCalendarDateLocks(
-                $startUtc,
-                $initialConfig['end_utc'],
-                $initialConfig['buffer_minutes'],
-            );
+        $email = trim((string) ($data['customer_email'] ?? $data['email'] ?? ''));
+        $phone = trim((string) ($data['customer_phone'] ?? $data['phone'] ?? ''));
+        $firstName = trim((string) ($data['first_name'] ?? ''));
+        $lastName = trim((string) ($data['last_name'] ?? ''));
+        if ($firstName === '' && $lastName === '' && ! empty($data['customer_name'] ?? $data['name'])) {
+            $parts = explode(' ', trim((string) ($data['customer_name'] ?? $data['name'])), 2);
+            $firstName = $parts[0];
+            $lastName = $parts[1] ?? $parts[0];
+        }
+        $dateOfBirth = $data['date_of_birth'] ?? null;
+        $phoneCountry = $data['phone_country'] ?? null;
+        $effectiveIntakeAnswers = ! empty($intakeAnswers) ? $intakeAnswers : ($data['intake_answers'] ?? []);
+        $effectiveFormVersionId = $formVersionId ?? ($data['form_version_id'] ?? null);
 
-            // 3. Verify hold with strict authentication and ownership
-            $hold = BookingHold::query()
-                ->where('id', (int) $holdId)
-                ->where('hold_token', (string) $holdToken)
-                ->lockForUpdate()
+        if ($effectiveFormVersionId === null) {
+            $preBookingForm = Form::where('status', 'published')
+                ->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'pre_booking'))
                 ->first();
+            if ($preBookingForm && $preBookingForm->is_mandatory && $preBookingForm->published_version_id) {
+                $effectiveFormVersionId = (int) $preBookingForm->published_version_id;
+            }
+        }
 
-            if (! $hold) {
-                throw new SlotUnavailableException('Invalid reservation hold authentication.');
+        if ($effectiveFormVersionId !== null) {
+            $targetVersion = FormVersion::with(['questions.options', 'form'])->find($effectiveFormVersionId);
+            if (! $targetVersion) {
+                throw ValidationException::withMessages([
+                    'form_version_id' => 'The specified form version does not exist.',
+                ]);
             }
 
-            if ((int) $hold->session_type_id !== (int) $sessionType->id) {
-                throw new SlotUnavailableException('Reservation hold session type mismatch.');
-            }
+            $validQuestions = $targetVersion->questions;
+            $questionKeyMap = $validQuestions->keyBy('question_key');
+            $questionIdMap = $validQuestions->keyBy(fn ($q) => (string) $q->id);
 
-            if (! $hold->slot_start_utc->equalTo($holdSnapshot->slot_start_utc)
-                || ! $hold->slot_end_utc->equalTo($holdSnapshot->slot_end_utc)) {
-                throw new SlotUnavailableException('The held slot changed while it was being confirmed. Please select a slot again.');
-            }
-
-            if (! hash_equals((string) $hold->visitor_token, (string) $visitorToken)) {
-                throw new SlotUnavailableException('Reservation hold ownership mismatch.');
-            }
-
-            if (! hash_equals((string) $hold->session_token, (string) $sessionToken)) {
-                throw new SlotUnavailableException('Reservation hold session mismatch.');
-            }
-
-            // Check idempotency only after the scheduling mutex and authenticated hold are locked.
-            $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
-            $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
-            if ($existing) {
-                if (! hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
-                    throw new SlotUnavailableException('This booking request cannot be verified.');
+            // Cross-version question rejection: every submitted key must exist in target version
+            foreach ($effectiveIntakeAnswers as $submittedKey => $answerVal) {
+                $submittedKeyStr = (string) $submittedKey;
+                if (! $questionIdMap->has($submittedKeyStr) && ! $questionKeyMap->has($submittedKeyStr)) {
+                    throw ValidationException::withMessages([
+                        "intakeAnswers.{$submittedKey}" => 'Submitted question ID does not belong to the active form version.',
+                    ]);
                 }
-
-                return $existing;
             }
 
-            if ($hold->status !== 'active') {
-                throw new SlotUnavailableException('Your reservation hold is no longer active.');
-            }
+            // Required questions validation
+            $formIsMandatory = (bool) ($targetVersion->form?->is_mandatory ?? false);
+            foreach ($validQuestions as $question) {
+                if ($formIsMandatory || $question->is_required) {
+                    $answered = false;
+                    if (array_key_exists((string) $question->id, $effectiveIntakeAnswers)) {
+                        $val = $effectiveIntakeAnswers[(string) $question->id];
+                        $answered = ! is_null($val) && $val !== '' && $val !== [];
+                    } elseif (! empty($question->question_key) && array_key_exists($question->question_key, $effectiveIntakeAnswers)) {
+                        $val = $effectiveIntakeAnswers[$question->question_key];
+                        $answered = ! is_null($val) && $val !== '' && $val !== [];
+                    }
 
-            if ($hold->expires_at <= now()) {
-                throw new SlotUnavailableException('Your reservation hold has expired. Please choose a slot again.');
-            }
-
-            $config = $this->availabilityService->resolveSlotConfiguration(
-                sessionType: $sessionType,
-                startUtc: $hold->slot_start_utc,
-                endUtc: $hold->slot_end_utc,
-            );
-
-            // 4. Authoritative slot validation
-            $this->availabilityService->validateSlotForBooking(
-                sessionType: $sessionType,
-                startUtc: $startUtc,
-                endUtc: $config['end_utc'],
-                currentVisitorToken: $visitorToken,
-                currentHoldToken: $hold->hold_token,
-                excludeHoldId: $hold->id,
-                resolvedConfig: $config
-            );
-
-            // Authoritative Last Non-Direct Touch conversion attribution within exact 30-day lookback (EDITS V1 §18B)
-            $conversionAttr = $this->analyticsService->getBookingConversionAttribution(
-                visitorToken: $analyticsVisitorToken ?? $visitorToken,
-                bookingTime: $nowUtc
-            );
-
-            if ($conversionAttr['utm_source'] !== 'Direct / None') {
-                $utmSource = $conversionAttr['utm_source'];
-                $utmMedium = $conversionAttr['utm_medium'];
-                $utmCampaign = $conversionAttr['utm_campaign'];
-                $utmContent = $conversionAttr['utm_content'];
-                $utmTerm = $conversionAttr['utm_term'];
-                $referrer = $conversionAttr['referrer'];
-                $touchAt = $conversionAttr['touch_at'];
-            } else {
-                $utmSource = 'Direct / None';
-                $utmMedium = null;
-                $utmCampaign = null;
-                $utmContent = null;
-                $utmTerm = null;
-                $referrer = null;
-                $touchAt = null;
-            }
-
-            // Resolve or create canonical Contact
-            $contact = $this->contactService->resolveOrCreate(
-                email: $data['customer_email'] ?? $data['email'],
-                name: $data['customer_name'] ?? $data['name'] ?? null,
-                phone: $data['customer_phone'] ?? $data['phone'] ?? null,
-                attribution: [
-                    'utm_source' => $utmSource,
-                    'utm_medium' => $utmMedium,
-                    'utm_campaign' => $utmCampaign,
-                    'utm_content' => $utmContent,
-                    'utm_term' => $utmTerm,
-                ]
-            );
-
-            // Generate timezone snapshot
-            $snapshot = $this->timezoneService->createBookingSnapshot(
-                startUtc: $startUtc,
-                endUtc: $endUtc,
-                customerTimezone: $customerTimezone,
-                businessTimezone: $businessTimezone
-            );
-
-            // Generate secure non-guessable confirmation token
-            $confirmationToken = Str::random(64);
-
-            // Country is a server-derived snapshot. Never trust a form field
-            // or a fresh request lookup at finalization time: the booking must
-            // use the verified analytics session that owns the authenticated
-            // hold. If that session cannot be verified, preserve NULL rather
-            // than manufacturing an attribution value.
-            $detectedCountry = null;
-            $verifiedAnalyticsSession = null;
-            if ($analyticsSessionToken) {
-                $verifiedAnalyticsSession = VisitorSession::query()
-                    ->where(function ($query) use ($analyticsSessionToken): void {
-                        $query->where('session_token', $analyticsSessionToken)
-                            ->orWhere('session_id', $analyticsSessionToken);
-                    })
-                    ->lockForUpdate()
-                    ->first();
-            }
-
-            $verifiedVisitorToken = $verifiedAnalyticsSession?->visitor?->visitor_token;
-            $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
-            if ($verifiedAnalyticsSession && $verifiedVisitorToken && hash_equals((string) $verifiedVisitorToken, (string) $expectedVisitorToken)) {
-                $detectedCountry = $verifiedAnalyticsSession->detected_country_code;
-            }
-
-            // Create booking with unique idempotency recovery
-            try {
-                $booking = Booking::create(array_merge($snapshot, [
-                    'contact_id' => $contact->id,
-                    'visitor_token' => $analyticsVisitorToken ?? $visitorToken,
-                    'detected_country_code' => $detectedCountry,
-                    'session_type_id' => $sessionType->id,
-                    'status' => 'confirmed',
-                    'idempotency_key' => $idempotencyKey,
-                    'confirmation_token' => $confirmationToken,
-                    'notes' => $data['notes'] ?? null,
-                    'source' => $utmSource,
-                    'medium' => $utmMedium,
-                    'campaign' => $utmCampaign,
-                    'content' => $utmContent,
-                    'term' => $utmTerm,
-                    'referrer' => $referrer,
-                    'touch_at' => $touchAt,
-                ]));
-                $bookingCreated = true;
-            } catch (QueryException $e) {
-                // If duplicate key error (1062), fetch and return the winning concurrent booking
-                if ($e->getCode() === '23000' || str_contains($e->getMessage(), '1062')) {
-                    $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
-                    if ($existing && hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
-                        return $existing;
+                    if (! $answered) {
+                        throw ValidationException::withMessages([
+                            "intakeAnswers.{$question->id}" => "The {$question->label} field is required.",
+                        ]);
                     }
                 }
-                throw $e;
             }
+        }
 
-            // Convert hold atomically
-            $hold->update([
-                'status' => 'converted',
-                'released_at' => now(),
-            ]);
+        $connection = DB::connection();
+        $dbName = substr($connection->getDatabaseName(), 0, 20);
+        $canonicalIdentityString = $this->studentIdentityService->normalizeIdentity(
+            $email,
+            $phone ?: null,
+            $firstName,
+            $lastName,
+            $phoneCountry
+        );
+        $identityDigest = substr(hash('sha256', $canonicalIdentityString), 0, 32);
+        $lockKey = "{$dbName}:stu:{$identityDigest}";
+        if (strlen($lockKey) > 64) {
+            throw new \LogicException("Named lock key [{$lockKey}] exceeds MariaDB 64-character limit.");
+        }
+        $acquired = $connection->selectOne('SELECT GET_LOCK(?, 5) AS acquired', [$lockKey], useReadPdo: false);
+        if ((int) ($acquired?->acquired ?? 0) !== 1) {
+            throw new ConcurrentIdentityProvisioningException(
+                'A booking or provisioning request for this student identity is already in progress. Please retry.'
+            );
+        }
 
-            // Record booking event
-            BookingEvent::create([
-                'booking_id' => $booking->id,
-                'event_type' => 'created',
-                'performed_by' => 'customer',
-                'previous_data' => null,
-                'new_data' => [
-                    'status' => 'confirmed',
-                    'start_at_utc' => $startUtc->toDateTimeString(),
-                    'end_at_utc' => $endUtc->toDateTimeString(),
-                    'customer_timezone' => $customerTimezone,
-                ],
-                'created_at' => now(),
-            ]);
+        $bookingCreated = false;
+        try {
+            $booking = $this->databaseCapability->transaction(function () use (
+                $data,
+                $idempotencyKey,
+                $sessionType,
+                $startUtc,
+                $endUtc,
+                $customerTimezone,
+                $businessTimezone,
+                $visitorToken,
+                $sessionToken,
+                $holdId,
+                $holdToken,
+                $holdSnapshot,
+                $initialConfig,
+                $analyticsVisitorToken,
+                $analyticsSessionToken,
+                $nowUtc,
+                $email,
+                $phone,
+                $firstName,
+                $lastName,
+                $dateOfBirth,
+                $phoneCountry,
+                $effectiveIntakeAnswers,
+                $effectiveFormVersionId,
+                &$bookingCreated,
+            ) {
+                // Acquire the canonical scheduling mutex before any booking-row lock.
+                $this->availabilityService->acquireCalendarDateLocks(
+                    $startUtc,
+                    $initialConfig['end_utc'],
+                    $initialConfig['buffer_minutes'],
+                );
 
-            // Track authoritative server-side analytics event post-commit
-            DB::afterCommit(function () use ($booking, $sessionType, $startUtc, $endUtc, $customerTimezone, $analyticsVisitorToken, $visitorToken, $analyticsSessionToken, $sessionToken) {
-                $this->analyticsService->trackEvent(
-                    eventType: 'booking_completed',
-                    page: '/booking/confirmed',
+                // 3. Verify hold with strict authentication and ownership
+                $hold = BookingHold::query()
+                    ->where('id', (int) $holdId)
+                    ->where('hold_token', (string) $holdToken)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $hold) {
+                    throw new SlotUnavailableException('Invalid reservation hold authentication.');
+                }
+
+                if ((int) $hold->session_type_id !== (int) $sessionType->id) {
+                    throw new SlotUnavailableException('Reservation hold session type mismatch.');
+                }
+
+                if (! $hold->slot_start_utc->equalTo($holdSnapshot->slot_start_utc)
+                    || ! $hold->slot_end_utc->equalTo($holdSnapshot->slot_end_utc)) {
+                    throw new SlotUnavailableException('The held slot changed while it was being confirmed. Please select a slot again.');
+                }
+
+                if (! hash_equals((string) $hold->visitor_token, (string) $visitorToken)) {
+                    throw new SlotUnavailableException('Reservation hold ownership mismatch.');
+                }
+
+                if (! hash_equals((string) $hold->session_token, (string) $sessionToken)) {
+                    throw new SlotUnavailableException('Reservation hold session mismatch.');
+                }
+
+                // Check idempotency only after the scheduling mutex and authenticated hold are locked.
+                $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
+                $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+                if ($existing) {
+                    if (! hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
+                        throw new SlotUnavailableException('This booking request cannot be verified.');
+                    }
+
+                    return $existing;
+                }
+
+                if ($hold->status !== 'active') {
+                    throw new SlotUnavailableException('Your reservation hold is no longer active.');
+                }
+
+                if ($hold->expires_at <= now()) {
+                    throw new SlotUnavailableException('Your reservation hold has expired. Please choose a slot again.');
+                }
+
+                $config = $this->availabilityService->resolveSlotConfiguration(
+                    sessionType: $sessionType,
+                    startUtc: $hold->slot_start_utc,
+                    endUtc: $hold->slot_end_utc,
+                );
+
+                // 4. Authoritative slot validation
+                $this->availabilityService->validateSlotForBooking(
+                    sessionType: $sessionType,
+                    startUtc: $startUtc,
+                    endUtc: $config['end_utc'],
+                    currentVisitorToken: $visitorToken,
+                    currentHoldToken: $hold->hold_token,
+                    excludeHoldId: $hold->id,
+                    resolvedConfig: $config
+                );
+
+                // Authoritative Last Non-Direct Touch conversion attribution within exact 30-day lookback (EDITS V1 §18B)
+                $conversionAttr = $this->analyticsService->getBookingConversionAttribution(
                     visitorToken: $analyticsVisitorToken ?? $visitorToken,
-                    sessionToken: $analyticsSessionToken ?? $sessionToken,
-                    metadata: [
-                        'booking_id' => $booking->id,
+                    bookingTime: $nowUtc
+                );
+
+                if ($conversionAttr['utm_source'] !== 'Direct / None') {
+                    $utmSource = $conversionAttr['utm_source'];
+                    $utmMedium = $conversionAttr['utm_medium'];
+                    $utmCampaign = $conversionAttr['utm_campaign'];
+                    $utmContent = $conversionAttr['utm_content'];
+                    $utmTerm = $conversionAttr['utm_term'];
+                    $referrer = $conversionAttr['referrer'];
+                    $touchAt = $conversionAttr['touch_at'];
+                } else {
+                    $utmSource = 'Direct / None';
+                    $utmMedium = null;
+                    $utmCampaign = null;
+                    $utmContent = null;
+                    $utmTerm = null;
+                    $referrer = null;
+                    $touchAt = null;
+                }
+
+                // Resolve or create canonical Contact
+                $contact = $this->contactService->resolveOrCreate(
+                    email: $email,
+                    name: trim("{$firstName} {$lastName}") ?: ($data['customer_name'] ?? $data['name'] ?? null),
+                    phone: $phone ?: null,
+                    attribution: [
+                        'utm_source' => $utmSource,
+                        'utm_medium' => $utmMedium,
+                        'utm_campaign' => $utmCampaign,
+                        'utm_content' => $utmContent,
+                        'utm_term' => $utmTerm,
+                    ]
+                );
+
+                // Pessimistic row locking: lock contacts, then students
+                Contact::whereKey($contact->id)->lockForUpdate()->first();
+
+                // Candidate Student Resolution (Strict StudentIdentityService logic)
+                $normEmail = $this->studentIdentityService->normalizeEmail($email);
+                $normPhone = null;
+                if (! empty($phone)) {
+                    try {
+                        $normPhone = $this->studentIdentityService->normalizePhone($phone, $phoneCountry);
+                    } catch (\Throwable) {
+                        $normPhone = mb_strtolower(trim($phone), 'UTF-8');
+                    }
+                }
+                $normName = $this->studentIdentityService->normalizedFullName($firstName, $lastName);
+
+                $candidateQuery = Student::withTrashed();
+                if ($normEmail && $normPhone) {
+                    $candidateQuery->where(function ($q) use ($normEmail, $normPhone) {
+                        $q->where('email_normalized', $normEmail)
+                            ->orWhere('phone_normalized', $normPhone);
+                    });
+                } elseif ($normEmail) {
+                    $candidateQuery->where('email_normalized', $normEmail);
+                } elseif ($normPhone) {
+                    $candidateQuery->where('phone_normalized', $normPhone);
+                } else {
+                    $candidateQuery->whereRaw('0 = 1');
+                }
+
+                $rawCandidates = $candidateQuery->lockForUpdate()->get();
+                $resolvedCandidates = [];
+                foreach ($rawCandidates as $cand) {
+                    $canonical = $this->studentIdentityService->resolveCanonicalStudent($cand, lock: true);
+                    if (! $canonical->trashed()) {
+                        $resolvedCandidates[$canonical->id] = $canonical;
+                    }
+                }
+                $distinctCandidates = array_values($resolvedCandidates);
+
+                if (count($distinctCandidates) > 1) {
+                    throw new StudentIdentityConflictException('Multiple conflicting student records matched.');
+                }
+
+                if (count($distinctCandidates) === 1) {
+                    $matchedStudent = $distinctCandidates[0];
+                    $studentId = $matchedStudent->id;
+                    if ($matchedStudent->identity_status === 'legacy_unverified') {
+                        $updates = [];
+                        if (empty($matchedStudent->date_of_birth) && ! empty($dateOfBirth)) {
+                            $updates['date_of_birth'] = $dateOfBirth;
+                        }
+                        if (empty($matchedStudent->phone) && ! empty($normPhone)) {
+                            $updates['phone'] = $phone;
+                            $updates['phone_normalized'] = $normPhone;
+                        }
+                        if ($updates !== []) {
+                            $matchedStudent->update($updates);
+                        }
+                    }
+                } else {
+                    $newStudent = Student::create([
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'name_normalized' => $normName,
+                        'email' => $normEmail ?? $email,
+                        'email_normalized' => $normEmail,
+                        'phone' => $phone ?: null,
+                        'phone_normalized' => $normPhone,
+                        'date_of_birth' => $dateOfBirth,
+                        'preferred_timezone' => $customerTimezone,
+                        'identity_status' => 'legacy_unverified',
+                    ]);
+                    $studentId = $newStudent->id;
+                }
+
+                // Generate timezone snapshot
+                $snapshot = $this->timezoneService->createBookingSnapshot(
+                    startUtc: $startUtc,
+                    endUtc: $endUtc,
+                    customerTimezone: $customerTimezone,
+                    businessTimezone: $businessTimezone
+                );
+
+                // Generate secure non-guessable confirmation token
+                $confirmationToken = Str::random(64);
+
+                // Country is a server-derived snapshot.
+                $detectedCountry = null;
+                $verifiedAnalyticsSession = null;
+                if ($analyticsSessionToken) {
+                    $verifiedAnalyticsSession = VisitorSession::query()
+                        ->where(function ($query) use ($analyticsSessionToken): void {
+                            $query->where('session_token', $analyticsSessionToken)
+                                ->orWhere('session_id', $analyticsSessionToken);
+                        })
+                        ->lockForUpdate()
+                        ->first();
+                }
+
+                $verifiedVisitorToken = $verifiedAnalyticsSession?->visitor?->visitor_token;
+                $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
+                if ($verifiedAnalyticsSession && $verifiedVisitorToken && hash_equals((string) $verifiedVisitorToken, (string) $expectedVisitorToken)) {
+                    $detectedCountry = $verifiedAnalyticsSession->detected_country_code;
+                }
+
+                // Create booking with unique idempotency recovery
+                try {
+                    $booking = Booking::create(array_merge($snapshot, [
+                        'contact_id' => $contact->id,
+                        'student_id' => $studentId,
+                        'visitor_token' => $analyticsVisitorToken ?? $visitorToken,
+                        'detected_country_code' => $detectedCountry,
                         'session_type_id' => $sessionType->id,
+                        'status' => 'confirmed',
+                        'idempotency_key' => $idempotencyKey,
+                        'confirmation_token' => $confirmationToken,
+                        'notes' => $data['notes'] ?? null,
+                        'source' => $utmSource,
+                        'medium' => $utmMedium,
+                        'campaign' => $utmCampaign,
+                        'content' => $utmContent,
+                        'term' => $utmTerm,
+                        'referrer' => $referrer,
+                        'touch_at' => $touchAt,
+                    ]));
+                    $bookingCreated = true;
+                } catch (QueryException $e) {
+                    // Granular Duplicate-Key Exception Handling
+                    $isDupKey = $e->getCode() === '23000' && (($e->errorInfo[1] ?? null) === 1062 || str_contains($e->getMessage(), '1062'));
+                    if ($isDupKey && (str_contains($e->getMessage(), 'idempotency_key') || str_contains($e->getMessage(), 'bookings_idempotency_key_unique') || str_contains($e->errorInfo[2] ?? '', 'idempotency_key'))) {
+                        $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
+                        if ($existing && hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
+                            return $existing;
+                        }
+                    }
+                    throw $e;
+                }
+
+                // Persist FormSubmission and FormAnswers if formVersionId provided
+                if ($effectiveFormVersionId) {
+                    $version = FormVersion::with('questions.options')->find($effectiveFormVersionId);
+                    if ($version) {
+                        $submission = FormSubmission::create([
+                            'form_version_id' => $version->id,
+                            'student_id' => $studentId,
+                            'status' => 'submitted',
+                            'submitted_at' => now('UTC'),
+                            'submission_revision' => 1,
+                        ]);
+                        $submission->contact_id = $contact->id;
+                        $submission->booking_id = $booking->id;
+                        $submission->save();
+
+                        if (! empty($effectiveIntakeAnswers)) {
+                            $questionMap = $version->questions->keyBy(fn ($q): string => (string) $q->id);
+                            $questionKeyMap = $version->questions->keyBy('question_key');
+                            foreach ($effectiveIntakeAnswers as $qIdOrKey => $ansVal) {
+                                $question = $questionMap->get((string) $qIdOrKey) ?? $questionKeyMap->get((string) $qIdOrKey);
+                                if ($question) {
+                                    $storedVal = is_array($ansVal)
+                                        ? json_encode($ansVal, JSON_THROW_ON_ERROR)
+                                        : (is_bool($ansVal) ? ($ansVal ? '1' : '0') : (string) $ansVal);
+                                    FormAnswer::create([
+                                        'form_submission_id' => $submission->id,
+                                        'form_question_id' => $question->id,
+                                        'value_text' => $storedVal,
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Convert hold atomically
+                $hold->update([
+                    'status' => 'converted',
+                    'released_at' => now(),
+                ]);
+
+                // Record booking event
+                BookingEvent::create([
+                    'booking_id' => $booking->id,
+                    'event_type' => 'created',
+                    'performed_by' => 'customer',
+                    'previous_data' => null,
+                    'new_data' => [
+                        'status' => 'confirmed',
                         'start_at_utc' => $startUtc->toDateTimeString(),
                         'end_at_utc' => $endUtc->toDateTimeString(),
                         'customer_timezone' => $customerTimezone,
-                    ]
-                );
-            });
+                    ],
+                    'created_at' => now(),
+                ]);
 
-            return $booking;
-        }, 5);
+                // Track authoritative server-side analytics event post-commit
+                DB::afterCommit(function () use ($booking, $sessionType, $startUtc, $endUtc, $customerTimezone, $analyticsVisitorToken, $visitorToken, $analyticsSessionToken, $sessionToken) {
+                    $this->analyticsService->trackEvent(
+                        eventType: 'booking_completed',
+                        page: '/booking/confirmed',
+                        visitorToken: $analyticsVisitorToken ?? $visitorToken,
+                        sessionToken: $analyticsSessionToken ?? $sessionToken,
+                        metadata: [
+                            'booking_id' => $booking->id,
+                            'session_type_id' => $sessionType->id,
+                            'start_at_utc' => $startUtc->toDateTimeString(),
+                            'end_at_utc' => $endUtc->toDateTimeString(),
+                            'customer_timezone' => $customerTimezone,
+                        ]
+                    );
+                });
+
+                return $booking;
+            }, 5);
+        } finally {
+            $released = $connection->selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockKey], useReadPdo: false);
+            if ((int) ($released?->released ?? 0) !== 1) {
+                throw new \LogicException("Failed to release named lock [{$lockKey}].");
+            }
+        }
 
         if ($bookingCreated) {
             try {

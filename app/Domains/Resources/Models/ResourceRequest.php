@@ -21,6 +21,7 @@ class ResourceRequest extends Model
         'resource_id',
         'visitor_token',
         'session_token',
+        'consumed_challenge_hash',
         'source',
         'medium',
         'campaign',

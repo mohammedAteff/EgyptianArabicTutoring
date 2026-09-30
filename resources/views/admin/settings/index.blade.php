@@ -58,7 +58,8 @@
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Default Platform Language</label>
                     <select name="default_language" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                         <option value="en" {{ old('default_language', $settings['default_language']->value ?? 'en') === 'en' ? 'selected' : '' }}>English (Default)</option>
-                        <option value="ar" {{ old('default_language', $settings['default_language']->value ?? 'en') === 'ar' ? 'selected' : '' }}>Arabic (العربية)</option>
+                        <option value="fr" {{ old('default_language', $settings['default_language']->value ?? 'en') === 'fr' ? 'selected' : '' }}>French (Français)</option>
+                        <option value="de" {{ old('default_language', $settings['default_language']->value ?? 'en') === 'de' ? 'selected' : '' }}>German (Deutsch)</option>
                     </select>
                 </div>
 

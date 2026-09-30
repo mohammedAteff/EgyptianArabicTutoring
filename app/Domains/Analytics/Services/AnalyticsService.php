@@ -43,6 +43,7 @@ class AnalyticsService
         'navigation_click',
         'section_view',
         'section_dwell',
+        'session_activity',
     ];
 
     public const SERVER_ONLY_EVENTS = [

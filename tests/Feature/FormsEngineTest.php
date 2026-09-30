@@ -37,7 +37,7 @@ class FormsEngineTest extends TestCase
         $this->actingAs($admin, 'web')->put(route('admin.forms.update', $form), [
             'title' => $form->title,
             'slug' => $form->slug,
-            'prompt_trigger' => $form->prompt_trigger,
+            'trigger' => 'none',
             'base_version_id' => $version->id,
             'lock_version' => $form->lock_version,
             'questions_json' => json_encode([
@@ -109,7 +109,7 @@ class FormsEngineTest extends TestCase
         $this->actingAs($admin, 'web')->put(route('admin.forms.update', $form), [
             'title' => $form->title,
             'slug' => $form->slug,
-            'prompt_trigger' => 'none',
+            'trigger' => 'none',
             'base_version_id' => $oldVersion->id,
             'lock_version' => $form->lock_version,
             'questions_json' => json_encode($updatedQuestions, JSON_THROW_ON_ERROR),
@@ -171,7 +171,7 @@ class FormsEngineTest extends TestCase
         $this->actingAs($admin, 'web')->put(route('admin.forms.update', $form), [
             'title' => $form->title,
             'slug' => $form->slug,
-            'prompt_trigger' => 'none',
+            'trigger' => 'none',
             'base_version_id' => $oldVersion->id,
             'lock_version' => 2,
             'questions_json' => json_encode($updatedQuestions, JSON_THROW_ON_ERROR),
@@ -286,14 +286,14 @@ class FormsEngineTest extends TestCase
         $this->assertSame(400, substr_count($csv, 'sample'));
     }
 
-    public function test_prompt_triggers_assign_forms_and_block_untriggered_direct_access(): void
+    public function test_form_triggers_assign_forms_and_block_untriggered_direct_access(): void
     {
         $admin = $this->administrator('super_admin');
         $questions = [['question_key' => 'goal', 'label' => 'Learning goal', 'question_type' => 'short_text', 'is_required' => false, 'assistant_visible' => true]];
-        $none = $this->publishedForm($admin, $questions, ['title' => 'Always available', 'prompt_trigger' => 'none']);
-        $afterBooking = $this->publishedForm($admin, $questions, ['title' => 'After booking', 'prompt_trigger' => 'after_booking']);
-        $afterReschedule = $this->publishedForm($admin, $questions, ['title' => 'After reschedule', 'prompt_trigger' => 'after_reschedule']);
-        $nextSession = $this->publishedForm($admin, $questions, ['title' => 'Before next session', 'prompt_trigger' => 'next_session_check']);
+        $none = $this->publishedForm($admin, $questions, ['title' => 'Always available', 'trigger' => 'none']);
+        $afterBooking = $this->publishedForm($admin, $questions, ['title' => 'After booking', 'trigger' => 'after_booking']);
+        $afterReschedule = $this->publishedForm($admin, $questions, ['title' => 'After reschedule', 'trigger' => 'after_reschedule']);
+        $nextSession = $this->publishedForm($admin, $questions, ['title' => 'Before next session', 'trigger' => 'next_session_check']);
         $student = Student::factory()->verified()->create();
         $this->asStudent($student);
 
@@ -335,7 +335,7 @@ class FormsEngineTest extends TestCase
     private function publishedForm(Administrator $admin, array $questions, array $overrides = []): Form
     {
         $form = app(FormBuilderService::class)->create(array_merge([
-            'title' => 'Student intake', 'slug' => 'student-intake-'.uniqid(), 'prompt_trigger' => 'none',
+            'title' => 'Student intake', 'slug' => 'student-intake-'.uniqid(), 'trigger' => 'none',
             'is_mandatory' => false, 'can_edit_after_submission' => false,
         ], $overrides), $questions, $admin);
 

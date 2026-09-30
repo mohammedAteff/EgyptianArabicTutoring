@@ -12,6 +12,9 @@ use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Forms\Models\Form;
+use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
+use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
@@ -71,6 +74,20 @@ class BookingWizard extends Component
 
     public string $name = '';
 
+    public string $first_name = '';
+
+    public string $last_name = '';
+
+    public ?string $date_of_birth = null;
+
+    public array $intakeAnswers = [];
+
+    #[Locked]
+    public ?int $preBookingFormId = null;
+
+    #[Locked]
+    public ?int $initialPublishedVersionId = null;
+
     public string $email = '';
 
     public string $phone = '';
@@ -94,18 +111,25 @@ class BookingWizard extends Component
     protected function rules(): array
     {
         return [
-            'name' => 'required|string|min:2|max:100',
+            'first_name' => 'required|string|min:2|max:100',
+            'last_name' => 'required|string|min:2|max:100',
+            'name' => 'nullable|string|max:200',
             'email' => 'required|email|max:255',
             'phone' => 'nullable|string|max:50',
+            'date_of_birth' => 'nullable|date|before:today',
             'notes' => 'nullable|string|max:1000',
             'honeypot' => 'nullable|max:0',
         ];
     }
 
     protected $messages = [
-        'name.required' => 'Please provide your name.',
+        'first_name.required' => 'Please provide your first name.',
+        'last_name.required' => 'Please provide your last name.',
         'email.required' => 'Please provide a valid email address for your calendar invite.',
         'email.email' => 'Please provide a valid email address.',
+        'date_of_birth.required' => 'Please provide your date of birth.',
+        'date_of_birth.date' => 'Please provide a valid date of birth.',
+        'date_of_birth.before' => 'Date of birth must be in the past.',
         'honeypot.max' => 'Spam detected.',
     ];
 
@@ -138,6 +162,16 @@ class BookingWizard extends Component
             $this->currentStep = 1;
         }
 
+        // Resolve published pre-booking form
+        $publishedForm = Form::query()
+            ->where('status', 'published')
+            ->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'pre_booking'))
+            ->first();
+        if ($publishedForm) {
+            $this->preBookingFormId = $publishedForm->id;
+            $this->initialPublishedVersionId = $publishedForm->published_version_id;
+        }
+
         // Restore booking flow state across language switches or page navigations (Section 28)
         $savedState = Session::get('booking_flow_state');
         if (is_array($savedState) && ! empty($savedState['visitor_token'])) {
@@ -149,7 +183,16 @@ class BookingWizard extends Component
                 $this->calendarMonth = $savedState['calendar_month'] ?? $this->calendarMonth;
                 $this->selectedDate = $savedState['selected_date'] ?? null;
                 $this->selectedSessionTypeId = $savedState['selected_session_type_id'] ?? $this->selectedSessionTypeId;
-                $this->name = $savedState['name'] ?? '';
+                $this->first_name = $savedState['first_name'] ?? '';
+                $this->last_name = $savedState['last_name'] ?? '';
+                $this->name = $savedState['name'] ?? trim("{$this->first_name} {$this->last_name}");
+                if (empty($this->first_name) && ! empty($this->name)) {
+                    $parts = explode(' ', trim($this->name), 2);
+                    $this->first_name = $parts[0];
+                    $this->last_name = $parts[1] ?? $parts[0];
+                }
+                $this->date_of_birth = $savedState['date_of_birth'] ?? null;
+                $this->intakeAnswers = $savedState['intake_answers'] ?? [];
                 $this->email = $savedState['email'] ?? '';
                 $this->phone = $savedState['phone'] ?? '';
                 $this->notes = $savedState['notes'] ?? '';
@@ -393,6 +436,7 @@ class BookingWizard extends Component
         }
 
         $this->selectedDate = $date;
+        $this->calendarMonth = CarbonImmutable::createFromFormat('!Y-m-d', $date, $this->customerTimezone)->format('Y-m');
         $this->errorMessage = null;
     }
 
@@ -471,7 +515,39 @@ class BookingWizard extends Component
 
     public function submitDetails(): void
     {
+        if ($this->first_name === '' && $this->last_name === '' && ! empty($this->name)) {
+            $parts = explode(' ', trim($this->name), 2);
+            $this->first_name = $parts[0];
+            $this->last_name = $parts[1] ?? $parts[0];
+        } else {
+            $this->name = trim("{$this->first_name} {$this->last_name}");
+        }
+
         $this->validate();
+
+        if ($this->preBookingFormId && $this->initialPublishedVersionId) {
+            $currentPublishedForm = Form::query()
+                ->whereKey($this->preBookingFormId)
+                ->where('status', 'published')
+                ->first();
+            if (! $currentPublishedForm || $this->initialPublishedVersionId !== $currentPublishedForm->published_version_id) {
+                $this->addError('intakeForm', 'The intake form was updated while you were booking. Please review the updated questions.');
+
+                return;
+            }
+            $version = $currentPublishedForm->publishedVersion()->with('questions.options')->first();
+            if ($version) {
+                foreach ($version->questions as $question) {
+                    if ($question->is_required && empty($this->intakeAnswers[$question->id]) && empty($this->intakeAnswers[$question->question_key])) {
+                        $this->addError("intakeAnswers.{$question->id}", "The {$question->label} question is required.");
+                    }
+                }
+                if ($this->getErrorBag()->isNotEmpty()) {
+                    return;
+                }
+            }
+        }
+
         $this->errorMessage = null;
         $this->currentStep = 4; // Step 4: Review
         $this->syncSessionState();
@@ -479,8 +555,22 @@ class BookingWizard extends Component
 
     public function confirmBooking(): void
     {
+        $this->name = trim("{$this->first_name} {$this->last_name}");
         $this->validate();
         $this->errorMessage = null;
+
+        if ($this->preBookingFormId && $this->initialPublishedVersionId) {
+            $currentPublishedForm = Form::query()
+                ->whereKey($this->preBookingFormId)
+                ->where('status', 'published')
+                ->first();
+            if (! $currentPublishedForm || $this->initialPublishedVersionId !== $currentPublishedForm->published_version_id) {
+                $this->addError('intakeForm', 'The intake form was updated while you were booking. Please review the updated questions.');
+                $this->currentStep = 3;
+
+                return;
+            }
+        }
 
         // Idempotency: If booking for this idempotency key already exists, redirect cleanly
         if ($this->idempotencyKey) {
@@ -552,8 +642,13 @@ class BookingWizard extends Component
                 'slot_id' => $this->selectedSlotId,
                 'customer_timezone' => $this->customerTimezone,
                 'customer_name' => $this->name,
+                'first_name' => $this->first_name,
+                'last_name' => $this->last_name,
                 'customer_email' => $this->email,
+                'email' => $this->email,
                 'customer_phone' => $this->phone,
+                'phone' => $this->phone,
+                'date_of_birth' => $this->date_of_birth,
                 'notes' => $this->notes,
                 'idempotency_key' => $this->idempotencyKey,
                 'hold_id' => (int) $holdId,
@@ -567,7 +662,9 @@ class BookingWizard extends Component
                 'campaign' => session('utm_campaign'),
                 'content' => session('utm_content'),
                 'term' => session('utm_term'),
-            ]);
+                'intake_answers' => $this->intakeAnswers,
+                'form_version_id' => $this->initialPublishedVersionId,
+            ], $this->intakeAnswers, $this->initialPublishedVersionId);
 
             // Release hold reference
             $this->holdId = null;
@@ -592,6 +689,11 @@ class BookingWizard extends Component
         } catch (SlotUnavailableException $e) {
             $this->errorMessage = $e->getMessage();
             $this->currentStep = 2; // return to slot selection
+        } catch (ConcurrentIdentityProvisioningException $e) {
+            abort(429, $e->getMessage());
+        } catch (StudentIdentityConflictException $e) {
+            $this->addError('email', 'A profile conflict was detected. Please contact support.');
+            $this->currentStep = 3;
         } catch (\Throwable $e) {
             $this->errorMessage = 'An error occurred while confirming your booking. Please try again.';
         }
@@ -626,6 +728,10 @@ class BookingWizard extends Component
             'hold_token' => $this->holdToken,
             'hold_expires_at' => $this->holdExpiresAt,
             'name' => $this->name,
+            'first_name' => $this->first_name,
+            'last_name' => $this->last_name,
+            'date_of_birth' => $this->date_of_birth,
+            'intake_answers' => $this->intakeAnswers,
             'email' => $this->email,
             'phone' => $this->phone,
             'notes' => $this->notes,
@@ -634,6 +740,13 @@ class BookingWizard extends Component
 
     public function updated($propertyName): void
     {
+        if ($propertyName === 'first_name' || $propertyName === 'last_name') {
+            $this->name = trim("{$this->first_name} {$this->last_name}");
+        } elseif ($propertyName === 'name' && empty($this->first_name) && empty($this->last_name)) {
+            $parts = explode(' ', trim((string) $this->name), 2);
+            $this->first_name = $parts[0];
+            $this->last_name = $parts[1] ?? $parts[0];
+        }
         $this->syncSessionState();
     }
 
@@ -642,6 +755,15 @@ class BookingWizard extends Component
         if (! empty($pendingData)) {
             if (isset($pendingData['name'])) {
                 $this->name = (string) $pendingData['name'];
+            }
+            if (isset($pendingData['first_name'])) {
+                $this->first_name = (string) $pendingData['first_name'];
+            }
+            if (isset($pendingData['last_name'])) {
+                $this->last_name = (string) $pendingData['last_name'];
+            }
+            if (isset($pendingData['date_of_birth'])) {
+                $this->date_of_birth = (string) $pendingData['date_of_birth'];
             }
             if (isset($pendingData['email'])) {
                 $this->email = (string) $pendingData['email'];
@@ -697,6 +819,12 @@ class BookingWizard extends Component
             unset($slots);
         }
 
+        $preBookingQuestions = collect();
+        if ($this->preBookingFormId) {
+            $preBookingForm = Form::with('publishedVersion.questions.options')->find($this->preBookingFormId);
+            $preBookingQuestions = $preBookingForm?->publishedVersion?->questions ?? collect();
+        }
+
         // Filter timezones for modal
         $timezoneService = app(TimezoneService::class);
         $curatedTimezones = $timezoneService->getCuratedList();
@@ -713,6 +841,7 @@ class BookingWizard extends Component
             'activeSessionTypes' => $activeSessionTypes,
             'availableSlotsByDate' => $availableSlotsByDate,
             'curatedTimezones' => $curatedTimezones,
+            'preBookingQuestions' => $preBookingQuestions,
         ]);
     }
 }

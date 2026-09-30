@@ -320,17 +320,44 @@
                 <!-- Honeypot anti-spam field -->
                 <input type="text" wire:model="honeypot" class="hidden" tabindex="-1" autocomplete="off">
 
-                <!-- Full Name -->
+                <!-- First & Last Name -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="first_name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
+                            {{ __('First Name') }} <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text"
+                               id="first_name"
+                               wire:model.live.debounce.250ms="first_name"
+                               placeholder="e.g. Sarah"
+                               class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('first_name') border-rose-400 @enderror">
+                        @error('first_name') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <label for="last_name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
+                            {{ __('Last Name') }} <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text"
+                               id="last_name"
+                               wire:model.live.debounce.250ms="last_name"
+                               placeholder="e.g. Jenkins"
+                               class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('last_name') border-rose-400 @enderror">
+                        @error('last_name') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+
+                <!-- Date of Birth -->
                 <div>
-                    <label for="name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                        {{ __('Your Full Name') }} <span class="text-rose-500">*</span>
+                    <label for="date_of_birth" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
+                        {{ __('Date of Birth') }} <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
-                           id="name"
-                           wire:model.live.debounce.250ms="name"
-                           placeholder="e.g. Sarah Jenkins"
-                           class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('name') border-rose-400 @enderror">
-                    @error('name') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
+                    <input type="date"
+                           id="date_of_birth"
+                           wire:model.live.debounce.250ms="date_of_birth"
+                           max="{{ now()->subYear()->toDateString() }}"
+                           class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('date_of_birth') border-rose-400 @enderror">
+                    <p class="text-xs text-stone-500 mt-1">{{ __('Required for your student portal identity verification.') }}</p>
+                    @error('date_of_birth') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
                 </div>
 
                 <!-- Email -->
@@ -359,6 +386,42 @@
                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all">
                     <p class="text-xs text-stone-500 mt-1">{{ __('Useful for last-minute lesson links or audio check-ins.') }}</p>
                 </div>
+
+                <!-- Dynamic Intake Form Questions (if assigned) -->
+                @if(!empty($preBookingQuestions) && $preBookingQuestions->isNotEmpty())
+                    <div class="pt-4 border-t border-stone-100 space-y-4">
+                        <h3 class="text-sm font-bold text-stone-800 uppercase tracking-wider">{{ __('Intake Questions') }}</h3>
+                        @error('intakeForm') <span class="text-xs text-rose-500 font-medium block">{{ $message }}</span> @enderror
+                        @foreach($preBookingQuestions as $q)
+                            <div>
+                                <label for="intake_{{ $q->id }}" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
+                                    {{ $q->label }} @if($q->is_required) <span class="text-rose-500">*</span> @endif
+                                </label>
+                                @if($q->question_type === 'textarea')
+                                    <textarea id="intake_{{ $q->id }}"
+                                              wire:model="intakeAnswers.{{ $q->id }}"
+                                              rows="3"
+                                              class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all"></textarea>
+                                @elseif($q->question_type === 'select')
+                                    <select id="intake_{{ $q->id }}"
+                                            wire:model="intakeAnswers.{{ $q->id }}"
+                                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all">
+                                        <option value="">{{ __('Select an option') }}</option>
+                                        @foreach($q->options ?? [] as $opt)
+                                            <option value="{{ $opt->option_value ?? $opt->label }}">{{ $opt->label }}</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <input type="text"
+                                           id="intake_{{ $q->id }}"
+                                           wire:model="intakeAnswers.{{ $q->id }}"
+                                           class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all">
+                                @endif
+                                @error('intakeAnswers.'.$q->id) <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
 
                 <!-- Learning Goals / Notes -->
                 <div>
@@ -466,9 +529,14 @@
             </div>
 
             <!-- Booking Policy Notice -->
-            <div class="mb-6 p-4 rounded-xl bg-stone-100/70 text-xs text-stone-600 leading-relaxed">
+            <div class="mb-4 p-4 rounded-xl bg-stone-100/70 text-xs text-stone-600 leading-relaxed">
                 <strong>{{ __('Policy Notice:') }}</strong> {{ \App\Domains\CMS\Models\Setting::get('cancellation_policy', 'Cancellations with at least 4 hours notice do not forfeit the session credit. Rescheduling requests must be made directly to Abdallah at least 24 hours before class.') }}
                 {{ __('Upon confirmation, you will receive an immediate calendar invitation with direct lesson access links.') }}
+            </div>
+
+            <!-- Student Portal Verification Notice -->
+            <div class="mb-6 p-4 rounded-xl bg-amber-50/70 border border-amber-200/60 text-xs text-amber-900 leading-relaxed">
+                <strong>{{ __('Student Portal Access:') }}</strong> {{ __('If this is your first session, your student portal access will become active once your student profile has been verified. To log in at /student/login, you will need your Date of Birth plus any two of your registered identifiers: your name, email address, or phone number.') }}
             </div>
 
             <!-- Action Buttons -->

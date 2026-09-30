@@ -25,7 +25,7 @@ class FormController extends Controller
         $role = Auth::guard('web')->user()?->role;
 
         return view('admin.forms.index', [
-            'forms' => Form::query()->when($role === 'assistant', fn (Builder $query) => $query->where('status', 'published'))->with(['activeVersion', 'publishedVersion'])->orderByDesc('updated_at')->paginate(25),
+            'forms' => Form::query()->when($role === 'assistant', fn (Builder $query) => $query->where('status', 'published'))->with(['activeVersion', 'publishedVersion', 'triggers'])->orderByDesc('updated_at')->paginate(25),
             'canManageForms' => in_array($role, ['super_admin', 'admin'], true),
         ]);
     }
@@ -48,7 +48,7 @@ class FormController extends Controller
 
     public function edit(Form $form)
     {
-        $form->load('activeVersion.questions.options');
+        $form->load(['activeVersion.questions.options', 'triggers']);
         $questions = $form->activeVersion?->questions->map(fn (FormQuestion $question): array => [
             'question_key' => $question->question_key,
             'label' => $question->label,
@@ -167,7 +167,8 @@ class FormController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('forms', 'slug')->ignore($form?->id)],
             'description' => ['nullable', 'string', 'max:10000'],
-            'prompt_trigger' => ['required', Rule::in(['none', 'after_booking', 'after_reschedule', 'next_session_check'])],
+            'trigger' => ['nullable', 'string', Rule::in(['none', 'after_booking', 'after_reschedule', 'next_session_check', 'pre_booking'])],
+            'trigger_name' => ['nullable', 'string', Rule::in(['none', 'after_booking', 'after_reschedule', 'next_session_check', 'pre_booking'])],
             'is_mandatory' => ['nullable', 'boolean'],
             'can_edit_after_submission' => ['nullable', 'boolean'],
             'questions_json' => ['required', 'string', 'max:500000'],
@@ -175,6 +176,11 @@ class FormController extends Controller
             'lock_version' => [$form ? 'required' : 'nullable', 'integer'],
             'changelog' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        $triggerValue = $request->input('trigger', $request->input('trigger_name'));
+        if ($triggerValue !== null) {
+            $metadata['trigger'] = $triggerValue;
+        }
 
         $metadata['is_mandatory'] = $request->boolean('is_mandatory');
         $metadata['can_edit_after_submission'] = $request->boolean('can_edit_after_submission');

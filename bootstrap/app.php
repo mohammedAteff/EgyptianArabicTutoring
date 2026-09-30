@@ -13,6 +13,12 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
+ini_set('unserialize_callback_func', 'spl_autoload_call');
+
+if (($_ENV['APP_ENV'] ?? '') === 'testing' || getenv('APP_ENV') === 'testing' || defined('PHPUNIT_COMPOSER_INSTALL') || defined('__PHPUNIT_PHAR__')) {
+    @ini_set('memory_limit', '512M');
+}
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -31,8 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             NormalizeTrailingSlash::class,
             SetRequestLocale::class,
-            EnsureNotUnderMaintenance::class,
             TrackVisitorSession::class,
+            EnsureNotUnderMaintenance::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

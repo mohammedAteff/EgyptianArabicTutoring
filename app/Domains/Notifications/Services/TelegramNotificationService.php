@@ -138,7 +138,7 @@ class TelegramNotificationService
         $sessionTitle = $booking->sessionType?->title ?: '1-on-1 Egyptian Arabic Session';
 
         $startUtc = Carbon::parse($booking->start_at_utc, 'UTC');
-        $startCairo = $startUtc->copy()->setTimezone('Africa/Cairo');
+        $startBusiness = $booking->business_start;
 
         $windowLabel = $this->humanizeMinutes($windowMinutes);
         $meetingUrl = (string) Setting::get('video_meeting_url', '');
@@ -152,7 +152,7 @@ class TelegramNotificationService
             ."📧 *Email:* `{$studentEmail}`\n"
             ."📞 *Phone:* `{$studentPhone}`\n"
             ."📚 *Track:* {$sessionTitle}\n"
-            ."🕒 *Cairo Time:* `{$startCairo->format('h:i A (l, M j)')}`\n"
+            ."🕒 *Tutor Time:* `{$startBusiness->format('h:i A (l, M j)')}` ({$startBusiness->timezoneName})\n"
             ."🌐 *UTC Time:* `{$startUtc->format('H:i (Y-m-d)')}`\n"
             .$meetingLine;
     }

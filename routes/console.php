@@ -29,6 +29,29 @@ Schedule::call(fn (): bool => Artisan::call('booking:cleanup-holds', []) === 0)
         }
     });
 
+// 2.5. Analytics Country Aggregation: aggregates daily activity by country prior to raw event pruning
+Schedule::call(function (): bool {
+    $cairoYesterday = now('Africa/Cairo')->subDay()->format('Y-m-d');
+
+    return Artisan::call('analytics:aggregate-daily-country', ['--date' => $cairoYesterday]) === 0;
+})
+    ->dailyAt('00:02')
+    ->timezone('Africa/Cairo')
+    ->name('analytics:aggregate-daily-country')
+    ->onSuccess(function () {
+        Setting::set('last_country_analytics_aggregation_at', now('UTC')->toIso8601String(), 'system');
+    })
+    ->onFailure(function () {
+        Setting::set('last_country_analytics_aggregation_status', 'failed', 'system');
+        try {
+            app(AdminNotificationService::class)->notifySystemWarning(
+                'Country Analytics Rollup Failed',
+                'Scheduled task [analytics:aggregate-daily-country] failed.'
+            );
+        } catch (Throwable) {
+        }
+    });
+
 // 3. Analytics Aggregation: computes daily traffic and conversion rollups
 Schedule::call(fn (): bool => Artisan::call('analytics:aggregate-daily', ['--prune' => true]) === 0)
     ->dailyAt('00:05')

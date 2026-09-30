@@ -79,89 +79,264 @@
         </div>
 
         <!-- Download Gate Card (5 cols) -->
-        <div class="lg:col-span-5">
+        <div class="lg:col-span-5" x-data="{
+            state: '{{ (! $resource->is_gated || session('access_granted')) ? 'unlocked' : 'idle' }}',
+            name: '{{ old('name') }}',
+            email: '{{ old('email') }}',
+            pin: '',
+            challenge: '',
+            downloadUrl: '{{ session('download_token') ? route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) : '' }}',
+            errorMessage: '',
+            attempts: 0,
+            requestUrl: '{{ route(app()->getLocale() === 'fr' ? 'resources.request.fr' : (app()->getLocale() === 'de' ? 'resources.request.de' : 'resources.request'), $resource->slug) }}',
+            verifyUrl: '{{ route(app()->getLocale() === 'fr' ? 'resources.verify-pin.fr' : (app()->getLocale() === 'de' ? 'resources.verify-pin.de' : 'resources.verify-pin'), $resource->slug) }}',
+            submitEmail() {
+                if (!this.email) return;
+                this.state = 'submitting';
+                this.errorMessage = '';
+                fetch(this.requestUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        name: this.name,
+                        email: this.email
+                    })
+                })
+                .then(async res => {
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        if (res.status === 429) {
+                            this.state = 'rate_limited';
+                            this.errorMessage = 'Too many requests. Please try again later.';
+                            return;
+                        }
+                        this.state = 'idle';
+                        this.errorMessage = data.message || 'Unable to request access. Please check your email.';
+                        return;
+                    }
+                    if (data.requires_pin) {
+                        this.challenge = data.challenge;
+                        this.attempts = 0;
+                        this.state = 'pin_required';
+                    } else if (data.download_url) {
+                        this.downloadUrl = data.download_url;
+                        this.state = 'unlocked';
+                        window.location.href = data.download_url;
+                    }
+                })
+                .catch(() => {
+                    this.state = 'idle';
+                    this.errorMessage = 'Network error. Please try again.';
+                });
+            },
+            submitPin() {
+                if (this.pin.length !== 6) return;
+                this.state = 'verifying';
+                this.errorMessage = '';
+                fetch(this.verifyUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        challenge: this.challenge,
+                        pin: this.pin
+                    })
+                })
+                .then(async res => {
+                    const data = await res.json().catch(() => ({}));
+                    if (res.status === 200 && data.download_url) {
+                        this.downloadUrl = data.download_url;
+                        this.state = 'unlocked';
+                        window.location.href = data.download_url;
+                    } else if (res.status === 422) {
+                        this.attempts++;
+                        this.state = 'pin_required';
+                        this.errorMessage = 'Invalid verification code. (Attempt ' + this.attempts + ' of 5)';
+                    } else if (res.status === 429) {
+                        this.state = 'rate_limited';
+                        this.errorMessage = 'Too many failed verification attempts. Please request a new code.';
+                    } else if (res.status === 403) {
+                        this.state = 'pin_required';
+                        this.errorMessage = 'Session authorization mismatch. Please refresh and try again.';
+                    } else if (res.status === 409) {
+                        this.state = 'pin_required';
+                        this.errorMessage = 'This verification code has already been used. Please request a new code.';
+                    } else {
+                        this.state = 'pin_required';
+                        this.errorMessage = data.message || 'Verification failed. Please retry.';
+                    }
+                })
+                .catch(() => {
+                    this.state = 'pin_required';
+                    this.errorMessage = 'Network error. Please check your connection and retry.';
+                });
+            }
+        }" x-init="
+        @if(!($isPreview ?? false) && !auth()->guard('web')->check())
+            fetch('/analytics/event', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    event_name: 'resource_gate_viewed',
+                    page: window.location.pathname,
+                    metadata: { resource_slug: '{{ $resource->slug }}' }
+                })
+            }).catch(() => {});
+        @endif
+        ">
             <div class="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-8 shadow-xl sticky top-28">
-                @if(! $resource->is_gated || session('access_granted'))
-                    <!-- Download State -->
-                    <div class="text-center space-y-4 py-4">
-                        <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <!-- Unlocked / Ready State -->
+                <div x-show="state === 'unlocked'" class="text-center space-y-4 py-4" style="{{ (! $resource->is_gated || session('access_granted')) ? '' : 'display: none;' }}">
+                    <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-stone-900">Your File Is Ready!</h2>
+                    <p class="text-xs text-stone-500 leading-relaxed">
+                        Click below to save the file directly to your device.
+                    </p>
+                    <div class="pt-2">
+                        <a :href="downloadUrl || '{{ route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) }}'"
+                            class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base px-6 py-4 rounded-full shadow-md hover:shadow-lg transition-all">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                             </svg>
+                            <span>{{ __('Download Resource') }}</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Idle / Submitting State (Email Input) -->
+                <div x-show="state === 'idle' || state === 'submitting'" style="{{ (! $resource->is_gated || session('access_granted')) ? 'display: none;' : '' }}">
+                    <div class="flex items-center gap-2 text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>Free Instant Access</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-stone-900">Get This Resource</h2>
+                    <p class="text-stone-500 text-xs mt-1 mb-6 leading-relaxed">
+                        Instant access provided right on this screen. No waiting for email links or promotional spam.
+                    </p>
+
+                    <div x-show="errorMessage" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-600 font-medium" x-text="errorMessage"></div>
+
+                    <form @submit.prevent="submitEmail" method="POST" action="{{ route(app()->getLocale() === 'fr' ? 'resources.request.fr' : (app()->getLocale() === 'de' ? 'resources.request.de' : 'resources.request'), $resource->slug) }}" class="space-y-4">
+                        @csrf
+                        <div>
+                            <label for="name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
+                                Your Name <span class="text-stone-400 font-normal">(Optional)</span>
+                            </label>
+                            <input type="text"
+                                   x-model="name"
+                                   name="name"
+                                   id="name"
+                                   placeholder="e.g. David"
+                                   class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none">
                         </div>
-                        <h2 class="text-xl font-bold text-stone-900">Your File Is Ready!</h2>
-                        <p class="text-xs text-stone-500 leading-relaxed">
-                            Click below to save the file directly to your device.
-                        </p>
+
+                        <div>
+                            <label for="email" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
+                                Email Address <span class="text-rose-500">*</span>
+                            </label>
+                            <input type="email"
+                                   x-model="email"
+                                   name="email"
+                                   id="email"
+                                   required
+                                   placeholder="david@example.com"
+                                   class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none">
+                        </div>
+
                         <div class="pt-2">
-                            <a href="{{ route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) }}"
-                                class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base px-6 py-4 rounded-full shadow-md hover:shadow-lg transition-all">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            <button type="submit"
+                                    :disabled="state === 'submitting'"
+                                    class="w-full inline-flex items-center justify-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 disabled:opacity-50 text-white font-bold text-sm px-6 py-3.5 rounded-full shadow-md hover:shadow transition-all">
+                                <span x-show="state !== 'submitting'">{{ __('Request Free Access') }}</span>
+                                <span x-show="state === 'submitting'">Requesting Access...</span>
+                                <svg x-show="state !== 'submitting'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
                                 </svg>
-                                <span>{{ __('Download Resource') }}</span>
-                            </a>
+                            </button>
                         </div>
-                    </div>
-                @else
-                    <!-- Email Gate Form -->
-                    <div>
-                        <div class="flex items-center gap-2 text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            <span>Free Instant Access</span>
-                        </div>
-                        <h2 class="text-xl font-bold text-stone-900">Get This Resource</h2>
-                        <p class="text-stone-500 text-xs mt-1 mb-6 leading-relaxed">
-                            Instant access provided right on this screen. No waiting for email links or promotional spam.
+
+                        <p class="text-[11px] text-stone-400 text-center leading-tight">
+                            We respect your privacy. Resource access does not trigger unsolicited marketing emails.
                         </p>
+                    </form>
+                </div>
 
-                        <form method="POST" action="{{ route(app()->getLocale() === 'fr' ? 'resources.request.fr' : (app()->getLocale() === 'de' ? 'resources.request.de' : 'resources.request'), $resource->slug) }}" class="space-y-4">
-                            @csrf
-
-                            <div>
-                                <label for="name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-                                    Your Name <span class="text-stone-400 font-normal">(Optional)</span>
-                                </label>
-                                <input type="text"
-                                       name="name"
-                                       id="name"
-                                       value="{{ old('name') }}"
-                                       placeholder="e.g. David"
-                                       class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none">
-                            </div>
-
-                            <div>
-                                <label for="email" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-                                    Email Address <span class="text-rose-500">*</span>
-                                </label>
-                                <input type="email"
-                                       name="email"
-                                       id="email"
-                                       required
-                                       value="{{ old('email') }}"
-                                       placeholder="david@example.com"
-                                       class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none @error('email') border-rose-400 @enderror">
-                                @error('email')
-                                    <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span>
-                                @enderror
-                            </div>
-
-                            <div class="pt-2">
-                                <button type="submit"
-                                        class="w-full inline-flex items-center justify-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-sm px-6 py-3.5 rounded-full shadow-md hover:shadow transition-all">
-                                    <span>{{ __('Request Free Access') }}</span>
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
-                                    </svg>
-                                </button>
-                            </div>
-
-                            <p class="text-[11px] text-stone-400 text-center leading-tight">
-                                We respect your privacy. Resource access does not trigger unsolicited marketing emails.
-                            </p>
-                        </form>
+                <!-- PIN Required / Verifying State -->
+                <div x-show="state === 'pin_required' || state === 'verifying'" style="display: none;">
+                    <div class="flex items-center gap-2 text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span>Verification Required</span>
                     </div>
-                @endif
+                    <h2 class="text-xl font-bold text-stone-900">Check Your Email</h2>
+                    <p class="text-stone-500 text-xs mt-1 mb-6 leading-relaxed">
+                        We sent a 6-digit verification code to <strong class="text-stone-800" x-text="email"></strong>. Please enter it below to unlock your download.
+                    </p>
+
+                    <div x-show="errorMessage" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-600 font-medium" x-text="errorMessage"></div>
+
+                    <form @submit.prevent="submitPin" class="space-y-4">
+                        <div>
+                            <label for="pin" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
+                                6-Digit Verification Code <span class="text-rose-500">*</span>
+                            </label>
+                            <input type="text"
+                                   x-model="pin"
+                                   id="pin"
+                                   required
+                                   maxlength="6"
+                                   pattern="[0-9]{6}"
+                                   placeholder="123456"
+                                   autocomplete="one-time-code"
+                                   class="w-full text-center tracking-[0.3em] font-mono font-bold text-lg px-4 py-3 rounded-xl border border-stone-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none">
+                        </div>
+
+                        <div class="pt-2">
+                            <button type="submit"
+                                    :disabled="state === 'verifying' || pin.length !== 6"
+                                    class="w-full inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-sm px-6 py-3.5 rounded-full shadow-md hover:shadow transition-all">
+                                <span x-show="state !== 'verifying'">Verify & Download</span>
+                                <span x-show="state === 'verifying'">Verifying Code...</span>
+                            </button>
+                        </div>
+
+                        <div class="text-center pt-2">
+                            <button type="button" @click="state = 'idle'; pin = ''; errorMessage = '';" class="text-xs text-stone-500 hover:text-stone-800 underline">
+                                Entered wrong email? Try again
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Rate Limited State -->
+                <div x-show="state === 'rate_limited'" style="display: none;" class="text-center space-y-4 py-4">
+                    <div class="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-stone-900">Access Restricted</h2>
+                    <p class="text-xs text-stone-600 leading-relaxed" x-text="errorMessage || 'Too many attempts. Please try again later.'"></p>
+                    <div class="pt-2">
+                        <button type="button" @click="state = 'idle'; pin = ''; errorMessage = ''; attempts = 0;" class="text-xs font-semibold text-terracotta-600 hover:text-terracotta-700 underline">
+                            Return to Form
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Cross-promote Lesson -->
                 <div class="mt-8 pt-6 border-t border-stone-100 text-center">

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SettingController extends Controller
@@ -44,7 +45,7 @@ class SettingController extends Controller
         $validated = $request->validate([
             'site_name' => ['required', 'string', 'max:100'],
             'business_timezone' => ['required', 'string'],
-            'default_language' => ['required', 'string', 'in:en,ar'],
+            'default_language' => ['required', 'string', Rule::in(['en', 'fr', 'de'])],
             'hero_title' => ['required', 'string', 'max:255'],
             'hero_subtitle' => ['required', 'string', 'max:1000'],
             'home_approach_badge' => ['nullable', 'string', 'max:100'],
@@ -154,6 +155,15 @@ class SettingController extends Controller
                     Setting::set('draft:'.$key, (string) ($value ?? ''), $group, false);
                 }
             }
+        }
+
+        if (array_key_exists('business_timezone', $validated)) {
+            Cache::forget('active_business_tz');
+        }
+
+        if ($request->has('maintenance_mode')) {
+            Cache::forget('maintenance_mode_active');
+            Cache::forget('system.maintenance_mode');
         }
 
         Cache::flush();

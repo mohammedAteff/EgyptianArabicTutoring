@@ -61,6 +61,7 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
         Route::get('/forms/{slug}', [StudentFormController::class, 'show'])->name('forms.show');
         Route::post('/forms/{slug}', [StudentFormController::class, 'save'])->middleware('throttle:student-form-save')->name('forms.save');
+        Route::post('/forms/{slug}/autosave', [StudentFormController::class, 'autosave'])->middleware('throttle:student-form-save')->name('forms.autosave');
         Route::get('/bookings/create', [StudentBookingController::class, 'create'])->name('bookings.create');
         Route::post('/bookings', [StudentBookingController::class, 'store'])->middleware('throttle:student-booking-finalize')->name('bookings.store');
         Route::get('/bookings/{booking}/reschedule', [StudentRescheduleController::class, 'show'])->name('bookings.reschedule');
@@ -123,6 +124,10 @@ Route::get('/de/ressourcen/{slug}', [ResourceController::class, 'show'])->name('
 Route::post('/resources/{slug}/request', [ResourceController::class, 'requestAccess'])->middleware('throttle:resource-request')->name('resources.request');
 Route::post('/fr/ressources/{slug}/request', [ResourceController::class, 'requestAccess'])->middleware('throttle:resource-request')->name('resources.request.fr');
 Route::post('/de/ressourcen/{slug}/request', [ResourceController::class, 'requestAccess'])->middleware('throttle:resource-request')->name('resources.request.de');
+
+Route::post('/resources/{slug}/verify-pin', [ResourceController::class, 'verifyPin'])->middleware('throttle:resource-request')->name('resources.verify-pin');
+Route::post('/fr/ressources/{slug}/verify-pin', [ResourceController::class, 'verifyPin'])->middleware('throttle:resource-request')->name('resources.verify-pin.fr');
+Route::post('/de/ressourcen/{slug}/verify-pin', [ResourceController::class, 'verifyPin'])->middleware('throttle:resource-request')->name('resources.verify-pin.de');
 
 Route::get('/resources/{slug}/download', [ResourceController::class, 'download'])->name('resources.download');
 Route::get('/fr/ressources/{slug}/download', [ResourceController::class, 'download'])->name('resources.download.fr');
@@ -210,7 +215,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::patch('/bookings/{booking}/notes', [App\Http\Controllers\Admin\BookingController::class, 'updateNotes'])->middleware('role:super_admin,admin')->name('bookings.notes');
         Route::post('/bookings/{booking}/complete', [App\Http\Controllers\Admin\BookingController::class, 'complete'])->middleware('role:super_admin,admin')->name('bookings.complete');
         Route::post('/bookings/{booking}/no-show', [App\Http\Controllers\Admin\BookingController::class, 'markNoShow'])->middleware('role:super_admin,admin')->name('bookings.no-show');
-        Route::post('/bookings/{booking}/reschedule', [App\Http\Controllers\Admin\BookingController::class, 'reschedule'])->name('bookings.reschedule');
+        Route::post('/bookings/{booking}/reschedule', [App\Http\Controllers\Admin\BookingController::class, 'reschedule'])->middleware('role:super_admin,admin')->name('bookings.reschedule');
         Route::post('/bookings/{booking}/cancel', [App\Http\Controllers\Admin\BookingController::class, 'cancel'])->middleware('role:super_admin,admin')->name('bookings.cancel');
 
         // Availability

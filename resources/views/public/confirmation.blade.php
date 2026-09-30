@@ -168,6 +168,10 @@
                     <p>{{ __('This booking is no longer active, so its meeting link is unavailable.') }}</p>
                 @endif
             </div>
+            <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-stone-100 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+                <p>{{ __('Your booking is confirmed! If this is your first session, your student portal access will become active once your student profile has been verified. To log in at /student/login, you will need your Date of Birth plus any two of your registered identifiers: your name, email address, or phone number.') }}</p>
+            </div>
         </div>
     </div>
 

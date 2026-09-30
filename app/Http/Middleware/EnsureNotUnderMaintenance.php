@@ -23,8 +23,16 @@ class EnsureNotUnderMaintenance
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // 0. Static asset bypass
+        if ($request->is(['build/*', 'assets/*', 'images/*', 'vendor/*', 'favicon.ico', 'robots.txt'])) {
+            return $next($request);
+        }
+
         $isUnderMaintenance = false;
         try {
+            if (! Cache::has('maintenance_mode_active')) {
+                Cache::forget('system.maintenance_mode');
+            }
             $isUnderMaintenance = Cache::remember('system.maintenance_mode', 30, function () {
                 $val = DB::table('settings')->where('key', 'system.maintenance_mode')->value('value');
                 if ($val === null) {
@@ -33,6 +41,7 @@ class EnsureNotUnderMaintenance
 
                 return in_array($val, ['1', 1, true, 'true'], true);
             });
+            Cache::put('maintenance_mode_active', $isUnderMaintenance, 30);
         } catch (\Throwable $e) {
             // Fail open: assume live if database or database-backed cache is unavailable
             $isUnderMaintenance = false;
@@ -55,9 +64,10 @@ class EnsureNotUnderMaintenance
             'admin.password.email',
             'admin.password.reset',
             'admin.password.update',
+            'admin.health',
         ];
 
-        if ($request->routeIs($adminAuthRoutes) || $request->is('admin/login', 'admin/forgot-password', 'admin/reset-password*')) {
+        if ($request->routeIs($adminAuthRoutes) || $request->is('admin/login*', 'admin/forgot-password*', 'admin/reset-password*', 'admin/health*')) {
             return $next($request);
         }
 
@@ -73,7 +83,9 @@ class EnsureNotUnderMaintenance
             // Suppress logging errors during database maintenance/outages
         }
 
-        return response()->view('errors.maintenance', [
+        $view = view()->exists('errors.503') ? 'errors.503' : 'errors.maintenance';
+
+        return response()->view($view, [
             'title' => 'Under Scheduled Maintenance',
         ], 503);
     }

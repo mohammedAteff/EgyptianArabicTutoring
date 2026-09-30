@@ -13,7 +13,7 @@ class Form extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title', 'slug', 'description', 'status', 'prompt_trigger', 'is_mandatory',
+        'title', 'slug', 'description', 'status', 'is_mandatory',
         'can_edit_after_submission', 'lock_version', 'created_by', 'active_version_id', 'published_version_id',
     ];
 
@@ -40,5 +40,10 @@ class Form extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(FormVersion::class);
+    }
+
+    public function triggers(): HasMany
+    {
+        return $this->hasMany(FormTrigger::class);
     }
 }

@@ -11,13 +11,13 @@ use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
+use App\Domains\Booking\Models\SessionReschedule;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class RescheduleService
@@ -107,7 +107,7 @@ class RescheduleService
             }
 
             if ($performedBy === 'student' && $idempotencyKey) {
-                $existing = DB::table('session_reschedules')->where('idempotency_key', $idempotencyKey)->first();
+                $existing = SessionReschedule::where('idempotency_key', $idempotencyKey)->first();
                 if ($existing) {
                     if ((int) $existing->booking_id !== (int) $lockedBooking->id) {
                         throw new BookingPolicyViolationException('Invalid reschedule request.');
@@ -190,7 +190,7 @@ class RescheduleService
             ]));
 
             if (in_array($performedBy, ['student', 'admin', 'system'], true)) {
-                DB::table('session_reschedules')->insert([
+                SessionReschedule::create([
                     'booking_id' => $lockedBooking->id,
                     'actor_type' => $performedBy,
                     'actor_id' => $performedById,

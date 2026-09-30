@@ -33,9 +33,9 @@ class FormAssignmentService
             ->where('status', 'published')
             ->whereNotNull('published_version_id')
             ->where(function (Builder $query) use ($studentId, $nowUtc): void {
-                $query->where('prompt_trigger', 'none')
+                $query->whereDoesntHave('triggers', fn ($q) => $q->whereIn('trigger_name', ['after_booking', 'after_reschedule', 'next_session_check', 'pre_booking']))
                     ->orWhere(function (Builder $query) use ($studentId): void {
-                        $query->where('prompt_trigger', 'after_booking')
+                        $query->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'after_booking'))
                             ->whereExists(fn ($bookings) => $bookings
                                 ->selectRaw('1')
                                 ->from('bookings')
@@ -43,7 +43,7 @@ class FormAssignmentService
                                 ->whereNull('deleted_at'));
                     })
                     ->orWhere(function (Builder $query) use ($studentId): void {
-                        $query->where('prompt_trigger', 'after_reschedule')
+                        $query->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'after_reschedule'))
                             ->whereExists(fn ($reschedules) => $reschedules
                                 ->selectRaw('1')
                                 ->from('session_reschedules')
@@ -52,7 +52,7 @@ class FormAssignmentService
                                 ->whereNull('bookings.deleted_at'));
                     })
                     ->orWhere(function (Builder $query) use ($studentId, $nowUtc): void {
-                        $query->where('prompt_trigger', 'next_session_check')
+                        $query->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'next_session_check'))
                             ->whereExists(fn ($bookings) => $bookings
                                 ->selectRaw('1')
                                 ->from('bookings')

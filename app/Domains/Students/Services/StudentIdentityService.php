@@ -2,6 +2,7 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Students\Models\Student;
 use InvalidArgumentException;
 use libphonenumber\NumberParseException;
 use libphonenumber\PhoneNumberFormat;
@@ -67,6 +68,19 @@ class StudentIdentityService
         return $this->normalizeName($firstName.' '.$lastName);
     }
 
+    public function normalizeIdentity(?string $email, ?string $phone, ?string $firstName, ?string $lastName, ?string $phoneCountry = null): string
+    {
+        $normalizedEmail = $this->normalizeEmail($email) ?? '';
+        try {
+            $normalizedPhone = $this->normalizePhone($phone, $phoneCountry) ?? '';
+        } catch (\Throwable) {
+            $normalizedPhone = mb_strtolower(trim((string) $phone), 'UTF-8');
+        }
+        $normalizedName = $this->normalizedFullName((string) $firstName, (string) $lastName);
+
+        return "{$normalizedEmail}|{$normalizedPhone}|{$normalizedName}";
+    }
+
     /** @return array<string, string> */
     public function authFingerprints(?string $email, ?string $phone, ?string $dateOfBirth, ?string $phoneCountry = null): array
     {
@@ -95,5 +109,30 @@ class StudentIdentityService
         }
 
         return $fingerprints;
+    }
+
+    public function resolveCanonicalStudent(Student $student, bool $lock = false): Student
+    {
+        $visited = [$student->id];
+        $current = $student;
+
+        while ($current->identity_status === 'merged' && $current->merged_into_student_id !== null) {
+            $nextId = (int) $current->merged_into_student_id;
+            if (in_array($nextId, $visited, true)) {
+                break;
+            }
+            $visited[] = $nextId;
+            $query = Student::withTrashed()->whereKey($nextId);
+            if ($lock) {
+                $query->lockForUpdate();
+            }
+            $target = $query->first();
+            if (! $target) {
+                break;
+            }
+            $current = $target;
+        }
+
+        return $current;
     }
 }

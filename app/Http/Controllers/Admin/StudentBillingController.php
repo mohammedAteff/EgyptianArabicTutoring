@@ -10,6 +10,7 @@ use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\BillingReconciliationService;
+use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -34,18 +35,34 @@ class StudentBillingController extends Controller
         $selectedStudentId = (int) $request->query('student_id', 0);
 
         $studentsQuery = Student::query()
-            ->where('identity_status', '!=', 'merged')
+            ->where(fn ($q) => $q->where('identity_status', '!=', 'merged')->orWhereNull('identity_status'))
             ->with([
                 'packages' => fn ($q) => $q->with(['payments', 'refunds', 'ledgerEntries'])->orderByDesc('id'),
             ]);
 
         if ($search !== '') {
-            $studentsQuery->where(function ($q) use ($search) {
+            $identityService = app(StudentIdentityService::class);
+            $normName = $identityService->normalizeName($search);
+            $normEmail = $identityService->normalizeEmail($search);
+            $normPhone = null;
+            try {
+                $normPhone = $identityService->normalizePhone($search);
+            } catch (\Throwable) {
+                $normPhone = mb_strtolower(trim($search), 'UTF-8');
+            }
+
+            $studentsQuery->where(function ($q) use ($search, $normName, $normEmail, $normPhone) {
                 $q->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('name_normalized', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('name_normalized', 'like', "%{$normName}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+                if ($normEmail) {
+                    $q->orWhere('email_normalized', 'like', "%{$normEmail}%");
+                }
+                $q->orWhere('phone', 'like', "%{$search}%");
+                if ($normPhone) {
+                    $q->orWhere('phone_normalized', 'like', "%{$normPhone}%");
+                }
             });
         }
 

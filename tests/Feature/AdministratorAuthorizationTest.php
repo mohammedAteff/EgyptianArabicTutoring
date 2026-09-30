@@ -53,7 +53,7 @@ class AdministratorAuthorizationTest extends TestCase
 
         $booking = $this->createBooking();
         $this->post(route('admin.bookings.reschedule', $booking), [])
-            ->assertSessionHasErrors(['new_date', 'new_time']);
+            ->assertForbidden();
 
         foreach ([
             route('admin.dashboard'),

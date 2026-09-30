@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Student;
 
+use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\Form;
+use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormAssignmentService;
 use App\Domains\Forms\Services\FormSubmissionService;
 use App\Domains\Students\Models\Student;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -73,5 +76,78 @@ class FormController extends Controller
         );
 
         return redirect()->route('student.forms.show', $slug)->with('success', $submission->status === 'submitted' ? 'Your responses were submitted.' : 'Your draft was saved.');
+    }
+
+    public function autosave(Request $request, string $slug): JsonResponse
+    {
+        /** @var Student|null $student */
+        $student = $request->attributes->get('student');
+        if (! ($student instanceof Student)) {
+            $sessionStudentId = $request->session()->get('student_id');
+            $student = is_numeric($sessionStudentId) ? Student::verified()->find((int) $sessionStudentId) : null;
+        }
+        if (! $student) {
+            abort(401);
+        }
+
+        $studentId = (int) $student->id;
+
+        $form = Form::query()->where('slug', $slug)->firstOrFail();
+        abort_unless($form->status === 'published' && $form->published_version_id, 404);
+
+        $publishedVersionId = (int) $form->published_version_id;
+        $version = $form->publishedVersion()->with('questions')->firstOrFail();
+
+        $data = $request->validate([
+            'answers' => ['nullable', 'array', 'max:300'],
+        ]);
+        $rawAnswers = $data['answers'] ?? [];
+
+        $submission = app(DatabaseCapability::class)->transaction(function () use ($studentId, $publishedVersionId, $version, $rawAnswers) {
+            $lockedStudent = Student::whereKey($studentId)->lockForUpdate()->firstOrFail();
+
+            $draft = FormSubmission::where('form_version_id', $publishedVersionId)
+                ->where('student_id', $lockedStudent->id)
+                ->where('status', 'draft')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $draft) {
+                $draft = FormSubmission::create([
+                    'form_version_id' => $publishedVersionId,
+                    'student_id' => $lockedStudent->id,
+                    'status' => 'draft',
+                    'submission_revision' => 1,
+                ]);
+            }
+
+            $questionMap = $version->questions->keyBy('question_key');
+            $idMap = $version->questions->keyBy('id');
+
+            foreach ($rawAnswers as $keyOrId => $val) {
+                $question = $questionMap->get($keyOrId) ?? $idMap->get($keyOrId);
+                if (! $question) {
+                    continue;
+                }
+                $storedValue = is_array($val)
+                    ? json_encode($val, JSON_THROW_ON_ERROR)
+                    : (is_bool($val) ? ($val ? '1' : '0') : (string) $val);
+
+                FormAnswer::updateOrCreate(
+                    ['form_submission_id' => $draft->id, 'form_question_id' => $question->id],
+                    ['value_text' => $storedValue]
+                );
+            }
+
+            $draft->touch();
+
+            return $draft;
+        });
+
+        return response()->json([
+            'success' => true,
+            'draft_id' => $submission->id,
+            'form_version_id' => $publishedVersionId,
+        ]);
     }
 }

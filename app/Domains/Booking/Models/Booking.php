@@ -2,13 +2,17 @@
 
 namespace App\Domains\Booking\Models;
 
+use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Students\Models\Student;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class Booking extends Model
 {
@@ -103,5 +107,44 @@ class Booking extends Model
     public function isNoShow(): bool
     {
         return $this->status === 'no_show';
+    }
+
+    public function reschedules(): HasMany
+    {
+        return $this->hasMany(SessionReschedule::class, 'booking_id');
+    }
+
+    public function studentStatusLabel(): string
+    {
+        $hasReschedules = (bool) ($this->reschedules_exists ?? (
+            $this->relationLoaded('reschedules') ? $this->reschedules->isNotEmpty() : false
+        ));
+
+        return match ($this->status) {
+            'completed' => 'Session Delivered',
+            'no_show', 'no-show' => 'Session Forfeited',
+            'cancelled' => 'Booking Canceled',
+            'confirmed' => $hasReschedules ? 'Session Rescheduled' : 'Confirmed',
+            'pending' => 'Pending Confirmation',
+            default => (function () {
+                Log::warning("Unrecognized booking status encountered: [{$this->status}]");
+
+                return 'Unknown Status';
+            })(),
+        };
+    }
+
+    public function getCustomerStartAttribute(): Carbon
+    {
+        return $this->start_at_utc->copy()->setTimezone($this->customer_timezone);
+    }
+
+    public function getBusinessStartAttribute(): Carbon
+    {
+        $activeBusinessTz = Cache::remember('active_business_tz', 3600, function () {
+            return Setting::where('key', 'business_timezone')->value('value') ?? 'Africa/Cairo';
+        });
+
+        return $this->start_at_utc->copy()->setTimezone($activeBusinessTz);
     }
 }

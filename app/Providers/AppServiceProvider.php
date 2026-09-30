@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentIdentityService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -19,6 +20,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        ini_set('unserialize_callback_func', 'spl_autoload_call');
+        $serializable = config('cache.serializable_classes');
+        if (is_array($serializable)) {
+            config(['cache.serializable_classes' => array_values(array_unique(array_merge($serializable, [
+                Student::class,
+            ])))]);
+        } elseif ($serializable === false) {
+            config(['cache.serializable_classes' => [
+                Student::class,
+            ]]);
+        }
         require_once __DIR__.'/../helpers.php';
     }
 
@@ -27,6 +39,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->environment('testing')) {
+            @ini_set('memory_limit', '512M');
+        }
+
+        class_exists(Student::class);
+
         RateLimiter::for('student-verification', function (Request $request) {
             $email = $request->input('email');
             $phone = $request->input('phone');
@@ -93,11 +111,19 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('resource-request', function (Request $request) {
             $email = strtolower(trim((string) $request->input('email')));
+            $challenge = (string) $request->input('challenge');
 
-            return [
+            $limits = [
                 Limit::perMinute(10)->by($request->ip()),
-                Limit::perMinute(5)->by('resource:email:'.$email),
             ];
+
+            if ($email !== '') {
+                $limits[] = Limit::perMinute(5)->by('resource:email:'.$email);
+            } elseif ($challenge !== '') {
+                $limits[] = Limit::perMinute(5)->by('resource:challenge:'.$challenge);
+            }
+
+            return $limits;
         });
 
         RateLimiter::for('game-track', function (Request $request) {
