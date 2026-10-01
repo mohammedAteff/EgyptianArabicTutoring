@@ -2,14 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Administration\Models\Administrator;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Forms\Models\Form;
+use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
@@ -31,9 +35,17 @@ class MariaDbConcurrencyVerificationTest extends TestCase
 
     private array $raceStudentIds = [];
 
+    private array $raceStudentEmails = [];
+
     private array $raceBookingKeys = [];
 
     private array $raceContactEmails = [];
+
+    private array $raceHoldIds = [];
+
+    private array $raceFormIds = [];
+
+    private array $raceAdministratorIds = [];
 
     private array $raceCalendarDates = [];
 
@@ -102,6 +114,30 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             DB::statement('SET FOREIGN_KEY_CHECKS = 0');
         }
 
+        if ($this->raceFormIds !== []) {
+            $versionIds = DB::table('form_versions')->whereIn('form_id', $this->raceFormIds)->pluck('id');
+            $submissionIds = DB::table('form_submissions')->whereIn('form_version_id', $versionIds)->pluck('id');
+            DB::table('form_submission_revisions')->whereIn('form_submission_id', $submissionIds)->delete();
+            DB::table('form_answers')->whereIn('form_submission_id', $submissionIds)->delete();
+            DB::table('form_submissions')->whereIn('id', $submissionIds)->delete();
+            $questionIds = DB::table('form_questions')->whereIn('form_version_id', $versionIds)->pluck('id');
+            DB::table('form_question_options')->whereIn('form_question_id', $questionIds)->delete();
+            DB::table('form_questions')->whereIn('id', $questionIds)->delete();
+            DB::table('form_triggers')->whereIn('form_id', $this->raceFormIds)->delete();
+            DB::table('form_versions')->whereIn('id', $versionIds)->delete();
+            DB::table('forms')->whereIn('id', $this->raceFormIds)->delete();
+        }
+        if ($this->raceAdministratorIds !== []) {
+            DB::table('administrators')->whereIn('id', $this->raceAdministratorIds)->delete();
+        }
+
+        if ($this->raceStudentEmails !== []) {
+            $this->raceStudentIds = array_values(array_unique(array_merge(
+                $this->raceStudentIds,
+                DB::table('students')->whereIn('email_normalized', $this->raceStudentEmails)->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            )));
+        }
+
         $bookingIds = DB::table('bookings')
             ->whereIn('idempotency_key', array_merge(
                 ['unique-key-concurrent-1', 'unique-key-concurrent-2'],
@@ -121,6 +157,9 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             DB::table('admin_notifications')->whereIn('title', $bookingIds->map(fn (int $id): string => "New Booking #{$id}"))->delete();
             DB::table('session_reschedules')->whereIn('booking_id', $bookingIds)->delete();
             DB::table('bookings')->whereIn('id', $bookingIds)->delete();
+        }
+        if ($this->raceHoldIds !== []) {
+            DB::table('booking_holds')->whereIn('id', $this->raceHoldIds)->delete();
         }
         if ($this->raceContactEmails !== []) {
             DB::table('contacts')->whereIn('email', $this->raceContactEmails)->delete();
@@ -406,25 +445,57 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             ],
         ]);
 
-        $this->assertSame(0, $results[0]['exit_code'], json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertContains($results[0]['exit_code'], [0, 2], json_encode($results, JSON_THROW_ON_ERROR));
         $this->assertContains($results[1]['exit_code'], [0, 2], json_encode($results, JSON_THROW_ON_ERROR));
-        $this->assertStringStartsWith('RESULT:SUCCESS:', $results[0]['output']);
-        $this->assertSame('merged', Student::withTrashed()->findOrFail($secondary->id)->identity_status);
-
         $newBooking = Booking::query()->where('idempotency_key', $studentBookingKey)->first();
-        if ($results[1]['exit_code'] === 0) {
-            $this->assertNotNull($newBooking);
-            $this->assertSame($primary->id, (int) $newBooking->student_id);
-            $this->assertDatabaseHas('session_ledger_entries', [
-                'booking_id' => $newBooking->id,
+
+        if ($results[0]['exit_code'] === 0) {
+            $this->assertStringStartsWith('RESULT:SUCCESS:', $results[0]['output']);
+            $this->assertSame('merged', Student::withTrashed()->findOrFail($secondary->id)->identity_status);
+            $this->assertDatabaseHas('bookings', [
+                'idempotency_key' => $seedBookingKey,
                 'student_id' => $primary->id,
-                'entry_type' => 'session_consumed',
-                'credit_change' => -1,
             ]);
-        } else {
-            $this->assertStringStartsWith('RESULT:CONFLICT:', $results[1]['output']);
-            $this->assertNull($newBooking);
+
+            if ($results[1]['exit_code'] === 0) {
+                // The booking committed before the merge took its snapshot, so the merge included it.
+                $this->assertStringStartsWith('RESULT:SUCCESS:', $results[1]['output']);
+                $this->assertNotNull($newBooking);
+                $this->assertSame($primary->id, (int) $newBooking->student_id);
+                $this->assertDatabaseHas('session_ledger_entries', [
+                    'booking_id' => $newBooking->id,
+                    'student_id' => $primary->id,
+                    'entry_type' => 'session_consumed',
+                    'credit_change' => -1,
+                ]);
+            } else {
+                // The merge committed before the booking could use the secondary student.
+                $this->assertStringStartsWith('RESULT:CONFLICT:', $results[1]['output']);
+                $this->assertNull($newBooking);
+            }
+
+            return;
         }
+
+        // The booking committed after the merge's snapshot, so the merge cleanly requests a retry.
+        $this->assertSame(2, $results[0]['exit_code'], json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertStringStartsWith('RESULT:CONFLICT:', $results[0]['output']);
+        $this->assertStringContainsString('Retry the merge.', $results[0]['output']);
+        $this->assertSame(0, $results[1]['exit_code'], json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertStringStartsWith('RESULT:SUCCESS:', $results[1]['output']);
+        $this->assertSame('verified', Student::withTrashed()->findOrFail($secondary->id)->identity_status);
+        $this->assertDatabaseHas('bookings', [
+            'idempotency_key' => $seedBookingKey,
+            'student_id' => $secondary->id,
+        ]);
+        $this->assertNotNull($newBooking);
+        $this->assertSame($secondary->id, (int) $newBooking->student_id);
+        $this->assertDatabaseHas('session_ledger_entries', [
+            'booking_id' => $newBooking->id,
+            'student_id' => $secondary->id,
+            'entry_type' => 'session_consumed',
+            'credit_change' => -1,
+        ]);
     }
 
     public function test_parallel_student_booking_and_contact_merge_leave_no_booking_on_a_merged_contact(): void
@@ -518,6 +589,161 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             $this->assertSame((int) $duplicate->id, (int) $newBooking->contact_id);
             $this->assertStringStartsWith('RESULT:CONFLICT:', $results[0]['output']);
         }
+    }
+
+    public function test_concurrent_public_bookings_for_new_identity_create_one_legacy_student(): void
+    {
+        $date = CarbonImmutable::now('Africa/Cairo')->addDays(24)->startOfDay();
+        $email = 'public-identity-race-'.Str::uuid().'@boltlanding.test';
+        $phone = '+201088776655';
+        $visitorTokens = [Str::random(64), Str::random(64)];
+        $sessionTokens = [Str::random(64), Str::random(64)];
+        $keys = ['public-identity-race-'.Str::uuid(), 'public-identity-race-'.Str::uuid()];
+        $payloads = [];
+        $this->raceStudentEmails[] = $email;
+        $this->raceContactEmails[] = $email;
+        $this->raceBookingKeys = array_merge($this->raceBookingKeys, $keys);
+
+        foreach ([0, 1] as $index) {
+            $slotDate = $date->addDays($index);
+            $start = $slotDate->setTime(14, 0)->setTimezone('UTC');
+            $end = $start->addHour();
+            $this->raceCalendarDates[] = $slotDate->toDateString();
+            $hold = app(BookingHoldService::class)->acquireHold(
+                visitorToken: $visitorTokens[$index],
+                sessionToken: $sessionTokens[$index],
+                sessionType: $this->sessionType,
+                startUtc: $start,
+                endUtc: $end,
+            );
+            $this->raceHoldIds[] = $hold->id;
+
+            $payloads[] = [
+                'action' => 'book_public',
+                'hold_id' => $hold->id,
+                'hold_token' => $hold->hold_token,
+                'visitor_token' => $visitorTokens[$index],
+                'session_token' => $sessionTokens[$index],
+                'session_type_id' => $this->sessionType->id,
+                'customer_timezone' => 'Africa/Cairo',
+                'first_name' => 'Shared',
+                'last_name' => 'Identity',
+                'customer_email' => $email,
+                'customer_phone' => $phone,
+                'date_of_birth' => '1990-06-01',
+                'start_at_utc' => $start->toDateTimeString(),
+                'end_at_utc' => $end->toDateTimeString(),
+                'idempotency_key' => $keys[$index],
+            ];
+        }
+
+        $results = $this->runConcurrentWorkers($payloads);
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results, JSON_THROW_ON_ERROR));
+        $bookings = Booking::query()->whereIn('idempotency_key', $keys)->get();
+        $this->assertCount(2, $bookings);
+        $this->assertCount(1, $bookings->pluck('student_id')->unique());
+        $studentId = (int) $bookings->first()->student_id;
+        $this->assertSame('legacy_unverified', Student::query()->findOrFail($studentId)->identity_status);
+        $this->assertSame(1, Student::query()->where('email_normalized', mb_strtolower($email, 'UTF-8'))->count());
+        $this->assertSame(1, Contact::query()->where('email', mb_strtolower($email, 'UTF-8'))->count());
+        $this->assertSame(2, DB::table('booking_holds')->whereIn('id', $this->raceHoldIds)->where('status', 'converted')->count());
+    }
+
+    public function test_concurrent_pre_booking_publications_leave_one_published_trigger(): void
+    {
+        $administrator = Administrator::query()->create([
+            'name' => 'Publication Race Admin',
+            'email' => 'publication-race-'.Str::uuid().'@boltlanding.test',
+            'password' => Str::random(48),
+            'role' => 'admin',
+        ]);
+        $this->raceAdministratorIds[] = $administrator->id;
+        $builder = app(FormBuilderService::class);
+        $forms = [];
+        $questions = [[
+            'question_key' => 'race_question',
+            'label' => 'Race question',
+            'question_type' => 'short_text',
+            'is_required' => false,
+            'assistant_visible' => true,
+        ]];
+
+        foreach (['first', 'second'] as $label) {
+            $form = $builder->create([
+                'title' => "Publication Race {$label}",
+                'slug' => 'publication-race-'.$label.'-'.Str::uuid(),
+                'trigger' => 'pre_booking',
+                'is_mandatory' => false,
+                'can_edit_after_submission' => false,
+            ], $questions, $administrator);
+            $forms[] = $form;
+            $this->raceFormIds[] = $form->id;
+        }
+
+        $results = $this->runConcurrentWorkers(array_map(fn (Form $form): array => [
+            'action' => 'publish_form',
+            'form_id' => $form->id,
+            'active_version_id' => $form->active_version_id,
+            'lock_version' => $form->lock_version,
+        ], $forms));
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results, JSON_THROW_ON_ERROR));
+        foreach (Form::query()->whereIn('id', $this->raceFormIds)->get() as $form) {
+            $this->assertSame('published', $form->status);
+            $this->assertSame((int) $form->active_version_id, (int) $form->published_version_id);
+        }
+        $this->assertSame(1, DB::table('form_triggers')->where('trigger_name', 'pre_booking')->count());
+        $this->assertSame(1, DB::table('form_triggers')->whereIn('form_id', $this->raceFormIds)->where('trigger_name', 'pre_booking')->count());
+    }
+
+    public function test_concurrent_student_form_autosaves_keep_one_draft_for_published_version(): void
+    {
+        $administrator = Administrator::query()->create([
+            'name' => 'Autosave Race Admin',
+            'email' => 'autosave-race-'.Str::uuid().'@boltlanding.test',
+            'password' => Str::random(48),
+            'role' => 'admin',
+        ]);
+        $this->raceAdministratorIds[] = $administrator->id;
+        $form = app(FormBuilderService::class)->create([
+            'title' => 'Autosave Race Form',
+            'slug' => 'autosave-race-'.Str::uuid(),
+            'trigger' => 'none',
+            'is_mandatory' => false,
+            'can_edit_after_submission' => false,
+        ], [[
+            'question_key' => 'notes',
+            'label' => 'Notes',
+            'question_type' => 'short_text',
+            'is_required' => false,
+            'assistant_visible' => true,
+        ]], $administrator);
+        $form = app(FormBuilderService::class)->publish($form->id, $form->active_version_id, $form->lock_version);
+        $this->raceFormIds[] = $form->id;
+
+        $student = Student::factory()->verified()->create();
+        $this->raceStudentIds[] = $student->id;
+        $this->raceStudentEmails[] = $student->email;
+        $this->raceContactEmails[] = $student->email;
+        $values = ['First concurrent draft', 'Second concurrent draft'];
+        $results = $this->runConcurrentWorkers(array_map(fn (string $value): array => [
+            'action' => 'autosave_form',
+            'student_id' => $student->id,
+            'slug' => $form->slug,
+            'answers' => ['notes' => $value],
+        ], $values));
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results, JSON_THROW_ON_ERROR));
+        $drafts = DB::table('form_submissions')
+            ->where('form_version_id', $form->published_version_id)
+            ->where('student_id', $student->id)
+            ->where('status', 'draft')
+            ->get();
+        $this->assertCount(1, $drafts);
+        $questionId = DB::table('form_questions')->where('form_version_id', $form->published_version_id)->where('question_key', 'notes')->value('id');
+        $savedAnswer = DB::table('form_answers')->where('form_submission_id', $drafts->first()->id)->where('form_question_id', $questionId)->value('value_text');
+        $this->assertContains($savedAnswer, $values);
     }
 
     /** @param array<int, array<string, mixed>> $payloads

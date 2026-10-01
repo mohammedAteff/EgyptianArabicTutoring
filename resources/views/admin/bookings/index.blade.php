@@ -46,7 +46,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
                     <h2 class="text-xl font-bold font-serif text-slate-900">{{ $dayCarbon->format('l, F j, Y') }}</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Tutor Cairo Time ({{ $businessTz }}) &bull; {{ $dayBookings->count() }} {{ Str::plural('session', $dayBookings->count()) }} scheduled</p>
+                    <p class="text-xs text-slate-500 mt-0.5">Tutor Time ({{ $businessTz }}) &bull; {{ $dayBookings->count() }} {{ Str::plural('session', $dayBookings->count()) }} scheduled</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <a href="{{ route('admin.bookings.index', ['view' => 'day', 'date' => $prevDay]) }}" 
@@ -83,10 +83,10 @@
                 <div class="space-y-4">
                     @foreach($dayBookings as $b)
                         @php
-                            $bStartCairo = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone($businessTz);
-                            $bEndCairo = \Carbon\CarbonImmutable::instance($b->end_at_utc)->setTimezone($businessTz);
-                            $bStartStudent = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone($b->customer_timezone);
-                            $bEndStudent = \Carbon\CarbonImmutable::instance($b->end_at_utc)->setTimezone($b->customer_timezone);
+                            $bStartCairo = $b->business_start;
+                            $bEndCairo = $b->end_at_utc->copy()->setTimezone($bStartCairo->timezoneName);
+                            $bStartStudent = $b->customer_start;
+                            $bEndStudent = $b->end_at_utc->copy()->setTimezone($bStartStudent->timezoneName);
                         @endphp
                         <div class="border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-amber-400 transition-colors">
                             <div class="space-y-2">
@@ -155,7 +155,7 @@
                     <h2 class="text-xl font-bold font-serif text-slate-900">
                         {{ $weekStart->format('M j') }} &ndash; {{ $weekEnd->format('M j, Y') }}
                     </h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Tutor Cairo Time ({{ $businessTz }}) &bull; 7-day schedule view</p>
+                    <p class="text-xs text-slate-500 mt-0.5">Tutor Time ({{ $businessTz }}) &bull; 7-day schedule view</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <a href="{{ route('admin.bookings.index', ['view' => 'week', 'date' => $prevWeek]) }}" 
@@ -193,7 +193,7 @@
                             <div class="space-y-1.5">
                                 @forelse($wDay['bookings'] as $b)
                                     @php
-                                        $bStartCairo = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone($businessTz);
+                                        $bStartCairo = $b->business_start;
                                     @endphp
                                     <a href="{{ route('admin.bookings.show', $b->id) }}" 
                                        class="block p-1.5 rounded-lg text-xs transition-colors border
@@ -201,7 +201,7 @@
                                            {{ $b->status === 'completed' ? 'bg-emerald-50 border-emerald-300 text-emerald-950 hover:bg-emerald-100' : '' }}
                                            {{ $b->status === 'no_show' ? 'bg-red-50 border-red-300 text-red-950 hover:bg-red-100' : '' }}
                                            {{ $b->status === 'cancelled' ? 'bg-slate-100 border-slate-200 text-slate-500 line-through' : '' }}">
-                                        <div class="font-bold font-mono text-[11px]">{{ $bStartCairo->format('H:i') }} (Cairo)</div>
+                                        <div class="font-bold font-mono text-[11px]">{{ $bStartCairo->format('H:i') }} (Tutor Time)</div>
                                         <div class="truncate text-[11px]">{{ $b->contact->name ?? 'Student' }}</div>
                                     </a>
                                 @empty
@@ -277,7 +277,7 @@
                 <table class="w-full text-left text-sm">
                     <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
                         <tr>
-                            <th class="px-4 py-3.5 font-semibold">Tutor Time (Cairo)</th>
+                            <th class="px-4 py-3.5 font-semibold">Tutor Time</th>
                             <th class="px-4 py-3.5 font-semibold">Student & Local Time</th>
                             <th class="px-4 py-3.5 font-semibold">Session Type</th>
                             <th class="px-4 py-3.5 font-semibold">Status</th>
@@ -287,13 +287,13 @@
                     <tbody class="divide-y divide-slate-100">
                         @forelse($bookings as $booking)
                             @php
-                                $bStartCairo = \Carbon\CarbonImmutable::instance($booking->start_at_utc)->setTimezone($businessTz);
-                                $bStartStudent = \Carbon\CarbonImmutable::instance($booking->start_at_utc)->setTimezone($booking->customer_timezone);
+                                $bStartCairo = $booking->business_start;
+                                $bStartStudent = $booking->customer_start;
                             @endphp
                             <tr class="hover:bg-slate-50/70 transition-colors">
                                 <td class="px-4 py-4 whitespace-nowrap">
                                     <div class="font-bold text-slate-900">{{ $bStartCairo->format('D, M j, Y') }}</div>
-                                    <div class="text-xs text-amber-700 font-mono font-semibold">{{ $bStartCairo->format('H:i') }} Cairo Time</div>
+                                    <div class="text-xs text-amber-700 font-mono font-semibold">{{ $bStartCairo->format('H:i') }} Tutor Time</div>
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="font-bold text-slate-900">{{ $booking->contact->name ?? 'Student' }}</div>
@@ -345,7 +345,7 @@
             <div class="flex items-center justify-between mb-6">
                 <div>
                     <h2 class="text-xl font-bold font-serif text-slate-900">{{ $monthCarbon->format('F Y') }}</h2>
-                    <p class="text-xs text-slate-500">All slots shown in Cairo Time ({{ $businessTz }})</p>
+                    <p class="text-xs text-slate-500">All slots shown in Tutor Time ({{ $businessTz }})</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <a href="{{ route('admin.bookings.index', ['view' => 'calendar', 'month' => $prevMonth]) }}" 
@@ -400,7 +400,7 @@
                         <div class="mt-2 space-y-1 overflow-y-auto max-h-[70px]">
                             @foreach($dBookings as $b)
                                 @php
-                                    $bTime = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone($businessTz);
+                                    $bTime = $b->business_start;
                                 @endphp
                                 <a href="{{ route('admin.bookings.show', $b->id) }}" 
                                    class="block text-[11px] px-1.5 py-0.5 rounded-md truncate font-medium

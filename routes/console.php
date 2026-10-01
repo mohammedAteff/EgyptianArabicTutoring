@@ -55,6 +55,7 @@ Schedule::call(function (): bool {
 // 3. Analytics Aggregation: computes daily traffic and conversion rollups
 Schedule::call(fn (): bool => Artisan::call('analytics:aggregate-daily', ['--prune' => true]) === 0)
     ->dailyAt('00:05')
+    ->timezone('Africa/Cairo')
     ->name('analytics:aggregate-daily --prune')
     ->onSuccess(function () {
         Setting::set('last_analytics_aggregation_at', now('UTC')->toIso8601String(), 'system');

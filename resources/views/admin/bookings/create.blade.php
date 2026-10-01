@@ -69,16 +69,16 @@
                 </div>
             </div>
 
-            <!-- Date & Time (Cairo Timezone) -->
+            <!-- Date & Time (Business Timezone) -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
                 <div>
-                    <label for="date" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Session Date (Cairo)</label>
+                    <label for="date" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Session Date ({{ $businessTz }})</label>
                     <input type="date" id="date" name="date" value="{{ old('date', now($businessTz)->addDay()->format('Y-m-d')) }}" required
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                 </div>
 
                 <div>
-                    <label for="time" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Start Time (Cairo 24h)</label>
+                    <label for="time" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Start Time ({{ $businessTz }} 24h)</label>
                     <input type="text" id="time" name="time" value="{{ old('time', '10:00') }}" required
                            placeholder="10:00"
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">

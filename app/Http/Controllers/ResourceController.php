@@ -187,21 +187,15 @@ class ResourceController extends Controller
         $hasCookieVisitor = $request->hasCookie('_va_visitor') || $request->hasCookie('visitor_token');
         $hasCookieSession = $request->hasCookie('_va_session') || $request->hasCookie('session_token');
 
-        if ($request->expectsJson() || $request->ajax()) {
-            if (! $hasCookieVisitor || ! $hasCookieSession) {
-                abort(403, 'Missing required visitor security context.');
-            }
+        if (! $hasCookieVisitor || ! $hasCookieSession) {
+            abort(403, 'Missing required visitor security context.');
         }
 
         $visitorToken = (string) ($request->cookie('_va_visitor')
-            ?? $request->cookie('visitor_token')
-            ?? $request->attributes->get('visitor_token')
-            ?? (session()->isStarted() ? session('analytics_visitor_token') : null));
+            ?? $request->cookie('visitor_token'));
 
         $sessionToken = (string) ($request->cookie('_va_session')
-            ?? $request->cookie('session_token')
-            ?? $request->attributes->get('session_token')
-            ?? (session()->isStarted() ? session('analytics_session_token') : null));
+            ?? $request->cookie('session_token'));
 
         if (empty($visitorToken) || empty($sessionToken)) {
             abort(403, 'Missing required visitor security context.');
@@ -262,7 +256,11 @@ class ResourceController extends Controller
 
                 $grantToken = $this->issueDownloadGrant($resource, $contact, $visitorToken, $sessionToken, $resourceRequest->id);
 
-                $downloadUrl = route('resources.download', [
+                $downloadUrl = route(match (app()->getLocale()) {
+                    'fr' => 'resources.download.fr',
+                    'de' => 'resources.download.de',
+                    default => 'resources.download',
+                }, [
                     'slug' => $resource->slug,
                     'token' => $grantToken,
                 ]);
@@ -308,7 +306,8 @@ class ResourceController extends Controller
 
     public function verifyPin(Request $request, string $slug)
     {
-        $resource = Resource::where('slug', $slug)->where('status', 'published')->firstOrFail();
+        $resource = Resource::where('slug', $slug)->where('status', 'published')
+            ->whereNotNull('published_at')->where('published_at', '<=', now())->firstOrFail();
         $request->validate([
             'challenge' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/'],
             'pin' => ['required', 'string', 'digits:6'],
@@ -331,12 +330,10 @@ class ResourceController extends Controller
         }
 
         $currentVisitorToken = (string) ($request->cookie('_va_visitor')
-            ?? $request->cookie('visitor_token')
-            ?? $request->attributes->get('visitor_token'));
+            ?? $request->cookie('visitor_token'));
 
         $currentSessionToken = (string) ($request->cookie('_va_session')
-            ?? $request->cookie('session_token')
-            ?? $request->attributes->get('session_token'));
+            ?? $request->cookie('session_token'));
 
         if (empty($currentVisitorToken) || empty($currentSessionToken)) {
             abort(403, 'Missing required visitor security context.');
@@ -420,7 +417,11 @@ class ResourceController extends Controller
 
                     $grantToken = $this->issueDownloadGrant($resource, $contact, $currentVisitorToken, $currentSessionToken, $resourceRequest->id);
 
-                    return route('resources.download', [
+                    return route(match (app()->getLocale()) {
+                        'fr' => 'resources.download.fr',
+                        'de' => 'resources.download.de',
+                        default => 'resources.download',
+                    }, [
                         'slug' => $resource->slug,
                         'token' => $grantToken,
                     ]);

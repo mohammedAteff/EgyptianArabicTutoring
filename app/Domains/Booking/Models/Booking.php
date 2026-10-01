@@ -126,6 +126,7 @@ class Booking extends Model
             'cancelled' => 'Booking Canceled',
             'confirmed' => $hasReschedules ? 'Session Rescheduled' : 'Confirmed',
             'pending' => 'Pending Confirmation',
+            'held' => 'Reservation Held',
             default => (function () {
                 Log::warning("Unrecognized booking status encountered: [{$this->status}]");
 

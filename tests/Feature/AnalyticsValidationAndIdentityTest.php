@@ -237,8 +237,11 @@ class AnalyticsValidationAndIdentityTest extends TestCase
             ->call('setDetectedTimezone', 'Africa/Cairo')
             ->call('selectDate', $slotDate);
         $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'Africa/Cairo', $wizard->get('visitorToken')))
-            ->set('name', 'Attributed Student')
+            ->set('first_name', 'Attributed')
+            ->set('last_name', 'Student')
+            ->set('date_of_birth', '1991-01-15')
             ->set('email', 'attributed.student@example.com')
+            ->set('phone', '+201000000013')
             ->call('submitDetails')
             ->call('confirmBooking');
 

@@ -284,12 +284,10 @@ class BillingReconciliationService
     {
         $discrepancies = [];
 
-        // Flag completed bookings ONLY when authoritative domain evidence demonstrates that a package credit was consumed
-        // (source = 'student_portal' indicating booking via StudentBookingService with package ledger linkage)
-        // but no corresponding session_consumed ledger entry exists for that booking_id.
         $studentPortalBookings = Booking::query()
-            ->where('source', 'student_portal')
             ->where('status', 'completed')
+            ->whereHas('events', fn ($query) => $query->where('event_type', 'created')->where('performed_by', 'student')
+                ->where('new_data->source', 'student_portal'))
             ->cursor();
 
         foreach ($studentPortalBookings as $booking) {

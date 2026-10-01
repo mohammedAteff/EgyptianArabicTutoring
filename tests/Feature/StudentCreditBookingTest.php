@@ -10,6 +10,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\CancellationService;
+use App\Domains\Contacts\Models\Contact;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentBookingService;
@@ -79,10 +80,14 @@ class StudentCreditBookingTest extends TestCase
     public function test_student_booking_acquires_lock_tiers_in_canonical_order(): void
     {
         $student = Student::factory()->verified()->create();
+        Contact::query()->create([
+            'name' => 'Student lock order',
+            'email' => $student->email_normalized,
+        ]);
         app(StudentLedgerService::class)->createPackage($student, 'Lock-order package', 2, '80.00', '0.00', 'USD', null, 'lock-order-booking-grant');
         [$slotId, , $ownerToken] = $this->slotForStudent($student);
         $lockedTiers = [];
-        $tierTables = ['booking_calendar_locks', 'students', 'bookings', 'student_packages', 'session_ledger_entries'];
+        $tierTables = ['booking_calendar_locks', 'contacts', 'students', 'bookings', 'student_packages', 'session_ledger_entries'];
 
         DB::listen(function (QueryExecuted $query) use (&$lockedTiers, $tierTables): void {
             $sql = strtolower($query->sql);

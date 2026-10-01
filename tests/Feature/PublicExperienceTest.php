@@ -96,9 +96,11 @@ class PublicExperienceTest extends TestCase
             ->assertSet('selectedDate', $slotDate);
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'America/New_York', $component->get('visitorToken')))
             ->assertSet('currentStep', 3)
-            ->set('name', 'Laila Vance')
+            ->set('first_name', 'Laila')
+            ->set('last_name', 'Vance')
+            ->set('date_of_birth', '1990-08-15')
             ->set('email', 'Laila.Vance@Example.com')
-            ->set('phone', '+1 555 4321')
+            ->set('phone', '+12025550123')
             ->set('notes', 'Planning a trip to Luxor and Cairo next month.')
             ->call('submitDetails')
             ->assertSet('currentStep', 4)
@@ -214,9 +216,16 @@ class PublicExperienceTest extends TestCase
         $showResponse = $this->get(route('resources.show', $resource->slug));
         $showResponse->assertStatus(200);
         $showResponse->assertSeeText('Egyptian Verbs Masterclass');
+        $visitorCookie = $showResponse->getCookie('_va_visitor');
+        $sessionCookie = $showResponse->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
 
         // Request access via email gate
-        $requestResponse = $this->post(route('resources.request', $resource->slug), [
+        $requestResponse = $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorCookie->getValue(),
+            '_va_session' => $sessionCookie->getValue(),
+        ])->post(route('resources.request', $resource->slug), [
             'name' => 'Omar Sherif',
             'email' => 'Omar.Sherif@Example.com',
         ]);

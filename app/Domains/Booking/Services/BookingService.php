@@ -18,6 +18,7 @@ use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Models\FormVersion;
+use App\Domains\Forms\Services\FormValidationService;
 use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Models\Student;
@@ -27,6 +28,7 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -78,11 +80,11 @@ class BookingService
      *     customer_name?: string|null,
      *     customer_email?: string|null,
      *     customer_phone?: string|null,
-     *     first_name?: string|null,
-     *     last_name?: string|null,
+     *     first_name: string,
+     *     last_name: string,
      *     email?: string|null,
-     *     phone?: string|null,
-     *     date_of_birth?: string|null,
+     *     phone: string,
+     *     date_of_birth: string,
      *     phone_country?: string|null,
      *     notes?: string|null,
      *     idempotency_key: string,
@@ -188,68 +190,44 @@ class BookingService
         $phone = trim((string) ($data['customer_phone'] ?? $data['phone'] ?? ''));
         $firstName = trim((string) ($data['first_name'] ?? ''));
         $lastName = trim((string) ($data['last_name'] ?? ''));
-        if ($firstName === '' && $lastName === '' && ! empty($data['customer_name'] ?? $data['name'])) {
-            $parts = explode(' ', trim((string) ($data['customer_name'] ?? $data['name'])), 2);
-            $firstName = $parts[0];
-            $lastName = $parts[1] ?? $parts[0];
-        }
         $dateOfBirth = $data['date_of_birth'] ?? null;
+        $missingIdentityFields = [];
+        foreach ([
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'email' => $email,
+            'phone' => $phone,
+            'date_of_birth' => $dateOfBirth,
+        ] as $field => $value) {
+            if (! is_string($value) || trim($value) === '') {
+                $missingIdentityFields[$field] = "Please provide your {$field}.";
+            }
+        }
+        if ($missingIdentityFields !== []) {
+            throw ValidationException::withMessages($missingIdentityFields);
+        }
         $phoneCountry = $data['phone_country'] ?? null;
+        Validator::make([
+            'first_name' => $firstName, 'last_name' => $lastName, 'email' => $email,
+            'phone' => $phone, 'date_of_birth' => $dateOfBirth,
+        ], [
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:255'],
+            'phone' => ['required', 'string', 'max:40'],
+            'date_of_birth' => ['required', 'date_format:Y-m-d', 'before:today'],
+        ])->validate();
+        try {
+            $normPhone = $this->studentIdentityService->normalizePhone($phone, $phoneCountry);
+        } catch (\InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['phone' => $exception->getMessage()]);
+        }
         $effectiveIntakeAnswers = ! empty($intakeAnswers) ? $intakeAnswers : ($data['intake_answers'] ?? []);
         $effectiveFormVersionId = $formVersionId ?? ($data['form_version_id'] ?? null);
 
-        if ($effectiveFormVersionId === null) {
-            $preBookingForm = Form::where('status', 'published')
-                ->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'pre_booking'))
-                ->first();
-            if ($preBookingForm && $preBookingForm->is_mandatory && $preBookingForm->published_version_id) {
-                $effectiveFormVersionId = (int) $preBookingForm->published_version_id;
-            }
-        }
-
-        if ($effectiveFormVersionId !== null) {
-            $targetVersion = FormVersion::with(['questions.options', 'form'])->find($effectiveFormVersionId);
-            if (! $targetVersion) {
-                throw ValidationException::withMessages([
-                    'form_version_id' => 'The specified form version does not exist.',
-                ]);
-            }
-
-            $validQuestions = $targetVersion->questions;
-            $questionKeyMap = $validQuestions->keyBy('question_key');
-            $questionIdMap = $validQuestions->keyBy(fn ($q) => (string) $q->id);
-
-            // Cross-version question rejection: every submitted key must exist in target version
-            foreach ($effectiveIntakeAnswers as $submittedKey => $answerVal) {
-                $submittedKeyStr = (string) $submittedKey;
-                if (! $questionIdMap->has($submittedKeyStr) && ! $questionKeyMap->has($submittedKeyStr)) {
-                    throw ValidationException::withMessages([
-                        "intakeAnswers.{$submittedKey}" => 'Submitted question ID does not belong to the active form version.',
-                    ]);
-                }
-            }
-
-            // Required questions validation
-            $formIsMandatory = (bool) ($targetVersion->form?->is_mandatory ?? false);
-            foreach ($validQuestions as $question) {
-                if ($formIsMandatory || $question->is_required) {
-                    $answered = false;
-                    if (array_key_exists((string) $question->id, $effectiveIntakeAnswers)) {
-                        $val = $effectiveIntakeAnswers[(string) $question->id];
-                        $answered = ! is_null($val) && $val !== '' && $val !== [];
-                    } elseif (! empty($question->question_key) && array_key_exists($question->question_key, $effectiveIntakeAnswers)) {
-                        $val = $effectiveIntakeAnswers[$question->question_key];
-                        $answered = ! is_null($val) && $val !== '' && $val !== [];
-                    }
-
-                    if (! $answered) {
-                        throw ValidationException::withMessages([
-                            "intakeAnswers.{$question->id}" => "The {$question->label} field is required.",
-                        ]);
-                    }
-                }
-            }
-        }
+        $liveIntakeForm = $this->publishedIntakeForm();
+        $effectiveFormVersionId ??= $liveIntakeForm?->published_version_id;
+        $effectiveIntakeAnswers = $this->validatePublicIntake($effectiveFormVersionId, $effectiveIntakeAnswers);
 
         $connection = DB::connection();
         $dbName = substr($connection->getDatabaseName(), 0, 20);
@@ -296,11 +274,17 @@ class BookingService
                 $firstName,
                 $lastName,
                 $dateOfBirth,
-                $phoneCountry,
+                $normPhone,
                 $effectiveIntakeAnswers,
                 $effectiveFormVersionId,
                 &$bookingCreated,
             ) {
+                if ($effectiveFormVersionId !== $this->publishedIntakeForm()?->published_version_id) {
+                    throw ValidationException::withMessages([
+                        'intakeForm' => 'The intake form was updated while you were booking. Please review the updated questions.',
+                    ]);
+                }
+
                 // Acquire the canonical scheduling mutex before any booking-row lock.
                 $this->availabilityService->acquireCalendarDateLocks(
                     $startUtc,
@@ -308,71 +292,7 @@ class BookingService
                     $initialConfig['buffer_minutes'],
                 );
 
-                // 3. Verify hold with strict authentication and ownership
-                $hold = BookingHold::query()
-                    ->where('id', (int) $holdId)
-                    ->where('hold_token', (string) $holdToken)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (! $hold) {
-                    throw new SlotUnavailableException('Invalid reservation hold authentication.');
-                }
-
-                if ((int) $hold->session_type_id !== (int) $sessionType->id) {
-                    throw new SlotUnavailableException('Reservation hold session type mismatch.');
-                }
-
-                if (! $hold->slot_start_utc->equalTo($holdSnapshot->slot_start_utc)
-                    || ! $hold->slot_end_utc->equalTo($holdSnapshot->slot_end_utc)) {
-                    throw new SlotUnavailableException('The held slot changed while it was being confirmed. Please select a slot again.');
-                }
-
-                if (! hash_equals((string) $hold->visitor_token, (string) $visitorToken)) {
-                    throw new SlotUnavailableException('Reservation hold ownership mismatch.');
-                }
-
-                if (! hash_equals((string) $hold->session_token, (string) $sessionToken)) {
-                    throw new SlotUnavailableException('Reservation hold session mismatch.');
-                }
-
-                // Check idempotency only after the scheduling mutex and authenticated hold are locked.
-                $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
-                $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
-                if ($existing) {
-                    if (! hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
-                        throw new SlotUnavailableException('This booking request cannot be verified.');
-                    }
-
-                    return $existing;
-                }
-
-                if ($hold->status !== 'active') {
-                    throw new SlotUnavailableException('Your reservation hold is no longer active.');
-                }
-
-                if ($hold->expires_at <= now()) {
-                    throw new SlotUnavailableException('Your reservation hold has expired. Please choose a slot again.');
-                }
-
-                $config = $this->availabilityService->resolveSlotConfiguration(
-                    sessionType: $sessionType,
-                    startUtc: $hold->slot_start_utc,
-                    endUtc: $hold->slot_end_utc,
-                );
-
-                // 4. Authoritative slot validation
-                $this->availabilityService->validateSlotForBooking(
-                    sessionType: $sessionType,
-                    startUtc: $startUtc,
-                    endUtc: $config['end_utc'],
-                    currentVisitorToken: $visitorToken,
-                    currentHoldToken: $hold->hold_token,
-                    excludeHoldId: $hold->id,
-                    resolvedConfig: $config
-                );
-
-                // Authoritative Last Non-Direct Touch conversion attribution within exact 30-day lookback (EDITS V1 §18B)
+                // Read conversion attribution before resolving the contact so attribution is written on first creation.
                 $conversionAttr = $this->analyticsService->getBookingConversionAttribution(
                     visitorToken: $analyticsVisitorToken ?? $visitorToken,
                     bookingTime: $nowUtc
@@ -396,10 +316,10 @@ class BookingService
                     $touchAt = null;
                 }
 
-                // Resolve or create canonical Contact
+                // Resolve and lock the contact before locking student identity rows.
                 $contact = $this->contactService->resolveOrCreate(
                     email: $email,
-                    name: trim("{$firstName} {$lastName}") ?: ($data['customer_name'] ?? $data['name'] ?? null),
+                    name: trim("{$firstName} {$lastName}"),
                     phone: $phone ?: null,
                     attribution: [
                         'utm_source' => $utmSource,
@@ -410,19 +330,10 @@ class BookingService
                     ]
                 );
 
-                // Pessimistic row locking: lock contacts, then students
                 Contact::whereKey($contact->id)->lockForUpdate()->first();
 
                 // Candidate Student Resolution (Strict StudentIdentityService logic)
                 $normEmail = $this->studentIdentityService->normalizeEmail($email);
-                $normPhone = null;
-                if (! empty($phone)) {
-                    try {
-                        $normPhone = $this->studentIdentityService->normalizePhone($phone, $phoneCountry);
-                    } catch (\Throwable) {
-                        $normPhone = mb_strtolower(trim($phone), 'UTF-8');
-                    }
-                }
                 $normName = $this->studentIdentityService->normalizedFullName($firstName, $lastName);
 
                 $candidateQuery = Student::withTrashed();
@@ -485,6 +396,60 @@ class BookingService
                     $studentId = $newStudent->id;
                 }
 
+                // Lock and verify the hold only after contact and student rows, keeping one global lock order.
+                $hold = BookingHold::query()
+                    ->where('id', (int) $holdId)
+                    ->where('hold_token', (string) $holdToken)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $hold) {
+                    throw new SlotUnavailableException('Invalid reservation hold authentication.');
+                }
+                if ((int) $hold->session_type_id !== (int) $sessionType->id
+                    || ! $hold->slot_start_utc->equalTo($holdSnapshot->slot_start_utc)
+                    || ! $hold->slot_end_utc->equalTo($holdSnapshot->slot_end_utc)) {
+                    throw new SlotUnavailableException('The held slot changed while it was being confirmed. Please select a slot again.');
+                }
+                if (! hash_equals((string) $hold->visitor_token, (string) $visitorToken)) {
+                    throw new SlotUnavailableException('Reservation hold ownership mismatch.');
+                }
+                if (! hash_equals((string) $hold->session_token, (string) $sessionToken)) {
+                    throw new SlotUnavailableException('Reservation hold session mismatch.');
+                }
+
+                $expectedVisitorToken = $analyticsVisitorToken ?? $visitorToken;
+                $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+                if ($existing) {
+                    if (! hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
+                        throw new SlotUnavailableException('This booking request cannot be verified.');
+                    }
+
+                    return $existing;
+                }
+
+                if ($hold->status !== 'active') {
+                    throw new SlotUnavailableException('Your reservation hold is no longer active.');
+                }
+                if ($hold->expires_at <= now()) {
+                    throw new SlotUnavailableException('Your reservation hold has expired. Please choose a slot again.');
+                }
+
+                $config = $this->availabilityService->resolveSlotConfiguration(
+                    sessionType: $sessionType,
+                    startUtc: $hold->slot_start_utc,
+                    endUtc: $hold->slot_end_utc,
+                );
+                $this->availabilityService->validateSlotForBooking(
+                    sessionType: $sessionType,
+                    startUtc: $startUtc,
+                    endUtc: $config['end_utc'],
+                    currentVisitorToken: $visitorToken,
+                    currentHoldToken: $hold->hold_token,
+                    excludeHoldId: $hold->id,
+                    resolvedConfig: $config
+                );
+
                 // Generate timezone snapshot
                 $snapshot = $this->timezoneService->createBookingSnapshot(
                     startUtc: $startUtc,
@@ -538,8 +503,10 @@ class BookingService
                     $bookingCreated = true;
                 } catch (QueryException $e) {
                     // Granular Duplicate-Key Exception Handling
-                    $isDupKey = $e->getCode() === '23000' && (($e->errorInfo[1] ?? null) === 1062 || str_contains($e->getMessage(), '1062'));
-                    if ($isDupKey && (str_contains($e->getMessage(), 'idempotency_key') || str_contains($e->getMessage(), 'bookings_idempotency_key_unique') || str_contains($e->errorInfo[2] ?? '', 'idempotency_key'))) {
+                    $isIdempotencyDuplicate = $e->getCode() === '23000'
+                        && (($e->errorInfo[1] ?? null) === 1062)
+                        && str_contains($e->errorInfo[2] ?? '', 'bookings_idempotency_key_unique');
+                    if ($isIdempotencyDuplicate) {
                         $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
                         if ($existing && hash_equals((string) $existing->visitor_token, (string) $expectedVisitorToken)) {
                             return $existing;
@@ -550,7 +517,7 @@ class BookingService
 
                 // Persist FormSubmission and FormAnswers if formVersionId provided
                 if ($effectiveFormVersionId) {
-                    $version = FormVersion::with('questions.options')->find($effectiveFormVersionId);
+                    $version = FormVersion::with('questions.options')->findOrFail($effectiveFormVersionId);
                     if ($version) {
                         $submission = FormSubmission::create([
                             'form_version_id' => $version->id,
@@ -641,6 +608,59 @@ class BookingService
         return $booking;
     }
 
+    public function publishedIntakeForm(): ?Form
+    {
+        return Form::query()->where('status', 'published')
+            ->whereNotNull('published_version_id')
+            ->whereHas('triggers', fn ($query) => $query->where('trigger_name', 'pre_booking'))
+            ->with('publishedVersion.questions.options')->first();
+    }
+
+    /** @param array<string|int, mixed> $answers @return array<string, mixed> */
+    public function validatePublicIntake(?int $versionId, array $answers): array
+    {
+        $form = $this->publishedIntakeForm();
+        if ($versionId !== $form?->published_version_id) {
+            throw ValidationException::withMessages([
+                'intakeForm' => 'The intake form was updated while you were booking. Please review the updated questions.',
+            ]);
+        }
+        if (! $form) {
+            if ($answers !== []) {
+                throw ValidationException::withMessages(['intakeForm' => 'No published intake form is available.']);
+            }
+
+            return [];
+        }
+
+        $questions = $form->publishedVersion->questions;
+        $byId = $questions->keyBy(fn ($question): string => (string) $question->id);
+        $byKey = $questions->keyBy('question_key');
+        $normalized = [];
+        foreach ($answers as $key => $value) {
+            $question = $byId->get((string) $key) ?? $byKey->get((string) $key);
+            if (! $question) {
+                throw ValidationException::withMessages(["intakeAnswers.{$key}" => 'Submitted question ID does not belong to the active form version.']);
+            }
+            if (array_key_exists($question->question_key, $normalized)) {
+                throw ValidationException::withMessages(["intakeAnswers.{$question->id}" => 'Submit only one answer per question.']);
+            }
+            $normalized[$question->question_key] = $value;
+        }
+
+        try {
+            return app(FormValidationService::class)->validateAnswers($questions->all(), $normalized);
+        } catch (ValidationException $exception) {
+            $errors = [];
+            foreach ($exception->errors() as $key => $messages) {
+                $parts = explode('.', $key);
+                $question = $byKey->get($parts[1] ?? '');
+                $errors['intakeAnswers.'.($question?->id ?? ($parts[1] ?? $key))] = $messages;
+            }
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
     /**
      * Create an admin-initiated booking through an explicitly trusted path.
      *
@@ -696,19 +716,11 @@ class BookingService
             $buffer = $this->availabilityService->resolveEffectiveBuffer($startUtc);
             $this->availabilityService->acquireCalendarDateLocks($startUtc, $endUtc, $buffer);
 
-            // Booking locks follow the canonical calendar mutex in the global lock order.
-            $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+            // Keep the replay fast path nonlocking; row locks follow Contact resolution.
+            $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
                 return $existing;
             }
-
-            // Authoritative slot validation without hold requirement (trusted admin override)
-            $this->availabilityService->validateSlotForBooking(
-                sessionType: $sessionType,
-                startUtc: $startUtc,
-                endUtc: $endUtc,
-                isTrustedAdmin: true
-            );
 
             // Resolve or create canonical Contact
             $contact = $this->contactService->resolveOrCreate(
@@ -722,6 +734,20 @@ class BookingService
                     'utm_content' => $data['content'] ?? null,
                     'utm_term' => $data['term'] ?? null,
                 ]
+            );
+
+            // Recheck idempotency under a row lock after Contact, before booking and hold locks.
+            $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            // Authoritative slot validation without hold requirement (trusted admin override)
+            $this->availabilityService->validateSlotForBooking(
+                sessionType: $sessionType,
+                startUtc: $startUtc,
+                endUtc: $endUtc,
+                isTrustedAdmin: true
             );
 
             // Generate timezone snapshot
@@ -756,7 +782,10 @@ class BookingService
                 ]));
                 $bookingCreated = true;
             } catch (QueryException $e) {
-                if ($e->getCode() === '23000' || str_contains($e->getMessage(), '1062')) {
+                $isIdempotencyDuplicate = $e->getCode() === '23000'
+                    && (($e->errorInfo[1] ?? null) === 1062)
+                    && str_contains($e->errorInfo[2] ?? '', 'bookings_idempotency_key_unique');
+                if ($isIdempotencyDuplicate) {
                     $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
                     if ($existing) {
                         return $existing;

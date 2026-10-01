@@ -6,6 +6,7 @@ use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\BillingReconciliationService;
@@ -86,6 +87,28 @@ class CashierBillingReconciliationTest extends TestCase
         $this->assertEquals('28.00', $presets['advanced_conversational']['price']);
         $this->assertEquals(1, $presets['advanced_conversational']['sessions']);
         $this->assertEquals(30, $presets['advanced_conversational']['validity_days']);
+    }
+
+    public function test_reconciliation_uses_student_booking_audit_evidence_instead_of_marketing_source(): void
+    {
+        $this->ledger->createPackage($this->student, 'One lesson', 1, '48.00', '0.00', 'USD', null, 'reconciliation-evidence');
+        $type = SessionType::create(['title' => 'Evidence lesson', 'slug' => 'evidence-lesson', 'duration_minutes' => 60, 'price' => 48, 'currency' => 'USD', 'active' => true]);
+        $contact = Contact::create(['name' => 'Evidence learner', 'email' => 'evidence@example.test']);
+        $start = CarbonImmutable::now('UTC')->subDays(2);
+        $booking = Booking::create(app(TimezoneService::class)->createBookingSnapshot($start, $start->addHour(), 'Africa/Cairo', 'Africa/Cairo') + [
+            'student_id' => $this->student->id, 'contact_id' => $contact->id, 'session_type_id' => $type->id,
+            'status' => 'completed', 'source' => 'student_portal', 'idempotency_key' => Str::uuid()->toString(), 'confirmation_token' => Str::random(64),
+        ]);
+
+        $this->assertSame([], $this->reconciliation->checkUnreconciledBookings());
+        $booking->events()->create([
+            'event_type' => 'created', 'performed_by' => 'student', 'performed_by_id' => $this->student->id,
+            'new_data' => ['source' => 'student_portal'], 'created_at' => now('UTC'),
+        ]);
+        $issues = $this->reconciliation->checkUnreconciledBookings();
+
+        $this->assertCount(1, $issues);
+        $this->assertSame($booking->id, $issues[0]['booking_id']);
     }
 
     public function test_48_hour_diagnostic_credit_automation_logic(): void
@@ -482,6 +505,27 @@ class CashierBillingReconciliationTest extends TestCase
         $report = $this->reconciliation->reconcile();
         $this->assertTrue($report['has_discrepancies']);
         $this->assertGreaterThanOrEqual(1, $report['summary']['negative_balances_count']);
+    }
+
+    public function test_financial_export_attributes_courtesy_credits_to_the_student(): void
+    {
+        $package = StudentPackage::factory()->create(['student_id' => $this->student->id]);
+        SessionLedgerEntry::factory()->create([
+            'student_id' => $this->student->id,
+            'student_package_id' => $package->id,
+            'entry_type' => 'courtesy_adjustment',
+            'credit_change' => 2,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'web')->get('/admin/billing/export?format=csv');
+        $response->assertOk();
+        $rows = array_map(str_getcsv(...), array_filter(explode("\n", trim($response->streamedContent()))));
+        $creditRow = collect($rows)->first(fn (array $row): bool => ($row[3] ?? null) === 'Courtesy Credit');
+
+        $this->assertNotNull($creditRow);
+        $this->assertSame('Layla Hassan', $creditRow[1]);
+        $this->assertSame('layla@example.com', $creditRow[2]);
+        $this->assertSame("'+2 credits", $creditRow[5]);
     }
 
     public function test_cashier_hub_and_reconciliation_http_endpoints(): void

@@ -151,8 +151,11 @@ class V3SlotIdentityTest extends TestCase
 
         $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $start, 'Asia/Kolkata', $wizard->get('visitorToken')))
             ->assertSet('currentStep', 3)
-            ->set('name', 'Kavya Student')
+            ->set('first_name', 'Kavya')
+            ->set('last_name', 'Student')
+            ->set('date_of_birth', '1990-11-15')
             ->set('email', 'kavya@example.com')
+            ->set('phone', '+919876543210')
             ->call('submitDetails');
 
         $canonicalDate = CarbonImmutable::parse($start, 'UTC')->setTimezone('Asia/Kolkata')->toDateString();

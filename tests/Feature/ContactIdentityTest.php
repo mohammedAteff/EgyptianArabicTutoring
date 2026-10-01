@@ -159,7 +159,7 @@ class ContactIdentityTest extends TestCase
         $this->assertEquals('spring2026', $canonicalFresh->utm_campaign);
     }
 
-    public function test_contact_merge_locks_calendar_students_bookings_then_contacts(): void
+    public function test_contact_merge_locks_calendar_contacts_students_then_bookings(): void
     {
         $canonical = Contact::query()->create(['name' => 'Canonical', 'email' => 'lock-canonical@example.test']);
         $duplicate = Contact::query()->create(['name' => 'Duplicate', 'email' => 'lock-duplicate@example.test']);
@@ -191,7 +191,7 @@ class ContactIdentityTest extends TestCase
         DB::listen(function (QueryExecuted $query) use (&$lockedTables): void {
             $sql = strtolower($query->sql);
             if (str_contains($sql, 'for update')) {
-                foreach (['booking_calendar_locks', 'students', 'bookings', 'contacts'] as $table) {
+                foreach (['booking_calendar_locks', 'contacts', 'students', 'bookings'] as $table) {
                     if (str_contains($sql, $table)) {
                         $lockedTables[] = $table;
                         break;
@@ -202,7 +202,7 @@ class ContactIdentityTest extends TestCase
 
         $this->contactService->merge($canonical, $duplicate);
 
-        $expectedOrder = ['booking_calendar_locks', 'students', 'bookings', 'contacts'];
+        $expectedOrder = ['booking_calendar_locks', 'contacts', 'students', 'bookings'];
         $this->assertSame($expectedOrder, array_values(array_unique($lockedTables)));
         $this->assertSame((int) $canonical->id, (int) $booking->fresh()->contact_id);
         $this->assertSame('lock-canonical@example.test', $canonical->fresh()->email);

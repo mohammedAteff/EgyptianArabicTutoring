@@ -3,11 +3,12 @@
 namespace App\Http\Middleware;
 
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\CMS\Models\Setting;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureNotUnderMaintenance
@@ -24,26 +25,22 @@ class EnsureNotUnderMaintenance
     public function handle(Request $request, Closure $next): Response
     {
         // 0. Static asset bypass
-        if ($request->is(['build/*', 'assets/*', 'images/*', 'vendor/*', 'favicon.ico', 'robots.txt'])) {
+        if ($request->is(['build/*', 'assets/*', 'images/*', 'storage/*', 'vendor/*', 'favicon.ico', 'robots.txt'])) {
             return $next($request);
         }
 
         $isUnderMaintenance = false;
         try {
-            if (! Cache::has('maintenance_mode_active')) {
-                Cache::forget('system.maintenance_mode');
-            }
-            $isUnderMaintenance = Cache::remember('system.maintenance_mode', 30, function () {
-                $val = DB::table('settings')->where('key', 'system.maintenance_mode')->value('value');
-                if ($val === null) {
-                    $val = DB::table('settings')->where('key', 'maintenance_mode')->value('value');
-                }
+            $isUnderMaintenance = Cache::remember('maintenance_mode_active', 30, function (): bool {
+                $value = Setting::where('key', 'maintenance_mode')->value('value')
+                    ?? Setting::where('key', 'system.maintenance_mode')->value('value');
 
-                return in_array($val, ['1', 1, true, 'true'], true);
+                return filter_var($value, FILTER_VALIDATE_BOOLEAN);
             });
-            Cache::put('maintenance_mode_active', $isUnderMaintenance, 30);
         } catch (\Throwable $e) {
-            // Fail open: assume live if database or database-backed cache is unavailable
+            Log::warning('Maintenance status lookup failed; allowing the request through.', [
+                'exception' => $e,
+            ]);
             $isUnderMaintenance = false;
         }
 
@@ -80,7 +77,9 @@ class EnsureNotUnderMaintenance
         try {
             $this->analyticsService->trackMaintenanceVisit($request);
         } catch (\Throwable $e) {
-            // Suppress logging errors during database maintenance/outages
+            Log::warning('Maintenance visit tracking failed.', [
+                'exception' => $e,
+            ]);
         }
 
         $view = view()->exists('errors.503') ? 'errors.503' : 'errors.maintenance';

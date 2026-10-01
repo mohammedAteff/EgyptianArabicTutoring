@@ -471,9 +471,16 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $homeFr->assertStatus(200);
         $homeFr->assertSee('href="'.url('/fr/ressources').'"', false);
         $homeFr->assertSee('href="'.url('/fr/jeux').'"', false);
+        $visitorCookie = $homeFr->getCookie('_va_visitor');
+        $sessionCookie = $homeFr->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
 
         // Gated resource request on French resource
-        $postResponse = $this->post('/fr/ressources/cairo-street-slang/request', [
+        $postResponse = $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorCookie->getValue(),
+            '_va_session' => $sessionCookie->getValue(),
+        ])->post('/fr/ressources/cairo-street-slang/request', [
             'email' => 'jean@example.fr',
             'name' => 'Jean Dupont',
         ]);

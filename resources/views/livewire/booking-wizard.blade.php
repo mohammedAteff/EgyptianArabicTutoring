@@ -235,7 +235,7 @@
                         @endif
                     </h3>
                     <p class="text-xs text-stone-500 mb-4">
-                        {{ __('Slots show in your local time with Cairo equivalent.') }}
+                        {{ __('Slots show in your local time with the tutor timezone equivalent.') }}
                     </p>
 
                     @if($selectedDate && !empty($availableSlotsByDate[$selectedDate]))
@@ -244,8 +244,9 @@
                                 @php
                                     $slotInstant = \Carbon\CarbonImmutable::parse($slot['slot_start_utc'], 'UTC');
                                     $slotCustomerDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, $slotInstant);
-                                    $cairoSlotStart = $slotInstant->setTimezone('Africa/Cairo');
-                                    $cairoSlotEnd = \Carbon\CarbonImmutable::parse($slot['slot_end_utc'], 'UTC')->setTimezone('Africa/Cairo');
+                                    $businessTimezone = $slot['business_timezone'] ?? 'Africa/Cairo';
+                                    $businessSlotStart = $slotInstant->setTimezone($businessTimezone);
+                                    $businessSlotEnd = \Carbon\CarbonImmutable::parse($slot['slot_end_utc'], 'UTC')->setTimezone($businessTimezone);
                                 @endphp
                                 <button type="button"
                                         wire:key="booking-slot-{{ $slot['slot_start_utc'] }}"
@@ -263,7 +264,7 @@
                                             </span>
                                         </div>
                                         <div class="text-xs text-stone-500 mt-0.5">
-                                            {{ __('Cairo equivalent: :start – :end', ['start' => $cairoSlotStart->format('g:i A'), 'end' => $cairoSlotEnd->format('g:i A')]) }} · Africa/Cairo
+                                            {{ __('Tutor equivalent: :start – :end', ['start' => $businessSlotStart->format('g:i A'), 'end' => $businessSlotEnd->format('g:i A')]) }} · {{ $businessTimezone }}
                                         </div>
                                     </div>
                                     <div class="text-xs font-semibold text-terracotta-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
@@ -329,6 +330,7 @@
                         <input type="text"
                                id="first_name"
                                wire:model.live.debounce.250ms="first_name"
+                               required
                                placeholder="e.g. Sarah"
                                class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('first_name') border-rose-400 @enderror">
                         @error('first_name') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
@@ -340,6 +342,7 @@
                         <input type="text"
                                id="last_name"
                                wire:model.live.debounce.250ms="last_name"
+                               required
                                placeholder="e.g. Jenkins"
                                class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('last_name') border-rose-400 @enderror">
                         @error('last_name') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
@@ -354,6 +357,7 @@
                     <input type="date"
                            id="date_of_birth"
                            wire:model.live.debounce.250ms="date_of_birth"
+                           required
                            max="{{ now()->subYear()->toDateString() }}"
                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('date_of_birth') border-rose-400 @enderror">
                     <p class="text-xs text-stone-500 mt-1">{{ __('Required for your student portal identity verification.') }}</p>
@@ -368,6 +372,7 @@
                     <input type="email"
                            id="email"
                            wire:model.live.debounce.250ms="email"
+                           required
                            placeholder="sarah@example.com"
                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('email') border-rose-400 @enderror">
                     <p class="text-xs text-stone-500 mt-1">{{ __('Your calendar invite (.ics) and confirmation link will be delivered here.') }}</p>
@@ -377,44 +382,62 @@
                 <!-- Phone / WhatsApp -->
                 <div>
                     <label for="phone" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                        {{ __('WhatsApp or Phone Number') }} <span class="text-stone-400 text-xs font-normal">({{ __('Recommended') }})</span>
+                        {{ __('WhatsApp or Phone Number') }} <span class="text-rose-500">*</span>
                     </label>
                     <input type="tel"
                            id="phone"
                            wire:model.live.debounce.250ms="phone"
+                           required
                            placeholder="+1 555 123 4567"
                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all">
+                    @error('phone') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
                     <p class="text-xs text-stone-500 mt-1">{{ __('Useful for last-minute lesson links or audio check-ins.') }}</p>
                 </div>
 
                 <!-- Dynamic Intake Form Questions (if assigned) -->
+                @error('intakeForm') <p role="alert" class="text-sm text-rose-600">{{ $message }}</p> @enderror
                 @if(!empty($preBookingQuestions) && $preBookingQuestions->isNotEmpty())
                     <div class="pt-4 border-t border-stone-100 space-y-4">
                         <h3 class="text-sm font-bold text-stone-800 uppercase tracking-wider">{{ __('Intake Questions') }}</h3>
-                        @error('intakeForm') <span class="text-xs text-rose-500 font-medium block">{{ $message }}</span> @enderror
                         @foreach($preBookingQuestions as $q)
-                            <div>
+                            <div wire:key="intake-question-{{ $q->id }}">
                                 <label for="intake_{{ $q->id }}" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                                     {{ $q->label }} @if($q->is_required) <span class="text-rose-500">*</span> @endif
                                 </label>
-                                @if($q->question_type === 'textarea')
+                                @if($q->description)<p class="mb-2 text-sm text-stone-600 whitespace-pre-line">{{ $q->description }}</p>@endif
+                                @if($q->question_type === 'info_block')
+                                @elseif($q->question_type === 'long_text')
                                     <textarea id="intake_{{ $q->id }}"
-                                              wire:model="intakeAnswers.{{ $q->id }}"
+                                              wire:model.live.debounce.250ms="intakeAnswers.{{ $q->id }}"
                                               rows="3"
                                               class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all"></textarea>
-                                @elseif($q->question_type === 'select')
+                                @elseif(in_array($q->question_type, ['single_choice', 'dropdown'], true))
                                     <select id="intake_{{ $q->id }}"
-                                            wire:model="intakeAnswers.{{ $q->id }}"
+                                            wire:model.live="intakeAnswers.{{ $q->id }}"
                                             class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all">
                                         <option value="">{{ __('Select an option') }}</option>
                                         @foreach($q->options ?? [] as $opt)
-                                            <option value="{{ $opt->option_value ?? $opt->label }}">{{ $opt->label }}</option>
+                                            <option value="{{ $opt->value }}">{{ $opt->label }}</option>
                                         @endforeach
                                     </select>
+                                @elseif($q->question_type === 'multiple_choice')
+                                    <div class="space-y-2" role="group" aria-label="{{ $q->label }}">
+                                        @foreach($q->options as $opt)
+                                            <label class="flex items-center gap-2 text-sm" wire:key="intake-option-{{ $opt->id }}"><input type="checkbox" wire:model.live="intakeAnswers.{{ $q->id }}" value="{{ $opt->value }}">{{ $opt->label }}</label>
+                                        @endforeach
+                                    </div>
+                                @elseif($q->question_type === 'yes_no')
+                                    <select id="intake_{{ $q->id }}" wire:model.live="intakeAnswers.{{ $q->id }}" class="w-full px-4 py-3 rounded-xl border border-stone-200 text-sm"><option value="">{{ __('Select an option') }}</option><option value="1">{{ __('Yes') }}</option><option value="0">{{ __('No') }}</option></select>
+                                @elseif($q->question_type === 'rating_scale')
+                                    <select id="intake_{{ $q->id }}" wire:model.live="intakeAnswers.{{ $q->id }}" class="w-full px-4 py-3 rounded-xl border border-stone-200 text-sm">
+                                        <option value="">{{ __('Select a rating') }}</option>
+                                        @for($rating = ($q->presentation_config['min'] ?? 1); $rating <= ($q->presentation_config['max'] ?? 5); $rating++)<option value="{{ $rating }}">{{ $rating }}</option>@endfor
+                                    </select>
                                 @else
-                                    <input type="text"
+                                    <input type="{{ in_array($q->question_type, ['email', 'number', 'date'], true) ? $q->question_type : ($q->question_type === 'phone' ? 'tel' : 'text') }}"
                                            id="intake_{{ $q->id }}"
-                                           wire:model="intakeAnswers.{{ $q->id }}"
+                                           wire:model.live.debounce.250ms="intakeAnswers.{{ $q->id }}"
+                                           @if($q->question_type === 'number') step="any" @endif
                                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all">
                                 @endif
                                 @error('intakeAnswers.'.$q->id) <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
@@ -465,7 +488,8 @@
                 @php
                     $reviewInstant = $selectedSlotStartUtc ? \Carbon\CarbonImmutable::parse($selectedSlotStartUtc, 'UTC') : now('UTC');
                     $reviewCustomerDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, $reviewInstant);
-                    $reviewBusinessDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', $reviewInstant);
+                    $reviewBusinessTimezone = $selectedSlot['business_timezone'] ?? 'Africa/Cairo';
+                    $reviewBusinessDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($reviewBusinessTimezone, $reviewInstant);
                 @endphp
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-stone-200">
                     <div class="bg-white p-4 rounded-xl border border-stone-200">
@@ -487,7 +511,7 @@
                     <div class="bg-white p-4 rounded-xl border border-stone-200">
                         <div class="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1.5">
                             <x-timezone-flag :display="$reviewBusinessDisplay" :alt="$reviewBusinessDisplay['city']" />
-                            {{ __("Tutor's Time (Cairo)") }}
+                            {{ __("Tutor's Time") }} ({{ $reviewBusinessTimezone }})
                         </div>
                         <div class="text-base font-bold text-stone-900">
                             {{ \Carbon\CarbonImmutable::parse($selectedSlot['business_date'] ?? $selectedDate)->format('l, F j, Y') }}

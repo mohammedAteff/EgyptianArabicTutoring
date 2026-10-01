@@ -72,8 +72,11 @@ class BookingCreationNotificationTest extends TestCase
             ->call('setDetectedTimezone', 'Africa/Cairo')
             ->call('selectDate', $slotDate);
         $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'Africa/Cairo', $wizard->get('visitorToken')))
-            ->set('name', 'Nadia Mostafa')
+            ->set('first_name', 'Nadia')
+            ->set('last_name', 'Mostafa')
+            ->set('date_of_birth', '1990-09-15')
             ->set('email', 'nadia@example.com')
+            ->set('phone', '+201000000011')
             ->call('submitDetails')
             ->call('confirmBooking');
 
@@ -98,8 +101,11 @@ class BookingCreationNotificationTest extends TestCase
             ->call('setDetectedTimezone', 'Africa/Cairo')
             ->call('selectDate', $slotDate);
         $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'Africa/Cairo', $wizard->get('visitorToken')))
-            ->set('name', 'Tariq Zaki')
+            ->set('first_name', 'Tariq')
+            ->set('last_name', 'Zaki')
+            ->set('date_of_birth', '1990-10-15')
             ->set('email', 'tariq@example.com')
+            ->set('phone', '+201000000012')
             ->call('submitDetails');
 
         // First confirmation

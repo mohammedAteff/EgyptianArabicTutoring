@@ -11,14 +11,17 @@ use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
+use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
+use App\Http\Controllers\Student\FormController;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 require __DIR__.'/../../../vendor/autoload.php';
@@ -129,6 +132,46 @@ try {
         );
 
         echo 'RESULT:SUCCESS:'.$booking->id."\n";
+        exit(0);
+    } elseif ($action === 'book_public') {
+        $booking = app(BookingService::class)->createPublicBooking([
+            'hold_id' => (int) $data['hold_id'],
+            'hold_token' => (string) $data['hold_token'],
+            'visitor_token' => (string) $data['visitor_token'],
+            'session_token' => (string) $data['session_token'],
+            'session_type_id' => (int) $data['session_type_id'],
+            'customer_timezone' => (string) $data['customer_timezone'],
+            'first_name' => (string) $data['first_name'],
+            'last_name' => (string) $data['last_name'],
+            'customer_name' => trim($data['first_name'].' '.$data['last_name']),
+            'customer_email' => (string) $data['customer_email'],
+            'customer_phone' => (string) $data['customer_phone'],
+            'date_of_birth' => (string) $data['date_of_birth'],
+            'start_at_utc' => (string) $data['start_at_utc'],
+            'end_at_utc' => (string) $data['end_at_utc'],
+            'idempotency_key' => (string) $data['idempotency_key'],
+        ], $data['intake_answers'] ?? [], isset($data['form_version_id']) ? (int) $data['form_version_id'] : null);
+
+        echo 'RESULT:SUCCESS:'.$booking->id."\n";
+        exit(0);
+    } elseif ($action === 'publish_form') {
+        $form = app(FormBuilderService::class)->publish(
+            (int) $data['form_id'],
+            (int) $data['active_version_id'],
+            (int) $data['lock_version'],
+        );
+
+        echo 'RESULT:SUCCESS:'.$form->id."\n";
+        exit(0);
+    } elseif ($action === 'autosave_form') {
+        $student = Student::verified()->findOrFail((int) $data['student_id']);
+        $request = Request::create('/student/forms/'.$data['slug'].'/autosave', 'POST', [
+            'answers' => $data['answers'] ?? [],
+        ]);
+        $request->attributes->set('student', $student);
+        $response = app(FormController::class)->autosave($request, (string) $data['slug']);
+
+        echo 'RESULT:SUCCESS:'.$response->getData()->draft_id."\n";
         exit(0);
     } elseif ($action === 'refund_payment') {
         $refund = app(StudentLedgerService::class)->refund(

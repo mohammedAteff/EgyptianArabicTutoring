@@ -8,11 +8,13 @@ use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormAssignmentService;
 use App\Domains\Forms\Services\FormSubmissionService;
+use App\Domains\Forms\Services\FormValidationService;
 use App\Domains\Students\Models\Student;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FormController extends Controller
@@ -95,16 +97,33 @@ class FormController extends Controller
         $form = Form::query()->where('slug', $slug)->firstOrFail();
         abort_unless($form->status === 'published' && $form->published_version_id, 404);
 
-        $publishedVersionId = (int) $form->published_version_id;
-        $version = $form->publishedVersion()->with('questions')->firstOrFail();
-
         $data = $request->validate([
             'answers' => ['nullable', 'array', 'max:300'],
         ]);
         $rawAnswers = $data['answers'] ?? [];
 
-        $submission = app(DatabaseCapability::class)->transaction(function () use ($studentId, $publishedVersionId, $version, $rawAnswers) {
-            $lockedStudent = Student::whereKey($studentId)->lockForUpdate()->firstOrFail();
+        $submission = app(DatabaseCapability::class)->transaction(function () use ($studentId, $form, $rawAnswers) {
+            $lockedForm = Form::whereKey($form->id)->lockForUpdate()->firstOrFail();
+            $lockedStudent = Student::verified()->whereKey($studentId)->lockForUpdate()->firstOrFail();
+            abort_unless(app(FormAssignmentService::class)->isAssignedTo($lockedForm, $lockedStudent), 404);
+            $publishedVersionId = (int) $lockedForm->published_version_id;
+            $version = $lockedForm->publishedVersion()->with('questions.options')->firstOrFail();
+            $questionMap = $version->questions->keyBy('question_key');
+            $idMap = $version->questions->keyBy(fn ($question): string => (string) $question->id);
+            $answers = [];
+            foreach ($rawAnswers as $key => $value) {
+                $question = $questionMap->get((string) $key) ?? $idMap->get((string) $key);
+                if (! $question || array_key_exists($question->question_key, $answers)) {
+                    throw ValidationException::withMessages(["answers.{$key}" => 'This answer does not belong to the form or was submitted twice.']);
+                }
+                $answers[$question->question_key] = $value;
+            }
+            $answers = app(FormValidationService::class)->validateAnswers($version->questions->all(), $answers, false);
+
+            if (! $lockedForm->can_edit_after_submission && FormSubmission::where('form_version_id', $publishedVersionId)
+                ->where('student_id', $lockedStudent->id)->where('status', 'submitted')->exists()) {
+                throw ValidationException::withMessages(['form' => 'This form has already been submitted.']);
+            }
 
             $draft = FormSubmission::where('form_version_id', $publishedVersionId)
                 ->where('student_id', $lockedStudent->id)
@@ -121,14 +140,10 @@ class FormController extends Controller
                 ]);
             }
 
-            $questionMap = $version->questions->keyBy('question_key');
-            $idMap = $version->questions->keyBy('id');
-
-            foreach ($rawAnswers as $keyOrId => $val) {
-                $question = $questionMap->get($keyOrId) ?? $idMap->get($keyOrId);
-                if (! $question) {
-                    continue;
-                }
+            $retainedQuestionIds = collect(array_keys($answers))->map(fn (string $key): int => (int) $questionMap->get($key)->id)->all();
+            $draft->answers()->whereNotIn('form_question_id', $retainedQuestionIds)->delete();
+            foreach ($answers as $key => $val) {
+                $question = $questionMap->get($key);
                 $storedValue = is_array($val)
                     ? json_encode($val, JSON_THROW_ON_ERROR)
                     : (is_bool($val) ? ($val ? '1' : '0') : (string) $val);
@@ -147,7 +162,7 @@ class FormController extends Controller
         return response()->json([
             'success' => true,
             'draft_id' => $submission->id,
-            'form_version_id' => $publishedVersionId,
+            'form_version_id' => $submission->form_version_id,
         ]);
     }
 }

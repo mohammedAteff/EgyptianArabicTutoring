@@ -339,9 +339,16 @@ class AnalyticsAndReportsTest extends TestCase
         // 1. Visitor lands on site with UTM tags
         $landingResponse = $this->get('/?utm_source=tiktok&utm_medium=video&utm_campaign=cairo_basics');
         $landingResponse->assertOk();
+        $visitorCookie = $landingResponse->getCookie('_va_visitor');
+        $sessionCookie = $landingResponse->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
 
         // 2. Visitor navigates to resource and requests access (without repeating UTMs in URL)
-        $requestResponse = $this->post(route('resources.request', ['slug' => $resource->slug]), [
+        $requestResponse = $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorCookie->getValue(),
+            '_va_session' => $sessionCookie->getValue(),
+        ])->post(route('resources.request', ['slug' => $resource->slug]), [
             'email' => 'fatima@example.com',
             'name' => 'Fatima',
         ]);
@@ -425,7 +432,11 @@ class AnalyticsAndReportsTest extends TestCase
             'end_at_utc' => $slotEnd,
             'customer_timezone' => 'UTC',
             'customer_name' => 'Tarek Student',
+            'first_name' => 'Tarek',
+            'last_name' => 'Student',
             'customer_email' => 'tarek@example.com',
+            'customer_phone' => '+201000000001',
+            'date_of_birth' => '1990-01-01',
             'idempotency_key' => (string) Str::uuid(),
             'hold_id' => $hold->id,
             'hold_token' => $hold->hold_token,

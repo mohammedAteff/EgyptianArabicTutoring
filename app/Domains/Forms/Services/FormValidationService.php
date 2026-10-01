@@ -162,6 +162,9 @@ class FormValidationService
             $value = $input[$key] ?? null;
             if ($question->question_type === 'yes_no' && $value !== null && $value !== '') {
                 $value = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($value === null) {
+                    throw ValidationException::withMessages(["answers.{$key}" => 'The answer is invalid.']);
+                }
             }
             if ($value === '' || $value === []) {
                 $value = null;
@@ -178,6 +181,17 @@ class FormValidationService
         }
 
         return $visibleAnswers;
+    }
+
+    /** @param array<int, FormQuestion> $questions @param array<string, mixed> $answers @return array<int, FormQuestion> */
+    public function visibleQuestions(array $questions, array $answers): array
+    {
+        $byKey = [];
+        foreach ($questions as $question) {
+            $byKey[$question->question_key] = $question;
+        }
+
+        return array_values(array_filter($questions, fn (FormQuestion $question): bool => $this->isVisible($question, $answers, $byKey)));
     }
 
     private function validateValue(FormQuestion $question, mixed $value): void

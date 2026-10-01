@@ -1,5 +1,7 @@
 # V3 Implementation Walkthrough
 
+**2026-10-01 v9.4 follow-up:** An independent review found additional defects and repaired them. Current findings, changed paths, verification results, and remaining limits are in [CODEX_V94_SECOND_PASS_AUDIT.md](CODEX_V94_SECOND_PASS_AUDIT.md). The V3 checks and deployment statements below remain dated historical evidence.
+
 **Updated:** 2026-09-25
 
 **Specification:** `Arabic w Abdallah EDIT V3.md` (newest priority)

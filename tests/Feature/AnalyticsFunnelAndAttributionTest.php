@@ -187,7 +187,11 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
             'start_at_utc' => $start,
             'end_at_utc' => $end,
             'customer_name' => 'Blocked Browser Customer',
+            'first_name' => 'Blocked',
+            'last_name' => 'Browser Customer',
             'customer_email' => 'blocked@example.com',
+            'customer_phone' => '+201000000002',
+            'date_of_birth' => '1990-01-01',
             'visitor_token' => $visitorToken,
             'session_token' => $sessionToken,
             'hold_id' => $hold->id,
@@ -237,6 +241,7 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
 
     public function test_cohort_maturity_window_cutoff(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-25 12:00:00', 'UTC'));
         $firstSeen = CarbonImmutable::parse('2026-09-01 10:00:00');
 
         $visitor = Visitor::create([
@@ -266,6 +271,7 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
 
     public function test_late_event_inside_window_can_be_reconciled(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-05 10:00:00', 'UTC'));
         $firstSeen = CarbonImmutable::parse('2026-09-01 10:00:00');
         $visitor = Visitor::create([
             'visitor_token' => 'vis-reconcile-test',
@@ -282,6 +288,7 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
         $this->assertNull($progression->booking_cta_observed_at);
 
         // Late event arrives whose authoritative timestamp is 2026-09-03 (inside 30 days)
+        $this->travelTo(CarbonImmutable::parse('2026-10-03 10:00:00', 'UTC'));
         $reconciled = $this->funnelService->reconcileLateEvent(
             $visitor,
             'booking_cta',

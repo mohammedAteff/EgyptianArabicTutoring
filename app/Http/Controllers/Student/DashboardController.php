@@ -23,6 +23,7 @@ class DashboardController extends Controller
         $bookings = Booking::query()
             ->where('student_id', $student->id)
             ->with('sessionType')
+            ->withExists('reschedules')
             ->orderBy('start_at_utc')
             ->get();
 

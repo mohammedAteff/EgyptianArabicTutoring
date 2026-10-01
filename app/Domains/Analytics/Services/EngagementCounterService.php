@@ -2,6 +2,7 @@
 
 namespace App\Domains\Analytics\Services;
 
+use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -12,12 +13,10 @@ class EngagementCounterService
     /**
      * Cache key for public social proof payload.
      */
-    public const CACHE_KEY = 'counters:social_proof_payload';
-
     /**
-     * Cache TTL in seconds (5 minutes / 300s).
+     * Cache TTL in seconds (15 minutes / 900s).
      */
-    public const CACHE_TTL = 300;
+    public const CACHE_TTL = 900;
 
     /**
      * Get the number of active distinct users in the last 60 seconds.
@@ -63,9 +62,7 @@ class EngagementCounterService
     }
 
     /**
-     * Derive collective learning activity hours over completed Cairo calendar days.
-     * Half-open interval [window_start, window_end) where window_end is midnight today (Cairo),
-     * and window_start is window_days complete days prior. Excludes current partial Cairo day.
+     * Derive learning activity over the configured Cairo calendar window, including today's raw dwell events.
      *
      * @return array{
      *     lesson_hours: float,
@@ -80,11 +77,10 @@ class EngagementCounterService
     public function getCollectiveLearningActivity(int $windowDays = 7): array
     {
         $cairoNow = CarbonImmutable::now('Africa/Cairo');
-        $cairoWindowEnd = $cairoNow->startOfDay();
-        $cairoWindowStart = $cairoWindowEnd->subDays($windowDays);
-
+        $cairoDate = $cairoNow->toDateString();
+        $cairoWindowStart = $cairoNow->startOfDay()->subDays(max(1, $windowDays) - 1);
         $utcWindowStart = $cairoWindowStart->setTimezone('UTC');
-        $utcWindowEnd = $cairoWindowEnd->setTimezone('UTC');
+        $utcWindowEnd = $cairoNow->setTimezone('UTC');
 
         // Lesson Hours = sum(bookings duration where status='completed', within window) / 60
         $completedLessonMinutes = (float) DB::table('bookings')
@@ -96,13 +92,26 @@ class EngagementCounterService
 
         $lessonHours = $completedLessonMinutes / 60.0;
 
-        // Study Dwell Hours = sum(daily_metrics.count where metric_name='section_dwell_seconds', within window) / 3600
-        $dwellSeconds = (float) DB::table('daily_metrics')
+        // Completed Cairo days come from rollups; today comes from raw events until the next rollup.
+        $historicalDwellSeconds = (float) DB::table('daily_metrics')
             ->where('metric_name', 'section_dwell_seconds')
             ->where('metric_date', '>=', $cairoWindowStart->toDateString())
-            ->where('metric_date', '<', $cairoWindowEnd->toDateString())
+            ->where('metric_date', '<', $cairoDate)
             ->sum('count');
 
+        $utcTodayStart = $cairoNow->startOfDay()->setTimezone('UTC');
+        $todayEvents = AnalyticsEvent::query()
+            ->where('event_name', 'section_dwell')
+            ->where('is_bot', false)
+            ->where('created_at', '>=', $utcTodayStart)
+            ->where('created_at', '<', $utcWindowEnd)
+            ->get(['metadata']);
+        $realtimeDwellSeconds = (float) $todayEvents->sum(function (AnalyticsEvent $event): int {
+            $seconds = $event->metadata['dwell_seconds'] ?? 0;
+
+            return is_numeric($seconds) ? max(0, (int) $seconds) : 0;
+        });
+        $dwellSeconds = $historicalDwellSeconds + $realtimeDwellSeconds;
         $studyDwellHours = $dwellSeconds / 3600.0;
         $totalHours = $lessonHours + $studyDwellHours;
 
@@ -187,13 +196,15 @@ class EngagementCounterService
     }
 
     /**
-     * Return cached public payload using flat key.
+     * Return the current Cairo day's cached public payload.
      *
      * @return array<string, mixed>
      */
     public function getCachedPublicPayload(): array
     {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
+        $cairoDate = CarbonImmutable::now('Africa/Cairo')->toDateString();
+
+        return Cache::remember("counters.public.{$cairoDate}", self::CACHE_TTL, function () {
             return $this->getPublicCountersPayload();
         });
     }

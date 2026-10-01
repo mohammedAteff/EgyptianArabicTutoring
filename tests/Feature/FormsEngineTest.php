@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SessionReschedule;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Forms\Models\Form;
@@ -349,6 +350,77 @@ class FormsEngineTest extends TestCase
             'student_authenticated_at' => now('UTC')->toIso8601String(),
             'student_auth_expires_at' => now('UTC')->addMinutes(180)->toIso8601String(),
         ]);
+    }
+
+    public function test_autosave_cannot_assign_an_untriggered_form_to_a_student(): void
+    {
+        $form = $this->publishedForm($this->administrator('admin'), [[
+            'question_key' => 'goal', 'label' => 'Goal', 'question_type' => 'short_text',
+        ]], ['trigger' => 'after_booking']);
+        $student = Student::factory()->verified()->create();
+        $this->asStudent($student);
+
+        $this->postJson(route('student.forms.autosave', $form->slug), ['answers' => ['goal' => 'Travel']])->assertNotFound();
+
+        $this->assertDatabaseMissing('form_submissions', ['student_id' => $student->id, 'form_version_id' => $form->published_version_id]);
+        $this->get(route('student.forms.show', $form->slug))->assertNotFound();
+    }
+
+    public function test_autosave_validates_answers_and_preserves_final_submission(): void
+    {
+        $form = $this->publishedForm($this->administrator('admin'), [[
+            'question_key' => 'level', 'label' => 'Level', 'question_type' => 'dropdown',
+            'options' => [['label' => 'Beginner', 'value' => 'beginner']],
+        ]]);
+        $student = Student::factory()->verified()->create();
+        $this->asStudent($student);
+
+        $this->postJson(route('student.forms.autosave', $form->slug), ['answers' => ['level' => 'forged']])
+            ->assertUnprocessable()->assertJsonValidationErrors('answers.level');
+        $this->assertDatabaseMissing('form_submissions', ['student_id' => $student->id]);
+
+        $this->post(route('student.forms.save', $form->slug), ['intent' => 'submit', 'answers' => ['level' => 'beginner']])->assertRedirect();
+        $this->postJson(route('student.forms.autosave', $form->slug), ['answers' => ['level' => 'beginner']])
+            ->assertUnprocessable()->assertJsonValidationErrors('form');
+
+        $this->assertSame(1, FormSubmission::where('student_id', $student->id)->count());
+        $this->assertSame('submitted', FormSubmission::where('student_id', $student->id)->firstOrFail()->status);
+    }
+
+    public function test_editing_a_published_form_without_responses_keeps_live_questions_unchanged(): void
+    {
+        $form = $this->publishedForm($this->administrator('admin'), [[
+            'question_key' => 'goal', 'label' => 'Original goal', 'question_type' => 'short_text',
+        ]]);
+        $publishedId = $form->published_version_id;
+
+        $updated = app(FormBuilderService::class)->update($form->id, ['title' => $form->title], [[
+            'question_key' => 'goal', 'label' => 'Draft goal', 'question_type' => 'short_text',
+        ]], $form->active_version_id, $form->lock_version);
+
+        $this->assertNotSame($publishedId, $updated->active_version_id);
+        $this->assertSame($publishedId, $updated->published_version_id);
+        $this->assertSame('Original goal', $updated->publishedVersion->questions->first()->label);
+        $this->assertSame('Draft goal', $updated->activeVersion->questions->first()->label);
+        $student = Student::factory()->verified()->create();
+        $this->asStudent($student);
+        $this->get(route('student.forms.show', $form->slug))->assertSee('Original goal')->assertDontSee('Draft goal');
+    }
+
+    public function test_student_dashboard_displays_reschedule_and_delivery_labels(): void
+    {
+        $student = Student::factory()->verified()->create();
+        $booking = $this->createStudentBooking($student);
+        SessionReschedule::create([
+            'booking_id' => $booking->id, 'actor_type' => 'student', 'actor_id' => $student->id,
+            'old_start_at_utc' => $booking->start_at_utc, 'new_start_at_utc' => $booking->start_at_utc->copy()->addDay(),
+            'old_timezone' => 'Africa/Cairo', 'new_timezone' => 'Africa/Cairo', 'idempotency_key' => Str::uuid()->toString(),
+        ]);
+        $this->asStudent($student);
+
+        $this->get(route('student.dashboard'))->assertSee('Session Rescheduled');
+        $booking->update(['status' => 'completed']);
+        $this->get(route('student.dashboard'))->assertSee('Session Delivered');
     }
 
     private function createStudentBooking(Student $student): Booking

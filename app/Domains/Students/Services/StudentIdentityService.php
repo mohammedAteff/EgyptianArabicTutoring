@@ -2,6 +2,7 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Models\Student;
 use InvalidArgumentException;
 use libphonenumber\NumberParseException;
@@ -116,10 +117,13 @@ class StudentIdentityService
         $visited = [$student->id];
         $current = $student;
 
-        while ($current->identity_status === 'merged' && $current->merged_into_student_id !== null) {
+        while ($current->identity_status === 'merged') {
+            if ($current->merged_into_student_id === null) {
+                throw new StudentIdentityConflictException('The student merge chain is incomplete.');
+            }
             $nextId = (int) $current->merged_into_student_id;
             if (in_array($nextId, $visited, true)) {
-                break;
+                throw new StudentIdentityConflictException('The student merge chain contains a cycle.');
             }
             $visited[] = $nextId;
             $query = Student::withTrashed()->whereKey($nextId);
@@ -128,7 +132,7 @@ class StudentIdentityService
             }
             $target = $query->first();
             if (! $target) {
-                break;
+                throw new StudentIdentityConflictException('The student merge chain is incomplete.');
             }
             $current = $target;
         }

@@ -66,6 +66,25 @@
         }
     }
 
+    function setupPageEvents() {
+        document.querySelectorAll('[data-analytics-event]').forEach(function (element) {
+            const eventName = element.dataset.analyticsEvent;
+            if (!eventName) return;
+
+            let metadata = {};
+            try {
+                metadata = JSON.parse(element.dataset.analyticsMetadata || '{}');
+            } catch (e) {
+                metadata = {};
+            }
+
+            enqueueEvent(eventName, metadata);
+            element.removeAttribute('data-analytics-event');
+            element.removeAttribute('data-analytics-metadata');
+            flushQueue();
+        });
+    }
+
     function flushQueue(isExit = false) {
         if (eventQueue.length === 0) return;
 
@@ -259,10 +278,12 @@
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
+            setupPageEvents();
             setupObservers();
             startTimers();
         });
     } else {
+        setupPageEvents();
         setupObservers();
         startTimers();
     }

@@ -36,4 +36,10 @@ class SessionLedgerEntry extends Model
     {
         return $this->belongsTo(StudentPackage::class, 'student_package_id');
     }
+
+    /** @return BelongsTo<Student, $this> */
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class, 'student_id');
+    }
 }

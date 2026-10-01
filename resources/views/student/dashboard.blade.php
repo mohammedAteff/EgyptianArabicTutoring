@@ -36,10 +36,10 @@
 <section class="mt-8" aria-labelledby="upcoming-title">
     <h2 id="upcoming-title" class="text-xl font-semibold">Upcoming sessions</h2>
     @forelse($upcoming as $booking)
-        @php $displayTimezone = $student->preferred_timezone ?: ($booking->customer_timezone ?: $businessTimezone); @endphp
+        @php $customerStart = $booking->customer_start; @endphp
         <article class="mt-4 rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-            <p class="font-semibold">{{ $booking->start_at_utc->copy()->timezone($displayTimezone)->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $displayTimezone }}</span></p>
-            <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ ucfirst($booking->status) }}</p>
+            <p class="font-semibold">{{ $customerStart->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $customerStart->timezoneName }}</span></p>
+            <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ $booking->studentStatusLabel() }}</p>
             <p class="mt-1 text-sm text-stone-600">Tutor: {{ $tutorName }}</p>
             @if($booking->status === 'confirmed' && $meetingUrl)
                 <a href="{{ $meetingUrl }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block rounded-lg bg-nile-800 px-4 py-2 text-sm font-semibold text-white hover:bg-nile-900">Join lesson with {{ $tutorName }}</a>
@@ -59,10 +59,10 @@
 <section class="mt-10" aria-labelledby="history-title">
     <h2 id="history-title" class="text-xl font-semibold">Session history</h2>
     @foreach($history as $booking)
-        @php $displayTimezone = $student->preferred_timezone ?: ($booking->customer_timezone ?: $businessTimezone); @endphp
+        @php $customerStart = $booking->customer_start; @endphp
         <article class="mt-4 rounded-xl border border-stone-200 bg-white p-5">
-            <p class="font-semibold">{{ $booking->start_at_utc->copy()->timezone($displayTimezone)->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $displayTimezone }}</span></p>
-            <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ ucfirst($booking->status) }}</p>
+            <p class="font-semibold">{{ $customerStart->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $customerStart->timezoneName }}</span></p>
+            <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ $booking->studentStatusLabel() }}</p>
         </article>
     @endforeach
 </section>

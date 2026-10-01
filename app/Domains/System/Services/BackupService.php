@@ -524,7 +524,7 @@ class BackupService
 
         // 5. Restore verified files if requested
         $filesRestored = 0;
-        if ($restoreFiles && ! empty($verifiedFiles)) {
+        if ($restoreFiles) {
             if (! File::isDirectory($targetBase)) {
                 File::makeDirectory($targetBase, 0755, true);
             }

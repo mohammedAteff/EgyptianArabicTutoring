@@ -50,21 +50,21 @@
 
     <!-- Dual Timezone Comparison Card -->
     @php
-        $cairoStart = \Carbon\CarbonImmutable::instance($booking->start_at_utc)->setTimezone($businessTz);
-        $cairoEnd = \Carbon\CarbonImmutable::instance($booking->end_at_utc)->setTimezone($businessTz);
-        $studentStart = \Carbon\CarbonImmutable::instance($booking->start_at_utc)->setTimezone($booking->customer_timezone);
-        $studentEnd = \Carbon\CarbonImmutable::instance($booking->end_at_utc)->setTimezone($booking->customer_timezone);
+        $cairoStart = $booking->business_start;
+        $cairoEnd = $booking->end_at_utc->copy()->setTimezone($cairoStart->timezoneName);
+        $studentStart = $booking->customer_start;
+        $studentEnd = $booking->end_at_utc->copy()->setTimezone($studentStart->timezoneName);
     @endphp
 
     <div class="bg-gradient-to-r from-slate-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800">
         <div class="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-4">Dual Timezone Authoritative Comparison</div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Cairo Tutor Local Time -->
+            <!-- Tutor Local Time -->
             <div class="bg-slate-800/60 rounded-2xl p-5 border border-slate-700/60">
                 <div class="flex items-center justify-between text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">
-                    <span>Tutor Time (Cairo)</span>
-                    <span>{{ $booking->business_utc_offset_at_booking ?? '+03:00' }}</span>
+                    <span>Tutor Time ({{ $cairoStart->timezoneName }})</span>
+                    <span>{{ $cairoStart->format('P') }}</span>
                 </div>
                 <div class="text-2xl font-bold font-serif text-white">{{ $cairoStart->format('l, F j, Y') }}</div>
                 <div class="text-lg font-semibold text-amber-300 mt-1">
@@ -201,7 +201,7 @@
         
         <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200" @click.away="rescheduleModalOpen = false">
             <h3 class="text-lg font-bold font-serif text-slate-900 mb-1">Reschedule Tutoring Session</h3>
-            <p class="text-xs text-slate-500 mb-6">Enter the new appointment date and time in Cairo Time ({{ $businessTz }}).</p>
+            <p class="text-xs text-slate-500 mb-6">Enter the new appointment date and time in Tutor Time ({{ $businessTz }}).</p>
 
             <form action="{{ route('admin.bookings.reschedule', $booking->id) }}" method="POST" class="space-y-4">
                 @csrf

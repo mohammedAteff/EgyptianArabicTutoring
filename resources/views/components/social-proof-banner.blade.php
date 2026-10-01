@@ -1,9 +1,5 @@
 @php
-    $countersPayload = Cache::remember(
-        \App\Domains\Analytics\Services\EngagementCounterService::CACHE_KEY,
-        \App\Domains\Analytics\Services\EngagementCounterService::CACHE_TTL,
-        fn () => app(\App\Domains\Analytics\Services\EngagementCounterService::class)->getPublicCountersPayload()
-    );
+    $countersPayload = app(\App\Domains\Analytics\Services\EngagementCounterService::class)->getCachedPublicPayload();
 
     $hasActiveCounter = (
         ($countersPayload['live_users']['enabled'] ?? false) ||

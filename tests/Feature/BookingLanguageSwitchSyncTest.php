@@ -66,7 +66,9 @@ class BookingLanguageSwitchSyncTest extends TestCase
         // Simulate user rapidly typing into DOM inputs without blur/debounce completion,
         // then clicking the visible language switch link which passes pending DOM values:
         $pendingDomData = [
-            'name' => 'Jean-Luc Picard',
+            'first_name' => 'Jean-Luc',
+            'last_name' => 'Picard',
+            'date_of_birth' => '1990-01-15',
             'email' => 'jeanluc@starfleet.fr',
             'phone' => '+33 6 98 76 54 32',
             'notes' => 'Focus on conversational Cairo marketplace dialogue',
@@ -88,6 +90,9 @@ class BookingLanguageSwitchSyncTest extends TestCase
         $sessionState = Session::get('booking_flow_state');
         $this->assertNotNull($sessionState);
         $this->assertEquals('Jean-Luc Picard', $sessionState['name']);
+        $this->assertEquals('Jean-Luc', $sessionState['first_name']);
+        $this->assertEquals('Picard', $sessionState['last_name']);
+        $this->assertEquals('1990-01-15', $sessionState['date_of_birth']);
         $this->assertEquals('jeanluc@starfleet.fr', $sessionState['email']);
         $this->assertEquals('+33 6 98 76 54 32', $sessionState['phone']);
         $this->assertEquals('Focus on conversational Cairo marketplace dialogue', $sessionState['notes']);
@@ -101,6 +106,9 @@ class BookingLanguageSwitchSyncTest extends TestCase
         // Verify all pending data, step, timezone, and the exact same hold survive
         $this->assertEquals(3, $frenchComponent->get('currentStep'));
         $this->assertEquals('Jean-Luc Picard', $frenchComponent->get('name'));
+        $this->assertEquals('Jean-Luc', $frenchComponent->get('first_name'));
+        $this->assertEquals('Picard', $frenchComponent->get('last_name'));
+        $this->assertEquals('1990-01-15', $frenchComponent->get('date_of_birth'));
         $this->assertEquals('jeanluc@starfleet.fr', $frenchComponent->get('email'));
         $this->assertEquals('+33 6 98 76 54 32', $frenchComponent->get('phone'));
         $this->assertEquals('Focus on conversational Cairo marketplace dialogue', $frenchComponent->get('notes'));
@@ -120,7 +128,9 @@ class BookingLanguageSwitchSyncTest extends TestCase
             ->call('selectTimezone', 'Europe/Berlin')
             ->call('selectDate', $slotStart->setTimezone('Europe/Berlin')->format('Y-m-d'));
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Berlin', $component->get('visitorToken')))
-            ->set('name', 'Klaus Mueller')
+            ->set('first_name', 'Klaus')
+            ->set('last_name', 'Mueller')
+            ->set('date_of_birth', '1990-02-10')
             ->set('email', 'klaus@example.de')
             ->set('phone', '+49 170 1234567')
             ->set('notes', 'German speaker learning Arabic')
@@ -152,7 +162,7 @@ class BookingLanguageSwitchSyncTest extends TestCase
             ->call('selectDate', $slotStart->setTimezone('Africa/Cairo')->format('Y-m-d'));
 
         $component->assertSee('Cairo · Africa/Cairo · UTC+3')
-            ->assertSee('Cairo equivalent: 3:00 PM – 4:00 PM');
+            ->assertSee('Tutor equivalent: 3:00 PM – 4:00 PM');
 
         foreach (['Pacific/Honolulu', 'Europe/Berlin', 'America/New_York'] as $timezone) {
             $component->call('selectTimezone', $timezone);
@@ -192,8 +202,11 @@ class BookingLanguageSwitchSyncTest extends TestCase
         $this->assertSame('active', BookingHold::query()->findOrFail($holdId)->status);
 
         $idempotencyKey = $component->get('idempotencyKey');
-        $component->set('name', 'Timezone Test Student')
+        $component->set('first_name', 'Timezone')
+            ->set('last_name', 'Test Student')
+            ->set('date_of_birth', '1990-03-10')
             ->set('email', 'timezone-test@example.test')
+            ->set('phone', '+201000000010')
             ->call('submitDetails')
             ->call('selectTimezone', 'America/New_York')
             ->assertSee('Your Local Time')
@@ -217,7 +230,9 @@ class BookingLanguageSwitchSyncTest extends TestCase
             ->call('selectTimezone', 'Europe/Paris')
             ->call('selectDate', $slotStart->setTimezone('Europe/Paris')->format('Y-m-d'));
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Paris', $component->get('visitorToken')))
-            ->set('name', 'Amelie Poulain')
+            ->set('first_name', 'Amelie')
+            ->set('last_name', 'Poulain')
+            ->set('date_of_birth', '1990-04-12')
             ->set('email', 'amelie@paris.fr');
 
         $holdId = $component->get('holdId');

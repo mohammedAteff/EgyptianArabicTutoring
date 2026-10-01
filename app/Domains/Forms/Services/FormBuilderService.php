@@ -8,6 +8,7 @@ use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormQuestionOption;
 use App\Domains\Forms\Models\FormTrigger;
 use App\Domains\Forms\Models\FormVersion;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -20,7 +21,7 @@ class FormBuilderService
     {
         $this->validation->validateStructure($questions);
 
-        return DB::transaction(function () use ($metadata, $questions, $author): Form {
+        return $this->withPublicationLock(fn (): Form => DB::transaction(function () use ($metadata, $questions, $author): Form {
             $trigger = $metadata['trigger'] ?? $metadata['trigger_name'] ?? null;
             $formMetadata = collect($metadata)->except(['trigger', 'trigger_name'])->all();
 
@@ -39,7 +40,7 @@ class FormBuilderService
             }
 
             return $form->fresh(['activeVersion.questions.options', 'triggers']);
-        }, 3);
+        }, 3));
     }
 
     /** @param array<string, mixed> $metadata @param array<int, array<string, mixed>> $questions */
@@ -47,7 +48,7 @@ class FormBuilderService
     {
         $this->validation->validateStructure($questions);
 
-        return DB::transaction(function () use ($formId, $metadata, $questions, $baseVersionId, $lockVersion): Form {
+        return $this->withPublicationLock(fn (): Form => DB::transaction(function () use ($formId, $metadata, $questions, $baseVersionId, $lockVersion): Form {
             $form = Form::query()->whereKey($formId)->lockForUpdate()->firstOrFail();
             if ((int) $form->active_version_id !== $baseVersionId || (int) $form->lock_version !== $lockVersion) {
                 abort(409, 'The form changed while you were editing. Reload the current version.');
@@ -56,7 +57,7 @@ class FormBuilderService
             $originalCreatedBy = $form->created_by;
 
             $version = FormVersion::query()->whereKey($baseVersionId)->where('form_id', $form->id)->lockForUpdate()->firstOrFail();
-            if ($version->isFrozen()) {
+            if ($version->isFrozen() || (int) $form->published_version_id === (int) $version->id) {
                 $version = $form->versions()->create([
                     'version_number' => ((int) $form->versions()->max('version_number')) + 1,
                     'changelog' => $metadata['changelog'] ?? null,
@@ -75,6 +76,12 @@ class FormBuilderService
             $form->save();
 
             if (array_key_exists('trigger', $metadata) || array_key_exists('trigger_name', $metadata)) {
+                if ($trigger === 'pre_booking' && $form->status === 'published') {
+                    FormTrigger::where('trigger_name', 'pre_booking')
+                        ->where('form_id', '!=', $form->id)
+                        ->whereHas('form', fn ($query) => $query->where('status', 'published'))
+                        ->delete();
+                }
                 $form->triggers()->delete();
                 if ($trigger && $trigger !== 'none' && in_array($trigger, FormTrigger::ALLOWED_TRIGGERS, true)) {
                     $form->triggers()->create(['trigger_name' => $trigger]);
@@ -82,69 +89,23 @@ class FormBuilderService
             }
 
             return $form->fresh(['activeVersion.questions.options', 'triggers']);
-        }, 3);
+        }, 3));
     }
 
     public function publish(int $formId, int $baseVersionId, int $lockVersion): Form
     {
-        $hasPreBooking = FormTrigger::where('form_id', $formId)->where('trigger_name', 'pre_booking')->exists();
-
-        if ($hasPreBooking) {
-            $connection = DB::connection();
-            $dbName = substr($connection->getDatabaseName(), 0, 20);
-            $lockKey = "{$dbName}:pub:pre_booking";
-            if (strlen($lockKey) > 64) {
-                throw new \LogicException("Publication lock key exceeds 64 characters: [{$lockKey}]");
-            }
-            $lock = $connection->selectOne('SELECT GET_LOCK(?, 10) AS acquired', [$lockKey], useReadPdo: false);
-            if ((int) ($lock?->acquired ?? 0) !== 1) {
-                throw new \DomainException('Another form publication is currently in progress. Please retry.');
-            }
-            try {
-                return app(DatabaseCapability::class)->transaction(function () use ($formId, $baseVersionId, $lockVersion) {
-                    $freshForm = Form::whereKey($formId)->lockForUpdate()->firstOrFail();
-                    if ((int) $freshForm->active_version_id !== $baseVersionId || (int) $freshForm->lock_version !== $lockVersion) {
-                        abort(409, 'The form changed while you were editing. Reload the current version.');
-                    }
-                    if (! $freshForm->active_version_id) {
-                        throw new \DomainException('Cannot publish a form without an active draft version.');
-                    }
-                    $activeVersion = $freshForm->versions()->whereKey($freshForm->active_version_id)->first();
-                    if (! $activeVersion) {
-                        throw new \DomainException('The active version does not belong to this form.');
-                    }
-                    if ($activeVersion->isFrozen() && $freshForm->status !== 'published') {
-                        abort(409, 'A form version with student submissions cannot be published or reactivated.');
-                    }
-                    if (! $activeVersion->questions()->exists()) {
-                        throw ValidationException::withMessages(['questions' => 'Add at least one question before publishing.']);
-                    }
-
-                    $freshForm->update([
-                        'status' => 'published',
-                        'published_version_id' => $freshForm->active_version_id,
-                        'lock_version' => $freshForm->lock_version + 1,
-                    ]);
-
-                    FormTrigger::where('trigger_name', 'pre_booking')->delete();
-                    $freshForm->triggers()->create(['trigger_name' => 'pre_booking']);
-
-                    return $freshForm->fresh(['activeVersion.questions.options', 'triggers']);
-                });
-            } finally {
-                $released = $connection->selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockKey], useReadPdo: false);
-                if ((int) ($released?->released ?? 0) !== 1) {
-                    throw new \LogicException("Failed to release publication lock [{$lockKey}].");
-                }
-            }
-        }
-
-        return app(DatabaseCapability::class)->transaction(function () use ($formId, $baseVersionId, $lockVersion): Form {
+        return $this->withPublicationLock(fn (): Form => app(DatabaseCapability::class)->transaction(function () use ($formId, $baseVersionId, $lockVersion): Form {
             $form = Form::query()->whereKey($formId)->lockForUpdate()->firstOrFail();
             if ((int) $form->active_version_id !== $baseVersionId || (int) $form->lock_version !== $lockVersion) {
                 abort(409, 'The form changed while you were editing. Reload the current version.');
             }
-            $version = FormVersion::query()->whereKey($baseVersionId)->where('form_id', $form->id)->lockForUpdate()->firstOrFail();
+            if (! $form->active_version_id) {
+                throw new \DomainException('Cannot publish a form without an active draft version.');
+            }
+            $version = $form->versions()->whereKey($form->active_version_id)->lockForUpdate()->first();
+            if (! $version) {
+                throw new \DomainException('The active version does not belong to this form.');
+            }
             if ($version->isFrozen() && $form->status !== 'published') {
                 abort(409, 'A form version with student submissions cannot be published or reactivated.');
             }
@@ -152,6 +113,12 @@ class FormBuilderService
                 throw ValidationException::withMessages(['questions' => 'Add at least one question before publishing.']);
             }
 
+            if ($form->triggers()->where('trigger_name', 'pre_booking')->exists()) {
+                FormTrigger::where('trigger_name', 'pre_booking')
+                    ->where('form_id', '!=', $form->id)
+                    ->whereHas('form', fn ($query) => $query->where('status', 'published'))
+                    ->delete();
+            }
             $form->update([
                 'status' => 'published',
                 'published_version_id' => $version->id,
@@ -159,7 +126,28 @@ class FormBuilderService
             ]);
 
             return $form->fresh(['activeVersion.questions.options', 'triggers']);
-        });
+        }));
+    }
+
+    private function withPublicationLock(Closure $callback): Form
+    {
+        $connection = DB::connection();
+        $lockKey = substr($connection->getDatabaseName(), 0, 20).':pub:pre_booking';
+        if (strlen($lockKey) > 64) {
+            throw new \LogicException('Publication lock key exceeds 64 characters.');
+        }
+        $lock = $connection->selectOne('SELECT GET_LOCK(?, 10) AS acquired', [$lockKey], useReadPdo: false);
+        if ((int) ($lock?->acquired ?? 0) !== 1) {
+            throw new \DomainException('Another form publication is currently in progress. Please retry.');
+        }
+        try {
+            return $callback();
+        } finally {
+            $released = $connection->selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockKey], useReadPdo: false);
+            if ((int) ($released?->released ?? 0) !== 1) {
+                throw new \LogicException('Failed to release publication lock.');
+            }
+        }
     }
 
     public function archive(int $formId, int $lockVersion): Form

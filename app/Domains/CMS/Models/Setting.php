@@ -10,6 +10,20 @@ class Setting extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saved(function (self $setting): void {
+            if ($setting->key === 'business_timezone') {
+                Cache::forget('active_business_tz');
+            }
+        });
+        static::deleted(function (self $setting): void {
+            if ($setting->key === 'business_timezone') {
+                Cache::forget('active_business_tz');
+            }
+        });
+    }
+
     protected $table = 'settings';
 
     protected $fillable = [
@@ -52,8 +66,9 @@ class Setting extends Model
             ]
         );
 
-        if ($key === 'system.maintenance_mode' || $key === 'maintenance_mode') {
+        if (in_array($key, ['system.maintenance_mode', 'maintenance_mode'], true)) {
             Cache::forget('system.maintenance_mode');
+            Cache::forget('maintenance_mode_active');
         }
     }
 }

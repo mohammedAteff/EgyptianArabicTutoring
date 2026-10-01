@@ -12,6 +12,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 ini_set('unserialize_callback_func', 'spl_autoload_call');
 
@@ -40,6 +41,14 @@ return Application::configure(basePath: dirname(__DIR__))
             TrackVisitorSession::class,
             EnsureNotUnderMaintenance::class,
         ]);
+        $middleware->prependToPriorityList(
+            SubstituteBindings::class,
+            TrackVisitorSession::class,
+        );
+        $middleware->prependToPriorityList(
+            SubstituteBindings::class,
+            EnsureNotUnderMaintenance::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

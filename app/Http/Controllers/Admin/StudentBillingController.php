@@ -352,7 +352,7 @@ class StudentBillingController extends Controller
                 ->with(['student', 'package'])
                 ->orderByDesc('paid_at');
 
-            foreach ($payments->cursor() as $pmt) {
+            foreach ($payments->lazy(500) as $pmt) {
                 yield [
                     $pmt->paid_at?->toIso8601String() ?? '',
                     $pmt->student?->name ?? 'Unknown',
@@ -372,7 +372,7 @@ class StudentBillingController extends Controller
                 ->with(['student', 'package'])
                 ->orderByDesc('refunded_at');
 
-            foreach ($refunds->cursor() as $ref) {
+            foreach ($refunds->lazy(500) as $ref) {
                 yield [
                     $ref->refunded_at?->toIso8601String() ?? '',
                     $ref->student?->name ?? 'Unknown',
@@ -393,7 +393,7 @@ class StudentBillingController extends Controller
                 ->with(['student', 'package'])
                 ->orderByDesc('created_at');
 
-            foreach ($adjustments->cursor() as $adj) {
+            foreach ($adjustments->lazy(500) as $adj) {
                 yield [
                     $adj->created_at?->toIso8601String() ?? '',
                     $adj->student?->name ?? 'Unknown',

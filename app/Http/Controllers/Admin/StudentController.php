@@ -81,7 +81,7 @@ class StudentController extends Controller
         return view('admin.students.index', compact('students', 'search'));
     }
 
-    public function show(Request $request, int $student, StudentLedgerService $ledger): View
+    public function show(Request $request, int $student, StudentLedgerService $ledger, TimezoneService $timezones): View
     {
         $isAssistant = $request->user('web')?->role === 'assistant';
         $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at'];
@@ -94,7 +94,7 @@ class StudentController extends Controller
             ->where('student_id', $studentRecord->id)
             ->with('sessionType:id,title,duration_minutes')
             ->orderByDesc('start_at_utc')
-            ->get(['id', 'student_id', 'session_type_id', 'contact_id', 'start_at_utc', 'end_at_utc', 'customer_timezone', 'status', 'admin_reconfirmation_needed']);
+            ->get(['id', 'student_id', 'session_type_id', 'contact_id', 'start_at_utc', 'end_at_utc', 'business_timezone', 'customer_timezone', 'status', 'admin_reconfirmation_needed']);
         $formSubmissions = FormSubmission::query()
             ->where('student_id', $studentRecord->id)
             ->with([
@@ -127,6 +127,7 @@ class StudentController extends Controller
             'formSubmissions' => $formSubmissions,
             'financialPackages' => $financialPackages,
             'isAssistant' => $isAssistant,
+            'businessTz' => $timezones->getBusinessTimezone(),
         ]);
     }
 

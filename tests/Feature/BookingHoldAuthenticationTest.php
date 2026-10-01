@@ -4,13 +4,17 @@ namespace Tests\Feature;
 
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
+use App\Domains\Contacts\Models\Contact;
 use App\Livewire\BookingWizard;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -62,7 +66,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->slotEndUtc = $this->slotStartUtc->addMinutes(50);
     }
 
-    public function test_valid_owner_succeeds_and_converts_hold(): void
+    public function test_valid_owner_locks_contact_before_student_and_converts_hold(): void
     {
         $hold = $this->holdService->acquireHold(
             visitorToken: 'vis-legit-123',
@@ -72,7 +76,23 @@ class BookingHoldAuthenticationTest extends TestCase
             endUtc: $this->slotEndUtc
         );
 
-        $booking = $this->bookingService->createPublicBooking([
+        $lockedTables = [];
+        $expectedOrder = ['booking_calendar_locks', 'contacts', 'students', 'booking_holds', 'bookings'];
+        DB::listen(function (QueryExecuted $query) use (&$lockedTables, $expectedOrder): void {
+            $sql = strtolower($query->sql);
+            if (! str_contains($sql, 'for update')) {
+                return;
+            }
+
+            foreach ($expectedOrder as $table) {
+                if (preg_match('/\\bfrom\\s+[`"]?'.preg_quote($table, '/').'[`"]?(?:\\s|$)/', $sql) === 1) {
+                    $lockedTables[] = $table;
+                    break;
+                }
+            }
+        });
+
+        $booking = $this->createPublicBooking([
             'session_type_id' => $this->sessionType->id,
             'start_at_utc' => $this->slotStartUtc,
             'end_at_utc' => $this->slotEndUtc,
@@ -87,6 +107,7 @@ class BookingHoldAuthenticationTest extends TestCase
             'idempotency_key' => 'idem-valid-owner-1',
         ]);
 
+        $this->assertSame($expectedOrder, array_values(array_unique($lockedTables)));
         $this->assertNotNull($booking);
         $this->assertEquals('confirmed', $booking->status);
         $this->assertEquals('valid.customer@example.com', $booking->contact->email);
@@ -109,7 +130,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('A valid reservation hold is required.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -141,7 +162,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Reservation hold authentication token is required.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -175,7 +196,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Session authentication token is required.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -209,7 +230,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Invalid reservation hold authentication.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -243,7 +264,7 @@ class BookingHoldAuthenticationTest extends TestCase
 
         try {
             // Attacker guesses victim's sequential hold id and uses their own attacker token
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -277,7 +298,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Reservation hold ownership mismatch.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -311,7 +332,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Reservation hold session mismatch.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -344,7 +365,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $tamperedStart = $this->slotStartUtc->addHours(1);
         $tamperedEnd = $tamperedStart->addMinutes(50);
 
-        $booking = $this->bookingService->createPublicBooking([
+        $booking = $this->createPublicBooking([
             'session_type_id' => $this->sessionType->id,
             'start_at_utc' => $tamperedStart,
             'end_at_utc' => $tamperedEnd,
@@ -388,7 +409,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Reservation hold session type mismatch.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $otherSessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -425,7 +446,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Your reservation hold has expired.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -461,7 +482,7 @@ class BookingHoldAuthenticationTest extends TestCase
         $this->expectExceptionMessage('Your reservation hold is no longer active.');
 
         try {
-            $this->bookingService->createPublicBooking([
+            $this->createPublicBooking([
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $this->slotStartUtc,
                 'end_at_utc' => $this->slotEndUtc,
@@ -480,8 +501,29 @@ class BookingHoldAuthenticationTest extends TestCase
         }
     }
 
-    public function test_admin_manual_booking_succeeds_through_trusted_path_without_hold(): void
+    public function test_admin_manual_booking_locks_contact_before_booking_and_hold_rows(): void
     {
+        Contact::query()->create([
+            'name' => 'Admin Student',
+            'email' => 'admin.student@example.com',
+        ]);
+
+        $lockedTables = [];
+        $expectedOrder = ['booking_calendar_locks', 'contacts', 'bookings', 'booking_holds'];
+        DB::listen(function (QueryExecuted $query) use (&$lockedTables, $expectedOrder): void {
+            $sql = strtolower($query->sql);
+            if (! str_contains($sql, 'for update')) {
+                return;
+            }
+
+            foreach ($expectedOrder as $table) {
+                if (preg_match('/\\bfrom\\s+[`"]?'.preg_quote($table, '/').'[`"]?(?:\\s|$)/', $sql) === 1) {
+                    $lockedTables[] = $table;
+                    break;
+                }
+            }
+        });
+
         $booking = $this->bookingService->createAdminBooking([
             'session_type_id' => $this->sessionType->id,
             'start_at_utc' => $this->slotStartUtc,
@@ -494,6 +536,7 @@ class BookingHoldAuthenticationTest extends TestCase
             'idempotency_key' => 'idem-admin-trusted-1',
         ], adminId: 42);
 
+        $this->assertSame($expectedOrder, array_values(array_unique($lockedTables)));
         $this->assertNotNull($booking);
         $this->assertEquals('confirmed', $booking->status);
         $this->assertEquals('admin.student@example.com', $booking->contact->email);
@@ -511,5 +554,19 @@ class BookingHoldAuthenticationTest extends TestCase
 
         Livewire::test(BookingWizard::class)
             ->set('holdId', 9999);
+    }
+
+    private function createPublicBooking(array $data): Booking
+    {
+        $name = trim((string) ($data['customer_name'] ?? 'Test Student'));
+        [$firstName, $lastName] = array_pad(explode(' ', $name, 2), 2, 'Student');
+
+        return $this->bookingService->createPublicBooking(array_merge([
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'email' => $data['customer_email'] ?? 'test.student@example.com',
+            'phone' => $data['customer_phone'] ?? '+201000000000',
+            'date_of_birth' => '1990-01-01',
+        ], $data));
     }
 }

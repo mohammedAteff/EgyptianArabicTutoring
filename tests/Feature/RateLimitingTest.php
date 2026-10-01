@@ -119,6 +119,15 @@ class RateLimitingTest extends TestCase
         ]);
 
         $email = 'spam_test@example.com';
+        $resourcePage = $this->get(route('resources.show', $resource->slug));
+        $visitorCookie = $resourcePage->getCookie('_va_visitor');
+        $sessionCookie = $resourcePage->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
+        $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorCookie->getValue(),
+            '_va_session' => $sessionCookie->getValue(),
+        ]);
 
         for ($i = 0; $i < 5; $i++) {
             $response = $this->post(route('resources.request', ['slug' => $resource->slug]), [
@@ -216,6 +225,16 @@ class RateLimitingTest extends TestCase
             'file_path' => 'resources/vocab.pdf',
         ]);
 
+        $resourcePage = $this->get(route('resources.show', $resource->slug));
+        $visitorCookie = $resourcePage->getCookie('_va_visitor');
+        $sessionCookie = $resourcePage->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
+        $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorCookie->getValue(),
+            '_va_session' => $sessionCookie->getValue(),
+        ]);
+
         for ($i = 0; $i < 5; $i++) {
             $this->post(route('resources.request', ['slug' => $resource->slug]), [
                 'name' => 'Tester',
@@ -306,7 +325,10 @@ class RateLimitingTest extends TestCase
 
         // mount() selects the active session type
         $component = Livewire::test(BookingWizard::class)
-            ->set('name', 'Spam User')
+            ->set('first_name', 'Spam')
+            ->set('last_name', 'User')
+            ->set('date_of_birth', '1990-12-15')
+            ->set('phone', '+201000000014')
             ->set('email', $email);
 
         $component->call('confirmBooking');
@@ -338,7 +360,10 @@ class RateLimitingTest extends TestCase
             RateLimiter::hit($confirmEmailKey, 300);
         }
 
-        $component->set('name', 'Existing Customer')
+        $component->set('first_name', 'Existing')
+            ->set('last_name', 'Customer')
+            ->set('date_of_birth', '1991-02-15')
+            ->set('phone', '+201000000015')
             ->set('email', 'idempotent@example.com');
 
         // Calling confirmBooking should redirect to confirmation route rather than failing on rate limiter

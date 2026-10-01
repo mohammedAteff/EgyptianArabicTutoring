@@ -52,14 +52,35 @@ class StudentBookingService
 
         try {
             $booking = $this->database->transaction(function () use ($student, $slotId, $sessionType, $customerTimezone, $idempotencyKey, $slotOwnerToken, $startUtc, $endUtc, $bufferMinutes, &$bookingCreated): Booking {
-                // Lock the canonical scheduling resource before student and booking rows.
+                // Lock the canonical scheduling resource before contact, student, and booking rows.
                 $this->availability->acquireCalendarDateLocks($startUtc, $endUtc, $bufferMinutes);
+
+                $studentSnapshot = Student::query()
+                    ->whereKey($student->id)
+                    ->where('identity_status', 'verified')
+                    ->firstOrFail();
+
+                // Resolve and lock the Contact before locking the Student row.
+                $email = $studentSnapshot->email_normalized ?: 'student-'.$studentSnapshot->id.'@internal.invalid';
+                $contact = $this->contacts->resolveOrCreate(
+                    email: $email,
+                    name: trim($studentSnapshot->first_name.' '.$studentSnapshot->last_name),
+                    phone: $studentSnapshot->phone,
+                    attribution: ['utm_source' => 'Student Portal'],
+                );
 
                 $lockedStudent = Student::query()
                     ->whereKey($student->id)
                     ->where('identity_status', 'verified')
                     ->lockForUpdate()
                     ->firstOrFail();
+
+                if ($lockedStudent->email_normalized !== $studentSnapshot->email_normalized
+                    || $lockedStudent->first_name !== $studentSnapshot->first_name
+                    || $lockedStudent->last_name !== $studentSnapshot->last_name
+                    || $lockedStudent->phone !== $studentSnapshot->phone) {
+                    throw new SlotUnavailableException('Student identity changed during booking confirmation. Please try again.');
+                }
 
                 $replay = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
                 if ($replay) {
@@ -74,13 +95,6 @@ class StudentBookingService
                     throw new SlotUnavailableException('This time slot changed while it was being booked. Select it again.');
                 }
 
-                $email = $lockedStudent->email_normalized ?: 'student-'.$lockedStudent->id.'@internal.invalid';
-                $contact = $this->contacts->resolveOrCreate(
-                    email: $email,
-                    name: trim($lockedStudent->first_name.' '.$lockedStudent->last_name),
-                    phone: $lockedStudent->phone,
-                    attribution: ['utm_source' => 'Student Portal'],
-                );
                 $snapshot = $this->timezones->createBookingSnapshot(
                     startUtc: $authoritativeStart,
                     endUtc: $authoritativeEnd,

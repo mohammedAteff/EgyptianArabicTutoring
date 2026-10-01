@@ -19,17 +19,29 @@ use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Resources\Models\ResourceRequest;
+use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Timezone\Services\TimezoneService;
+use App\Http\Middleware\EnsureNotUnderMaintenance;
+use App\Livewire\BookingWizard;
+use App\Mail\ResourceVerificationPinMail;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class V5RemediationModuleTest extends TestCase
@@ -77,6 +89,133 @@ class V5RemediationModuleTest extends TestCase
         RateLimiter::clearResolvedInstances();
     }
 
+    public function test_public_intake_uses_real_question_types_and_field_validation(): void
+    {
+        $form = $this->intakeForm([
+            ['question_key' => 'level', 'label' => 'Experience', 'question_type' => 'dropdown', 'is_required' => true,
+                'options' => [['label' => 'Beginner', 'value' => 'beginner']]],
+            ['question_key' => 'notes', 'label' => 'Long notes', 'question_type' => 'long_text'],
+            ['question_key' => 'interests', 'label' => 'Interests', 'question_type' => 'multiple_choice',
+                'options' => [['label' => 'Travel', 'value' => 'travel']]],
+            ['question_key' => 'contact', 'label' => 'Other email', 'question_type' => 'email'],
+        ]);
+        $question = $form->publishedVersion->questions->firstWhere('question_key', 'level');
+
+        $wizard = $this->intakeWizard()->set('currentStep', 3)
+            ->assertSeeHtml('<textarea')->assertSeeHtml('type="checkbox"')->assertSeeHtml('type="email"')
+            ->assertSeeHtml('value="beginner"')
+            ->set('intakeAnswers', [$question->id => 'forged'])->call('submitDetails');
+
+        $wizard->assertHasErrors("intakeAnswers.{$question->id}")->assertSet('currentStep', 3);
+        $this->assertDatabaseCount('bookings', 0);
+    }
+
+    public function test_false_zero_and_hidden_required_answers_are_handled_consistently(): void
+    {
+        $form = $this->intakeForm([
+            ['question_key' => 'studied', 'label' => 'Studied before', 'question_type' => 'yes_no', 'is_required' => true],
+            ['question_key' => 'years', 'label' => 'Years', 'question_type' => 'number', 'is_required' => true],
+            ['question_key' => 'course', 'label' => 'Previous course', 'question_type' => 'short_text', 'is_required' => true,
+                'conditional_logic' => ['logic_version' => 1, 'mode' => 'all', 'conditions' => [
+                    ['question_key' => 'studied', 'operator' => 'equals', 'value' => true],
+                ]]],
+            ['question_key' => 'info', 'label' => 'Information', 'question_type' => 'info_block'],
+        ]);
+        $questions = $form->publishedVersion->questions->keyBy('question_key');
+
+        $this->intakeWizard()->set('currentStep', 3)->set('intakeAnswers', [
+            $questions['studied']->id => '0', $questions['years']->id => 0, $questions['course']->id => 'Discard hidden value',
+        ])->call('submitDetails')->assertHasNoErrors()->assertSet('currentStep', 4);
+
+        $validated = app(BookingService::class)->validatePublicIntake($form->published_version_id, [
+            'studied' => false, 'years' => 0, 'course' => 'Discard hidden value',
+        ]);
+        $this->assertSame(['studied' => false, 'years' => 0], $validated);
+    }
+
+    public function test_replacing_intake_during_booking_requires_review_of_the_new_form(): void
+    {
+        $first = $this->intakeForm([['question_key' => 'old_goal', 'label' => 'Old goal', 'question_type' => 'short_text']]);
+        $wizard = $this->intakeWizard()->set('currentStep', 3)->set('intakeAnswers', ['old_goal' => 'Old response']);
+        $second = $this->intakeForm([['question_key' => 'new_goal', 'label' => 'New goal', 'question_type' => 'short_text']]);
+
+        $wizard->call('submitDetails')->assertHasErrors('intakeForm')->assertSet('currentStep', 3)
+            ->assertSet('preBookingFormId', $second->id)->assertSet('intakeAnswers', [])->assertSee('New goal');
+        $wizard->call('submitDetails')->assertHasNoErrors()->assertSet('currentStep', 4);
+
+        try {
+            app(BookingService::class)->validatePublicIntake($first->published_version_id, ['old_goal' => 'Old response']);
+            $this->fail('A replaced intake version must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('intakeForm', $exception->errors());
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $questions */
+    private function intakeForm(array $questions): Form
+    {
+        $builder = app(FormBuilderService::class);
+        $form = $builder->create([
+            'title' => 'Review intake', 'slug' => 'review-intake-'.Str::lower(Str::random(10)),
+            'trigger' => 'pre_booking', 'is_mandatory' => true, 'can_edit_after_submission' => false,
+        ], $questions, $this->admin);
+
+        return $builder->publish($form->id, $form->active_version_id, $form->lock_version);
+    }
+
+    private function intakeWizard(): Testable
+    {
+        return Livewire::test(BookingWizard::class)->set('first_name', 'Review')->set('last_name', 'Learner')
+            ->set('email', 'review@example.test')->set('phone', '+201012345678')->set('date_of_birth', '1990-01-01');
+    }
+
+    public function test_pin_issuance_queues_mail_and_verification_unlocks_a_localized_download(): void
+    {
+        Mail::fake();
+        Config::set('business.resources.require_pin_verification', true);
+        Config::set('cache.default', 'database');
+        $category = ResourceCategory::create(['name' => 'PIN review', 'slug' => 'pin-review', 'active' => true]);
+        $resource = Resource::create([
+            'title' => 'PIN review guide', 'slug' => 'pin-review-guide', 'category_id' => $category->id,
+            'status' => 'published', 'published_at' => now()->subDay(), 'is_gated' => true,
+            'external_url' => 'https://example.org/guide.pdf',
+        ]);
+        $page = $this->get(route('resources.show.fr', $resource->slug));
+        $this->withCredentials()->withCookies([
+            '_va_visitor' => $page->getCookie('_va_visitor')->getValue(),
+            '_va_session' => $page->getCookie('_va_session')->getValue(),
+        ]);
+
+        $issued = $this->postJson(route('resources.request.fr', $resource->slug), ['name' => 'Review learner', 'email' => 'pin-review@example.test']);
+        $issued->assertOk()->assertJsonPath('requires_pin', true);
+        $challenge = $issued->json('challenge');
+        $this->assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/', $challenge);
+        $this->assertDatabaseCount('resource_requests', 0);
+        $pin = null;
+        Mail::assertQueued(ResourceVerificationPinMail::class, function ($mail) use (&$pin): bool {
+            $pin = $mail->pin;
+
+            return $mail->hasTo('pin-review@example.test');
+        });
+        $this->assertMatchesRegularExpression('/\A[0-9]{6}\z/', $pin);
+
+        $verified = $this->postJson(route('resources.verify-pin.fr', $resource->slug), ['challenge' => $challenge, 'pin' => $pin]);
+        $verified->assertOk();
+        $this->assertStringStartsWith(route('resources.download.fr', $resource->slug), $verified->json('download_url'));
+        $this->assertDatabaseHas('resource_requests', ['resource_id' => $resource->id, 'consumed_challenge_hash' => hash('sha256', $challenge)]);
+        $this->withCookie(config('session.cookie'), $verified->getCookie(config('session.cookie'))->getValue());
+        $this->get($verified->json('download_url'))->assertRedirect('https://example.org/guide.pdf');
+        $this->assertDatabaseHas('resource_downloads', ['resource_id' => $resource->id]);
+    }
+
+    public function test_broken_student_merge_chains_are_rejected_instead_of_linked(): void
+    {
+        $student = Student::factory()->create(['identity_status' => 'merged', 'merged_into_student_id' => null]);
+
+        $this->expectException(StudentIdentityConflictException::class);
+        app(StudentIdentityService::class)->resolveCanonicalStudent($student);
+    }
+
     public function test_dynamic_tutor_timezone_and_customer_timezone_isolation(): void
     {
         Setting::set('business_timezone', 'Africa/Cairo', 'booking', true);
@@ -111,7 +250,6 @@ class V5RemediationModuleTest extends TestCase
 
         // Update business_timezone to Asia/Tokyo
         Setting::set('business_timezone', 'Asia/Tokyo', 'booking', true);
-        Cache::forget('active_business_tz');
 
         $booking->refresh();
 
@@ -222,7 +360,7 @@ class V5RemediationModuleTest extends TestCase
             'is_mandatory' => true,
             'can_edit_after_submission' => false,
         ], $questions, $this->admin);
-        $builder->publish($form->id, $form->active_version_id, $form->lock_version);
+        $form = $builder->publish($form->id, $form->active_version_id, $form->lock_version);
 
         $startUtc = CarbonImmutable::now('UTC')->addDays(4)->startOfHour();
         $endUtc = $startUtc->addMinutes(60);
@@ -240,30 +378,123 @@ class V5RemediationModuleTest extends TestCase
 
         $bookingService = app(BookingService::class);
 
-        // Missing required intake answers must throw ValidationException before creating booking
-        $this->expectException(ValidationException::class);
+        $bookingKey = Str::uuid()->toString();
+        $identity = app(StudentIdentityService::class)->normalizeIdentity(
+            'intake@example.test',
+            '+201099887766',
+            'Intake',
+            'Student'
+        );
+        $lockKey = substr(DB::connection()->getDatabaseName(), 0, 20).':stu:'.substr(hash('sha256', $identity), 0, 32);
+        $validationFailed = false;
 
-        $bookingService->createPublicBooking(
-            [
+        try {
+            $bookingService->createPublicBooking(
+                [
+                    'hold_id' => $hold->id,
+                    'hold_token' => $hold->hold_token,
+                    'visitor_token' => $hold->visitor_token,
+                    'session_token' => $hold->session_token,
+                    'customer_name' => 'Intake Student',
+                    'first_name' => 'Intake',
+                    'last_name' => 'Student',
+                    'date_of_birth' => '2000-01-01',
+                    'customer_email' => 'intake@example.test',
+                    'customer_phone' => '+201099887766',
+                    'customer_timezone' => 'Africa/Cairo',
+                    'session_type_id' => $this->sessionType->id,
+                    'start_at_utc' => $startUtc->toIso8601String(),
+                    'end_at_utc' => $endUtc->toIso8601String(),
+                    'idempotency_key' => $bookingKey,
+                ],
+                intakeAnswers: [],
+                formVersionId: $form->published_version_id
+            );
+        } catch (ValidationException) {
+            $validationFailed = true;
+        }
+
+        $this->assertTrue($validationFailed, 'Missing mandatory intake answers must fail validation.');
+        $this->assertDatabaseMissing('bookings', ['idempotency_key' => $bookingKey]);
+        $this->assertDatabaseMissing('contacts', ['email' => 'intake@example.test']);
+        $this->assertDatabaseMissing('students', ['email_normalized' => 'intake@example.test']);
+        $this->assertSame('active', $hold->fresh()->status);
+        $lockState = DB::connection()->selectOne('SELECT IS_USED_LOCK(?) AS owner', [$lockKey], useReadPdo: false);
+        $this->assertNull($lockState?->owner, 'Intake validation must happen before acquiring the named identity lock.');
+    }
+
+    public function test_intake_answer_persistence_failure_rolls_back_booking_and_submission(): void
+    {
+        $builder = app(FormBuilderService::class);
+        $form = $builder->create([
+            'title' => 'Persistence Rollback Form',
+            'slug' => 'persistence-rollback-'.uniqid(),
+            'trigger' => 'pre_booking',
+            'is_mandatory' => false,
+            'can_edit_after_submission' => false,
+        ], [[
+            'question_key' => 'goal',
+            'label' => 'Learning goal',
+            'question_type' => 'short_text',
+            'is_required' => false,
+            'assistant_visible' => true,
+        ]], $this->admin);
+        $form = $builder->publish($form->id, $form->active_version_id, $form->lock_version);
+
+        $startUtc = CarbonImmutable::now('UTC')->addDays(6)->startOfHour();
+        $hold = app(BookingHoldService::class)->acquireHold(
+            (string) Str::uuid(),
+            (string) Str::uuid(),
+            $this->sessionType,
+            $startUtc,
+            $startUtc->addHour(),
+            60
+        );
+        $bookingKey = Str::uuid()->toString();
+        $submissionCountBefore = FormSubmission::query()->where('form_version_id', $form->published_version_id)->count();
+        $answerWriteFailed = true;
+
+        DB::connection()->beforeExecuting(function (string $query) use (&$answerWriteFailed): void {
+            if ($answerWriteFailed && str_contains(strtolower($query), 'form_answers')) {
+                $answerWriteFailed = false;
+                throw new \RuntimeException('Simulated intake answer persistence failure.');
+            }
+        });
+
+        $caughtFailure = false;
+        try {
+            app(BookingService::class)->createPublicBooking([
                 'hold_id' => $hold->id,
                 'hold_token' => $hold->hold_token,
                 'visitor_token' => $hold->visitor_token,
                 'session_token' => $hold->session_token,
-                'customer_name' => 'Intake Student',
-                'first_name' => 'Intake',
+                'customer_name' => 'Rollback Student',
+                'first_name' => 'Rollback',
                 'last_name' => 'Student',
-                'date_of_birth' => '2000-01-01',
-                'customer_email' => 'intake@example.test',
-                'customer_phone' => '+201099887766',
+                'date_of_birth' => '1990-01-01',
+                'customer_email' => 'rollback-student@example.test',
+                'customer_phone' => '+201012345678',
                 'customer_timezone' => 'Africa/Cairo',
                 'session_type_id' => $this->sessionType->id,
                 'start_at_utc' => $startUtc->toIso8601String(),
-                'end_at_utc' => $endUtc->toIso8601String(),
-                'idempotency_key' => Str::uuid()->toString(),
-            ],
-            intakeAnswers: [], // Empty answers fails validation
-            formVersionId: $form->published_version_id
+                'end_at_utc' => $startUtc->addHour()->toIso8601String(),
+                'idempotency_key' => $bookingKey,
+            ], ['goal' => 'Speak confidently'], $form->published_version_id);
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Simulated intake answer persistence failure.', $exception->getMessage());
+            $caughtFailure = true;
+        }
+
+        $this->assertTrue($caughtFailure, 'The injected answer persistence failure must be observed.');
+        $this->assertDatabaseMissing('bookings', ['idempotency_key' => $bookingKey]);
+        $this->assertDatabaseMissing('contacts', ['email' => 'rollback-student@example.test']);
+        $this->assertDatabaseMissing('students', ['email_normalized' => 'rollback-student@example.test']);
+        $this->assertSame(
+            $submissionCountBefore,
+            FormSubmission::query()->where('form_version_id', $form->published_version_id)->count()
         );
+        $this->assertSame('active', $hold->fresh()->status);
+        $this->assertFalse($answerWriteFailed, 'The failure hook must be inert after its one simulated failure.');
     }
 
     public function test_cross_version_question_rejection(): void
@@ -330,7 +561,7 @@ class V5RemediationModuleTest extends TestCase
         );
     }
 
-    public function test_all_writer_pre_booking_publication_serialization(): void
+    public function test_pre_booking_publication_replaces_the_active_trigger(): void
     {
         $builder = app(FormBuilderService::class);
         $questions = [
@@ -363,6 +594,21 @@ class V5RemediationModuleTest extends TestCase
         $this->assertTrue($form2->triggers()->where('trigger_name', 'pre_booking')->exists());
         // Exactly one form has pre_booking
         $this->assertSame(1, DB::table('form_triggers')->where('trigger_name', 'pre_booking')->count());
+    }
+
+    public function test_publishing_one_intake_preserves_another_drafts_trigger_selection(): void
+    {
+        $builder = app(FormBuilderService::class);
+        $questions = [['question_key' => 'goal', 'label' => 'Goal', 'question_type' => 'short_text']];
+        $first = $builder->create(['title' => 'First draft', 'slug' => 'first-review-draft', 'trigger' => 'pre_booking'], $questions, $this->admin);
+        $second = $builder->create(['title' => 'Second draft', 'slug' => 'second-review-draft', 'trigger' => 'pre_booking'], $questions, $this->admin);
+
+        $builder->publish($first->id, $first->active_version_id, $first->lock_version);
+
+        $this->assertTrue($second->triggers()->where('trigger_name', 'pre_booking')->exists());
+        $builder->publish($second->id, $second->active_version_id, $second->lock_version);
+        $this->assertSame($second->id, app(BookingService::class)->publishedIntakeForm()->id);
+        $this->assertFalse($first->triggers()->where('trigger_name', 'pre_booking')->exists());
     }
 
     public function test_form_author_immutability(): void
@@ -410,7 +656,7 @@ class V5RemediationModuleTest extends TestCase
         $this->assertSame($this->admin->id, $form->fresh()->created_by);
     }
 
-    public function test_concurrent_draft_autosave_preserves_single_draft_record(): void
+    public function test_repeated_draft_autosave_preserves_single_draft_record(): void
     {
         $builder = app(FormBuilderService::class);
         $questions = [
@@ -481,7 +727,7 @@ class V5RemediationModuleTest extends TestCase
             'sort_order' => 1,
         ]);
 
-        // Missing cookies with spoofed tokens in body returns 403 Forbidden
+        // Missing cookies with spoofed tokens in body returns 403 Forbidden.
         $response = $this->postJson(route('resources.request', $resource->slug), [
             'name' => 'Spoofer',
             'email' => 'spoofer@example.test',
@@ -491,15 +737,72 @@ class V5RemediationModuleTest extends TestCase
 
         $response->assertStatus(403);
 
-        // Verification without cookies returns 403 Forbidden
+        $visitorToken = (string) Str::uuid();
+        $sessionToken = (string) Str::uuid();
+        $spoofedToken = (string) Str::uuid();
+        $requestUrl = route('resources.request', $resource->slug).'?'.http_build_query([
+            'visitor_token' => $spoofedToken,
+            'session_token' => $spoofedToken,
+        ]);
+        $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorToken,
+            '_va_session' => $sessionToken,
+        ])->postJson($requestUrl, [
+            'name' => 'Cookie Owner',
+            'email' => 'cookie-owner@example.test',
+            'visitor_token' => $spoofedToken,
+            'session_token' => $spoofedToken,
+        ])->assertOk()->assertJson(['requires_pin' => false]);
+
+        $storedRequest = ResourceRequest::query()->where('resource_id', $resource->id)->firstOrFail();
+        $this->assertSame($visitorToken, $storedRequest->visitor_token);
+        $this->assertSame($sessionToken, $storedRequest->session_token);
+
+        // Verification without cookies returns 403 even when tokens are supplied in the body.
         $challenge = bin2hex(random_bytes(32));
         $responseVerify = $this->postJson(route('resources.verify-pin', $resource->slug), [
             'challenge' => $challenge,
             'pin' => '123456',
-            'visitor_token' => Str::uuid()->toString(),
+            'visitor_token' => $spoofedToken,
+            'session_token' => $spoofedToken,
         ]);
 
         $responseVerify->assertStatus(403);
+
+        Config::set('business.resources.require_pin_verification', true);
+        $challenge = bin2hex(random_bytes(32));
+        $challengeHash = hash('sha256', $challenge);
+        Cache::put("resource_pin:{$challenge}", [
+            'hash' => Hash::make('123456'),
+            'name' => 'Cookie Owner',
+            'email' => 'cookie-owner@example.test',
+            'resource_id' => $resource->id,
+            'visitor_token' => $visitorToken,
+            'session_token' => $sessionToken,
+            'attribution' => [],
+            'attempts' => 0,
+        ], now()->addMinutes(10));
+
+        $verifyUrl = route('resources.verify-pin', $resource->slug).'?'.http_build_query([
+            'visitor_token' => $spoofedToken,
+            'session_token' => $spoofedToken,
+        ]);
+        $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorToken,
+            '_va_session' => $sessionToken,
+        ])->postJson($verifyUrl, [
+            'challenge' => $challenge,
+            'pin' => '123456',
+            'visitor_token' => $spoofedToken,
+            'session_token' => $spoofedToken,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('resource_requests', [
+            'resource_id' => $resource->id,
+            'visitor_token' => $visitorToken,
+            'session_token' => $sessionToken,
+            'consumed_challenge_hash' => $challengeHash,
+        ]);
     }
 
     public function test_granular_challenge_hash_replay_and_race_verification(): void
@@ -687,6 +990,17 @@ class V5RemediationModuleTest extends TestCase
         $adminLogin = $this->get('/admin/login');
         $adminLogin->assertStatus(200);
 
+        $health = $this->get(route('admin.health'));
+        $this->assertNotSame(503, $health->getStatusCode());
+
+        Route::middleware('web')->get('/build/maintenance-probe', fn () => response('asset'));
+        $this->get('/build/maintenance-probe')->assertOk()->assertSeeText('asset');
+        $storageResponse = app(EnsureNotUnderMaintenance::class)->handle(
+            Request::create('/storage/maintenance-probe'),
+            fn () => response('asset'),
+        );
+        $this->assertSame('asset', $storageResponse->getContent());
+
         // Authenticated admin bypasses 503
         $authResponse = $this->actingAs($this->admin, 'web')->get('/');
         $this->assertNotSame(503, $authResponse->getStatusCode());
@@ -696,7 +1010,7 @@ class V5RemediationModuleTest extends TestCase
         Cache::forget('maintenance_mode_active');
     }
 
-    public function test_telemetry_triple_verification(): void
+    public function test_resource_gate_telemetry_is_allowlisted_and_excluded_for_admins_and_previews(): void
     {
         $allowed = AnalyticsService::ALLOWED_EVENTS;
 
@@ -706,18 +1020,95 @@ class V5RemediationModuleTest extends TestCase
         $this->assertContains('game_completed', $allowed);
         $this->assertContains('section_view', $allowed);
 
-        // Telemetry POST
-        $visitorToken = (string) Str::uuid();
-        $sessionToken = (string) Str::uuid();
+        $category = ResourceCategory::create([
+            'slug' => 'telemetry-'.uniqid(),
+            'name' => 'Telemetry',
+            'sort_order' => 1,
+            'active' => true,
+        ]);
+        $resource = Resource::create([
+            'title' => 'Telemetry Resource',
+            'slug' => 'telemetry-resource-'.uniqid(),
+            'category_id' => $category->id,
+            'status' => 'published',
+            'published_at' => now()->subDay(),
+            'sort_order' => 1,
+        ]);
 
-        $response = $this->withCookies([
+        $this->get(route('resources.show', $resource->slug))
+            ->assertOk()
+            ->assertSee('data-analytics-event="resource_gate_viewed"', false);
+
+        $this->actingAs($this->admin, 'web')
+            ->get(route('resources.show', $resource->slug))
+            ->assertOk()
+            ->assertDontSee('data-analytics-event="resource_gate_viewed"', false);
+
+        $this->get(route('resources.preview', $resource->slug))
+            ->assertOk()
+            ->assertDontSee('data-analytics-event="resource_gate_viewed"', false);
+
+        $telemetryScript = file_get_contents(resource_path('js/analytics-telemetry.js'));
+        $resourceView = file_get_contents(resource_path('views/public/resources/show.blade.php'));
+        $this->assertStringContainsString("querySelectorAll('[data-analytics-event]')", $telemetryScript);
+        $this->assertStringContainsString('data-analytics-event="resource_gate_viewed"', $resourceView);
+        $this->assertStringContainsString("'section_view'", $telemetryScript);
+
+        // Telemetry POST
+        Auth::guard('web')->logout();
+        $page = $this->get(route('resources.show', $resource->slug));
+        $visitorToken = $page->getCookie('_va_visitor')->getValue();
+        $sessionToken = $page->getCookie('_va_session')->getValue();
+
+        $response = $this->withCredentials()->withCookies([
             '_va_visitor' => $visitorToken,
             '_va_session' => $sessionToken,
         ])->postJson(route('analytics.track'), [
-            'event_name' => 'session_activity',
-            'metadata' => ['duration_seconds' => 120],
+            'event_name' => 'resource_gate_viewed',
+            'metadata' => ['resource_slug' => $resource->slug],
         ]);
 
         $response->assertOk();
+        $this->assertDatabaseHas('analytics_events', ['event_name' => 'resource_gate_viewed', 'visitor_token' => $visitorToken]);
+    }
+
+    public function test_resource_gate_telemetry_script_dispatches_once_when_the_page_mounts(): void
+    {
+        $script = <<<'JS'
+const fs = require('node:fs');
+const vm = require('node:vm');
+const calls = [];
+const element = {
+    dataset: {analyticsEvent: 'resource_gate_viewed', analyticsMetadata: '{"resource_slug":"guide"}'},
+    removeAttribute(name) { delete this.dataset[name === 'data-analytics-event' ? 'analyticsEvent' : 'analyticsMetadata']; }
+};
+const document = {
+    readyState: 'complete', visibilityState: 'visible', addEventListener() {},
+    querySelector(selector) {
+        if (selector === 'meta[name="analytics-event-url"]') return {content: '/analytics/track'};
+        if (selector === 'meta[name="csrf-token"]') return {getAttribute: () => 'csrf'};
+        return null;
+    },
+    querySelectorAll(selector) {
+        return selector === '[data-analytics-event]' && element.dataset.analyticsEvent ? [element] : [];
+    }
+};
+const context = vm.createContext({
+    document, window: {location: {pathname: '/resources/guide', href: 'https://example.test/resources/guide'}, addEventListener() {}},
+    fetch(url, options) { calls.push(JSON.parse(options.body)); return Promise.resolve({ok: true}); },
+    setInterval() { return 1; }, clearInterval() {}, crypto: {randomUUID: () => '12345678-1234-4234-8234-123456789abc'}
+});
+const source = fs.readFileSync(process.argv[1], 'utf8');
+vm.runInContext(source, context);
+vm.runInContext(source, context);
+process.stdout.write(JSON.stringify(calls.flatMap(call => call.events)));
+JS;
+        $process = new Process(['node', '-e', $script, resource_path('js/analytics-telemetry.js')]);
+        $process->mustRun();
+        $events = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('resource_gate_viewed', $events[0]['event_name']);
+        $this->assertSame('guide', $events[0]['metadata']['resource_slug']);
     }
 }

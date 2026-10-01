@@ -13,8 +13,11 @@ use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Forms\Models\Form;
+use App\Domains\Forms\Models\FormVersion;
+use App\Domains\Forms\Services\FormValidationService;
 use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
+use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
@@ -22,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -115,8 +119,14 @@ class BookingWizard extends Component
             'last_name' => 'required|string|min:2|max:100',
             'name' => 'nullable|string|max:200',
             'email' => 'required|email|max:255',
-            'phone' => 'nullable|string|max:50',
-            'date_of_birth' => 'nullable|date|before:today',
+            'phone' => ['required', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
+                try {
+                    app(StudentIdentityService::class)->normalizePhone(is_string($value) ? $value : null);
+                } catch (\InvalidArgumentException $exception) {
+                    $fail($exception->getMessage());
+                }
+            }],
+            'date_of_birth' => 'required|date_format:Y-m-d|before:today',
             'notes' => 'nullable|string|max:1000',
             'honeypot' => 'nullable|max:0',
         ];
@@ -127,6 +137,7 @@ class BookingWizard extends Component
         'last_name.required' => 'Please provide your last name.',
         'email.required' => 'Please provide a valid email address for your calendar invite.',
         'email.email' => 'Please provide a valid email address.',
+        'phone.required' => 'Please provide your phone number.',
         'date_of_birth.required' => 'Please provide your date of birth.',
         'date_of_birth.date' => 'Please provide a valid date of birth.',
         'date_of_birth.before' => 'Date of birth must be in the past.',
@@ -163,13 +174,11 @@ class BookingWizard extends Component
         }
 
         // Resolve published pre-booking form
-        $publishedForm = Form::query()
-            ->where('status', 'published')
-            ->whereHas('triggers', fn ($q) => $q->where('trigger_name', 'pre_booking'))
-            ->first();
+        $publishedForm = app(BookingService::class)->publishedIntakeForm();
         if ($publishedForm) {
             $this->preBookingFormId = $publishedForm->id;
             $this->initialPublishedVersionId = $publishedForm->published_version_id;
+            $this->intakeAnswers = $this->intakeDefaults($publishedForm);
         }
 
         // Restore booking flow state across language switches or page navigations (Section 28)
@@ -185,14 +194,14 @@ class BookingWizard extends Component
                 $this->selectedSessionTypeId = $savedState['selected_session_type_id'] ?? $this->selectedSessionTypeId;
                 $this->first_name = $savedState['first_name'] ?? '';
                 $this->last_name = $savedState['last_name'] ?? '';
-                $this->name = $savedState['name'] ?? trim("{$this->first_name} {$this->last_name}");
-                if (empty($this->first_name) && ! empty($this->name)) {
-                    $parts = explode(' ', trim($this->name), 2);
-                    $this->first_name = $parts[0];
-                    $this->last_name = $parts[1] ?? $parts[0];
-                }
+                $this->name = trim("{$this->first_name} {$this->last_name}");
                 $this->date_of_birth = $savedState['date_of_birth'] ?? null;
-                $this->intakeAnswers = $savedState['intake_answers'] ?? [];
+                $this->intakeAnswers = ($savedState['intake_answers'] ?? []) + $this->intakeAnswers;
+                if (array_key_exists('initial_published_version_id', $savedState)
+                    && $savedState['initial_published_version_id'] !== $this->initialPublishedVersionId) {
+                    $this->intakeAnswers = $this->intakeDefaults($publishedForm);
+                    $this->addError('intakeForm', 'The intake form was updated while you were booking. Please review the updated questions.');
+                }
                 $this->email = $savedState['email'] ?? '';
                 $this->phone = $savedState['phone'] ?? '';
                 $this->notes = $savedState['notes'] ?? '';
@@ -515,37 +524,12 @@ class BookingWizard extends Component
 
     public function submitDetails(): void
     {
-        if ($this->first_name === '' && $this->last_name === '' && ! empty($this->name)) {
-            $parts = explode(' ', trim($this->name), 2);
-            $this->first_name = $parts[0];
-            $this->last_name = $parts[1] ?? $parts[0];
-        } else {
-            $this->name = trim("{$this->first_name} {$this->last_name}");
-        }
+        $this->name = trim("{$this->first_name} {$this->last_name}");
 
         $this->validate();
 
-        if ($this->preBookingFormId && $this->initialPublishedVersionId) {
-            $currentPublishedForm = Form::query()
-                ->whereKey($this->preBookingFormId)
-                ->where('status', 'published')
-                ->first();
-            if (! $currentPublishedForm || $this->initialPublishedVersionId !== $currentPublishedForm->published_version_id) {
-                $this->addError('intakeForm', 'The intake form was updated while you were booking. Please review the updated questions.');
-
-                return;
-            }
-            $version = $currentPublishedForm->publishedVersion()->with('questions.options')->first();
-            if ($version) {
-                foreach ($version->questions as $question) {
-                    if ($question->is_required && empty($this->intakeAnswers[$question->id]) && empty($this->intakeAnswers[$question->question_key])) {
-                        $this->addError("intakeAnswers.{$question->id}", "The {$question->label} question is required.");
-                    }
-                }
-                if ($this->getErrorBag()->isNotEmpty()) {
-                    return;
-                }
-            }
+        if (! $this->validateIntake()) {
+            return;
         }
 
         $this->errorMessage = null;
@@ -559,17 +543,10 @@ class BookingWizard extends Component
         $this->validate();
         $this->errorMessage = null;
 
-        if ($this->preBookingFormId && $this->initialPublishedVersionId) {
-            $currentPublishedForm = Form::query()
-                ->whereKey($this->preBookingFormId)
-                ->where('status', 'published')
-                ->first();
-            if (! $currentPublishedForm || $this->initialPublishedVersionId !== $currentPublishedForm->published_version_id) {
-                $this->addError('intakeForm', 'The intake form was updated while you were booking. Please review the updated questions.');
-                $this->currentStep = 3;
+        if (! $this->validateIntake()) {
+            $this->currentStep = 3;
 
-                return;
-            }
+            return;
         }
 
         // Idempotency: If booking for this idempotency key already exists, redirect cleanly
@@ -603,7 +580,7 @@ class BookingWizard extends Component
         }
 
         $ip = request()->ip() ?? '127.0.0.1';
-        $normalizedEmail = strtolower(trim((string) $this->email));
+        $normalizedEmail = app(StudentIdentityService::class)->normalizeEmail($this->email);
         $confirmIpKey = 'throttle:booking-confirm:ip:'.$ip;
         $confirmEmailKey = 'throttle:booking-confirm:email:'.$normalizedEmail;
 
@@ -694,9 +671,53 @@ class BookingWizard extends Component
         } catch (StudentIdentityConflictException $e) {
             $this->addError('email', 'A profile conflict was detected. Please contact support.');
             $this->currentStep = 3;
+        } catch (ValidationException $e) {
+            foreach ($e->errors() as $key => $messages) {
+                $this->addError($key, $messages[0]);
+            }
+            $this->currentStep = 3;
         } catch (\Throwable $e) {
             $this->errorMessage = 'An error occurred while confirming your booking. Please try again.';
         }
+    }
+
+    private function validateIntake(): bool
+    {
+        $this->resetValidation();
+        $bookingService = app(BookingService::class);
+        $currentForm = $bookingService->publishedIntakeForm();
+        if ($this->preBookingFormId !== $currentForm?->id || $this->initialPublishedVersionId !== $currentForm?->published_version_id) {
+            $this->preBookingFormId = $currentForm?->id;
+            $this->initialPublishedVersionId = $currentForm?->published_version_id;
+            $this->intakeAnswers = $this->intakeDefaults($currentForm);
+            $this->addError('intakeForm', 'The intake form was updated while you were booking. Please review the updated questions.');
+
+            return false;
+        }
+        try {
+            $bookingService->validatePublicIntake($this->initialPublishedVersionId, $this->intakeAnswers);
+        } catch (ValidationException $exception) {
+            foreach ($exception->errors() as $key => $messages) {
+                $this->addError($key, $messages[0]);
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /** @return array<int, array<never, never>> */
+    private function intakeDefaults(?Form $form): array
+    {
+        $defaults = [];
+        foreach ($form?->publishedVersion?->questions ?? [] as $question) {
+            if ($question->question_type === 'multiple_choice') {
+                $defaults[$question->id] = [];
+            }
+        }
+
+        return $defaults;
     }
 
     public function goToStep(int $step): void
@@ -732,6 +753,7 @@ class BookingWizard extends Component
             'last_name' => $this->last_name,
             'date_of_birth' => $this->date_of_birth,
             'intake_answers' => $this->intakeAnswers,
+            'initial_published_version_id' => $this->initialPublishedVersionId,
             'email' => $this->email,
             'phone' => $this->phone,
             'notes' => $this->notes,
@@ -742,10 +764,6 @@ class BookingWizard extends Component
     {
         if ($propertyName === 'first_name' || $propertyName === 'last_name') {
             $this->name = trim("{$this->first_name} {$this->last_name}");
-        } elseif ($propertyName === 'name' && empty($this->first_name) && empty($this->last_name)) {
-            $parts = explode(' ', trim((string) $this->name), 2);
-            $this->first_name = $parts[0];
-            $this->last_name = $parts[1] ?? $parts[0];
         }
         $this->syncSessionState();
     }
@@ -773,6 +791,10 @@ class BookingWizard extends Component
             }
             if (isset($pendingData['notes'])) {
                 $this->notes = (string) $pendingData['notes'];
+            }
+
+            if (isset($pendingData['first_name']) || isset($pendingData['last_name'])) {
+                $this->name = trim("{$this->first_name} {$this->last_name}");
             }
         }
 
@@ -820,9 +842,15 @@ class BookingWizard extends Component
         }
 
         $preBookingQuestions = collect();
-        if ($this->preBookingFormId) {
-            $preBookingForm = Form::with('publishedVersion.questions.options')->find($this->preBookingFormId);
-            $preBookingQuestions = $preBookingForm?->publishedVersion?->questions ?? collect();
+        if ($this->preBookingFormId && $this->initialPublishedVersionId) {
+            $version = FormVersion::with('questions.options')
+                ->where('form_id', $this->preBookingFormId)->find($this->initialPublishedVersionId);
+            $answers = [];
+            foreach ($version?->questions ?? [] as $question) {
+                $answers[$question->question_key] = $this->intakeAnswers[$question->id] ?? $this->intakeAnswers[$question->question_key] ?? null;
+            }
+            $preBookingQuestions = collect(app(FormValidationService::class)
+                ->visibleQuestions($version?->questions->all() ?? [], $answers));
         }
 
         // Filter timezones for modal

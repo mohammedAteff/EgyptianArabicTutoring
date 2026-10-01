@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
@@ -155,15 +156,63 @@ class EngagementCountersTest extends TestCase
         $this->assertStringContainsString('3 hours', $activity['formatted_time']);
     }
 
-    public function test_public_counters_payload_and_flat_cache(): void
+    public function test_collective_learning_activity_adds_current_cairo_day_raw_dwell_events(): void
+    {
+        $cairoNow = CarbonImmutable::now('Africa/Cairo');
+        $cairoDate = $cairoNow->toDateString();
+        $yesterday = $cairoNow->subDay()->toDateString();
+        $todayEventAtUtc = $cairoNow->subMinute()->setTimezone('UTC');
+
+        DailyMetric::create([
+            'metric_date' => $yesterday,
+            'metric_name' => 'section_dwell_seconds',
+            'dimension_key' => 'section',
+            'dimension_value' => 'curriculum',
+            'count' => 7200,
+        ]);
+        DailyMetric::create([
+            'metric_date' => $cairoDate,
+            'metric_name' => 'section_dwell_seconds',
+            'dimension_key' => 'section',
+            'dimension_value' => 'curriculum',
+            'count' => 90000,
+        ]);
+
+        AnalyticsEvent::create([
+            'event_name' => 'section_dwell',
+            'visitor_token' => 'counter-current-day-visitor',
+            'session_token' => 'counter-current-day-session',
+            'page' => '/curriculum',
+            'metadata' => ['section_id' => 'curriculum', 'dwell_seconds' => 3600],
+            'is_bot' => false,
+            'created_at' => $todayEventAtUtc,
+        ]);
+        AnalyticsEvent::create([
+            'event_name' => 'section_dwell',
+            'visitor_token' => 'counter-current-day-bot',
+            'session_token' => 'counter-current-day-bot-session',
+            'page' => '/curriculum',
+            'metadata' => ['section_id' => 'curriculum', 'dwell_seconds' => 9000],
+            'is_bot' => true,
+            'created_at' => $todayEventAtUtc,
+        ]);
+
+        $activity = $this->counterService->getCollectiveLearningActivity(7);
+
+        $this->assertSame(3.0, $activity['study_dwell_hours']);
+    }
+
+    public function test_public_counters_payload_uses_the_cairo_day_cache(): void
     {
         Setting::set('counters.live_users.public_enabled', true, 'counters', true);
         Setting::set('counters.live_users.template', '{count} online now', 'counters', true);
 
-        Cache::forget(EngagementCounterService::CACHE_KEY);
+        $cacheKey = 'counters.public.'.now('Africa/Cairo')->toDateString();
+        Cache::forget($cacheKey);
 
         $payload = $this->counterService->getCachedPublicPayload();
-        $this->assertTrue(Cache::has(EngagementCounterService::CACHE_KEY));
+        $this->assertTrue(Cache::has($cacheKey));
+        $this->assertSame(900, EngagementCounterService::CACHE_TTL);
         $this->assertTrue($payload['live_users']['enabled']);
         $this->assertStringContainsString('online now', $payload['live_users']['text']);
     }

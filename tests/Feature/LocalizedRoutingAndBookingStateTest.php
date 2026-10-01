@@ -208,7 +208,9 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
             ->call('selectTimezone', 'Europe/Paris')
             ->call('selectDate', $slotStart->setTimezone('Europe/Paris')->format('Y-m-d'));
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Europe/Paris', $component->get('visitorToken')))
-            ->set('name', 'Nadia Benali')
+            ->set('first_name', 'Nadia')
+            ->set('last_name', 'Benali')
+            ->set('date_of_birth', '1990-05-15')
             ->set('email', 'nadia@example.com')
             ->set('phone', '+33612345678')
             ->set('notes', 'Interested in Egyptian slang')
@@ -254,7 +256,9 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
         $slotStart = CarbonImmutable::now('UTC')->addDays(5)->setTime(10, 0, 0);
         $component = Livewire::test(BookingWizard::class);
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Africa/Cairo', $component->get('visitorToken')))
-            ->set('name', 'Hans Schmidt')
+            ->set('first_name', 'Hans')
+            ->set('last_name', 'Schmidt')
+            ->set('date_of_birth', '1990-06-20')
             ->set('email', 'hans@example.de');
 
         $holdId = $component->get('holdId');
@@ -279,7 +283,9 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
         $slotStart = CarbonImmutable::now('UTC')->addDays(5)->setTime(10, 0, 0);
         $component = Livewire::test(BookingWizard::class);
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStart->toDateTimeString(), 'Africa/Cairo', $component->get('visitorToken')))
-            ->set('name', 'Legitimate User');
+            ->set('first_name', 'Legitimate')
+            ->set('last_name', 'User')
+            ->set('date_of_birth', '1990-07-25');
 
         // Tamper with visitor token in session to simulate foreign attacker
         $sessionState = Session::get('booking_flow_state');

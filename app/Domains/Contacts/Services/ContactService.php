@@ -9,6 +9,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\Student;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -44,22 +45,7 @@ class ContactService
                 return $this->resolveOrCreate($email, $name, $phone, $attribution);
             }
 
-            // If contact was soft-deleted and not merged, restore it so active customer records are visible
-            if ($contact->trashed() && $contact->merged_into_contact_id === null) {
-                $contact->restore();
-            }
-
-            $updates = ['last_seen_at' => $now];
-            if (! empty($name) && empty($contact->name)) {
-                $updates['name'] = trim($name);
-            }
-            if (! empty($phone) && empty($contact->phone)) {
-                $updates['phone'] = trim($phone);
-            }
-
-            $contact->update($updates);
-
-            return $contact;
+            return $this->refreshResolvedContact($contact, $name, $phone, $now);
         }
 
         try {
@@ -77,12 +63,44 @@ class ContactService
                 'utm_term' => $attribution['utm_term'] ?? null,
             ]);
         } catch (QueryException $e) {
-            // Concurrent insert race condition caught by unique index contacts_email_unique
-            if ($e->getCode() === '23000' || str_contains($e->getMessage(), '1062')) {
-                return $this->resolveOrCreate($email, $name, $phone, $attribution);
+            $isEmailDuplicate = $e->getCode() === '23000'
+                && (($e->errorInfo[1] ?? null) === 1062)
+                && str_contains($e->errorInfo[2] ?? '', 'contacts_email_unique');
+            if ($isEmailDuplicate) {
+                $contact = Contact::withTrashed()
+                    ->where('email', $normalized)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($contact) {
+                    $contact = $this->resolveCanonicalContact($contact->id, DB::transactionLevel() > 0);
+                    if ($contact) {
+                        return $this->refreshResolvedContact($contact, $name, $phone, $now);
+                    }
+                }
             }
+
             throw $e;
         }
+    }
+
+    private function refreshResolvedContact(Contact $contact, ?string $name, ?string $phone, CarbonInterface $now): Contact
+    {
+        if ($contact->trashed() && $contact->merged_into_contact_id === null) {
+            $contact->restore();
+        }
+
+        $updates = ['last_seen_at' => $now];
+        if (! empty($name) && empty($contact->name)) {
+            $updates['name'] = trim($name);
+        }
+        if (! empty($phone) && empty($contact->phone)) {
+            $updates['phone'] = trim($phone);
+        }
+
+        $contact->update($updates);
+
+        return $contact;
     }
 
     /**
@@ -108,9 +126,19 @@ class ContactService
             ->values()
             ->all();
         $studentIds = $bookingSnapshot->pluck('student_id')->filter()->map(fn ($id): int => (int) $id)->unique()->sort()->values()->all();
+        $contactIds = [(int) $canonical->id, (int) $duplicate->id];
+        sort($contactIds, SORT_NUMERIC);
 
-        $this->database->transaction(function () use ($canonical, $duplicate, $adminId, $snapshotSignature, $intervals, $studentIds): void {
+        $this->database->transaction(function () use ($canonical, $duplicate, $adminId, $snapshotSignature, $intervals, $studentIds, $contactIds): void {
             $calendarDates = $this->availability->acquireCalendarDateLocksForIntervals($intervals);
+
+            $contacts = Contact::withTrashed()->whereIn('id', $contactIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $lockedCanonical = $contacts->get($canonical->id);
+            $lockedDuplicate = $contacts->get($duplicate->id);
+            if (! $lockedCanonical || ! $lockedDuplicate || $lockedCanonical->trashed() || $lockedDuplicate->trashed()
+                || $lockedCanonical->merged_into_contact_id !== null || $lockedDuplicate->merged_into_contact_id !== null) {
+                throw ValidationException::withMessages(['duplicate_id' => 'Only active, unmerged contacts can be merged.']);
+            }
 
             if ($studentIds !== []) {
                 Student::withTrashed()->whereIn('id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
@@ -136,17 +164,6 @@ class ContactService
                 ->all();
             if (array_diff($this->availability->calendarDatesForIntervals($lockedIntervals), $calendarDates) !== []) {
                 throw ValidationException::withMessages(['duplicate_id' => 'The booking calendar changed while the contact merge was being prepared. Retry the merge.']);
-            }
-
-            $contactIds = [(int) $canonical->id, (int) $duplicate->id];
-            sort($contactIds, SORT_NUMERIC);
-            $contacts = Contact::withTrashed()->whereIn('id', $contactIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
-            $lockedCanonical = $contacts->get($canonical->id);
-            $lockedDuplicate = $contacts->get($duplicate->id);
-
-            if (! $lockedCanonical || ! $lockedDuplicate || $lockedCanonical->trashed() || $lockedDuplicate->trashed()
-                || $lockedCanonical->merged_into_contact_id !== null || $lockedDuplicate->merged_into_contact_id !== null) {
-                throw ValidationException::withMessages(['duplicate_id' => 'Only active, unmerged contacts can be merged.']);
             }
 
             // A booking writer may have committed while this transaction waited for the contact lock.

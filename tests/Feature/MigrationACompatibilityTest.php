@@ -3,10 +3,14 @@
 namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\BookingHoldService;
+use App\Domains\Booking\Services\BookingService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Forms\Models\Form;
+use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormAssignmentService;
 use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Students\Models\Student;
@@ -133,5 +137,89 @@ class MigrationACompatibilityTest extends TestCase
         $this->assertTrue($assignmentService->isAssignedTo($afterBookingForm, $student));
         $assigned = $assignmentService->assignedTo($student);
         $this->assertTrue($assigned->contains('id', $afterBookingForm->id));
+    }
+
+    public function test_public_booking_and_intake_work_under_intermediate_schema(): void
+    {
+        $admin = Administrator::create([
+            'name' => 'Compatibility Admin',
+            'email' => 'public-compat-admin@example.test',
+            'password' => Hash::make('password123'),
+            'role' => 'super_admin',
+        ]);
+        $form = app(FormBuilderService::class)->create([
+            'title' => 'Public Compatibility Intake',
+            'slug' => 'public-compat-intake-'.uniqid(),
+            'trigger' => 'pre_booking',
+            'is_mandatory' => true,
+            'can_edit_after_submission' => false,
+        ], [[
+            'question_key' => 'experience_level',
+            'label' => 'Arabic experience',
+            'question_type' => 'short_text',
+            'is_required' => true,
+            'assistant_visible' => true,
+        ]], $admin);
+        $form = app(FormBuilderService::class)->publish($form->id, $form->active_version_id, $form->lock_version);
+
+        $sessionType = SessionType::create([
+            'title' => 'Compatibility Session',
+            'slug' => 'public-compat-session-'.uniqid(),
+            'duration_minutes' => 60,
+            'price' => 20,
+            'currency' => 'USD',
+            'active' => true,
+        ]);
+        for ($weekday = 0; $weekday <= 6; $weekday++) {
+            AvailabilityRule::updateOrCreate(
+                ['weekday' => $weekday],
+                [
+                    'start_time' => '00:00:00',
+                    'end_time' => '23:59:59',
+                    'session_duration_minutes' => 60,
+                    'buffer_minutes' => 0,
+                    'min_notice_hours' => 0,
+                    'max_horizon_days' => 90,
+                    'enabled' => true,
+                ]
+            );
+        }
+
+        $startUtc = CarbonImmutable::now('UTC')->addDays(8)->setTime(10, 0);
+        $hold = app(BookingHoldService::class)->acquireHold(
+            (string) Str::uuid(),
+            (string) Str::uuid(),
+            $sessionType,
+            $startUtc,
+            $startUtc->addHour(),
+            60
+        );
+        $booking = app(BookingService::class)->createPublicBooking([
+            'hold_id' => $hold->id,
+            'hold_token' => $hold->hold_token,
+            'visitor_token' => $hold->visitor_token,
+            'session_token' => $hold->session_token,
+            'session_type_id' => $sessionType->id,
+            'customer_timezone' => 'Africa/Cairo',
+            'first_name' => 'Schema',
+            'last_name' => 'Compatibility',
+            'customer_name' => 'Schema Compatibility',
+            'customer_email' => 'schema-compat-student@example.test',
+            'customer_phone' => '+201011223344',
+            'date_of_birth' => '1992-03-04',
+            'start_at_utc' => $startUtc->toIso8601String(),
+            'end_at_utc' => $startUtc->addHour()->toIso8601String(),
+            'idempotency_key' => Str::uuid()->toString(),
+        ], ['experience_level' => 'Beginner'], (int) $form->published_version_id);
+
+        $this->assertTrue(Schema::hasColumn('forms', 'prompt_trigger'));
+        $this->assertNotNull($booking->student_id);
+        $this->assertDatabaseHas('form_submissions', [
+            'booking_id' => $booking->id,
+            'student_id' => $booking->student_id,
+            'form_version_id' => $form->published_version_id,
+            'status' => 'submitted',
+        ]);
+        $this->assertSame(1, FormSubmission::query()->where('booking_id', $booking->id)->count());
     }
 }

@@ -32,6 +32,7 @@ class StudentPrivacyService
             ->get(['id', 'contact_id', 'status', 'cancelled_at', 'start_at_utc', 'end_at_utc', 'deleted_at']);
         $snapshotIds = $bookingSnapshot->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $snapshotSignature = $this->activeBookingSignature($bookingSnapshot);
+        $snapshotContactIds = $bookingSnapshot->pluck('contact_id')->filter()->map(fn ($id): int => (int) $id)->unique()->sort()->values()->all();
         $intervals = $bookingSnapshot
             ->filter(fn (Booking $booking): bool => $this->usesCalendar($booking))
             ->map(fn (Booking $booking): array => [
@@ -41,8 +42,16 @@ class StudentPrivacyService
             ->values()
             ->all();
 
-        return $this->database->transaction(function () use ($studentId, $administratorId, $snapshotIds, $snapshotSignature, $intervals): Student {
+        return $this->database->transaction(function () use ($studentId, $administratorId, $snapshotIds, $snapshotSignature, $snapshotContactIds, $intervals): Student {
             $calendarDates = $this->availability->acquireCalendarDateLocksForIntervals($intervals);
+
+            $contacts = Contact::withTrashed()
+                ->whereIn('id', $snapshotContactIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
             $student = Student::withTrashed()->whereKey($studentId)->lockForUpdate()->firstOrFail();
             if ($student->trashed()) {
                 throw ValidationException::withMessages(['student' => 'This student record has already been anonymized or removed.']);
@@ -54,6 +63,11 @@ class StudentPrivacyService
             $lockedIds = $bookings->pluck('id')->map(fn ($id): int => (int) $id)->all();
             if ($lockedIds !== $snapshotIds || $this->activeBookingSignature($bookings) !== $snapshotSignature) {
                 throw ValidationException::withMessages(['student' => 'A booking changed while privacy erasure was being prepared. Retry the action.']);
+            }
+
+            $lockedContactIds = $bookings->pluck('contact_id')->filter()->map(fn ($id): int => (int) $id)->unique()->sort()->values()->all();
+            if ($lockedContactIds !== $snapshotContactIds) {
+                throw ValidationException::withMessages(['student' => 'A booking contact changed while privacy erasure was being prepared. Retry the action.']);
             }
 
             $lockedIntervals = $bookings
@@ -68,8 +82,6 @@ class StudentPrivacyService
                 throw ValidationException::withMessages(['student' => 'The booking calendar changed while privacy erasure was being prepared. Retry the action.']);
             }
 
-            $contactIds = $bookings->pluck('contact_id')->filter()->map(fn ($id): int => (int) $id)->unique()->sort()->values();
-            $contacts = Contact::withTrashed()->whereIn('id', $contactIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $anonymousEmail = 'anonymized_'.$student->id.'@internal.invalid';
             $anonymousContact = null;
             foreach ($contacts as $contactId => $contact) {

@@ -134,6 +134,35 @@ class ProductionHealthAndSchedulerTest extends TestCase
         $this->assertEquals('Scheduler stale', $response->viewData('schedulerMessage'));
     }
 
+    public function test_scheduler_and_database_worker_health_are_independent(): void
+    {
+        config(['queue.default' => 'database']);
+        Cache::forget('queue_worker_heartbeat_at');
+        Setting::set('last_scheduler_run_at', now('UTC')->toIso8601String(), 'system');
+
+        $response = $this->actingAs($this->superAdmin, 'web')->get(route('admin.health'));
+        $response->assertOk();
+        $this->assertSame('healthy', $response->viewData('schedulerStatus'));
+        $this->assertSame('warning', $response->viewData('queueStatus'));
+        $this->assertSame('No active queue worker heartbeat detected', $response->viewData('queueMessage'));
+
+        Setting::set('last_scheduler_run_at', now('UTC')->subMinutes(15)->toIso8601String(), 'system');
+        Cache::put('queue_worker_heartbeat_at', now('UTC')->toIso8601String(), 300);
+
+        $response = $this->get(route('admin.health'));
+        $response->assertOk();
+        $this->assertSame('unhealthy', $response->viewData('schedulerStatus'));
+        $this->assertSame('healthy', $response->viewData('queueStatus'));
+
+        Cache::put('queue_worker_heartbeat_at', now('UTC')->subMinutes(10)->toIso8601String(), 300);
+        Setting::set('last_scheduler_run_at', now('UTC')->toIso8601String(), 'system');
+        $response = $this->get(route('admin.health'));
+        $response->assertOk();
+        $this->assertSame('healthy', $response->viewData('schedulerStatus'));
+        $this->assertSame('warning', $response->viewData('queueStatus'));
+        $this->assertStringContainsString('heartbeat stale', $response->viewData('queueMessage'));
+    }
+
     public function test_queue_failed_jobs_reporting(): void
     {
         DB::table('failed_jobs')->delete();

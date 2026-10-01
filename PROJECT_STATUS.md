@@ -1,5 +1,7 @@
 # Project Status — Egyptian Arabic with Abdallah
 
+**2026-10-01 v9.4 review:** The independent second pass found and repaired booking intake, form publication/autosave, timezone cache, status rendering, resource flow, billing provenance, and scheduler defects. See [the requirement matrix and current verification results](CODEX_V94_SECOND_PASS_AUDIT.md). The release/deployment statements below describe the historical 2026-09-25 V3 release; they do not establish deployment or live-browser verification of these new repairs.
+
 **Review date:** 2026-09-25
 
 **Specification priority:** `Arabic w Abdallah EDIT V3.md` > `Arabic w Abdallah Edits V2.md` > `ARABIC TUTORING WEBSITE FINAL 16 Sep.md`

@@ -370,7 +370,16 @@ class AdminFunctionsAndCalendarTest extends TestCase
             'published_at' => now(),
         ]);
 
-        $this->post(route('resources.request', $resource->slug), [
+        $resourcePage = $this->get(route('resources.show', $resource->slug));
+        $visitorCookie = $resourcePage->getCookie('_va_visitor');
+        $sessionCookie = $resourcePage->getCookie('_va_session');
+        $this->assertNotNull($visitorCookie);
+        $this->assertNotNull($sessionCookie);
+
+        $this->withCredentials()->withCookies([
+            '_va_visitor' => $visitorCookie->getValue(),
+            '_va_session' => $sessionCookie->getValue(),
+        ])->post(route('resources.request', $resource->slug), [
             'name' => 'Omar Requester',
             'email' => 'omar@test.org',
         ])->assertRedirect();

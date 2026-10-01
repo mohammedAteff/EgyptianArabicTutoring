@@ -81,8 +81,8 @@
         <!-- Download Gate Card (5 cols) -->
         <div class="lg:col-span-5" x-data="{
             state: '{{ (! $resource->is_gated || session('access_granted')) ? 'unlocked' : 'idle' }}',
-            name: '{{ old('name') }}',
-            email: '{{ old('email') }}',
+            name: @js(old('name', '')),
+            email: @js(old('email', '')),
             pin: '',
             challenge: '',
             downloadUrl: '{{ session('download_token') ? route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) : '' }}',
@@ -178,23 +178,12 @@
                     this.errorMessage = 'Network error. Please check your connection and retry.';
                 });
             }
-        }" x-init="
+        }"
         @if(!($isPreview ?? false) && !auth()->guard('web')->check())
-            fetch('/analytics/event', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
-                    event_name: 'resource_gate_viewed',
-                    page: window.location.pathname,
-                    metadata: { resource_slug: '{{ $resource->slug }}' }
-                })
-            }).catch(() => {});
+            data-analytics-event="resource_gate_viewed"
+            data-analytics-metadata="{{ json_encode(['resource_slug' => $resource->slug], JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_TAG) }}"
         @endif
-        ">
+        >
             <div class="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-8 shadow-xl sticky top-28">
                 <!-- Unlocked / Ready State -->
                 <div x-show="state === 'unlocked'" class="text-center space-y-4 py-4" style="{{ (! $resource->is_gated || session('access_granted')) ? '' : 'display: none;' }}">
@@ -235,12 +224,13 @@
                         @csrf
                         <div>
                             <label for="name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-                                Your Name <span class="text-stone-400 font-normal">(Optional)</span>
+                                Your Name <span class="text-rose-500">*</span>
                             </label>
                             <input type="text"
                                    x-model="name"
                                    name="name"
                                    id="name"
+                                   required
                                    placeholder="e.g. David"
                                    class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none">
                         </div>
