@@ -129,7 +129,7 @@ Existing historical records, UTC instants, form versions, ledgers and primary id
 
 Final current-schema release run: **660 tests passed, 6,279 assertions** (343.889 seconds). Separate real MariaDB concurrency run: **13 tests passed, 57 assertions** (14.145 seconds). Earlier focused pass: 20 tests / 203 assertions; latest operations/reporting corrections: 13 tests / 110 assertions. Previous full run: 659 / 6275, all passed. Intermediate-schema historical tests remain excluded from the current-schema run, as in the baseline; they require their own earlier schema.
 
-JS: five tests passed. Vite production build passed. Blade compilation passed. Changed PHP lint: 115 files, zero failures at the recorded check. UTF-8 check passed. Pint fixes applied. Final git diff whitespace check and final changed-file lint are recorded at release.
+JS: five tests passed. Vite production build passed. Blade compilation passed. Final changed PHP lint: 115 files, zero failures. UTF-8 and secret-candidate checks passed. Final Pint and git diff/staged whitespace checks passed.
 
 # Browser Verification
 
@@ -142,6 +142,9 @@ Screenshots saved locally:
 - C:/Users/e/AppData/Local/Temp/awa-business-analytics-tables.png
 - C:/Users/e/AppData/Local/Temp/awa-business-analytics-mobile.png
 - C:/Users/e/AppData/Local/Temp/awa-business-student-calendar-mobile.png
+- C:/Users/e/AppData/Local/Temp/awa-business-live-homepage.png
+
+Post-deployment production browser checks confirmed the rendered homepage, published content, public counters and booking calendar. Selecting October 5 loaded three available AM/PM slots with the tutor timezone equivalents. No slot was held and no production booking/customer record was created. No browser warning/error was reported during these checks. HTTP probes used the existing synthetic exclusion header; browser checks used ordinary public navigation because the connected browser did not support the attempted developer header override. Authenticated mutation acceptance was performed locally with synthetic data, not against real production customers.
 
 # PHPStan Delta
 
@@ -151,9 +154,13 @@ Baseline: 307. Current: 285. Removed: 22. New: zero, comparing diagnostic messag
 
 # Deployment Requirements
 
-GitHub main and Hostinger deployment are explicitly authorized in this conversation. Verify all release checks before pushing. Preserve production .env/APP_KEY, uploads, database, existing untracked .env backup, bot configuration and current business settings. Ship production-built assets to both app/public/build and the existing /arabictutor public wrapper; apply four forward migrations and refresh config/routes/views. queue:restart is a signal, not a running worker.
+GitHub main and Hostinger deployment were explicitly authorized in this conversation. Implementation commit `80642ca7add3488fc2f7cf206a497bb4e8f59d16` was pushed to main and fast-forwarded on Hostinger. All four forward migrations completed. Config, route and view caches were refreshed. Production assets were shipped to both app/public/build and the existing /arabictutor public wrapper. Their manifest SHA-256 hashes match: `ae5521d70154e8ca49efd38e071d9830ac8608f558bf6eca873835c5ee8e0965`. queue:restart was issued as a signal; no recurring worker was created.
 
-Private pre-deployment snapshot: `/home/u494520852/deployment-backups/20261002-business-c913d7e`. It includes source, wrapper, prior built assets, private environment, before-state hashes and `backup-full-2026-10-02-132456.zip` (SHA-256 5723bd0a3cac74a35a12d3d811345cedb8da5d774e2c5598ba0a4166d04695bc). Production was Live immediately before this deployment. Release verification must compare the settings/environment hashes and existing financial/booking record counts.
+Private pre-deployment snapshot: `/home/u494520852/deployment-backups/20261002-business-c913d7e`. It includes source, wrapper, prior built assets, private environment, before-state hashes and `backup-full-2026-10-02-132456.zip` (SHA-256 5723bd0a3cac74a35a12d3d811345cedb8da5d774e2c5598ba0a4166d04695bc). Production was Live immediately before deployment and remains Live (`maintenance_mode=0`). The environment file fingerprint is unchanged; the existing untracked `.env.backup.before-7123f15` remains present. Uploads were not replaced and no QA database was copied.
+
+The pre/post combined settings fingerprint initially differed. Deployment paused under Artisan maintenance while this was investigated. Only `last_backup_at` and `last_backup_file` had changed, both at 13:24:58 UTC, because the pre-deployment backup command updates its own metadata after the before-state fingerprint. No social-link row changed in that interval. No business setting was restored or overwritten. After identifying that expected metadata change, Artisan maintenance was cleared successfully.
+
+Record counts remained unchanged: three students, six bookings, eight payments, three refunds and seven session-ledger entries. The homepage, resources, booking page, student login and administrator login all returned HTTP 200 after deployment. Public browser booking availability loaded successfully. The subsequent report-only commit records this evidence without requiring another application build or migration.
 
 Hostinger scheduler/queue/watchdog/poll jobs remain deferred at the user's explicit request pending their developer. This pass must not claim recurring reminders or alerts are operational merely because code and tests pass.
 
