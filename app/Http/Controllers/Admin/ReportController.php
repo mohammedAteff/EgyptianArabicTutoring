@@ -179,13 +179,10 @@ class ReportController extends Controller
     protected function exportSocial(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts): Response
     {
         $report = $this->reportService->getSocialReport($start, $end);
-        $headers = ['Platform', 'Event Name', 'Page', 'Date', 'Total Clicks'];
+        $headers = ['Platform', 'Placement', 'Event Name', 'Page', 'Date', 'Total Clicks', 'Unique Visitors', 'Language', 'Country', 'Source', 'Medium', 'Campaign'];
         $rows = $report['rows']->map(fn ($s) => [
-            $s['platform'],
-            $s['event_name'],
-            $s['page'],
-            $s['date'],
-            $s['clicks'],
+            $s['platform'], $s['placement'], $s['event_name'], $s['page'], $s['date'], $s['clicks'],
+            $s['unique_visitors'], $s['language'], $s['country'], $s['source'], $s['medium'], $s['campaign'],
         ]);
 
         $filename = "social_clicks_report_{$ts}.{$format}";

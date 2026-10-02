@@ -22,7 +22,8 @@
     </div>
 
     <!-- Form -->
-    <form action="{{ route('admin.settings.update') }}" method="POST" class="space-y-8">
+    <form id="business-settings" action="{{ route('admin.settings.update') }}" method="POST" class="space-y-8">
+        <input type="hidden" name="operations_present" value="1">
         @csrf
 
         <!-- 1. General & Business Timezone -->
@@ -71,6 +72,7 @@
                             <option value="0" {{ old('maintenance_mode', $settings['maintenance_mode']->value ?? '0') == '0' ? 'selected' : '' }}>Live (Normal Public Operations)</option>
                             <option value="1" {{ old('maintenance_mode', $settings['maintenance_mode']->value ?? '0') == '1' ? 'selected' : '' }}>Maintenance Mode (Public Offline)</option>
                         </select>
+                        <p class="mt-2 text-xs text-slate-500">Publish to apply this setting. Your administrator session keeps access; check the public result in a private browser. Students and anonymous visitors receive the maintenance page.</p>
                     </div>
                 @else
                     <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:col-span-2">
@@ -371,103 +373,7 @@
             </div>
         </div>
 
-        <!-- 6. Telegram Reminders & Multi-Recipient Notifications -->
-        @php
-            $savedReminderWindows = \App\Domains\CMS\Models\Setting::get('telegram.reminder_windows', [1440, 60]);
-            $reminderWindows = old('telegram_reminder_windows', is_array($savedReminderWindows) ? $savedReminderWindows : []);
-            $savedChatIds = \App\Domains\CMS\Models\Setting::get('telegram.notification_chat_ids', []);
-            $notificationChatIds = old('telegram_notification_chat_ids', is_array($savedChatIds) ? $savedChatIds : []);
-            $reminderWindowRows = array_map(fn ($minutes) => ['id' => (string) \Illuminate\Support\Str::uuid(), 'value' => (int) $minutes % 60 === 0 ? (int) $minutes / 60 : (int) $minutes, 'unit' => (int) $minutes % 60 === 0 ? 'hours' : 'minutes'], $reminderWindows);
-            $notificationChatRows = array_map(fn ($chatId) => ['id' => (string) \Illuminate\Support\Str::uuid(), 'value' => (string) $chatId], $notificationChatIds);
-        @endphp
-        <div x-data="{
-                windows: @js($reminderWindowRows),
-                chatIds: @js($notificationChatRows),
-                minutes(row) { return row.value === '' || !Number.isInteger(Number(row.value)) ? '' : Number(row.value) * (row.unit === 'hours' ? 60 : 1) },
-                addWindow() { this.windows.push({ id: Math.random().toString(36).slice(2), value: '', unit: 'minutes' }) },
-                addChat() { this.chatIds.push({ id: Math.random().toString(36).slice(2), value: '' }) }
-            }" class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
-            <input type="hidden" name="telegram_settings_present" value="1">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                <div>
-                    <h2 class="text-lg font-bold font-serif text-slate-900">6. Telegram Bot & Reminder Windows</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Automated lesson alerts to Abdallah and assistants with configurable dynamic milestone lead times.</p>
-                </div>
-                <div class="flex items-center gap-4">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="telegram_reminders_enabled" value="1" class="sr-only peer"
-                               {{ old('telegram_reminders_enabled', \App\Domains\CMS\Models\Setting::get('telegram.reminders_enabled', false)) ? 'checked' : '' }}>
-                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-                        <span class="ml-2 text-xs font-bold text-slate-800">Reminders Active</span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div class="sm:col-span-2">
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Telegram Bot Token (Encrypted at Rest)</label>
-                    <input type="password" name="telegram_bot_token"
-                           placeholder="••••••••••••••••••••••••••••••••••••••••"
-                           class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
-                    <p class="text-[11px] text-slate-400 mt-1">Leave empty to keep existing token. Value is encrypted with AES-256-GCM.</p>
-                </div>
-
-                <div class="space-y-3">
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600">Reminder Milestones</label>
-                    <template x-for="(window, index) in windows" :key="window.id">
-                        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2">
-                            <span class="text-xs text-slate-500" x-text="'#' + (index + 1)"></span>
-                            <input type="number" min="1" step="1" x-model.number="window.value" :aria-label="'Reminder milestone ' + (index + 1)" class="min-w-0 flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                            <select x-model="window.unit" :aria-label="'Reminder milestone unit ' + (index + 1)" class="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                                <option value="minutes">Minutes</option>
-                                <option value="hours">Hours</option>
-                            </select>
-                            <input type="hidden" name="telegram_reminder_windows[]" :value="minutes(window)">
-                            <button type="button" @click="windows.splice(index, 1)" :aria-label="'Remove reminder milestone ' + (index + 1)" class="px-3 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 rounded-xl">Remove</button>
-                        </div>
-                    </template>
-                    <button type="button" @click="addWindow()" class="px-3.5 py-2.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-xl">+ Add reminder milestone</button>
-                    @error('telegram_reminder_windows') <p class="text-xs text-red-700">{{ $message }}</p> @enderror
-                    @error('telegram_reminder_windows.*') <p class="text-xs text-red-700">{{ $message }}</p> @enderror
-                </div>
-
-                <div class="space-y-3">
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600">Notification Chat IDs</label>
-                    <template x-for="(chat, index) in chatIds" :key="chat.id">
-                        <div class="flex items-center gap-2">
-                            <input type="text" name="telegram_notification_chat_ids[]" x-model="chat.value" :aria-label="'Notification chat ID ' + (index + 1)" placeholder="-100123456789" class="min-w-0 flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
-                            <button type="button" @click="chatIds.splice(index, 1)" :aria-label="'Remove notification chat ID ' + (index + 1)" class="px-3 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-50 rounded-xl">Remove</button>
-                        </div>
-                    </template>
-                    <button type="button" @click="addChat()" class="px-3.5 py-2.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-xl">+ Add recipient chat ID</button>
-                    @error('telegram_notification_chat_ids') <p class="text-xs text-red-700">{{ $message }}</p> @enderror
-                    @error('telegram_notification_chat_ids.*') <p class="text-xs text-red-700">{{ $message }}</p> @enderror
-                </div>
-            </div>
-
-            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <span class="text-xs text-slate-400">Verify connectivity and credentials before publishing live reminders.</span>
-                <button type="submit" formaction="{{ route('admin.settings.telegram.test') }}" formmethod="POST"
-                        class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 transition-colors">
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                    <span>Send Test Reminder</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Save Buttons -->
-        <div class="flex items-center justify-end gap-3">
-            <button type="submit" name="action" value="draft" class="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-sm font-bold transition-colors shadow-xs">
-                Save as Draft
-            </button>
-            <button type="submit" name="action" value="publish" class="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm font-serif">
-                Publish All Settings
-            </button>
-        </div>
-    </form>
-
-    <form method="POST" action="{{ route('admin.settings.operations') }}" class="space-y-8">
-        @csrf
+        <div class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">Telegram automation is managed in <a class="font-semibold text-amber-700 underline" href="{{ route('admin.telegram.index') }}">Telegram Bots</a>.</div>
         @php
             $inputClass = 'mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none';
             $cardClass = 'bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6';
@@ -538,8 +444,10 @@
             </div>
         </section>
 
-        <div class="flex items-center justify-end">
-            <button type="submit" class="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm font-serif">Save operational settings</button>
+        <div class="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+            <p class="mr-auto text-xs text-slate-500">All sections save together. Draft applies operational settings immediately; homepage and About copy stay in preview.</p>
+            <button type="submit" name="action" value="draft" class="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-800">Save as Draft</button>
+            <button type="submit" name="action" value="publish" class="rounded-xl bg-amber-600 px-6 py-3 text-sm font-bold text-white hover:bg-amber-700">Publish All Settings</button>
         </div>
     </form>
 </div>

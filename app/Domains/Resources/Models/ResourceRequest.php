@@ -45,11 +45,13 @@ class ResourceRequest extends Model
         });
     }
 
+    /** @return BelongsTo<Contact, $this> */
     public function contact(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'contact_id');
     }
 
+    /** @return BelongsTo<\App\Domains\Resources\Models\Resource, $this> */
     public function resource(): BelongsTo
     {
         return $this->belongsTo(Resource::class, 'resource_id');

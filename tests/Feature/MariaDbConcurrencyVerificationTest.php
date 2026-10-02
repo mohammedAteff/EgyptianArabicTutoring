@@ -11,15 +11,20 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
+use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Services\FormBuilderService;
+use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use Database\Factories\TelegramBotFactory;
+use Database\Factories\TelegramDestinationFactory;
+use Database\Factories\TelegramRuleFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -756,6 +761,36 @@ class MariaDbConcurrencyVerificationTest extends TestCase
     /** @param array<int, array<string, mixed>> $payloads
      * @return array<int, array{exit_code: int|null, output: string}>
      */
+    public function test_parallel_telegram_emit_and_delivery_claim_are_idempotent(): void
+    {
+        $previous = Setting::get('telegram.automation_enabled', false);
+        Setting::set('telegram.automation_enabled', true);
+        $bot = TelegramBotFactory::new()->create();
+        try {
+            $destination = TelegramDestinationFactory::new()->create(['telegram_bot_id' => $bot->id]);
+            $rule = TelegramRuleFactory::new()->create(['telegram_bot_id' => $bot->id]);
+            $rule->destinations()->attach($destination);
+            $payload = ['action' => 'telegram_emit', 'identity' => 'race:'.Str::uuid(), 'rule_id' => $rule->id];
+            foreach ($this->runConcurrentWorkers([$payload, $payload]) as $result) {
+                $this->assertSame(0, $result['exit_code'], $result['output']);
+            }
+            $deliveries = TelegramDelivery::where('telegram_bot_id', $bot->id)->get();
+            $this->assertCount(1, $deliveries);
+            $delivery = $deliveries->first();
+            $payload = ['action' => 'telegram_deliver', 'delivery_id' => $delivery->id];
+            foreach ($this->runConcurrentWorkers([$payload, $payload]) as $result) {
+                $this->assertSame(0, $result['exit_code'], $result['output']);
+            }
+            $delivery->refresh();
+            $this->assertSame('sent', $delivery->status);
+            $this->assertSame(1, $delivery->attempts);
+            $this->assertCount(1, $delivery->message_ids);
+        } finally {
+            $bot->delete();
+            Setting::set('telegram.automation_enabled', $previous);
+        }
+    }
+
     private function runConcurrentWorkers(array $payloads): array
     {
         $gate = sys_get_temp_dir().DIRECTORY_SEPARATOR.'boltlanding-v3-'.Str::uuid();

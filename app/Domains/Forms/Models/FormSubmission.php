@@ -22,6 +22,7 @@ class FormSubmission extends Model
         return $this->belongsTo(FormVersion::class, 'form_version_id');
     }
 
+    /** @return BelongsTo<Student, $this> */
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);

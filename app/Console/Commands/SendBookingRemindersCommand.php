@@ -26,6 +26,13 @@ class SendBookingRemindersCommand extends Command
 
     public function handle(TelegramNotificationService $telegramService): int
     {
+        if (filter_var(Setting::get('telegram.center_migrated', false), FILTER_VALIDATE_BOOLEAN)) {
+            $this->info('Reminders are managed by Telegram Bots; forwarding to telegram:tick.');
+            $this->call('telegram:tick');
+
+            return self::SUCCESS;
+        }
+
         $enabled = Setting::get('telegram.reminders_enabled', false);
         if (! in_array($enabled, [true, 1, '1', 'true'], true)) {
             $this->info('Telegram reminders are currently disabled in Settings.');

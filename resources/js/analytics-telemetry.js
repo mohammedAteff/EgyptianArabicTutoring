@@ -50,6 +50,12 @@
         if (chosen !== active) { commit(); active = chosen; since = clock.now(); }
     }
     function initialize() {
+        document.querySelectorAll('[data-social-platform]').forEach(link => link.addEventListener('click', () => {
+            const platform = link.dataset.socialPlatform.toLowerCase();
+            const event = platform === 'whatsapp' ? 'whatsapp_clicked' : platform === 'telegram' ? 'telegram_clicked' : 'social_link_clicked';
+            enqueue(event, {target_url: link.href, platform, placement: 'footer_social', context: 'public', language: document.documentElement?.lang || 'en'});
+            flush(true);
+        }));
         document.querySelectorAll('[data-whatsapp-cta]').forEach(link => link.addEventListener('click', () => {
             enqueue('whatsapp_clicked', {target_url: link.href, platform: 'whatsapp', placement: 'floating_cta', context: link.dataset.context, language: link.dataset.language});
             flush(true);

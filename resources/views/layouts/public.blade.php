@@ -393,6 +393,7 @@
             if (!href) return;
 
             const socialPlatform = (el.getAttribute('data-social-platform') || '').toLowerCase();
+            if (socialPlatform || el.hasAttribute('data-whatsapp-cta')) return;
             const isWhatsApp = href.includes('wa.me') || href.includes('whatsapp.com') || socialPlatform === 'whatsapp';
             const isTelegram = href.includes('t.me') || href.includes('telegram.me') || socialPlatform === 'telegram';
             const isOtherSocial = Boolean(socialPlatform) || 

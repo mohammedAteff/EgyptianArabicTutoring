@@ -256,6 +256,9 @@
                 <!-- Settings & System -->
                 <div>
                     <div class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Configuration</div>
+                    @if(in_array(auth()->user()->role, ['admin', 'super_admin']))
+                    <a href="{{ route('admin.telegram.index') }}" class="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Telegram Bots</a>
+                    @endif
                     <div class="space-y-1">
                         <a href="{{ route('admin.settings.index') }}" 
                            class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.settings.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">

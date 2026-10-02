@@ -12,12 +12,12 @@
 
         <!-- Export Buttons -->
         <div class="flex items-center gap-2">
-            <a href="{{ route('admin.reports.export', array_merge(request()->query(), ['type' => $reportType, 'format' => 'csv'])) }}" 
+            <a href="{{ route('admin.reports.export', array_merge(request()->query(), ['type' => $reportType, 'format' => 'csv'])) }}"
                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 shadow-xs transition-colors">
                 <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 <span>Export CSV</span>
             </a>
-            <a href="{{ route('admin.reports.export', array_merge(request()->query(), ['type' => $reportType, 'format' => 'xlsx'])) }}" 
+            <a href="{{ route('admin.reports.export', array_merge(request()->query(), ['type' => $reportType, 'format' => 'xlsx'])) }}"
                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors">
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 <span>Export XLSX</span>
@@ -35,27 +35,27 @@
 
     <!-- 5 Fixed Reports Navigation Tabs -->
     <div class="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-px text-xs font-semibold">
-        <a href="{{ route('admin.reports.index', ['type' => 'traffic', 'range' => $range]) }}" 
+        <a href="{{ route('admin.reports.index', ['type' => 'traffic', 'range' => $range]) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'traffic' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             1. Traffic & Visitors
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'bookings', 'range' => $range]) }}" 
+        <a href="{{ route('admin.reports.index', ['type' => 'bookings', 'range' => $range]) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'bookings' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             2. Bookings Ledger
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'resources', 'range' => $range]) }}" 
+        <a href="{{ route('admin.reports.index', ['type' => 'resources', 'range' => $range]) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'resources' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             3. Resource Downloads & Conversion
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'social', 'range' => $range]) }}" 
+        <a href="{{ route('admin.reports.index', ['type' => 'social', 'range' => $range]) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'social' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             4. Social & Messaging Clicks
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'events', 'range' => $range]) }}" 
+        <a href="{{ route('admin.reports.index', ['type' => 'events', 'range' => $range]) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'events' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             5. Raw Events Log
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'campaigns', 'range' => $range]) }}" 
+        <a href="{{ route('admin.reports.index', ['type' => 'campaigns', 'range' => $range]) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'campaigns' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             6. Campaign & Content Attribution
         </a>
@@ -287,38 +287,37 @@
     <!-- REPORT 4: SOCIAL & MESSAGING -->
     @elseif($reportType === 'social')
         <div class="space-y-6">
-            <div class="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 text-xs text-slate-600 shadow-xs">
-                <span>Total Messaging Clicks: <strong class="text-slate-900">{{ number_format($reportData['total_clicks']) }}</strong></span>
-                <span>•</span>
-                <span>WhatsApp: <strong class="text-emerald-700">{{ number_format($reportData['whatsapp_clicks']) }}</strong></span>
-                <span>•</span>
-                <span>Telegram: <strong class="text-blue-700">{{ number_format($reportData['telegram_clicks']) }}</strong></span>
+            <div class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-xs">
+                <span>Total Social &amp; Messaging Clicks: <strong>{{ number_format($reportData['total_clicks']) }}</strong></span>
+                <span>Unique visitors: <strong>{{ number_format($reportData['unique_visitors']) }}</strong></span>
+                @foreach($reportData['platform_totals'] as $platform => $count)
+                    <span>{{ $platform }}: <strong class="text-amber-700">{{ number_format($count) }}</strong></span>
+                @endforeach
             </div>
-
             <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs text-slate-600">
                         <thead class="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-200">
                             <tr>
                                 <th class="py-3 px-4">Platform</th>
-                                <th class="py-3 px-4">Event</th>
+                                <th class="py-3 px-4">Placement</th><th class="py-3 px-4">Event</th>
                                 <th class="py-3 px-4">Originating Page</th>
                                 <th class="py-3 px-4">Date</th>
-                                <th class="py-3 px-4 text-right">Click Count</th>
+                                <th class="py-3 px-4 text-right">Click Count</th><th class="py-3 px-4">Unique Visitors</th><th class="py-3 px-4">Language / Country</th><th class="py-3 px-4">Source / Medium / Campaign</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @forelse($reportData['rows'] as $s)
                                 <tr class="hover:bg-slate-50/80 transition-colors">
                                     <td class="py-3 px-4 font-bold text-slate-900">{{ $s['platform'] }}</td>
-                                    <td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $s['event_name'] }}</td>
+                                    <td class="py-3 px-4">{{ $s['placement'] }}</td><td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $s['event_name'] }}</td>
                                     <td class="py-3 px-4 font-mono text-[11px] text-slate-600 truncate max-w-xs">{{ $s['page'] }}</td>
                                     <td class="py-3 px-4 font-mono text-slate-800">{{ $s['date'] }}</td>
-                                    <td class="py-3 px-4 text-right font-black text-amber-700">{{ number_format($s['clicks']) }}</td>
+                                    <td class="py-3 px-4 text-right font-black text-amber-700">{{ number_format($s['clicks']) }}</td><td class="py-3 px-4">{{ $s['unique_visitors'] }}</td><td class="py-3 px-4">{{ $s['language'] }} / {{ $s['country'] }}</td><td class="py-3 px-4">{{ $s['source'] ?: 'Direct / unknown' }} / {{ $s['medium'] ?: '—' }} / {{ $s['campaign'] ?: '—' }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="py-8 text-center text-slate-400 italic">No social or direct messaging clicks recorded in this period.</td>
+                                    <td colspan="9" class="py-8 text-center text-slate-400 italic">No social or direct messaging clicks recorded in this period.</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -5,6 +5,7 @@ namespace App\Domains\System\Services;
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Notifications\Services\TelegramAutomationService;
 use Carbon\CarbonImmutable;
 use Exception;
 use Illuminate\Support\Facades\Auth;
@@ -93,6 +94,7 @@ class BackupService
 
             // Replicate to offsite disk if configured
             $offsiteDisk = config('filesystems.backup_disk') ?: Setting::get('backup_offsite_disk');
+            $offsiteStatus = 'not configured';
             if ($offsiteDisk && $offsiteDisk !== 'local' && config("filesystems.disks.{$offsiteDisk}")) {
                 try {
                     $stream = fopen($zipPath, 'r');
@@ -103,8 +105,10 @@ class BackupService
                     if ($uploaded === false) {
                         throw new Exception("Offsite upload to disk '{$offsiteDisk}' returned false.");
                     }
+                    $offsiteStatus = 'success';
                     Setting::set('last_offsite_backup_status', 'success', 'system');
                 } catch (Throwable $offsiteEx) {
+                    $offsiteStatus = 'failed';
                     $category = $this->categorizeOffsiteError($offsiteEx);
                     Setting::set('last_offsite_backup_status', 'failed', 'system');
                     Setting::set('last_offsite_backup_category', $category, 'system');
@@ -130,8 +134,15 @@ class BackupService
                 'created_at' => now(),
             ]);
 
+            $automation = app(TelegramAutomationService::class);
+            $automation->emit('backup_success', 'backup:'.$zipFilename, ['file_name' => $zipFilename, 'file_size' => File::size($zipPath), 'local_status' => 'success', 'offsite_status' => $offsiteStatus]);
+            if ($offsiteStatus === 'failed') {
+                $automation->emit('backup_failure', 'offsite:'.$zipFilename, ['failure_code' => (string) Setting::get('last_offsite_backup_category', 'offsite_failed'), 'local_status' => 'success', 'offsite_status' => 'failed']);
+            }
+
             return $zipPath;
         } catch (Throwable $e) {
+            app(TelegramAutomationService::class)->emit('backup_failure', 'backup:'.$zipFilename, ['failure_code' => 'local_backup_failed', 'local_status' => 'failed', 'offsite_status' => 'not attempted']);
             Setting::set('last_backup_status', 'failed: '.$e->getMessage(), 'system');
             Log::error('Backup creation failed: '.$e->getMessage(), ['exception' => $e]);
             try {

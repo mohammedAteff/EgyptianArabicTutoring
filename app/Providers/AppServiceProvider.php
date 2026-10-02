@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentIdentityService;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -44,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         class_exists(Student::class);
+        app(TelegramBusinessEvents::class)->register();
 
         RateLimiter::for('student-verification', function (Request $request) {
             $email = $request->input('email');

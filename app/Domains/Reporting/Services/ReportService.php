@@ -325,38 +325,36 @@ class ReportService
 
         $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
 
-        $rows = $this->nonBotEventQuery()
-            ->whereBetween('created_at', [$start, $end])
-            ->whereIn('event_name', $socialEvents)
-            ->select(
-                'event_name',
-                'page',
-                DB::raw("{$dateExpr} as report_date"),
-                DB::raw('COUNT(*) as clicks')
-            )
-            ->groupBy('event_name', 'page', 'report_date')
-            ->orderByDesc('report_date')
-            ->get()
-            ->map(function ($row) {
-                $platform = match ($row->event_name) {
-                    'whatsapp_clicked' => 'WhatsApp',
-                    'telegram_clicked' => 'Telegram',
-                    'social_link_clicked' => 'Social Channel',
-                    default => 'Outbound Link',
+        $platformExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.platform')), ''), CASE event_name WHEN 'whatsapp_clicked' THEN 'whatsapp' WHEN 'telegram_clicked' THEN 'telegram' WHEN 'social_link_clicked' THEN 'social channel' ELSE 'outbound link' END)";
+        $placementExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.placement')), ''), 'unknown')";
+        $languageExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.language')), ''), 'unknown')";
+        $countryExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.detected_country_code')), ''), 'ZZ')";
+        $query = $this->nonBotEventQuery()->whereBetween('created_at', [$start, $end])->whereIn('event_name', $socialEvents);
+        $rows = (clone $query)
+            ->select('event_name', 'page', 'utm_source', 'utm_medium', 'utm_campaign')
+            ->selectRaw("{$dateExpr} as report_date, LOWER({$platformExpr}) as platform, {$placementExpr} as placement, {$languageExpr} as language, {$countryExpr} as country")
+            ->selectRaw("COUNT(*) as clicks, COUNT(DISTINCT NULLIF(visitor_token, '')) as unique_visitors")
+            ->groupBy('event_name', 'page', 'utm_source', 'utm_medium', 'utm_campaign', 'report_date', 'platform', 'placement', 'language', 'country')
+            ->orderByDesc('report_date')->orderBy('platform')->toBase()->get()
+            ->map(function ($row): array {
+                $platform = match ($row->platform) {
+                    'whatsapp' => 'WhatsApp', 'youtube' => 'YouTube', 'tiktok' => 'TikTok', default => ucwords($row->platform),
                 };
 
                 return [
-                    'platform' => $platform,
-                    'event_name' => $row->event_name,
-                    'page' => $row->page ?: '/',
-                    'date' => $row->report_date,
-                    'clicks' => $row->clicks,
+                    'platform' => $platform, 'placement' => $row->placement,
+                    'event_name' => $row->event_name, 'page' => $row->page ?: '/',
+                    'date' => $row->report_date, 'clicks' => (int) $row->clicks,
+                    'unique_visitors' => (int) $row->unique_visitors,
+                    'language' => $row->language, 'country' => $row->country,
+                    'source' => $row->utm_source, 'medium' => $row->utm_medium, 'campaign' => $row->utm_campaign,
                 ];
             });
 
         return [
-            'rows' => $rows,
-            'total_clicks' => $rows->sum('clicks'),
+            'rows' => $rows, 'total_clicks' => $rows->sum('clicks'),
+            'unique_visitors' => (clone $query)->where('visitor_token', '!=', '')->distinct()->count('visitor_token'),
+            'platform_totals' => $rows->groupBy('platform')->map(fn ($group): int => $group->sum('clicks')),
             'whatsapp_clicks' => $rows->where('platform', 'WhatsApp')->sum('clicks'),
             'telegram_clicks' => $rows->where('platform', 'Telegram')->sum('clicks'),
         ];

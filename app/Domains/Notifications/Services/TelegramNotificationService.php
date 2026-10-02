@@ -52,7 +52,7 @@ class TelegramNotificationService
                 ->throw();
 
             if ($response->json('ok') !== true) {
-                Log::warning("Telegram API returned ok:false for chat {$chatId}: ".json_encode($response->json()));
+                Log::warning('Telegram rejected a reminder.', ['error_code' => (int) $response->json('error_code', 0)]);
 
                 return false;
             }
@@ -132,7 +132,7 @@ class TelegramNotificationService
         $booking->loadMissing(['contact', 'student', 'sessionType']);
 
         $studentName = $booking->student?->name
-            ?: ($booking->contact ? "{$booking->contact->first_name} {$booking->contact->last_name}" : 'Student');
+            ?: ($booking->contact->name ?? 'Student');
         $studentEmail = $booking->student?->email ?: ($booking->contact?->email ?? 'N/A');
         $studentPhone = $booking->student?->phone ?: ($booking->contact?->phone ?? 'N/A');
         $sessionTitle = $booking->sessionType?->title ?: '1-on-1 Egyptian Arabic Session';

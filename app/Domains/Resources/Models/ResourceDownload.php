@@ -38,6 +38,7 @@ class ResourceDownload extends Model
         });
     }
 
+    /** @return BelongsTo<\App\Domains\Resources\Models\Resource, $this> */
     public function resource(): BelongsTo
     {
         return $this->belongsTo(Resource::class, 'resource_id');
@@ -48,6 +49,7 @@ class ResourceDownload extends Model
         return $this->belongsTo(Contact::class, 'contact_id');
     }
 
+    /** @return BelongsTo<ResourceRequest, $this> */
     public function request(): BelongsTo
     {
         return $this->belongsTo(ResourceRequest::class, 'request_id');

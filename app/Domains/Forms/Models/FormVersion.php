@@ -15,6 +15,7 @@ class FormVersion extends Model
         return ['version_number' => 'integer'];
     }
 
+    /** @return BelongsTo<Form, $this> */
     public function form(): BelongsTo
     {
         return $this->belongsTo(Form::class);

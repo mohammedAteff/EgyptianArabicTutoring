@@ -10,6 +10,7 @@ use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -127,6 +128,7 @@ class BookingHoldService
             ->update([
                 'status' => 'released',
                 'released_at' => now(),
+                'lead_details' => null,
             ]);
     }
 
@@ -135,12 +137,23 @@ class BookingHoldService
      */
     public function cleanExpiredHolds(): int
     {
-        return BookingHold::query()
-            ->where('status', 'active')
-            ->where('expires_at', '<=', now())
-            ->update([
-                'status' => 'expired',
-            ]);
+        $count = 0;
+        BookingHold::query()->where('status', 'active')->where('expires_at', '<=', now())
+            ->chunkById(100, function ($holds) use (&$count): void {
+                foreach ($holds as $candidate) {
+                    DB::transaction(function () use ($candidate, &$count): void {
+                        $hold = BookingHold::query()->whereKey($candidate->id)->where('status', 'active')
+                            ->where('expires_at', '<=', now())->lockForUpdate()->first();
+                        if ($hold) {
+                            $hold->update(['status' => 'expired']);
+                            app(TelegramBusinessEvents::class)->expiredHold($hold);
+                            $count++;
+                        }
+                    });
+                }
+            });
+
+        return $count;
     }
 
     /**

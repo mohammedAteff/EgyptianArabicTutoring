@@ -5,6 +5,7 @@ namespace App\Domains\CMS\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class Setting extends Model
 {
@@ -15,6 +16,7 @@ class Setting extends Model
         static::saved(function (self $setting): void {
             if (in_array($setting->key, ['maintenance_mode', 'system.maintenance_mode'], true)) {
                 Cache::forget('maintenance_mode_active');
+                DB::afterCommit(fn () => Cache::forget('maintenance_mode_active'));
             }
             if ($setting->key === 'business_timezone') {
                 Cache::forget('active_business_tz');
@@ -23,6 +25,7 @@ class Setting extends Model
         static::deleted(function (self $setting): void {
             if (in_array($setting->key, ['maintenance_mode', 'system.maintenance_mode'], true)) {
                 Cache::forget('maintenance_mode_active');
+                DB::afterCommit(fn () => Cache::forget('maintenance_mode_active'));
             }
             if ($setting->key === 'business_timezone') {
                 Cache::forget('active_business_tz');

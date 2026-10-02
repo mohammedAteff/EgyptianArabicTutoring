@@ -13,6 +13,8 @@ class BookingHold extends Model
 
     protected $table = 'booking_holds';
 
+    protected $hidden = ['lead_details'];
+
     protected $fillable = [
         'visitor_token',
         'session_token',
@@ -28,6 +30,7 @@ class BookingHold extends Model
     protected function casts(): array
     {
         return [
+            'lead_details' => 'encrypted:array',
             'slot_start_utc' => 'datetime',
             'slot_end_utc' => 'datetime',
             'expires_at' => 'datetime',
@@ -53,6 +56,7 @@ class BookingHold extends Model
 
     public function release(): void
     {
+        $this->lead_details = null;
         $this->update([
             'status' => 'released',
             'released_at' => now(),
@@ -61,6 +65,7 @@ class BookingHold extends Model
 
     public function convert(): void
     {
+        $this->lead_details = null;
         $this->update([
             'status' => 'converted',
         ]);

@@ -13,6 +13,8 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Forms\Services\FormSubmissionService;
+use App\Domains\Notifications\Services\TelegramAutomationService;
+use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentBookingService;
@@ -23,6 +25,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 
 require __DIR__.'/../../../vendor/autoload.php';
@@ -55,7 +59,18 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
-    if ($action === 'book_admin') {
+    if (in_array($action, ['telegram_emit', 'telegram_deliver'], true)) {
+        Queue::fake();
+        Http::preventStrayRequests();
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => ['message_id' => $data['worker_id']]])]);
+        if ($action === 'telegram_emit') {
+            app(TelegramAutomationService::class)->emit('booking_created', $data['identity'], ['booking_id' => 0], null, $data['rule_id']);
+        } else {
+            app(TelegramDeliveryService::class)->deliver($data['delivery_id']);
+        }
+        echo "RESULT:SUCCESS:telegram\n";
+        exit(0);
+    } elseif ($action === 'book_admin') {
         $service = app(BookingService::class);
         $booking = $service->createBooking([
             'session_type_id' => $data['session_type_id'],

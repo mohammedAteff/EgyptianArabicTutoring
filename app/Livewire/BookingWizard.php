@@ -533,6 +533,18 @@ class BookingWizard extends Component
         }
 
         $this->errorMessage = null;
+        DB::transaction(function (): void {
+            $hold = BookingHold::query()
+                ->where('hold_token', $this->holdToken)
+                ->where('visitor_token', $this->visitorToken)
+                ->where('session_token', session()->getId())
+                ->where('status', 'active')->where('expires_at', '>', now())
+                ->lockForUpdate()->first();
+            if ($hold) {
+                $hold->lead_details = ['name' => $this->name, 'email' => $this->email, 'phone' => $this->phone];
+                $hold->save();
+            }
+        });
         $this->currentStep = 4; // Step 4: Review
         $this->syncSessionState();
     }

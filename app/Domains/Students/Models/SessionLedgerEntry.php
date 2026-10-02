@@ -32,6 +32,7 @@ class SessionLedgerEntry extends Model
         return SessionLedgerEntryFactory::new();
     }
 
+    /** @return BelongsTo<StudentPackage, $this> */
     public function package(): BelongsTo
     {
         return $this->belongsTo(StudentPackage::class, 'student_package_id');

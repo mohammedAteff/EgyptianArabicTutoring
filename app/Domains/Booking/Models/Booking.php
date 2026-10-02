@@ -69,16 +69,19 @@ class Booking extends Model
         ];
     }
 
+    /** @return BelongsTo<Contact, $this> */
     public function contact(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'contact_id');
     }
 
+    /** @return BelongsTo<Student, $this> */
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
     }
 
+    /** @return BelongsTo<SessionType, $this> */
     public function sessionType(): BelongsTo
     {
         return $this->belongsTo(SessionType::class, 'session_type_id');

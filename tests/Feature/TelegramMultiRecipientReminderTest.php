@@ -23,6 +23,7 @@ class TelegramMultiRecipientReminderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Setting::set('telegram.center_migrated', false);
 
         Setting::set('telegram.bot_token', Crypt::encryptString('123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11'), 'telegram', false);
         Setting::set('telegram.reminders_enabled', true, 'telegram', false);
@@ -191,8 +192,8 @@ class TelegramMultiRecipientReminderTest extends TestCase
         $this->actingAs($admin, 'web')
             ->get(route('admin.settings.index'))
             ->assertOk()
-            ->assertSee('Add reminder milestone')
-            ->assertSee('Add recipient chat ID');
+            ->assertSee('Telegram Bots')->assertDontSee('Add reminder milestone')
+            ->assertDontSee('Add recipient chat ID');
 
         $this->post(route('admin.settings.update'), array_merge($baseSettings, [
             'telegram_reminders_enabled' => '1',

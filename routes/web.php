@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StudentBillingController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SystemHealthController;
+use App\Http\Controllers\Admin\TelegramController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BlogController;
@@ -369,6 +370,16 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         // Everyday operational settings are available to both administrator roles.
         Route::middleware('role:super_admin,admin')->group(function () {
+            Route::prefix('telegram')->name('telegram.')->group(function (): void {
+                Route::get('/', [TelegramController::class, 'index'])->name('index');
+                Route::post('/global', [TelegramController::class, 'global'])->name('global');
+                Route::post('/bots/{bot?}', [TelegramController::class, 'bot'])->middleware('throttle:30,1')->name('bot');
+                Route::post('/destinations/{destination?}', [TelegramController::class, 'destination'])->name('destination');
+                Route::post('/rules/{rule?}', [TelegramController::class, 'rule'])->name('rule');
+                Route::post('/run/{rule}', [TelegramController::class, 'run'])->middleware('throttle:5,1')->name('run');
+                Route::post('/preview', [TelegramController::class, 'preview'])->middleware('throttle:30,1')->name('preview');
+                Route::post('/test/{destination}', [TelegramController::class, 'test'])->middleware('throttle:5,1')->name('test');
+            });
             Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
             Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
             Route::post('/settings/telegram/test', [SettingController::class, 'testTelegram'])->name('settings.telegram.test');
