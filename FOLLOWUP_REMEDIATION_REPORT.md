@@ -134,3 +134,15 @@ Screenshots were captured from the actual browser, not generated mockups:
 - The in-app browser did not return an Excel download artifact, or a file path for the resource's initial download action. CSV parity was manually verified; the resource request/download records and automated grant/download checks passed. Existing export implementation was not changed in this pass.
 - Email-quality validation establishes domain routing, not individual mailbox ownership, as in the baseline.
 - The previously reported Hostinger recurring scheduler/worker configuration gap is outside these four repairs.
+
+# Publication Verification
+
+The earlier explicit GitHub/Hostinger deployment authorization was used for this follow-up. Runtime release `efc5a583f0c3cad1b3be87a812d7a07f3dce713c` was pushed to GitHub `main` and fast-forwarded into the existing Hostinger application checkout. Local fixture databases and uploaded synthetic files were not transferred. No migration, onboarding reinstall, dependency change or production business-setting update was performed.
+
+Before replacing production source/assets, a private server-side snapshot of the previous commit, source, environment, public wrapper and build was created. The existing full database/storage backup service produced a ZIP whose integrity and database-manifest checksum were validated. The asset transfer checksum was validated before extraction.
+
+Database capability verification passed on MariaDB 11.8.9/InnoDB. Configuration, routes and Blade views were cached, workers received the existing restart signal, and the application returned to Live. Checksums confirmed that `.env`, all nine operational setting values in scope and the complete footer Social Links records were unchanged. Existing unrelated environment-backup files were preserved.
+
+Seven public live GET checks returned HTTP 200: homepage, pricing, resources, booking, admin login, student login and Arabic Alphabet. The latter was requested as an analytics-excluded synthetic client: both operational cookies were present, the safe retry script was present, and the old internal error string was absent. The deployed CSS `app-DkZ5rSWm.css` and JavaScript `app-d3et6oWW.js` returned HTTP 200 with exact SHA-256 matches to the local production build.
+
+The live homepage was also inspected in the browser. Existing footer WhatsApp remained in Connect Directly with its preserved destination. Floating visibility retains the production account's existing saved switches; local enabled-state desktop/mobile screenshots document the repaired widget without changing those production settings. Private authenticated refund/settings screens were exercised locally, not by modifying customer records in production.
