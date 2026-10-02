@@ -29,6 +29,7 @@ use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\System\Services\BackupService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -36,13 +37,16 @@ use Database\Factories\AdministratorFactory;
 use Database\Factories\TelegramBotFactory;
 use Database\Factories\TelegramDestinationFactory;
 use Database\Factories\TelegramRuleFactory;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
@@ -532,5 +536,44 @@ class TelegramAutomationTest extends TestCase
         $label = $summary['visitors_is_daily_sum'] ? 'Sum of daily unique visitors' : 'Unique visitors';
         $this->assertStringContainsString($label.': '.$summary['visitors'], $digest);
         $this->assertStringContainsString('Sessions: '.$summary['sessions'], $digest);
+    }
+
+    #[TestWith(['unconfigured'])]
+    #[TestWith(['success'])]
+    #[TestWith(['failed'])]
+    public function test_backup_alert_reports_actual_private_archive_size_and_current_replication_outcome(string $outcome): void
+    {
+        [, , $successRule] = $this->configured('backup_success');
+        [, , $failureRule] = $this->configured('backup_failure');
+        Setting::set('last_offsite_backup_status', 'failed');
+        Setting::set('backup_offsite_disk', 'qa-backup');
+        config(['filesystems.backup_disk' => 'qa-backup', 'filesystems.disks.qa-backup' => $outcome === 'unconfigured' ? null : ['driver' => 'local']]);
+        if ($outcome !== 'unconfigured') {
+            $disk = \Mockery::mock(FilesystemAdapter::class);
+            $disk->shouldReceive('put')->once()->andReturn($outcome === 'success');
+            Storage::shouldReceive('disk')->with('qa-backup')->andReturn($disk);
+        }
+        $service = new class extends BackupService
+        {
+            public function dumpDatabase(string $outputPath): void
+            {
+                File::put($outputPath, '-- Fictional test database dump');
+            }
+
+            protected function addDirectoryToZip(\ZipArchive $zip, string $dirPath, string $zipPrefix, array &$fileHashes = []): void {}
+        };
+        $path = $service->createBackup('telegram-qa-'.Str::random(8));
+        try {
+            $payload = TelegramDelivery::where('telegram_rule_id', $successRule->id)->firstOrFail()->payload['source'];
+            $this->assertSame(basename($path), $payload['file_name']);
+            $this->assertSame(filesize($path), $payload['file_size']);
+            $this->assertSame('success', $payload['local_status']);
+            $this->assertSame($outcome === 'unconfigured' ? 'not configured' : $outcome, $payload['offsite_status']);
+            $this->assertSame($outcome === 'failed' ? 1 : 0, TelegramDelivery::where('telegram_rule_id', $failureRule->id)->count());
+            $this->assertStringNotContainsString('https://', implode('', TelegramDelivery::where('telegram_rule_id', $successRule->id)->first()->payload['parts']));
+            Http::assertNothingSent();
+        } finally {
+            File::delete($path);
+        }
     }
 }

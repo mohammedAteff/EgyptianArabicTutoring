@@ -147,9 +147,9 @@ Two additive migrations: Telegram bots, destinations, rules, destination-rule pi
 
 | Check | Result |
 | --- | --- |
-| Full current-schema suite, `php artisan test --compact --exclude-group=intermediate-schema` | 638 passed; 6,068 assertions. |
+| Full current-schema suite, `php artisan test --compact --exclude-group=intermediate-schema` | 641 passed; 6,090 assertions; 193.367 s. |
 | Dedicated real MariaDB/InnoDB concurrency suite using `phpunit.concurrency.xml` | 11 passed; 53 assertions; 8.049 s. New two-process Telegram emission and delivery race produced one row, one attempt and one accepted mocked message. |
-| Focused operational settings / Telegram automation / legacy reminders | 60 passed; 249 assertions. |
+| Focused operational settings / Telegram automation / legacy reminders | 60 passed; 249 assertions, plus 3 backup-outcome cases passed with 23 assertions. |
 | JS telemetry and existing form builder | 5 passed, 0 failed. |
 | Vite production build and Blade cache | Passed. |
 | Pint dirty PHP format, diff whitespace, UTF-8 checks, PHP lint | Passed; 53 changed/new PHP files linted, 61 changed/new files UTF-8 checked. |
@@ -157,7 +157,7 @@ Two additive migrations: Telegram bots, destinations, rules, destination-rule pi
 
 The historical `intermediate-schema` group is a separate stage-only suite which expects the removed forms.prompt_trigger column. A broad initial invocation included it against the current schema and got its two expected schema assertions; the established current-schema command excludes that group, as in both previous reports. No assertions were weakened or removed. New migrations do not change the historical forms migration stage.
 
-Coverage includes encrypted/masked credentials, roles, legacy import/dedupe, cross-bot validation, templates, sample preview, toggles, source conditions, privacy, post-commit/rollback lifecycle events, canonical ledgers, quiet hours/cooldowns, cancelled/rescheduled queued reminders, forms, expired-versus-converted holds, resources/unknown country, traffic thresholds, independent watchdog, daily/on-demand digests, strict command allow-lists/ambiguity/offset, Unicode splitting/resume, rejected/uncertain API responses and bounded retries. All automated Telegram calls use Http fakes.
+Coverage includes encrypted/masked credentials, roles, legacy import/dedupe, cross-bot validation, templates, sample preview, toggles, source conditions, privacy, post-commit/rollback lifecycle events, canonical ledgers, quiet hours/cooldowns, cancelled/rescheduled queued reminders, forms, expired-versus-converted holds, resources/unknown country, traffic thresholds, independent watchdog, daily/on-demand digests, strict command allow-lists/ambiguity/offset, Unicode splitting/resume, actual private backup archive sizes/current offsite success-failure-unconfigured outcomes, rejected/uncertain API responses and bounded retries. All automated Telegram calls use Http fakes.
 
 # Browser Verification
 
