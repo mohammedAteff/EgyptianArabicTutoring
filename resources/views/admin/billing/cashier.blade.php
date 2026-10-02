@@ -312,13 +312,15 @@
 
                             <!-- Payment History -->
                             <div class="space-y-2">
-                                <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Payments Recorded</div>
+                                <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Payments & Manual Refunds</div>
                                 @if($pkg->payments->isEmpty())
                                     <p class="text-xs text-slate-400 italic">No payments logged yet.</p>
                                 @else
                                     <div class="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white overflow-hidden">
                                         @foreach($pkg->payments as $pmt)
-                                            <div class="p-3 flex items-center justify-between text-xs">
+                                            @php $paymentRefunds = $pkg->refunds->where('payment_record_id', $pmt->id)->sortBy('refunded_at'); @endphp
+                                            <div data-payment-id="{{ $pmt->id }}" class="p-3 space-y-3 text-xs">
+                                              <div class="flex flex-wrap items-center justify-between gap-3">
                                                 <div>
                                                     <span class="font-bold font-mono text-slate-900">${{ $pmt->amount_paid }} {{ $pmt->currency }}</span>
                                                     <span class="text-slate-400 ml-2">via {{ $pmt->payment_method }}</span>
@@ -326,11 +328,29 @@
                                                         <span class="text-slate-400 ml-1">({{ $pmt->transaction_reference }})</span>
                                                     @endif
                                                     <span class="text-slate-400 ml-2">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($pmt->paid_at) }}</span>
+                                                    <span class="text-slate-500 ml-2">Payment #{{ $pmt->id }}</span>
+                                                    @if($paymentRefunds->isNotEmpty())
+                                                        <span class="ml-2 inline-flex rounded-full bg-rose-50 px-2 py-1 font-semibold text-rose-700">{{ bccomp($pmt->refundable_amount, '0.00', 2) === 0 ? 'Fully refunded' : 'Partially refunded' }}</span>
+                                                    @endif
                                                 </div>
-                                                <button type="button" @click="refundPaymentId = {{ $pmt->id }}; refundPackageId = {{ $pkg->id }}; refundAmount = '{{ $pmt->amount_paid }}'"
+                                                @if(bccomp($pmt->refundable_amount, '0.00', 2) > 0)
+                                                <button type="button" @click="refundPaymentId = {{ $pmt->id }}; refundPackageId = {{ $pkg->id }}; refundAmount = '{{ $pmt->refundable_amount }}'"
                                                         class="text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors">
-                                                    Record Manual Refund &rarr;
+                                                    Record Manual Refund (up to ${{ $pmt->refundable_amount }}) &rarr;
                                                 </button>
+                                                @endif
+                                              </div>
+                                              @foreach($paymentRefunds as $refund)
+                                                <div data-refund-id="{{ $refund->id }}" class="rounded-lg border border-rose-100 bg-rose-50 p-3 text-rose-900 space-y-1">
+                                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                        <span class="font-semibold">Manual Refund #{{ $refund->id }}</span>
+                                                        <span class="font-bold font-mono">-${{ $refund->amount_refunded }} {{ $refund->currency }}</span>
+                                                        <span>Refunded {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($refund->refunded_at) }}</span>
+                                                    </div>
+                                                    <p>Against payment #{{ $pmt->id }}@if($pmt->transaction_reference) · Reference: {{ $pmt->transaction_reference }}@endif</p>
+                                                    @if($refund->reason)<p>Reason: {{ $refund->reason }}</p>@endif
+                                                </div>
+                                              @endforeach
                                             </div>
                                         @endforeach
                                     </div>

@@ -96,6 +96,9 @@ class StudentBillingController extends Controller
                 $pkg->setAttribute('net_paid', $summary['net_paid']);
                 $pkg->available_credits = $summary['remaining_credits'];
                 $pkg->is_paid_in_full = bccomp($pkg->remaining_balance, '0.00', 2) <= 0;
+                foreach ($pkg->payments as $payment) {
+                    $payment->setAttribute('refundable_amount', $ledger->refundableAmount($payment, $pkg));
+                }
             }
         }
 

@@ -46,11 +46,17 @@ class StudentPackage extends Model
         return $this->hasMany(SessionLedgerEntry::class);
     }
 
+    /**
+     * @return HasMany<PaymentRecord, $this>
+     */
     public function payments(): HasMany
     {
         return $this->hasMany(PaymentRecord::class);
     }
 
+    /**
+     * @return HasMany<PaymentRefund, $this>
+     */
     public function refunds(): HasMany
     {
         return $this->hasMany(PaymentRefund::class);

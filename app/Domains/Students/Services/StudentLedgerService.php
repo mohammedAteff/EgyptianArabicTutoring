@@ -425,7 +425,7 @@ class StudentLedgerService
             $packageRefunded = $refunds
                 ->reduce(fn (int $total, PaymentRefund $refund): int => $total + $this->toCents((string) $refund->amount_refunded), 0);
             $packagePaid = $this->toCents((string) PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid'));
-            if ($cents > $this->toCents($lockedPayment->amount_paid) - $paymentRefunded || $cents > $packagePaid - $packageRefunded) {
+            if ($cents > $this->remainingRefundableCents($lockedPayment, $paymentRefunded, $packagePaid - $packageRefunded)) {
                 throw new InvalidArgumentException('Refund exceeds the refundable payment or package amount.');
             }
 
@@ -469,6 +469,23 @@ class StudentLedgerService
 
             return $refund;
         }, 5);
+    }
+
+    public function refundableAmount(PaymentRecord $payment, StudentPackage $package): string
+    {
+        $paymentRefunded = $package->refunds->where('payment_record_id', $payment->id)
+            ->reduce(fn (int $total, PaymentRefund $refund): int => $total + $this->toCents((string) $refund->amount_refunded), 0);
+        $packageRefunded = $package->refunds
+            ->reduce(fn (int $total, PaymentRefund $refund): int => $total + $this->toCents((string) $refund->amount_refunded), 0);
+        $packagePaid = $package->payments
+            ->reduce(fn (int $total, PaymentRecord $record): int => $total + $this->toCents((string) $record->amount_paid), 0);
+
+        return $this->fromCents($this->remainingRefundableCents($payment, $paymentRefunded, $packagePaid - $packageRefunded));
+    }
+
+    private function remainingRefundableCents(PaymentRecord $payment, int $paymentRefunded, int $packageNetPaid): int
+    {
+        return max(0, min($this->toCents((string) $payment->amount_paid) - $paymentRefunded, $packageNetPaid));
     }
 
     public function adjustCredits(StudentPackage $package, int $creditChange, string $description, string $idempotencyKey, ?int $administratorId = null): SessionLedgerEntry

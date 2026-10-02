@@ -10,6 +10,7 @@ use App\Domains\CMS\Models\Setting;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,6 +25,10 @@ class TrackVisitorSession
     public function handle(Request $request, Closure $next): Response
     {
         if ($this->shouldSkip($request)) {
+            if ($request->isMethod('GET') && $request->routeIs('resources.show*') && $request->hasSession()) {
+                $this->initializeResourceContext($request);
+            }
+
             return $next($request);
         }
 
@@ -211,6 +216,18 @@ class TrackVisitorSession
         }
 
         return $response;
+    }
+
+    private function initializeResourceContext(Request $request): void
+    {
+        foreach (['_va_visitor' => 'analytics_visitor_token', '_va_session' => 'analytics_session_token'] as $cookieName => $sessionKey) {
+            $token = (string) $request->cookie($cookieName, '');
+            if (! Str::isUuid($token)) {
+                $token = (string) Str::uuid();
+            }
+            $request->session()->put($sessionKey, $token);
+            Cookie::queue(cookie($cookieName, $token, 60, '/', null, app()->isProduction() || $request->isSecure(), false, false, 'Lax'));
+        }
     }
 
     protected function shouldSkip(Request $request): bool

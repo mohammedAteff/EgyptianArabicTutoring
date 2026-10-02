@@ -12,13 +12,13 @@ class EmailQualityService
         $domain = strtolower(substr(strrchr($email, '@') ?: '', 1));
         $ascii = idn_to_ascii($domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
         if (! $ascii || ! filter_var($ascii, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) || ! str_contains($ascii, '.')) {
-            $this->reject('Please enter an email address with a valid mail domain.');
+            $this->reject('Please enter a valid email address.');
         }
         $domains = file(resource_path('data/disposable-email-domains.txt'), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
         $parts = explode('.', $ascii);
         while (count($parts) > 1) {
             if (in_array(implode('.', $parts), $domains, true)) {
-                $this->reject('Temporary email addresses cannot be used for resource access.');
+                $this->reject('Please use a permanent email address.');
             }
             array_shift($parts);
         }
@@ -27,14 +27,14 @@ class EmailQualityService
         }
         $records = $this->dnsRecords($ascii);
         if ($records === false) {
-            $this->reject('We could not check this email domain right now. Please try again shortly.');
+            $this->reject('We could not check your email right now. Please try again shortly.');
         }
         $mx = array_values(array_filter($records, fn (array $record): bool => ($record['type'] ?? '') === 'MX'));
         $routable = $mx !== []
             ? collect($mx)->contains(fn (array $record): bool => isset($record['target']) && ! in_array($record['target'], ['', '.'], true))
             : collect($records)->contains(fn (array $record): bool => in_array($record['type'] ?? '', ['A', 'AAAA'], true));
         if (! $routable) {
-            $this->reject('This email domain cannot receive mail. Please check your email address.');
+            $this->reject('Please enter a valid email address.');
         }
         Cache::put('email-domain:'.$ascii, true, 3600);
     }

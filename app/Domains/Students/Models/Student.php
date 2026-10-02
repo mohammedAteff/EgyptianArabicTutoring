@@ -53,6 +53,9 @@ class Student extends Authenticatable
         return trim(($this->first_name ?? '').' '.($this->last_name ?? ''));
     }
 
+    /**
+     * @return HasMany<StudentPackage, $this>
+     */
     public function packages(): HasMany
     {
         return $this->hasMany(StudentPackage::class);

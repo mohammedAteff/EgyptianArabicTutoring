@@ -154,14 +154,9 @@ class ResourceController extends Controller
             'content' => ['nullable', 'string', 'max:255'],
             'term' => ['nullable', 'string', 'max:255'],
             'landing_page' => ['nullable', 'string', 'max:255'],
-        ]);
+        ], ['email.email' => 'Please enter a valid email address.']);
 
-        $hasCookieVisitor = $request->hasCookie('_va_visitor') || $request->hasCookie('visitor_token');
-        $hasCookieSession = $request->hasCookie('_va_session') || $request->hasCookie('session_token');
-
-        if (! $hasCookieVisitor || ! $hasCookieSession) {
-            abort(403, 'Missing required visitor security context.');
-        }
+        app(EmailQualityService::class)->validate((string) $request->input('email'));
 
         $visitorToken = (string) ($request->cookie('_va_visitor')
             ?? $request->cookie('visitor_token'));
@@ -170,7 +165,12 @@ class ResourceController extends Controller
             ?? $request->cookie('session_token'));
 
         if (empty($visitorToken) || empty($sessionToken)) {
-            abort(403, 'Missing required visitor security context.');
+            Log::notice('Resource access rejected: missing visitor cookies.', [
+                'resource_id' => $resource->id,
+                'has_visitor_cookie' => $visitorToken !== '',
+                'has_session_cookie' => $sessionToken !== '',
+            ]);
+            abort(403, "We couldn't process your request. Please refresh the page and try again.");
         }
 
         $visSession = VisitorSession::where('session_token', $sessionToken)->first();
@@ -188,8 +188,6 @@ class ResourceController extends Controller
             'term' => $request->query('utm_term') ?? $request->input('term') ?? ($request->hasSession() ? $request->session()->get('utm_term') : null) ?? $visSession?->utm_term,
             'landing_page' => $request->input('landing_page') ?? $request->header('referer'),
         ];
-
-        app(EmailQualityService::class)->validate((string) $request->input('email'));
 
         $result = DB::transaction(function () use ($resource, $request, $visitorToken, $sessionToken, $attribution) {
             $contact = app(ContactService::class)->resolveOrCreate(

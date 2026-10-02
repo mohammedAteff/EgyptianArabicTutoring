@@ -466,16 +466,81 @@
         </div>
     </form>
 
+    <form method="POST" action="{{ route('admin.settings.operations') }}" class="space-y-8">
+        @csrf
+        @php
+            $inputClass = 'mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none';
+            $cardClass = 'bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6';
+            $headingClass = 'text-lg font-bold font-serif text-slate-900 pb-3 border-b border-slate-100';
+            $floatingLabels = old('whatsapp_label', (array) \App\Domains\CMS\Models\Setting::get('whatsapp_label', []));
+            $floatingMessages = old('whatsapp_message', (array) \App\Domains\CMS\Models\Setting::get('whatsapp_message', []));
+        @endphp
+
+        <section class="{{ $cardClass }}" aria-labelledby="maintenance-message-heading">
+            <h2 id="maintenance-message-heading" class="{{ $headingClass }}">7. Maintenance Message</h2>
+            <div>
+                <label for="maintenance-message" class="block text-xs font-semibold uppercase tracking-wider text-slate-600">Public maintenance message</label>
+                <textarea id="maintenance-message" name="maintenance_message" maxlength="2000" rows="3" class="{{ $inputClass }}">{{ old('maintenance_message', \App\Domains\CMS\Models\Setting::get('maintenance_message', 'We will be back shortly.')) }}</textarea>
+                <p class="mt-2 text-xs text-slate-500">Shown while maintenance mode is active. Change the mode in Business Timezone &amp; General above.</p>
+            </div>
+        </section>
+
+        <section class="{{ $cardClass }}" aria-labelledby="floating-whatsapp-heading">
+            <h2 id="floating-whatsapp-heading" class="{{ $headingClass }}">8. Floating WhatsApp</h2>
+            <p class="text-sm text-slate-500">Configure the circular contact button. Footer social links keep their own configuration in Social Links.</p>
+            <div>
+                <label for="floating-whatsapp-url" class="block text-xs font-semibold uppercase tracking-wider text-slate-600">Floating WhatsApp destination URL</label>
+                <input id="floating-whatsapp-url" type="url" name="whatsapp_url" value="{{ old('whatsapp_url', \App\Domains\CMS\Models\Setting::get('whatsapp_url')) }}" placeholder="https://wa.me/201012345678" class="{{ $inputClass }}">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                @foreach(['whatsapp_public' => 'Show on public website', 'whatsapp_portal' => 'Show in student portal'] as $key => $label)
+                    <label class="flex items-center gap-2 text-sm text-slate-700">
+                        <input type="hidden" name="{{ $key }}" value="0">
+                        <input type="checkbox" name="{{ $key }}" value="1" @checked(old($key, \App\Domains\CMS\Models\Setting::get($key, false))) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"> {{ $label }}
+                    </label>
+                @endforeach
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                @foreach(['en' => 'English', 'fr' => 'French', 'de' => 'German'] as $locale => $language)
+                    <fieldset class="space-y-4 rounded-xl border border-slate-200 p-4 min-w-0">
+                        <legend class="px-1 text-sm font-semibold text-slate-700">{{ $language }}</legend>
+                        <label class="block text-xs font-semibold text-slate-600">Accessible label / tooltip
+                            <input name="whatsapp_label[{{ $locale }}]" maxlength="100" value="{{ $floatingLabels[$locale] ?? '' }}" class="{{ $inputClass }}">
+                        </label>
+                        <label class="block text-xs font-semibold text-slate-600">Prefilled message
+                            <textarea name="whatsapp_message[{{ $locale }}]" maxlength="1000" rows="3" class="{{ $inputClass }}">{{ $floatingMessages[$locale] ?? '' }}</textarea>
+                        </label>
+                    </fieldset>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="{{ $cardClass }}" aria-labelledby="conversion-goals-heading">
+            <h2 id="conversion-goals-heading" class="{{ $headingClass }}">9. Analytics &amp; Conversion Goals</h2>
+            <fieldset>
+                <legend class="text-sm text-slate-500">Choose which actions count toward conversion reports.</legend>
+                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    @foreach(\App\Domains\Analytics\Services\AnalyticsService::CONVERSION_EVENTS as $event)
+                        <label class="flex items-center gap-2 text-sm text-slate-700">
+                            <input type="checkbox" name="goals[]" value="{{ $event }}" @checked(in_array($event, (array) old('goals', \App\Domains\CMS\Models\Setting::get('analytics.goals', [])), true)) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"> {{ ucfirst(str_replace('_', ' ', $event)) }}
+                        </label>
+                    @endforeach
+                </div>
+            </fieldset>
+        </section>
+
+        <section class="{{ $cardClass }}" aria-labelledby="internal-traffic-heading">
+            <h2 id="internal-traffic-heading" class="{{ $headingClass }}">10. Analytics Exclusions &amp; Internal Traffic</h2>
+            <p class="text-sm text-slate-500">Administrators, previews, bots and synthetic checks are excluded automatically. Saved connection exclusions apply to public analytics reports.</p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="exclude_connection" value="1" @checked(old('exclude_connection')) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"> Exclude my current connection</label>
+                <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="clear_exclusions" value="1" @checked(old('clear_exclusions')) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"> Clear saved connection exclusions</label>
+            </div>
+        </section>
+
+        <div class="flex items-center justify-end">
+            <button type="submit" class="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm font-serif">Save operational settings</button>
+        </div>
+    </form>
 </div>
-<form method="POST" action="{{ route('admin.settings.operations') }}" class="mt-8 space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
-@csrf
-<h2 class="text-xl font-bold">Contact, conversions and maintenance message</h2>
-<label class="block text-sm font-medium">Maintenance message<textarea name="maintenance_message" maxlength="2000" class="mt-2 w-full rounded-lg border border-slate-300 p-3">{{ old('maintenance_message', \App\Domains\CMS\Models\Setting::get('maintenance_message', 'We will be back shortly.')) }}</textarea></label>
-<label class="block text-sm font-medium">WhatsApp destination URL<input type="url" name="whatsapp_url" value="{{ old('whatsapp_url', \App\Domains\CMS\Models\Setting::get('whatsapp_url')) }}" placeholder="https://wa.me/201012345678" class="mt-2 w-full rounded-lg border border-slate-300 p-3"></label>
-<div class="flex flex-wrap gap-5">@foreach(['whatsapp_public'=>'Show on public website','whatsapp_portal'=>'Show in student portal'] as $key=>$label)<label><input type="hidden" name="{{ $key }}" value="0"><input type="checkbox" name="{{ $key }}" value="1" @checked(\App\Domains\CMS\Models\Setting::get($key, false))> {{ $label }}</label>@endforeach</div>
-<div class="grid gap-4 md:grid-cols-3">@foreach(['en'=>'English','fr'=>'French','de'=>'German'] as $locale=>$language)<fieldset class="space-y-2 rounded-lg border p-3"><legend>{{ $language }}</legend><label class="block text-sm">Button label<input name="whatsapp_label[{{ $locale }}]" maxlength="100" value="{{ \App\Domains\CMS\Models\Setting::get('whatsapp_label', [])[$locale] ?? '' }}" class="w-full rounded border border-slate-300 p-2"></label><label class="block text-sm">Prefilled message<textarea name="whatsapp_message[{{ $locale }}]" maxlength="1000" class="w-full rounded border border-slate-300 p-2">{{ \App\Domains\CMS\Models\Setting::get('whatsapp_message', [])[$locale] ?? '' }}</textarea></label></fieldset>@endforeach</div>
-<fieldset><legend class="font-semibold">Conversion goals</legend><div class="mt-2 grid gap-2 sm:grid-cols-2">@foreach(\App\Domains\Analytics\Services\AnalyticsService::CONVERSION_EVENTS as $event)<label class="text-sm"><input type="checkbox" name="goals[]" value="{{ $event }}" @checked(in_array($event, (array) \App\Domains\CMS\Models\Setting::get('analytics.goals', []), true))> {{ ucfirst(str_replace('_', ' ', $event)) }}</label>@endforeach</div></fieldset>
-<fieldset class="space-y-2"><legend class="font-semibold">Internal traffic</legend><p class="text-sm text-slate-600">Administrators, previews, bots and synthetic checks are excluded automatically. Connection exclusions store a keyed hash.</p><label class="block"><input type="checkbox" name="exclude_connection" value="1"> Exclude my current connection</label><label class="block"><input type="checkbox" name="clear_exclusions" value="1"> Clear saved connection exclusions</label></fieldset>
-<button class="rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white">Save operational settings</button>
-</form>
 @endsection

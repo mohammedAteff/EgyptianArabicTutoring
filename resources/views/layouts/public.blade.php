@@ -402,7 +402,7 @@
 
             if (isWhatsApp && !el.hasAttribute('data-whatsapp-cta')) {
                 el.addEventListener('click', () => {
-                    window.vaTrack('whatsapp_clicked', { target: href, target_url: href, platform: 'whatsapp', placement: 'footer' });
+                    window.vaTrack('whatsapp_clicked', { target: href, target_url: href, platform: 'whatsapp', placement: 'footer_social', context: 'public', language: @js(app()->getLocale()) });
                 });
             } else if (isTelegram) {
                 el.addEventListener('click', () => {

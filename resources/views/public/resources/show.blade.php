@@ -96,6 +96,7 @@
                 this.errorMessage = '';
                 fetch(this.requestUrl, {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
@@ -115,7 +116,9 @@
                             return;
                         }
                         this.state = 'idle';
-                        this.errorMessage = data.message || 'Unable to request access. Please check your email.';
+                        this.errorMessage = res.status === 422
+                            ? (data.errors?.email?.[0] || data.errors?.name?.[0] || 'Please check your name and email address.')
+                            : (res.status === 403 ? 'We couldn’t process your request. Please refresh the page and try again.' : 'We couldn’t process your request. Please try again shortly.');
                         return;
                     }
                     if (data.requires_pin) {
@@ -164,13 +167,13 @@
                         this.errorMessage = 'Too many failed verification attempts. Please request a new code.';
                     } else if (res.status === 403) {
                         this.state = 'pin_required';
-                        this.errorMessage = 'Session authorization mismatch. Please refresh and try again.';
+                        this.errorMessage = 'Please refresh the page and try again.';
                     } else if (res.status === 409) {
                         this.state = 'pin_required';
                         this.errorMessage = 'This verification code has already been used. Please request a new code.';
                     } else {
                         this.state = 'pin_required';
-                        this.errorMessage = data.message || 'Verification failed. Please retry.';
+                        this.errorMessage = 'We couldn’t process your request. Please refresh the page and try again.';
                     }
                 })
                 .catch(() => {
