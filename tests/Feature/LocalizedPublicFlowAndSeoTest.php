@@ -340,7 +340,7 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $responseConf = $this->get('/fr/reservation/confirmation/'.$booking->confirmation_token);
         $responseConf->assertStatus(200);
         $responseConf->assertSee('Réservation confirmée');
-        $responseConf->assertSee('Votre cours est programmé !');
+        $responseConf->assertSee('Votre réservation est confirmée.');
         $responseConf->assertSee('Calendrier des leçons');
         $responseConf->assertSee('Votre heure locale');
         $responseConf->assertSee('Heure du tuteur (Le Caire)');

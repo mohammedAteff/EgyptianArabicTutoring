@@ -204,6 +204,8 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     |--------------------------------------------------------------------------
     */
     Route::middleware('auth:web')->group(function () {
+        Route::post('/preferences/time', [SettingController::class, 'timePreference'])->middleware('role:super_admin,admin,assistant')->name('preferences.time');
+        Route::post('/settings/operations', [SettingController::class, 'operational'])->middleware('role:super_admin,admin')->name('settings.operations');
         Route::get('/', [DashboardController::class, 'index'])->middleware('role:super_admin,admin')->name('dashboard');
         Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('role:super_admin,admin');
 

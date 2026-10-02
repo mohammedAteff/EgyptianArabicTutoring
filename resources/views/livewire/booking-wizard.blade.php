@@ -517,7 +517,7 @@
                             {{ \Carbon\CarbonImmutable::parse($selectedSlot['business_date'] ?? $selectedDate)->format('l, F j, Y') }}
                         </div>
                         <div class="text-lg font-extrabold text-nile-700 mt-1">
-                            {{ $selectedSlot['business_start_time'] ?? '' }} - {{ $selectedSlot['business_end_time'] ?? '' }}
+                            {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->studentTime($reviewInstant->setTimezone($reviewBusinessTimezone)) }} - {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->studentTime(\Carbon\CarbonImmutable::parse($selectedSlotEndUtc, 'UTC')->setTimezone($reviewBusinessTimezone)) }}
                         </div>
                         <div class="text-xs text-stone-500 mt-1 font-medium">
                             {{ __('Timezone:') }} {{ $reviewBusinessDisplay['label'] }}

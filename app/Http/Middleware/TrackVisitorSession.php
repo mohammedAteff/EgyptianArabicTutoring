@@ -215,7 +215,9 @@ class TrackVisitorSession
 
     protected function shouldSkip(Request $request): bool
     {
-        return $request->is('admin*')
+        return $this->analyticsService->excluded($request)
+            || $this->detectBot((string) $request->userAgent())
+            || $request->is('admin*')
             || $request->is('livewire*')
             || $request->is('up')
             || $request->is('build*')

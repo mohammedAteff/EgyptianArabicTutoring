@@ -13,11 +13,17 @@ class Setting extends Model
     protected static function booted(): void
     {
         static::saved(function (self $setting): void {
+            if (in_array($setting->key, ['maintenance_mode', 'system.maintenance_mode'], true)) {
+                Cache::forget('maintenance_mode_active');
+            }
             if ($setting->key === 'business_timezone') {
                 Cache::forget('active_business_tz');
             }
         });
         static::deleted(function (self $setting): void {
+            if (in_array($setting->key, ['maintenance_mode', 'system.maintenance_mode'], true)) {
+                Cache::forget('maintenance_mode_active');
+            }
             if ($setting->key === 'business_timezone') {
                 Cache::forget('active_business_tz');
             }

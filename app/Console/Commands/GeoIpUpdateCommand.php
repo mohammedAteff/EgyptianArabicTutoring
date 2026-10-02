@@ -24,7 +24,7 @@ class GeoIpUpdateCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Download or atomically install the MaxMind GeoLite2-Country database';
+    protected $description = 'Download a free DB-IP country database or atomically install a compatible MMDB';
 
     /**
      * Execute the console command.
@@ -57,13 +57,7 @@ class GeoIpUpdateCommand extends Command
         }
 
         if (! $downloadUrl) {
-            $this->warn('No download URL, MAXMIND_LICENSE_KEY, or local --path provided.');
-            $this->line('Usage examples:');
-            $this->line('  php artisan geoip:update --path=/path/to/GeoLite2-Country.mmdb');
-            $this->line('  php artisan geoip:update --url=https://example.com/GeoLite2-Country.mmdb');
-            $this->line('Or define MAXMIND_LICENSE_KEY or GEOIP_DOWNLOAD_URL in your .env file.');
-
-            return Command::INVALID;
+            $downloadUrl = 'https://download.db-ip.com/free/dbip-country-lite-'.now('UTC')->format('Y-m').'.mmdb.gz';
         }
 
         $this->info('Downloading GeoLite2 database from '.$this->redactCredentials($downloadUrl).'...');
@@ -87,7 +81,24 @@ class GeoIpUpdateCommand extends Command
             // Check if file is tar.gz
             $mmdbTempPath = $targetDir.'/extracted_'.uniqid().'.mmdb';
 
-            if (str_ends_with(strtolower($downloadUrl), '.tar.gz') || $this->isGzip($tempDownload)) {
+            if ($this->isGzip($tempDownload) && str_contains(strtolower($downloadUrl), '.mmdb.gz')) {
+                $input = gzopen($tempDownload, 'rb');
+                $output = fopen($mmdbTempPath, 'wb');
+                if (! $input || ! $output) {
+                    throw new \RuntimeException('Unable to open compressed country database.');
+                }
+                try {
+                    while (! gzeof($input)) {
+                        $chunk = gzread($input, 1048576);
+                        if ($chunk === false || fwrite($output, $chunk) === false) {
+                            throw new \RuntimeException('Country database decompression failed.');
+                        }
+                    }
+                } finally {
+                    gzclose($input);
+                    fclose($output);
+                }
+            } elseif ($this->isGzip($tempDownload)) {
                 $this->info('Extracting tar.gz archive...');
                 $extracted = $this->extractMmdbFromTarGz($tempDownload, $mmdbTempPath);
                 File::delete($tempDownload);

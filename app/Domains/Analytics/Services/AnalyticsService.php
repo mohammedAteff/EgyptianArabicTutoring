@@ -3,6 +3,7 @@
 namespace App\Domains\Analytics\Services;
 
 use App\Domains\Analytics\Models\AnalyticsEvent;
+use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Models\MarketingTouch;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
@@ -20,6 +21,172 @@ use Illuminate\Support\Str;
 
 class AnalyticsService
 {
+    public const CONVERSION_EVENTS = ['booking_completed', 'resource_requested', 'resource_downloaded', 'whatsapp_clicked', 'form_submitted', 'short_form_completed', 'long_form_completed', 'package_session_scheduled', 'booking_rescheduled', 'game_completed'];
+
+    /** @return Collection<int, \stdClass> */
+    public function reportingMetrics(CarbonInterface $start, CarbonInterface $end): Collection
+    {
+        $today = CarbonImmutable::now('Africa/Cairo')->startOfDay();
+        $rows = DB::table('daily_metrics')->whereBetween('metric_date', [$start->toDateString(), $end->toDateString()])->where('metric_date', '<', $today->toDateString())->get();
+        if ($end->lt($today)) {
+            return $rows;
+        }
+        $events = AnalyticsEvent::query()->where('is_bot', false)->where('created_at', '>=', $today->setTimezone('UTC'))->where('created_at', '<', $today->addDay()->setTimezone('UTC'))->get();
+        $counts = [];
+        foreach ($events as $event) {
+            $key = $event->event_name;
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+            $section = $event->metadata['section_id'] ?? null;
+            if ($section && in_array($key, ['section_view', 'section_dwell'], true)) {
+                $metric = $key === 'section_view' ? 'section_views' : 'section_dwell_seconds';
+                $compound = $metric.'|section|'.$section;
+                $counts[$compound] = ($counts[$compound] ?? 0) + ($key === 'section_view' ? 1 : max(0, (float) ($event->metadata['dwell_seconds'] ?? 0)));
+                if ($key === 'section_dwell') {
+                    $counts['section_dwell_seconds'] = ($counts['section_dwell_seconds'] ?? 0) + max(0, (float) ($event->metadata['dwell_seconds'] ?? 0));
+                }
+            }
+        }
+        $sessions = VisitorSession::query()->where('is_bot', false)->where('started_at', '>=', $today->setTimezone('UTC'))->where('started_at', '<', $today->addDay()->setTimezone('UTC'))->get();
+        $bySession = $events->groupBy('session_token');
+        $counts['sessions'] = $sessions->count();
+        $counts['unique_visitors'] = $events->pluck('visitor_token')->filter()->unique()->count();
+        $counts['bounced_sessions'] = $sessions->filter(fn ($session): bool => $this->isBounce($session, $bySession->get($session->session_token, collect())))->count();
+        foreach ($counts as $compound => $count) {
+            [$metric, $dimension, $value] = array_pad(explode('|', $compound, 3), 3, '');
+            $rows->push((object) ['metric_date' => $today->toDateString(), 'metric_name' => $metric, 'dimension_key' => $dimension, 'dimension_value' => $value, 'count' => $count]);
+        }
+
+        return $rows;
+    }
+
+    private function isBounce(VisitorSession $session, Collection $events): bool
+    {
+        return $events->where('event_name', 'page_view')->count() === 1
+            && ! $events->contains(fn ($event): bool => in_array($event->event_name, self::CONVERSION_EVENTS, true))
+            && $session->started_at->diffInSeconds($session->last_activity_at, true) < 10;
+    }
+
+    /** @return Collection<int, object{unique_visitors: int, sessions: int, page_views: int, bounced_sessions_count: int, booking_cta_clicks: int, bookings_completed: int, resource_requests: int, country_code: string}&\stdClass> */
+    public function reportingCountries(CarbonInterface $start, CarbonInterface $end): Collection
+    {
+        $today = CarbonImmutable::now('Africa/Cairo')->startOfDay();
+        $columns = ['unique_visitors', 'sessions', 'page_views', 'bounced_sessions_count', 'booking_cta_clicks', 'bookings_completed', 'resource_requests'];
+        $rows = DailyCountryMetric::query()->whereBetween('metric_date', [$start->toDateString(), $end->toDateString()])->where('metric_date', '<', $today->toDateString())->get();
+        $totals = [];
+        foreach ($rows as $row) {
+            foreach ($columns as $column) {
+                $totals[$row->country_code][$column] = ($totals[$row->country_code][$column] ?? 0) + (int) $row->{$column};
+            }
+        }
+        if ($end->gte($today)) {
+            $sessions = VisitorSession::query()->with('visitor')->where('is_bot', false)->where('started_at', '>=', $today->setTimezone('UTC'))->where('started_at', '<', $today->addDay()->setTimezone('UTC'))->get();
+            $events = AnalyticsEvent::query()->where('is_bot', false)->where('created_at', '>=', $today->setTimezone('UTC'))->where('created_at', '<', $today->addDay()->setTimezone('UTC'))->get();
+            $bySession = $events->groupBy('session_token');
+            $active = [];
+            foreach ($sessions as $session) {
+                $country = $this->reportCountry($session->detected_country_code);
+                $totals[$country]['sessions'] = ($totals[$country]['sessions'] ?? 0) + 1;
+                if ($this->isBounce($session, $bySession->get($session->session_token, collect()))) {
+                    $totals[$country]['bounced_sessions_count'] = ($totals[$country]['bounced_sessions_count'] ?? 0) + 1;
+                }
+                if ($session->visitor) {
+                    $active[$this->reportCountry($session->visitor->detected_country_code)][$session->visitor->visitor_token] = true;
+                }
+            }
+            $visitors = Visitor::query()->whereIn('visitor_token', $events->pluck('visitor_token')->filter()->unique())->get()->keyBy('visitor_token');
+            foreach ($events as $event) {
+                $country = $this->reportCountry($event->metadata['detected_country_code'] ?? null);
+                $metric = match ($event->event_name) {
+                    'page_view' => 'page_views', 'booking_completed' => 'bookings_completed', 'resource_requested' => 'resource_requests', 'booking_cta_clicked' => 'booking_cta_clicks', default => null
+                };
+                if ($metric) {
+                    $totals[$country][$metric] = ($totals[$country][$metric] ?? 0) + 1;
+                }
+                if ($event->visitor_token) {
+                    $visitor = $visitors->get($event->visitor_token);
+                    $active[$this->reportCountry($visitor?->detected_country_code)][$event->visitor_token] = true;
+                }
+            }
+            foreach ($active as $country => $tokens) {
+                $totals[$country]['unique_visitors'] = ($totals[$country]['unique_visitors'] ?? 0) + count($tokens);
+            }
+        }
+
+        $periodEvents = AnalyticsEvent::query()->where('is_bot', false)->whereBetween('created_at', [CarbonImmutable::parse($start)->setTimezone('UTC'), CarbonImmutable::parse($end)->setTimezone('UTC')])->pluck('visitor_token')->filter();
+        $periodSessions = VisitorSession::query()->with('visitor')->where('is_bot', false)->whereBetween('started_at', [CarbonImmutable::parse($start)->setTimezone('UTC'), CarbonImmutable::parse($end)->setTimezone('UTC')])->get();
+        $tokens = $periodEvents->merge($periodSessions->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique();
+        $periodVisitors = Visitor::query()->where('is_bot', false)->whereIn('visitor_token', $tokens)->get()->groupBy(fn ($visitor) => $this->reportCountry($visitor->detected_country_code));
+        foreach ($periodVisitors as $country => $visitors) {
+            $totals[$country]['unique_visitors'] = $visitors->count();
+        }
+
+        return collect($totals)->map(fn (array $row, string $country): object => (object) array_merge(array_fill_keys($columns, 0), $row, ['country_code' => $country]))->sortByDesc('unique_visitors')->values();
+    }
+
+    private function reportCountry(?string $code): string
+    {
+        return $code && ! in_array(strtoupper($code), ['XX', 'ZZ'], true) ? strtoupper($code) : 'ZZ';
+    }
+
+    /** @return Collection<int, array{event: string, count: int, visitors: int, rate: float|int}> */
+    public function goalReport(CarbonInterface $start, CarbonInterface $end): Collection
+    {
+        $events = AnalyticsEvent::query()->whereBetween('created_at', [$start, $end])->where('is_bot', false);
+        $audience = (clone $events)->distinct()->count('visitor_token');
+
+        return collect((array) Setting::get('analytics.goals', []))->filter(fn ($name): bool => in_array($name, self::CONVERSION_EVENTS, true))->map(function ($name) use ($events, $audience): array {
+            $goal = (clone $events)->where('event_name', $name);
+            $visitors = (clone $goal)->distinct()->count('visitor_token');
+
+            return ['event' => $name, 'count' => $goal->count(), 'visitors' => $visitors, 'rate' => $audience ? round(100 * $visitors / $audience, 1) : 0];
+        })->values();
+    }
+
+    /** @return Collection<int, array{section_id: string, page_template: string, total_views: int, total_dwell_seconds: float, avg_attention_duration: float|int, entry_bounce_rate: float|null, drop_off_rate: float|null}> */
+    public function sectionReport(CarbonInterface $start, CarbonInterface $end): Collection
+    {
+        $templates = ['hero' => 'landing', 'pricing' => 'landing', 'curriculum' => 'landing', 'tutor-bio' => 'landing', 'blog-content' => 'blog', 'resource-preview' => 'resource', 'game-board' => 'game'];
+        $metrics = $this->reportingMetrics($start, $end)->where('dimension_key', 'section')->groupBy('dimension_value');
+        $events = AnalyticsEvent::query()->where('is_bot', false)->whereBetween('created_at', [CarbonImmutable::parse($start)->setTimezone('UTC'), CarbonImmutable::parse($end)->setTimezone('UTC')])->get();
+        $sessions = VisitorSession::query()->whereIn('session_token', $events->pluck('session_token')->filter()->unique())->get()->keyBy('session_token');
+        $bySession = $events->groupBy('session_token');
+
+        return collect(array_unique([...array_keys($templates), ...$metrics->keys()->all()]))->map(function (string $id) use ($templates, $metrics, $events, $sessions, $bySession): array {
+            $rows = $metrics->get($id, collect());
+            $views = (int) $rows->where('metric_name', 'section_views')->sum('count');
+            $dwell = (float) $rows->where('metric_name', 'section_dwell_seconds')->sum('count');
+            $exposures = $events->where('event_name', 'section_view')->filter(fn ($event): bool => ($event->metadata['section_id'] ?? null) === $id)->pluck('session_token')->filter()->unique();
+            $bounces = $exposures->filter(fn ($token): bool => $sessions->has($token) && $this->isBounce($sessions->get($token), $bySession->get($token, collect())))->count();
+            $terminal = $exposures->filter(function ($token) use ($bySession, $id): bool {
+                $sections = $bySession->get($token, collect())->where('event_name', 'section_view')->sortBy('created_at');
+
+                return ($sections->last()?->metadata['section_id'] ?? null) === $id;
+            })->count();
+
+            return ['section_id' => $id, 'page_template' => $templates[$id] ?? 'general', 'total_views' => $views, 'total_dwell_seconds' => $dwell, 'avg_attention_duration' => $views ? round($dwell / $views, 1) : 0, 'entry_bounce_rate' => $exposures->count() ? round(100 * $bounces / $exposures->count(), 1) : null, 'drop_off_rate' => $exposures->count() ? round(100 * $terminal / $exposures->count(), 1) : null];
+        })->values();
+    }
+
+    public function linkAuthenticatedStudent(Request $request, int $studentId): void
+    {
+        $token = $request->attributes->get('analytics_visitor_token');
+        $sessionToken = $request->attributes->get('analytics_session_token');
+        if (! is_string($token) || ! is_string($sessionToken)) {
+            return;
+        }
+        Visitor::query()->where('visitor_token', $token)->whereNull('student_id')->whereHas('sessions', fn ($query) => $query->where('session_token', $sessionToken))->update(['student_id' => $studentId]);
+    }
+
+    public function excluded(Request $request): bool
+    {
+        if ($request->user('web') || $request->is('admin*', 'preview*', '*/preview', 'build/*', 'assets/*', 'up') || $request->header('X-Analytics-Synthetic') === '1') {
+            return true;
+        }
+        $fingerprint = hash_hmac('sha256', (string) $request->ip(), (string) config('app.key'));
+
+        return in_array($fingerprint, (array) Setting::get('analytics.internal_hashes', []), true);
+    }
+
     public const ALLOWED_EVENTS = [
         'page_view',
         'session_started',
@@ -44,6 +211,10 @@ class AnalyticsService
         'section_view',
         'section_dwell',
         'session_activity',
+        'form_submitted',
+        'short_form_completed',
+        'long_form_completed',
+        'package_session_scheduled',
     ];
 
     public const SERVER_ONLY_EVENTS = [
@@ -53,6 +224,10 @@ class AnalyticsService
         'booking_slot_held',
         'resource_requested',
         'resource_downloaded',
+        'form_submitted',
+        'short_form_completed',
+        'long_form_completed',
+        'package_session_scheduled',
     ];
 
     /**
@@ -85,7 +260,7 @@ class AnalyticsService
         'game_started' => ['game_slug', 'game_title', 'level'],
         'game_completed' => ['game_slug', 'game_title', 'score', 'total', 'duration_seconds', 'level'],
         'social_link_clicked' => ['platform', 'target_url', 'placement', 'target'],
-        'whatsapp_clicked' => ['platform', 'target_url', 'placement', 'target'],
+        'whatsapp_clicked' => ['platform', 'target_url', 'placement', 'target', 'context', 'language'],
         'telegram_clicked' => ['platform', 'target_url', 'placement', 'target'],
         'outbound_link_clicked' => ['url', 'text', 'placement', 'target', 'destination'],
         'faq_opened' => ['question_id', 'question_text', 'category'],
@@ -176,6 +351,9 @@ class AnalyticsService
 
         try {
             $req = $request ?? request();
+            if ($req && $this->excluded($req)) {
+                return null;
+            }
 
             $sessionVisitorToken = null;
             if ($req && $req->hasSession()) {
@@ -438,7 +616,7 @@ class AnalyticsService
                     'page' => $latest->page,
                     'source' => $latest->utm_source ?: 'Direct / Organic',
                     'last_active_at' => $latest->created_at,
-                    'minutes_ago' => $latest->created_at->diffInMinutes(now(), true),
+                    'minutes_ago' => (int) floor($latest->created_at->diffInMinutes(now(), true)),
                 ];
             })
             ->values();
@@ -610,7 +788,7 @@ class AnalyticsService
         $events = AnalyticsEvent::query()
             ->whereBetween('created_at', [$startDate, $endDate])
             ->where('is_bot', false)
-            ->select('event_name', DB::raw('count(*) as total_events'))
+            ->select('event_name', DB::raw('count(distinct visitor_token) as total_events'))
             ->whereIn('event_name', [
                 'resource_gate_viewed',
                 'resource_requested',
@@ -637,7 +815,7 @@ class AnalyticsService
         $events = AnalyticsEvent::query()
             ->whereBetween('created_at', [$startDate, $endDate])
             ->where('is_bot', false)
-            ->select('event_name', DB::raw('count(*) as total_events'))
+            ->select('event_name', DB::raw('count(distinct visitor_token) as total_events'))
             ->whereIn('event_name', [
                 'game_opened',
                 'game_started',
@@ -679,13 +857,53 @@ class AnalyticsService
             ->get();
     }
 
+    /** @return Collection<int, array{date: string, country: string, source: string, medium: string, campaign: string, content: string, context: string, language: string, clicks: int, visitors: int}> */
+    public function whatsappReport(CarbonInterface $start, CarbonInterface $end): Collection
+    {
+        return AnalyticsEvent::query()->where('is_bot', false)->where('event_name', 'whatsapp_clicked')->whereBetween('created_at', [$start, $end])->get()
+            ->groupBy(fn ($event) => json_encode([$event->created_at->copy()->timezone('Africa/Cairo')->toDateString(), $this->reportCountry($event->metadata['detected_country_code'] ?? null), $event->utm_source ?: 'direct', $event->utm_medium ?: 'none', $event->utm_campaign ?: 'none', $event->utm_content ?: 'none', $event->metadata['context'] ?? 'public', $event->metadata['language'] ?? 'unknown']))
+            ->map(fn ($events): array => $this->whatsappReportRow($events))->values();
+    }
+
+    /**
+     * @param  Collection<int, AnalyticsEvent>  $events
+     * @return array{date: string, country: string, source: string, medium: string, campaign: string, content: string, context: string, language: string, clicks: int, visitors: int}
+     */
+    private function whatsappReportRow(Collection $events): array
+    {
+        $event = $events->firstOrFail();
+
+        return [
+            'date' => $event->created_at->copy()->timezone('Africa/Cairo')->toDateString(),
+            'country' => $this->reportCountry($event->metadata['detected_country_code'] ?? null),
+            'source' => $event->utm_source ?: 'direct',
+            'medium' => $event->utm_medium ?: 'none',
+            'campaign' => $event->utm_campaign ?: 'none',
+            'content' => $event->utm_content ?: 'none',
+            'context' => match ($event->metadata['context'] ?? null) {
+                'portal' => 'portal', default => 'public'
+            },
+            'language' => match ($event->metadata['language'] ?? null) {
+                'en' => 'en', 'fr' => 'fr', 'de' => 'de', default => 'unknown'
+            },
+            'clicks' => $events->count(),
+            'visitors' => $events->pluck('visitor_token')->filter()->unique()->count(),
+        ];
+    }
+
     /**
      * Track a visitor hit during maintenance mode.
      */
     public function trackMaintenanceVisit(Request $request): void
     {
-        $visitorToken = $request->cookie('visitor_token')
-            ?: hash('sha256', ($request->ip() ?? 'unknown').($request->userAgent() ?? ''));
+        if ($this->excluded($request)) {
+            return;
+        }
+        $visitorToken = $request->attributes->get('analytics_visitor_token') ?? $request->cookie('_va_visitor');
+        if (! is_string($visitorToken) || ! Str::isUuid($visitorToken)) {
+            $visitorToken = (string) Str::uuid();
+        }
+        $request->attributes->set('analytics_maintenance_visitor_token', $visitorToken);
 
         $countryCode = 'XX';
         try {
@@ -696,7 +914,7 @@ class AnalyticsService
 
         DB::table('maintenance_visits')->insert([
             'visitor_id' => substr($visitorToken, 0, 100),
-            'ip_address' => $request->ip(),
+            'ip_address' => null,
             'user_agent' => substr((string) $request->userAgent(), 0, 500),
             'country_code' => $countryCode ?: 'XX',
             'url' => substr($request->fullUrl(), 0, 500),

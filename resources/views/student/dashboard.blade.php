@@ -30,7 +30,7 @@
         <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Available credits</p><p class="mt-1 text-2xl font-semibold text-nile-900">{{ $availableCredits }}</p></div>
     </div>
     @foreach($packageSummaries as $package)
-        <p class="mt-3 text-sm text-stone-600">{{ $package['name'] }} · {{ ucfirst($package['status']) }} · {{ $package['summary']['remaining_credits'] }} credits · {{ $package['summary']['net_paid'] }} {{ $package['currency'] }} paid net · {{ $package['summary']['balance_due'] }} {{ $package['currency'] }} due</p>
+        <p class="mt-3 text-sm text-stone-600">{{ $package['name'] }} · {{ ucfirst($package['status']) }} · {{ $package['summary']['remaining_credits'] }} credits · {{ $package['summary']['net_paid'] }} {{ $package['currency'] }} paid net · {{ bccomp($package['summary']['overpaid'], '0.00', 2) > 0 ? $package['summary']['overpaid'].' '.$package['currency'].' overpaid' : $package['summary']['balance_due'].' '.$package['currency'].' due' }}</p>
     @endforeach
 </section>
 <section class="mt-8" aria-labelledby="upcoming-title">

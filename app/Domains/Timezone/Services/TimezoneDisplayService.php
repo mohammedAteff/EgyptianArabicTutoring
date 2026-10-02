@@ -11,6 +11,21 @@ use Throwable;
 
 class TimezoneDisplayService
 {
+    public function studentTime(DateTimeInterface $instant): string
+    {
+        return $instant->format('g:i A');
+    }
+
+    public function administratorTime(DateTimeInterface $instant): string
+    {
+        return $instant->format(auth('web')->user()?->time_format === '12' ? 'g:i A' : 'H:i');
+    }
+
+    public function administratorDateTime(DateTimeInterface $instant): string
+    {
+        return $instant->format('M j, Y').' '.$this->administratorTime($instant);
+    }
+
     /**
      * Curated city display names for common zones.
      */

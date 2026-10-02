@@ -22,8 +22,8 @@ class FormBuilderService
         $this->validation->validateStructure($questions);
 
         return $this->withPublicationLock(fn (): Form => DB::transaction(function () use ($metadata, $questions, $author): Form {
-            $trigger = $metadata['trigger'] ?? $metadata['trigger_name'] ?? null;
-            $formMetadata = collect($metadata)->except(['trigger', 'trigger_name'])->all();
+            $triggers = $metadata['triggers'] ?? array_filter([$metadata['trigger'] ?? $metadata['trigger_name'] ?? null]);
+            $formMetadata = collect($metadata)->except(['trigger', 'trigger_name', 'triggers'])->all();
 
             $form = Form::create([
                 ...$formMetadata,
@@ -35,8 +35,10 @@ class FormBuilderService
             $form->update(['active_version_id' => $version->id]);
             $this->replaceQuestions($version, $questions);
 
-            if ($trigger && $trigger !== 'none' && in_array($trigger, FormTrigger::ALLOWED_TRIGGERS, true)) {
-                $form->triggers()->create(['trigger_name' => $trigger]);
+            foreach (array_unique($triggers) as $trigger) {
+                if (in_array($trigger, FormTrigger::ALLOWED_TRIGGERS, true)) {
+                    $form->triggers()->create(['trigger_name' => $trigger]);
+                }
             }
 
             return $form->fresh(['activeVersion.questions.options', 'triggers']);
@@ -67,24 +69,26 @@ class FormBuilderService
 
             $this->replaceQuestions($version, $questions);
 
-            $trigger = $metadata['trigger'] ?? $metadata['trigger_name'] ?? null;
-            $formMetadata = collect($metadata)->except(['changelog', 'trigger', 'trigger_name', 'created_by'])->all();
+            $triggers = $metadata['triggers'] ?? array_filter([$metadata['trigger'] ?? $metadata['trigger_name'] ?? null]);
+            $formMetadata = collect($metadata)->except(['changelog', 'trigger', 'trigger_name', 'triggers', 'created_by'])->all();
 
             $form->fill($formMetadata);
             $form->created_by = $originalCreatedBy;
             $form->lock_version++;
             $form->save();
 
-            if (array_key_exists('trigger', $metadata) || array_key_exists('trigger_name', $metadata)) {
-                if ($trigger === 'pre_booking' && $form->status === 'published') {
+            if (array_key_exists('trigger', $metadata) || array_key_exists('trigger_name', $metadata) || array_key_exists('triggers', $metadata)) {
+                if (in_array('pre_booking', $triggers, true) && $form->status === 'published') {
                     FormTrigger::where('trigger_name', 'pre_booking')
                         ->where('form_id', '!=', $form->id)
                         ->whereHas('form', fn ($query) => $query->where('status', 'published'))
                         ->delete();
                 }
                 $form->triggers()->delete();
-                if ($trigger && $trigger !== 'none' && in_array($trigger, FormTrigger::ALLOWED_TRIGGERS, true)) {
-                    $form->triggers()->create(['trigger_name' => $trigger]);
+                foreach (array_unique($triggers) as $trigger) {
+                    if (in_array($trigger, FormTrigger::ALLOWED_TRIGGERS, true)) {
+                        $form->triggers()->create(['trigger_name' => $trigger]);
+                    }
                 }
             }
 

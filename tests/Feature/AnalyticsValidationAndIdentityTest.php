@@ -15,11 +15,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class AnalyticsValidationAndIdentityTest extends TestCase
 {
+    use HasPublishedShortForm;
     use IssuesBookingSlotIds;
     use RefreshDatabase;
 
@@ -32,6 +34,7 @@ class AnalyticsValidationAndIdentityTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->activeGame = Game::create([
             'title' => 'Arabic Verb Conjugator',

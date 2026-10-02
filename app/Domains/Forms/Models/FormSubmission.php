@@ -16,6 +16,7 @@ class FormSubmission extends Model
         return ['submitted_at' => 'immutable_datetime', 'submission_revision' => 'integer'];
     }
 
+    /** @return BelongsTo<FormVersion, $this> */
     public function version(): BelongsTo
     {
         return $this->belongsTo(FormVersion::class, 'form_version_id');

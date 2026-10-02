@@ -68,7 +68,7 @@
                 </div>
                 <div class="text-2xl font-bold font-serif text-white">{{ $cairoStart->format('l, F j, Y') }}</div>
                 <div class="text-lg font-semibold text-amber-300 mt-1">
-                    {{ $cairoStart->format('h:i A') }} &ndash; {{ $cairoEnd->format('h:i A') }}
+                    {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($cairoStart) }} &ndash; {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($cairoEnd) }}
                 </div>
                 <div class="text-xs text-slate-400 mt-2">
                     Canonical UTC Instant: {{ $booking->start_at_utc->format('Y-m-d H:i:s \U\T\C') }}
@@ -83,7 +83,7 @@
                 </div>
                 <div class="text-2xl font-bold font-serif text-white">{{ $studentStart->format('l, F j, Y') }}</div>
                 <div class="text-lg font-semibold text-amber-300 mt-1">
-                    {{ $studentStart->format('h:i A') }} &ndash; {{ $studentEnd->format('h:i A') }}
+                    {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentStart) }} &ndash; {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentEnd) }}
                 </div>
                 <div class="text-xs text-slate-400 mt-2">
                     Student Timezone: {{ $booking->customer_timezone }}

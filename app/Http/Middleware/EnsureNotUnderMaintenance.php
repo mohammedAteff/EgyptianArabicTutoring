@@ -84,8 +84,12 @@ class EnsureNotUnderMaintenance
 
         $view = view()->exists('errors.503') ? 'errors.503' : 'errors.maintenance';
 
-        return response()->view($view, [
-            'title' => 'Under Scheduled Maintenance',
-        ], 503);
+        $response = response()->view($view, ['title' => 'Under Scheduled Maintenance'], 503);
+        $token = $request->attributes->get('analytics_maintenance_visitor_token');
+        if (is_string($token) && $token !== $request->cookie('_va_visitor')) {
+            $response->withCookie(cookie('_va_visitor', $token, 60 * 24 * 365, '/', null, $request->isSecure() || app()->isProduction(), false, false, 'Lax'));
+        }
+
+        return $response;
     }
 }

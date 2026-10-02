@@ -25,12 +25,13 @@ class BookingController extends Controller
         $booking = Booking::query()
             ->where('confirmation_token', $token)
             ->with(['sessionType', 'contact'])
+            ->withExists('reschedules')
             ->firstOrFail();
 
         return view('public.confirmation', [
             'booking' => $booking,
             'meetingUrl' => $meetingLinks->current(),
-            'title' => 'Booking Confirmed — #'.substr($booking->confirmation_token, 0, 8),
+            'title' => $booking->studentStatusLabel().' — #'.substr($booking->confirmation_token, 0, 8),
         ]);
     }
 

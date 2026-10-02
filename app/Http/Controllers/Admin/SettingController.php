@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Notifications\Services\TelegramNotificationService;
@@ -17,6 +18,45 @@ use Illuminate\View\View;
 
 class SettingController extends Controller
 {
+    public function timePreference(Request $request): RedirectResponse
+    {
+        $validated = $request->validate(['time_format' => ['required', Rule::in(['12', '24'])]]);
+        $request->user('web')->update($validated);
+
+        return back()->with('success', 'Your time display preference was saved.');
+    }
+
+    public function operational(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'maintenance_message' => ['nullable', 'string', 'max:2000'],
+            'whatsapp_public' => ['required', 'boolean'],
+            'whatsapp_portal' => ['required', 'boolean'],
+            'whatsapp_url' => ['nullable', 'url:https', 'max:1000', 'regex:~^https://(?:wa\.me/[1-9][0-9]{6,14}|api\.whatsapp\.com/send)(?:\?.*)?$~'],
+            'whatsapp_label' => ['required', 'array:en,fr,de'],
+            'whatsapp_label.*' => ['nullable', 'string', 'max:100'],
+            'whatsapp_message' => ['required', 'array:en,fr,de'],
+            'whatsapp_message.*' => ['nullable', 'string', 'max:1000'],
+            'goals' => ['nullable', 'array', 'max:30'],
+            'goals.*' => ['string', Rule::in(AnalyticsService::CONVERSION_EVENTS), 'distinct'],
+            'exclude_connection' => ['nullable', 'boolean'],
+            'clear_exclusions' => ['nullable', 'boolean'],
+        ]);
+        foreach ($validated as $key => $value) {
+            if (! in_array($key, ['goals', 'exclude_connection', 'clear_exclusions'], true)) {
+                Setting::set($key, $value ?? '', 'operations');
+            }
+        }
+        Setting::set('analytics.goals', $validated['goals'] ?? [], 'analytics');
+        $hashes = $request->boolean('clear_exclusions') ? [] : (array) Setting::get('analytics.internal_hashes', []);
+        if ($request->boolean('exclude_connection')) {
+            $hashes[] = hash_hmac('sha256', (string) $request->ip(), (string) config('app.key'));
+        }
+        Setting::set('analytics.internal_hashes', array_values(array_unique($hashes)), 'analytics');
+
+        return back()->with('success', 'Operational settings saved.');
+    }
+
     public function __construct(
         protected TimezoneService $timezoneService
     ) {}
@@ -166,7 +206,9 @@ class SettingController extends Controller
             Cache::forget('system.maintenance_mode');
         }
 
-        Cache::flush();
+        Cache::forget('active_business_tz');
+        Cache::forget('maintenance_mode_active');
+        Cache::forget('counters.public.'.now('Africa/Cairo')->toDateString());
 
         AuditLog::create([
             'administrator_id' => Auth::id(),

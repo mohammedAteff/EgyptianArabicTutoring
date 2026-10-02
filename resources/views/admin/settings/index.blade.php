@@ -467,4 +467,15 @@
     </form>
 
 </div>
+<form method="POST" action="{{ route('admin.settings.operations') }}" class="mt-8 space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
+@csrf
+<h2 class="text-xl font-bold">Contact, conversions and maintenance message</h2>
+<label class="block text-sm font-medium">Maintenance message<textarea name="maintenance_message" maxlength="2000" class="mt-2 w-full rounded-lg border border-slate-300 p-3">{{ old('maintenance_message', \App\Domains\CMS\Models\Setting::get('maintenance_message', 'We will be back shortly.')) }}</textarea></label>
+<label class="block text-sm font-medium">WhatsApp destination URL<input type="url" name="whatsapp_url" value="{{ old('whatsapp_url', \App\Domains\CMS\Models\Setting::get('whatsapp_url')) }}" placeholder="https://wa.me/201012345678" class="mt-2 w-full rounded-lg border border-slate-300 p-3"></label>
+<div class="flex flex-wrap gap-5">@foreach(['whatsapp_public'=>'Show on public website','whatsapp_portal'=>'Show in student portal'] as $key=>$label)<label><input type="hidden" name="{{ $key }}" value="0"><input type="checkbox" name="{{ $key }}" value="1" @checked(\App\Domains\CMS\Models\Setting::get($key, false))> {{ $label }}</label>@endforeach</div>
+<div class="grid gap-4 md:grid-cols-3">@foreach(['en'=>'English','fr'=>'French','de'=>'German'] as $locale=>$language)<fieldset class="space-y-2 rounded-lg border p-3"><legend>{{ $language }}</legend><label class="block text-sm">Button label<input name="whatsapp_label[{{ $locale }}]" maxlength="100" value="{{ \App\Domains\CMS\Models\Setting::get('whatsapp_label', [])[$locale] ?? '' }}" class="w-full rounded border border-slate-300 p-2"></label><label class="block text-sm">Prefilled message<textarea name="whatsapp_message[{{ $locale }}]" maxlength="1000" class="w-full rounded border border-slate-300 p-2">{{ \App\Domains\CMS\Models\Setting::get('whatsapp_message', [])[$locale] ?? '' }}</textarea></label></fieldset>@endforeach</div>
+<fieldset><legend class="font-semibold">Conversion goals</legend><div class="mt-2 grid gap-2 sm:grid-cols-2">@foreach(\App\Domains\Analytics\Services\AnalyticsService::CONVERSION_EVENTS as $event)<label class="text-sm"><input type="checkbox" name="goals[]" value="{{ $event }}" @checked(in_array($event, (array) \App\Domains\CMS\Models\Setting::get('analytics.goals', []), true))> {{ ucfirst(str_replace('_', ' ', $event)) }}</label>@endforeach</div></fieldset>
+<fieldset class="space-y-2"><legend class="font-semibold">Internal traffic</legend><p class="text-sm text-slate-600">Administrators, previews, bots and synthetic checks are excluded automatically. Connection exclusions store a keyed hash.</p><label class="block"><input type="checkbox" name="exclude_connection" value="1"> Exclude my current connection</label><label class="block"><input type="checkbox" name="clear_exclusions" value="1"> Clear saved connection exclusions</label></fieldset>
+<button class="rounded-lg bg-slate-900 px-5 py-3 font-semibold text-white">Save operational settings</button>
+</form>
 @endsection

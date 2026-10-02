@@ -112,7 +112,7 @@
                         <div class="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 flex flex-col justify-between text-xs">
                             <div class="flex items-center justify-between text-slate-400 mb-1">
                                 <span class="font-mono text-amber-400">{{ $item['visitor_token'] }}</span>
-                                <span class="text-[11px]">{{ $item['minutes_ago'] === 0 ? 'Just now' : $item['minutes_ago'] . 'm ago' }}</span>
+                                <span class="text-[11px]">{{ $item['minutes_ago'] === 0 ? 'Just now' : $item['minutes_ago'] . ($item['minutes_ago'] === 1 ? ' minute ago' : ' minutes ago') }}</span>
                             </div>
                             <div class="truncate font-medium text-slate-200" title="{{ $item['page'] }}">
                                 {{ parse_url($item['page'], PHP_URL_PATH) ?: '/' }}
@@ -377,4 +377,6 @@
     </div>
 
 </div>
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-6"><h2 class="font-bold">Configured conversion goals</h2><div class="overflow-x-auto"><table class="mt-4 w-full text-left text-sm"><thead><tr><th>Outcome</th><th>Events</th><th>Unique visitors</th><th>Visitor conversion</th></tr></thead><tbody>@forelse($goals as $goal)<tr class="border-t"><td class="py-3">{{ ucfirst(str_replace('_', ' ', $goal['event'])) }}</td><td>{{ $goal['count'] }}</td><td>{{ $goal['visitors'] }}</td><td>{{ $goal['rate'] }}%</td></tr>@empty<tr><td colspan="4" class="py-4 text-slate-500">Select outcomes in System & Business Settings.</td></tr>@endforelse</tbody></table></div></section>
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-6"><h2 class="font-bold">WhatsApp click activity</h2><p class="mt-1 text-sm text-slate-500">Selected Cairo date range. Clicks indicate outbound interest; they do not confirm a conversation. Included in overview exports.</p><div class="overflow-x-auto"><table class="mt-4 w-full text-left text-xs"><thead><tr><th>Date / country</th><th>Source / medium</th><th>Campaign / content</th><th>Context / language</th><th>Clicks</th><th>Unique visitors</th></tr></thead><tbody>@forelse($whatsappActivity as $click)<tr class="border-t"><td class="py-3">{{ $click['date'] }} / {{ $click['country'] }}</td><td>{{ $click['source'] }} / {{ $click['medium'] }}</td><td>{{ $click['campaign'] }} / {{ $click['content'] }}</td><td>{{ $click['context'] }} / {{ $click['language'] }}</td><td>{{ $click['clicks'] }}</td><td>{{ $click['visitors'] }}</td></tr>@empty<tr><td colspan="6" class="py-4 text-slate-500">No WhatsApp clicks recorded in this period.</td></tr>@endforelse</tbody></table></div></section>
 @endsection

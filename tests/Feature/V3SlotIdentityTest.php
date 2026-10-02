@@ -14,11 +14,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Livewire\Livewire;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class V3SlotIdentityTest extends TestCase
 {
+    use HasPublishedShortForm;
     use IssuesBookingSlotIds;
     use RefreshDatabase;
 
@@ -27,6 +29,7 @@ class V3SlotIdentityTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->sessionType = SessionType::create([
             'title' => 'V3 Slot Test',

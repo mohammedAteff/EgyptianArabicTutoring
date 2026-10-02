@@ -12,16 +12,12 @@ use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest as ResourceRequestModel;
-use App\Mail\ResourceVerificationPinMail;
-use Illuminate\Contracts\Cache\LockTimeoutException;
-use Illuminate\Database\QueryException;
+use App\Domains\Resources\Services\EmailQualityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -149,30 +145,6 @@ class ResourceController extends Controller
                 'required',
                 'string',
                 'email:rfc',
-                function ($attribute, $value, $fail) {
-                    if (app()->environment('testing')) {
-                        return;
-                    }
-                    $domain = substr(strrchr((string) $value, '@'), 1);
-                    if (! $domain || ! filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
-                        $fail('The email domain format is invalid.');
-
-                        return;
-                    }
-                    $cacheKey = 'dns_routability_'.md5(strtolower($domain));
-                    $cached = Cache::get($cacheKey);
-                    if ($cached === 'VALID') {
-                        return;
-                    }
-                    $hasMx = @checkdnsrr($domain, 'MX');
-                    $hasA = $hasMx ? false : @checkdnsrr($domain, 'A');
-                    if ($hasMx || $hasA) {
-                        Cache::put($cacheKey, 'VALID', 86400);
-
-                        return;
-                    }
-                    Log::warning("DNS routability inconclusive for {$domain}; failing open per architectural contract.");
-                },
                 'max:255',
             ],
             'name' => ['required', 'string', 'max:255'],
@@ -217,231 +189,72 @@ class ResourceController extends Controller
             'landing_page' => $request->input('landing_page') ?? $request->header('referer'),
         ];
 
-        $pinEnabled = (bool) config('business.resources.require_pin_verification', false);
+        app(EmailQualityService::class)->validate((string) $request->input('email'));
 
-        if (! $pinEnabled) {
-            $result = DB::transaction(function () use ($resource, $request, $visitorToken, $sessionToken, $attribution) {
-                $contact = app(ContactService::class)->resolveOrCreate(
-                    email: $request->email,
-                    name: $request->name,
-                    phone: null,
-                    attribution: $attribution
-                );
+        $result = DB::transaction(function () use ($resource, $request, $visitorToken, $sessionToken, $attribution) {
+            $contact = app(ContactService::class)->resolveOrCreate(
+                email: $request->email,
+                name: $request->name,
+                phone: null,
+                attribution: $attribution
+            );
 
-                $resourceRequest = ResourceRequestModel::create([
-                    'resource_id' => $resource->id,
-                    'contact_id' => $contact->id,
-                    'visitor_token' => $visitorToken,
-                    'session_token' => $sessionToken,
-                    'source' => $attribution['source'] ?? null,
-                    'medium' => $attribution['medium'] ?? null,
-                    'campaign' => $attribution['campaign'] ?? null,
-                    'content' => $attribution['content'] ?? null,
-                    'term' => $attribution['term'] ?? null,
-                    'landing_page' => $attribution['landing_page'] ?? null,
-                ]);
+            $resourceRequest = ResourceRequestModel::create([
+                'resource_id' => $resource->id,
+                'contact_id' => $contact->id,
+                'visitor_token' => $visitorToken,
+                'session_token' => $sessionToken,
+                'source' => $attribution['source'] ?? null,
+                'medium' => $attribution['medium'] ?? null,
+                'campaign' => $attribution['campaign'] ?? null,
+                'content' => $attribution['content'] ?? null,
+                'term' => $attribution['term'] ?? null,
+                'landing_page' => $attribution['landing_page'] ?? null,
+            ]);
 
-                app(AnalyticsService::class)->trackEvent(
-                    eventType: 'resource_requested',
-                    page: '/'.ltrim($request->path(), '/'),
-                    visitorToken: $visitorToken,
-                    sessionToken: $sessionToken,
-                    metadata: ['resource_id' => $resource->id, 'resource_title' => $resource->title]
-                );
+            app(AnalyticsService::class)->trackEvent(
+                eventType: 'resource_requested',
+                page: '/'.ltrim($request->path(), '/'),
+                visitorToken: $visitorToken,
+                sessionToken: $sessionToken,
+                metadata: ['resource_id' => $resource->id, 'resource_title' => $resource->title]
+            );
 
-                try {
-                    app(AdminNotificationService::class)->notifyResourceRequested($resourceRequest);
-                } catch (\Throwable) {
-                }
-
-                $grantToken = $this->issueDownloadGrant($resource, $contact, $visitorToken, $sessionToken, $resourceRequest->id);
-
-                $downloadUrl = route(match (app()->getLocale()) {
-                    'fr' => 'resources.download.fr',
-                    'de' => 'resources.download.de',
-                    default => 'resources.download',
-                }, [
-                    'slug' => $resource->slug,
-                    'token' => $grantToken,
-                ]);
-
-                return ['download_url' => $downloadUrl, 'grant_token' => $grantToken];
-            });
-
-            if ($request->expectsJson() || $request->ajax()) {
-                return response()->json(['requires_pin' => false, 'download_url' => $result['download_url']]);
+            try {
+                app(AdminNotificationService::class)->notifyResourceRequested($resourceRequest);
+            } catch (\Throwable) {
             }
 
-            $targetUrl = app(LocalizedUrlService::class)->getLocalizedUrl('resource.detail', app()->getLocale(), $resource->slug);
+            $grantToken = $this->issueDownloadGrant($resource, $contact, $visitorToken, $sessionToken, $resourceRequest->id);
 
-            return redirect()->to($targetUrl)
-                ->with('access_granted', true)
-                ->with('download_token', $result['grant_token'])
-                ->with('success', 'Your download is ready! Click the button below to get your file.');
+            $downloadUrl = route(match (app()->getLocale()) {
+                'fr' => 'resources.download.fr',
+                'de' => 'resources.download.de',
+                default => 'resources.download',
+            }, [
+                'slug' => $resource->slug,
+                'token' => $grantToken,
+            ]);
+
+            return ['download_url' => $downloadUrl, 'grant_token' => $grantToken];
+        });
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['requires_pin' => false, 'download_url' => $result['download_url']]);
         }
 
-        $cacheStore = config('cache.default');
-        if (! in_array($cacheStore, ['database', 'redis', 'memcached'], true)) {
-            abort(500, 'PIN verification requires a shared cache store (database, redis, or memcached).');
-        }
+        $targetUrl = app(LocalizedUrlService::class)->getLocalizedUrl('resource.detail', app()->getLocale(), $resource->slug);
 
-        $challenge = bin2hex(random_bytes(32));
-        $pin = sprintf('%06d', random_int(0, 999999));
+        return redirect()->to($targetUrl)
+            ->with('access_granted', true)
+            ->with('download_token', $result['grant_token'])
+            ->with('success', 'Your download is ready! Click the button below to get your file.');
 
-        Cache::put("resource_pin:{$challenge}", [
-            'hash' => Hash::make($pin),
-            'name' => $request->name,
-            'email' => strtolower(trim((string) $request->email)),
-            'resource_id' => $resource->id,
-            'visitor_token' => $visitorToken,
-            'session_token' => $sessionToken,
-            'attribution' => $attribution,
-            'attempts' => 0,
-        ], now()->addMinutes(10));
-
-        Mail::to($request->email)->send(new ResourceVerificationPinMail($pin));
-
-        return response()->json(['requires_pin' => true, 'challenge' => $challenge]);
     }
 
     public function verifyPin(Request $request, string $slug)
     {
-        $resource = Resource::where('slug', $slug)->where('status', 'published')
-            ->whereNotNull('published_at')->where('published_at', '<=', now())->firstOrFail();
-        $request->validate([
-            'challenge' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/'],
-            'pin' => ['required', 'string', 'digits:6'],
-        ]);
-
-        $challenge = (string) $request->input('challenge');
-        $pin = (string) $request->input('pin');
-        $challengeHash = hash('sha256', $challenge);
-
-        $cacheStore = config('cache.default');
-        if (! in_array($cacheStore, ['database', 'redis', 'memcached'], true)) {
-            abort(500, 'PIN verification requires a shared cache store (database, redis, or memcached).');
-        }
-
-        $hasCookieVisitor = $request->hasCookie('_va_visitor') || $request->hasCookie('visitor_token');
-        $hasCookieSession = $request->hasCookie('_va_session') || $request->hasCookie('session_token');
-
-        if (! $hasCookieVisitor || ! $hasCookieSession) {
-            abort(403, 'Missing required visitor security context.');
-        }
-
-        $currentVisitorToken = (string) ($request->cookie('_va_visitor')
-            ?? $request->cookie('visitor_token'));
-
-        $currentSessionToken = (string) ($request->cookie('_va_session')
-            ?? $request->cookie('session_token'));
-
-        if (empty($currentVisitorToken) || empty($currentSessionToken)) {
-            abort(403, 'Missing required visitor security context.');
-        }
-
-        $connection = DB::connection();
-        $dbName = substr($connection->getDatabaseName(), 0, 20);
-        $challengeDigest = substr($challengeHash, 0, 32);
-        $lockKey = "{$dbName}:pin:{$challengeDigest}";
-        if (strlen($lockKey) > 64) {
-            throw new \LogicException("Lock key exceeds 64 characters: [{$lockKey}]");
-        }
-
-        $lock = Cache::lock("lock:{$lockKey}", 15);
-        try {
-            $lock->block(5);
-        } catch (LockTimeoutException) {
-            abort(429, 'Verification already in progress.');
-        }
-
-        try {
-            if (ResourceRequestModel::where('consumed_challenge_hash', $challengeHash)->exists()) {
-                abort(409, 'This verification code has already been consumed.');
-            }
-
-            $cached = Cache::get("resource_pin:{$challenge}");
-            if (! is_array($cached) || (int) ($cached['resource_id'] ?? 0) !== (int) $resource->id) {
-                abort(403, 'Invalid or expired challenge.');
-            }
-
-            if ($currentVisitorToken !== $cached['visitor_token'] || $currentSessionToken !== $cached['session_token']) {
-                abort(403, 'Session authorization mismatch.');
-            }
-
-            if (! Hash::check($pin, $cached['hash'])) {
-                $cached['attempts'] = ((int) ($cached['attempts'] ?? 0)) + 1;
-                if ($cached['attempts'] >= 5) {
-                    Cache::forget("resource_pin:{$challenge}");
-                    abort(429, 'Too many failed verification attempts.');
-                }
-                Cache::put("resource_pin:{$challenge}", $cached, now()->addMinutes(10));
-                abort(422, 'Invalid verification code.');
-            }
-
-            try {
-                $downloadUrl = DB::transaction(function () use ($resource, $cached, $challengeHash, $currentVisitorToken, $currentSessionToken) {
-                    $attribution = $cached['attribution'] ?? [];
-                    $contact = app(ContactService::class)->resolveOrCreate(
-                        email: $cached['email'],
-                        name: $cached['name'],
-                        phone: null,
-                        attribution: $attribution
-                    );
-
-                    $resourceRequest = ResourceRequestModel::create([
-                        'resource_id' => $resource->id,
-                        'contact_id' => $contact->id,
-                        'visitor_token' => $currentVisitorToken,
-                        'session_token' => $currentSessionToken,
-                        'consumed_challenge_hash' => $challengeHash,
-                        'source' => $attribution['source'] ?? null,
-                        'medium' => $attribution['medium'] ?? null,
-                        'campaign' => $attribution['campaign'] ?? null,
-                        'content' => $attribution['content'] ?? null,
-                        'term' => $attribution['term'] ?? null,
-                        'landing_page' => $attribution['landing_page'] ?? null,
-                    ]);
-
-                    app(AnalyticsService::class)->trackEvent(
-                        eventType: 'resource_requested',
-                        page: '/'.ltrim(request()->path(), '/'),
-                        visitorToken: $currentVisitorToken,
-                        sessionToken: $currentSessionToken,
-                        metadata: ['resource_id' => $resource->id, 'resource_title' => $resource->title]
-                    );
-
-                    try {
-                        app(AdminNotificationService::class)->notifyResourceRequested($resourceRequest);
-                    } catch (\Throwable) {
-                    }
-
-                    $grantToken = $this->issueDownloadGrant($resource, $contact, $currentVisitorToken, $currentSessionToken, $resourceRequest->id);
-
-                    return route(match (app()->getLocale()) {
-                        'fr' => 'resources.download.fr',
-                        'de' => 'resources.download.de',
-                        default => 'resources.download',
-                    }, [
-                        'slug' => $resource->slug,
-                        'token' => $grantToken,
-                    ]);
-                });
-            } catch (QueryException $e) {
-                $isDuplicate = $e->getCode() === '23000' && (($e->errorInfo[1] ?? null) === 1062);
-                $isHashViolation = str_contains($e->getMessage(), 'resource_requests_consumed_challenge_hash_unique')
-                    || str_contains($e->errorInfo[2] ?? '', 'resource_requests_consumed_challenge_hash_unique');
-                if ($isDuplicate && $isHashViolation) {
-                    abort(409, 'This verification code has already been consumed.');
-                }
-                throw $e;
-            }
-
-            Cache::forget("resource_pin:{$challenge}");
-
-            return response()->json(['download_url' => $downloadUrl]);
-        } finally {
-            $lock->release();
-        }
+        abort(404, 'Email PIN verification is inactive.');
     }
 
     public function download(Request $request, string $slug, ContactService $contactService)

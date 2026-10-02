@@ -6,6 +6,7 @@ use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Booking\Models\Booking;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -111,7 +112,7 @@ class AggregateDailyCountryMetricsCommand extends Command
         foreach ($sessions as $session) {
             $visitorToken = $session->visitor?->visitor_token;
             if ($visitorToken) {
-                $country = $this->normalizeCountry($session->visitor?->detected_country_code);
+                $country = $this->normalizeCountry($session->visitor->detected_country_code);
                 $activeVisitorCountries[$country][$visitorToken] = true;
             }
         }
@@ -179,7 +180,7 @@ class AggregateDailyCountryMetricsCommand extends Command
             ->where('started_at', '<', $endUtc)
             ->whereRaw('TIMESTAMPDIFF(SECOND, started_at, last_activity_at) < 10')
             ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name = "page_view" AND analytics_events.is_bot = 0) = 1')
-            ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name IN ("booking_completed", "booking_cta_clicked", "booking_cta_click", "booking_started") AND analytics_events.is_bot = 0) = 0')
+            ->whereRaw('(SELECT COUNT(*) FROM analytics_events WHERE (analytics_events.session_token = visitor_sessions.session_token OR analytics_events.session_token = visitor_sessions.session_id) AND analytics_events.event_name IN ('.implode(',', array_fill(0, count(AnalyticsService::CONVERSION_EVENTS), '?')).') AND analytics_events.is_bot = 0) = 0', AnalyticsService::CONVERSION_EVENTS)
             ->get(['id', 'detected_country_code']);
 
         foreach ($bouncedSessions as $bSession) {

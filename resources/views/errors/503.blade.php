@@ -23,7 +23,7 @@
             </span>
             <h1 class="text-2xl font-bold font-serif text-white tracking-tight">We'll Be Right Back</h1>
             <p class="text-sm text-stone-400 leading-relaxed">
-                The platform is currently undergoing scheduled maintenance and updates. Regular booking and student sessions will resume shortly.
+                {{ \App\Domains\CMS\Models\Setting::get('maintenance_message', 'The platform is currently undergoing scheduled maintenance. We will be back shortly.') }}
             </p>
         </div>
 

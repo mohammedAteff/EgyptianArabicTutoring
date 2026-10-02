@@ -17,10 +17,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class BookingHoldAuthenticationTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected BookingService $bookingService;
@@ -36,6 +38,7 @@ class BookingHoldAuthenticationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->bookingService = app(BookingService::class);
         $this->holdService = app(BookingHoldService::class);

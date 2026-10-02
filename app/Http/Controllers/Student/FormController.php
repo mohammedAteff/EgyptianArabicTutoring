@@ -2,19 +2,16 @@
 
 namespace App\Http\Controllers\Student;
 
-use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Forms\Models\Form;
-use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormAssignmentService;
 use App\Domains\Forms\Services\FormSubmissionService;
-use App\Domains\Forms\Services\FormValidationService;
 use App\Domains\Students\Models\Student;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FormController extends Controller
@@ -67,6 +64,7 @@ class FormController extends Controller
         $data = $request->validate([
             'answers' => ['nullable', 'array', 'max:300'],
             'submission_id' => ['nullable', 'integer'],
+            'form_version_id' => ['nullable', 'integer'],
             'intent' => ['required', 'in:draft,submit'],
         ]);
         $submission = $submissions->save(
@@ -75,94 +73,23 @@ class FormController extends Controller
             $data['answers'] ?? [],
             $data['intent'] === 'submit',
             isset($data['submission_id']) ? (int) $data['submission_id'] : null,
+            isset($data['form_version_id']) ? (int) $data['form_version_id'] : null,
         );
+        if ($data['intent'] === 'submit') {
+            app(AnalyticsService::class)->track($form->triggers()->where('trigger_name', 'pre_booking')->exists() ? 'short_form_completed' : 'long_form_completed', ['form_id' => $form->id, 'submission_id' => $submission->id], $request, eventUuid: 'form-submitted-'.$submission->id.'-'.$submission->submission_revision);
+        }
 
         return redirect()->route('student.forms.show', $slug)->with('success', $submission->status === 'submitted' ? 'Your responses were submitted.' : 'Your draft was saved.');
     }
 
-    public function autosave(Request $request, string $slug): JsonResponse
+    public function autosave(Request $request, string $slug, FormSubmissionService $submissions): JsonResponse
     {
-        /** @var Student|null $student */
         $student = $request->attributes->get('student');
-        if (! ($student instanceof Student)) {
-            $sessionStudentId = $request->session()->get('student_id');
-            $student = is_numeric($sessionStudentId) ? Student::verified()->find((int) $sessionStudentId) : null;
-        }
-        if (! $student) {
-            abort(401);
-        }
-
-        $studentId = (int) $student->id;
-
+        abort_unless($student instanceof Student, 401);
         $form = Form::query()->where('slug', $slug)->firstOrFail();
-        abort_unless($form->status === 'published' && $form->published_version_id, 404);
+        $data = $request->validate(['answers' => ['nullable', 'array', 'max:300'], 'submission_id' => ['nullable', 'integer'], 'form_version_id' => ['nullable', 'integer']]);
+        $submission = $submissions->save($student, $form, $data['answers'] ?? [], false, isset($data['submission_id']) ? (int) $data['submission_id'] : null, isset($data['form_version_id']) ? (int) $data['form_version_id'] : null);
 
-        $data = $request->validate([
-            'answers' => ['nullable', 'array', 'max:300'],
-        ]);
-        $rawAnswers = $data['answers'] ?? [];
-
-        $submission = app(DatabaseCapability::class)->transaction(function () use ($studentId, $form, $rawAnswers) {
-            $lockedForm = Form::whereKey($form->id)->lockForUpdate()->firstOrFail();
-            $lockedStudent = Student::verified()->whereKey($studentId)->lockForUpdate()->firstOrFail();
-            abort_unless(app(FormAssignmentService::class)->isAssignedTo($lockedForm, $lockedStudent), 404);
-            $publishedVersionId = (int) $lockedForm->published_version_id;
-            $version = $lockedForm->publishedVersion()->with('questions.options')->firstOrFail();
-            $questionMap = $version->questions->keyBy('question_key');
-            $idMap = $version->questions->keyBy(fn ($question): string => (string) $question->id);
-            $answers = [];
-            foreach ($rawAnswers as $key => $value) {
-                $question = $questionMap->get((string) $key) ?? $idMap->get((string) $key);
-                if (! $question || array_key_exists($question->question_key, $answers)) {
-                    throw ValidationException::withMessages(["answers.{$key}" => 'This answer does not belong to the form or was submitted twice.']);
-                }
-                $answers[$question->question_key] = $value;
-            }
-            $answers = app(FormValidationService::class)->validateAnswers($version->questions->all(), $answers, false);
-
-            if (! $lockedForm->can_edit_after_submission && FormSubmission::where('form_version_id', $publishedVersionId)
-                ->where('student_id', $lockedStudent->id)->where('status', 'submitted')->exists()) {
-                throw ValidationException::withMessages(['form' => 'This form has already been submitted.']);
-            }
-
-            $draft = FormSubmission::where('form_version_id', $publishedVersionId)
-                ->where('student_id', $lockedStudent->id)
-                ->where('status', 'draft')
-                ->lockForUpdate()
-                ->first();
-
-            if (! $draft) {
-                $draft = FormSubmission::create([
-                    'form_version_id' => $publishedVersionId,
-                    'student_id' => $lockedStudent->id,
-                    'status' => 'draft',
-                    'submission_revision' => 1,
-                ]);
-            }
-
-            $retainedQuestionIds = collect(array_keys($answers))->map(fn (string $key): int => (int) $questionMap->get($key)->id)->all();
-            $draft->answers()->whereNotIn('form_question_id', $retainedQuestionIds)->delete();
-            foreach ($answers as $key => $val) {
-                $question = $questionMap->get($key);
-                $storedValue = is_array($val)
-                    ? json_encode($val, JSON_THROW_ON_ERROR)
-                    : (is_bool($val) ? ($val ? '1' : '0') : (string) $val);
-
-                FormAnswer::updateOrCreate(
-                    ['form_submission_id' => $draft->id, 'form_question_id' => $question->id],
-                    ['value_text' => $storedValue]
-                );
-            }
-
-            $draft->touch();
-
-            return $draft;
-        });
-
-        return response()->json([
-            'success' => true,
-            'draft_id' => $submission->id,
-            'form_version_id' => $submission->form_version_id,
-        ]);
+        return response()->json(['success' => true, 'draft_id' => $submission->id, 'form_version_id' => $submission->form_version_id]);
     }
 }

@@ -24,6 +24,7 @@ class EngagementCounterService
     public function getLiveUsersCount(): int
     {
         return DB::table('visitor_sessions')
+            ->where('is_bot', false)
             ->where('last_activity_at', '>', now()->subSeconds(60))
             ->distinct('visitor_id')
             ->count('visitor_id');
@@ -45,12 +46,14 @@ class EngagementCounterService
         $utcMonthEnd = $cairoMonthEnd->setTimezone('UTC');
 
         $visitorsCount = DB::table('visitor_sessions')
+            ->where('is_bot', false)
             ->where('started_at', '>=', $utcMonthStart)
             ->where('started_at', '<', $utcMonthEnd)
             ->distinct('visitor_id')
             ->count('visitor_id');
 
         $sessionsCount = DB::table('visitor_sessions')
+            ->where('is_bot', false)
             ->where('started_at', '>=', $utcMonthStart)
             ->where('started_at', '<', $utcMonthEnd)
             ->count('id');
@@ -95,6 +98,8 @@ class EngagementCounterService
         // Completed Cairo days come from rollups; today comes from raw events until the next rollup.
         $historicalDwellSeconds = (float) DB::table('daily_metrics')
             ->where('metric_name', 'section_dwell_seconds')
+            ->where('dimension_key', 'section')
+            ->whereIn('dimension_value', ['curriculum', 'blog-content', 'resource-preview', 'game-board'])
             ->where('metric_date', '>=', $cairoWindowStart->toDateString())
             ->where('metric_date', '<', $cairoDate)
             ->sum('count');
@@ -107,7 +112,7 @@ class EngagementCounterService
             ->where('created_at', '<', $utcWindowEnd)
             ->get(['metadata']);
         $realtimeDwellSeconds = (float) $todayEvents->sum(function (AnalyticsEvent $event): int {
-            $seconds = $event->metadata['dwell_seconds'] ?? 0;
+            $seconds = in_array($event->metadata['section_id'] ?? null, ['curriculum', 'blog-content', 'resource-preview', 'game-board'], true) ? ($event->metadata['dwell_seconds'] ?? 0) : 0;
 
             return is_numeric($seconds) ? max(0, (int) $seconds) : 0;
         });
@@ -204,8 +209,13 @@ class EngagementCounterService
     {
         $cairoDate = CarbonImmutable::now('Africa/Cairo')->toDateString();
 
-        return Cache::remember("counters.public.{$cairoDate}", self::CACHE_TTL, function () {
+        $payload = Cache::remember("counters.public.{$cairoDate}", self::CACHE_TTL, function () {
             return $this->getPublicCountersPayload();
         });
+        $count = $this->getLiveUsersCount();
+        $payload['live_users']['count'] = $count;
+        $payload['live_users']['text'] = str_replace('{count}', number_format($count), (string) Setting::get('counters.live_users.template', '{count} active visitors online right now'));
+
+        return $payload;
     }
 }

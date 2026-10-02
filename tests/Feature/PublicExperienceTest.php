@@ -14,16 +14,19 @@ use App\Domains\Games\Models\Game;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Resources\Models\ResourceDownload;
+use App\Domains\Resources\Services\EmailQualityService;
 use App\Livewire\BookingWizard;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class PublicExperienceTest extends TestCase
 {
+    use HasPublishedShortForm;
     use IssuesBookingSlotIds;
     use RefreshDatabase;
 
@@ -32,6 +35,10 @@ class PublicExperienceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
+        $quality = $this->getMockBuilder(EmailQualityService::class)->onlyMethods(['dnsRecords'])->getMock();
+        $quality->method('dnsRecords')->willReturn([['type' => 'MX', 'target' => 'mx.example.test']]);
+        $this->app->instance(EmailQualityService::class, $quality);
 
         $this->sessionType = SessionType::create([
             'title' => '1-on-1 Tutoring',
@@ -104,6 +111,7 @@ class PublicExperienceTest extends TestCase
             ->set('notes', 'Planning a trip to Luxor and Cairo next month.')
             ->call('submitDetails')
             ->assertSet('currentStep', 4)
+            ->assertSee('9:00 AM')
             ->call('confirmBooking');
 
         $booking = Booking::query()->where('customer_timezone', 'America/New_York')->first();
@@ -138,7 +146,7 @@ class PublicExperienceTest extends TestCase
         // Confirmation page
         $response = $this->get(route('booking.confirmation', ['token' => $booking->confirmation_token]));
         $response->assertStatus(200);
-        $response->assertSeeText("You're Scheduled!");
+        $response->assertSeeText('Confirmed');
         $response->assertSeeText('Europe/London');
         $response->assertSeeText('Africa/Cairo');
         $response->assertSeeText('Your tutor will share the private video meeting link before the lesson.');

@@ -286,6 +286,7 @@ class AdminFunctionsAndCalendarTest extends TestCase
         $booking = $this->createBookingFixture($contact, $startUtc, $endUtc, 'America/New_York');
 
         // 1. Visit day view on 2026-10-15
+        $this->superAdmin->update(['time_format' => '12']);
         $response = $this->actingAs($this->superAdmin, 'web')
             ->get(route('admin.bookings.index', ['view' => 'day', 'date' => '2026-10-15']));
 

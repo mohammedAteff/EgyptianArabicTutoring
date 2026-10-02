@@ -12,11 +12,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class BookingLanguageSwitchSyncTest extends TestCase
 {
+    use HasPublishedShortForm;
     use IssuesBookingSlotIds;
     use RefreshDatabase;
 
@@ -25,6 +27,7 @@ class BookingLanguageSwitchSyncTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         RateLimiter::clear('throttle:hold:ip:127.0.0.1');
 

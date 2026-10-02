@@ -68,6 +68,7 @@ class VisitorSession extends Model
         ];
     }
 
+    /** @return BelongsTo<Visitor, $this> */
     public function visitor(): BelongsTo
     {
         return $this->belongsTo(Visitor::class, 'visitor_id');

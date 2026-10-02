@@ -19,9 +19,9 @@ class FormSubmissionService
     ) {}
 
     /** @param array<string, mixed> $answers */
-    public function save(Student $student, Form $form, array $answers, bool $submit, ?int $submissionId = null): FormSubmission
+    public function save(Student $student, Form $form, array $answers, bool $submit, ?int $submissionId = null, ?int $expectedVersionId = null): FormSubmission
     {
-        return $this->database->transaction(function () use ($student, $form, $answers, $submit, $submissionId): FormSubmission {
+        return $this->database->transaction(function () use ($student, $form, $answers, $submit, $submissionId, $expectedVersionId): FormSubmission {
             $lockedForm = Form::query()->whereKey($form->id)->lockForUpdate()->firstOrFail();
             $student = Student::verified()->whereKey($student->id)->lockForUpdate()->firstOrFail();
             abort_unless($this->formAssignments->isAssignedTo($lockedForm, $student), 404);
@@ -68,6 +68,10 @@ class FormSubmissionService
                     ]);
                     $isNewSubmission = true;
                 }
+            }
+
+            if ($expectedVersionId !== null && (int) $version->id !== $expectedVersionId) {
+                abort(409, 'The form version changed. Reload before saving.');
             }
 
             $normalizedAnswers = $this->validation->validateAnswers($version->questions->all(), $answers, $submit);

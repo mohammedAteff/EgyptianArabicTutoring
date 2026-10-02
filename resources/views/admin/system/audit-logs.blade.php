@@ -46,7 +46,7 @@
                                 {{ $log->ip_address ?? '—' }}
                             </td>
                             <td class="px-4 py-4 text-right text-xs text-slate-500">
-                                {{ $log->created_at ? $log->created_at->format('M j, Y h:i:s A') : '—' }}
+                                {{ $log->created_at ? app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($log->created_at) : '—' }}
                             </td>
                         </tr>
                     @empty

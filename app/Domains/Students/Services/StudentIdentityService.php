@@ -64,6 +64,35 @@ class StudentIdentityService
         return $util->format($parsed, PhoneNumberFormat::E164);
     }
 
+    public function phoneMatches(?string $input, ?string $canonical): bool
+    {
+        if (! $input || ! $canonical) {
+            return false;
+        }
+        $util = PhoneNumberUtil::getInstance();
+        try {
+            $stored = $util->parse($canonical, null);
+            $region = $util->getRegionCodeForNumber($stored);
+            $raw = trim($input);
+            $digits = preg_replace('/[^0-9]/', '', $raw);
+            $variants = [$raw, '+'.$digits];
+            if (str_starts_with($digits, '00')) {
+                $variants[] = '+'.substr($digits, 2);
+            }
+            foreach (array_unique($variants) as $variant) {
+                try {
+                    if ($this->normalizePhone($variant, $region) === $canonical) {
+                        return true;
+                    }
+                } catch (InvalidArgumentException) {
+                }
+            }
+        } catch (NumberParseException) {
+        }
+
+        return false;
+    }
+
     public function normalizedFullName(string $firstName, string $lastName): string
     {
         return $this->normalizeName($firstName.' '.$lastName);

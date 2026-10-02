@@ -12,7 +12,8 @@
 @if($errors->any())<div role="alert" class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
 <form method="POST" action="{{ route('student.forms.save', $form->slug) }}" class="mt-6 space-y-5" data-questionnaire data-read-only="{{ $readOnly ? '1' : '0' }}">
     @csrf
-    @if($submission)<input type="hidden" name="submission_id" value="{{ $submission->id }}">@endif
+    <input type="hidden" name="submission_id" value="{{ $submission?->id }}"><input type="hidden" name="form_version_id" value="{{ $version->id }}">
+    <p data-save-status role="status" class="text-sm text-stone-600">{{ $readOnly ? 'Submitted' : 'Changes save automatically' }}</p>
     @foreach($version->questions as $question)
         @php $value = old("answers.{$question->question_key}", $answers[$question->question_key] ?? null); @endphp
         @if($question->question_type === 'info_block')
@@ -89,6 +90,28 @@
     form.addEventListener('input', refresh);
     form.addEventListener('change', refresh);
     refresh();
+    if (readOnly) return;
+    const status = form.querySelector('[data-save-status]');
+    let timer, saving = false, pending = false, submitting = false;
+    const save = async () => {
+        if (saving || submitting) { pending = true; return; }
+        saving = true; pending = false; status.textContent = 'Saving…';
+        try {
+            const response = await fetch(@js(route('student.forms.autosave', $form->slug)), {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value}, body: JSON.stringify({answers: values(), submission_id: form.querySelector('[name="submission_id"]').value || null, form_version_id: Number(form.querySelector('[name="form_version_id"]').value)})});
+            if (!response.ok) throw new Error(response.status === 409 ? 'Form changed. Reload before saving.' : 'Could not save. Use Save draft to retry.');
+            const data = await response.json(); form.querySelector('[name="submission_id"]').value = data.draft_id;
+            status.textContent = 'Saved';
+        } catch (error) { status.textContent = error.message; }
+        finally { saving = false; if (pending && !submitting) save(); }
+    };
+    const queueSave = () => { clearTimeout(timer); timer = setTimeout(save, 700); };
+    form.addEventListener('input', queueSave); form.addEventListener('change', queueSave);
+    form.addEventListener('submit', async (event) => {
+        if (submitting) return;
+        event.preventDefault(); clearTimeout(timer); pending = false; submitting = true;
+        while (saving) await new Promise(resolve => setTimeout(resolve, 50));
+        setTimeout(() => form.requestSubmit(event.submitter), 0);
+    });
 })();
 </script>
 @endsection

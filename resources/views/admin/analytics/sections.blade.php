@@ -45,7 +45,7 @@
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
         <div class="mb-6">
             <h2 class="text-base font-bold text-slate-900">Tracked Sections & Dwell Metrics</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Section views fire on &ge;50% viewport visibility. Dwell seconds accrue exclusively to the dominant visible section.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Section views fire on &ge;50% viewport visibility. Dwell seconds accrue exclusively to the dominant visible section. Drop-off uses the last observed section; active sessions are provisional. Rates use retained session evidence; — means unavailable. Drop-off is the last observed section in a session.</p>
         </div>
 
         <div class="overflow-x-auto">
@@ -91,10 +91,10 @@
                                 {{ $row['avg_attention_duration'] }}s
                             </td>
                             <td class="py-3 px-4 text-right font-medium text-amber-700">
-                                {{ $row['entry_bounce_rate'] }}%
+                                {{ $row['entry_bounce_rate'] === null ? '—' : $row['entry_bounce_rate'].'%' }}
                             </td>
                             <td class="py-3 px-4 text-right font-medium {{ $row['drop_off_rate'] > 60 ? 'text-rose-600' : 'text-slate-700' }}">
-                                {{ $row['drop_off_rate'] }}%
+                                {{ $row['drop_off_rate'] === null ? '—' : $row['drop_off_rate'].'%' }}
                             </td>
                         </tr>
                     @empty

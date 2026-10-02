@@ -23,10 +23,18 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class PhaseCVerificationTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->installShortFormFixture();
+    }
+
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     /** @test */
@@ -279,7 +287,7 @@ class PhaseCVerificationTest extends TestCase
     /** @test */
     public function test_admin_country_audience_table_renders_country_names_and_unknown_label(): void
     {
-        $cairoDate = CarbonImmutable::now('Africa/Cairo')->toDateString();
+        $cairoDate = CarbonImmutable::now('Africa/Cairo')->subDay()->toDateString();
         DailyCountryMetric::create([
             'metric_date' => $cairoDate,
             'country_code' => 'DE',
@@ -303,7 +311,7 @@ class PhaseCVerificationTest extends TestCase
             'password' => Hash::make('Password123!'),
         ]);
 
-        $response = $this->actingAs($admin)->get('/admin/analytics?range=today');
+        $response = $this->actingAs($admin)->get('/admin/analytics?range=7d');
 
         $response->assertOk()
             ->assertSee('Germany (DE)')

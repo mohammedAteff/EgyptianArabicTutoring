@@ -167,6 +167,8 @@ class FormController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('forms', 'slug')->ignore($form?->id)],
             'description' => ['nullable', 'string', 'max:10000'],
+            'triggers' => ['nullable', 'array', 'max:4'],
+            'triggers.*' => ['required', 'distinct', Rule::in(['after_booking', 'after_reschedule', 'next_session_check', 'pre_booking'])],
             'trigger' => ['nullable', 'string', Rule::in(['none', 'after_booking', 'after_reschedule', 'next_session_check', 'pre_booking'])],
             'trigger_name' => ['nullable', 'string', Rule::in(['none', 'after_booking', 'after_reschedule', 'next_session_check', 'pre_booking'])],
             'is_mandatory' => ['nullable', 'boolean'],
@@ -180,6 +182,10 @@ class FormController extends Controller
         $triggerValue = $request->input('trigger', $request->input('trigger_name'));
         if ($triggerValue !== null) {
             $metadata['trigger'] = $triggerValue;
+        }
+
+        if ($request->has('triggers_present')) {
+            $metadata['triggers'] = $request->input('triggers', []);
         }
 
         $metadata['is_mandatory'] = $request->boolean('is_mandatory');

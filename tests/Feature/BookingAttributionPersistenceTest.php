@@ -19,10 +19,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class BookingAttributionPersistenceTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected SessionType $sessionType;
@@ -38,6 +40,7 @@ class BookingAttributionPersistenceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->sessionType = SessionType::create([
             'title' => 'Arabic Conversational Lesson',

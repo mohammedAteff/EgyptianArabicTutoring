@@ -201,10 +201,14 @@ class StudentLedgerService
                 $effectiveName = $preset['name'];
                 $effectiveSessions = $preset['sessions'];
                 $effectiveOriginalCents = $this->toCents($preset['price']);
-                $effectiveDiscountCents = in_array($presetKey, ['foundation_track', 'fluency_track'], true)
-                    && $this->checkDiagnosticCreditEligibility($student->id) !== null ? 2500 : 0;
+                $diagnosticCredit = in_array($presetKey, ['foundation_track', 'fluency_track'], true) ? $this->checkDiagnosticCreditEligibility($student->id) : null;
+                $effectiveDiscountCents = max($discountCents, $diagnosticCredit ? $this->toCents($diagnosticCredit['credit_amount']) : 0);
                 $effectiveCurrency = 'USD';
                 $effectiveExpirationDate = null;
+            }
+
+            if ($effectiveDiscountCents > $effectiveOriginalCents) {
+                throw new InvalidArgumentException('Discount cannot exceed the package price.');
             }
 
             $package = StudentPackage::create([
@@ -513,7 +517,7 @@ class StudentLedgerService
         }, 5);
     }
 
-    /** @return array{gross_paid: string, gross_refunded: string, net_paid: string, balance_due: string, remaining_credits: int} */
+    /** @return array{gross_paid: string, gross_refunded: string, net_paid: string, balance_due: string, overpaid: string, remaining_credits: int} */
     public function summary(StudentPackage $package): array
     {
         $paid = $this->toCents((string) PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid'));
@@ -524,7 +528,8 @@ class StudentLedgerService
             'gross_paid' => $this->fromCents($paid),
             'gross_refunded' => $this->fromCents($refunded),
             'net_paid' => $this->fromCents($netPaid),
-            'balance_due' => $this->fromCents($this->toCents($package->final_price) - $netPaid),
+            'balance_due' => $this->fromCents(max(0, $this->toCents($package->final_price) - $netPaid)),
+            'overpaid' => $this->fromCents(max(0, $netPaid - $this->toCents($package->final_price))),
             'remaining_credits' => $this->isEligible($package)
                 ? (int) SessionLedgerEntry::query()->where('student_package_id', $package->id)->sum('credit_change') : 0,
         ];

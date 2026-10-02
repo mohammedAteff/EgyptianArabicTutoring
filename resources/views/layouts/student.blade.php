@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="analytics-event-url" content="{{ route('analytics.track') }}">
+    <meta name="analytics-disabled" content="{{ app(\App\Domains\Analytics\Services\AnalyticsService::class)->excluded(request()) ? '1' : '0' }}">
+    @livewireStyles
     <title>{{ $title ?? 'Student area' }} — Egyptian Arabic Tutoring</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -17,5 +21,7 @@
         </div>
     </header>
     <main class="mx-auto max-w-5xl px-4 py-10 sm:px-6">@yield('content')</main>
+<x-whatsapp-cta context="portal" />
+    @livewireScripts
 </body>
 </html>

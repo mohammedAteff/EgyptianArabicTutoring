@@ -245,5 +245,21 @@
   "pricing.fluency_benefit_priority": "Priorisierte Kalenderplanung und Terminreservierung",
   "pricing.fluency_benefit_voice": "Tägliche Ausspracheübungen per Sprachnachricht",
   "pricing.invariants_title": "Zahlungs- und Buchungsregeln",
-  "pricing.operational_note": "Alle Kurse finden als private 1-zu-1-Gespräche über Zoom, Google Meet oder Microsoft Teams mit Abdallah in Kairo statt. Die Paketlaufzeit beginnt am Tag der Rechnungszahlung, ausgewertet um 00:00:00 Uhr in Africa/Cairo."
+  "pricing.operational_note": "Alle Kurse finden als private 1-zu-1-Gespräche über Zoom, Google Meet oder Microsoft Teams mit Abdallah in Kairo statt. Die Paketlaufzeit beginnt am Tag der Rechnungszahlung, ausgewertet um 00:00:00 Uhr in Africa/Cairo.",
+  "Confirmed": "Buchung bestätigt",
+  "Session Rescheduled": "Unterricht verschoben",
+  "Session Delivered": "Unterricht abgeschlossen",
+  "Session Forfeited": "Unterricht verfallen",
+  "Booking Canceled": "Buchung storniert",
+  "Pending Confirmation": "Bestätigung ausstehend",
+  "Reservation Held": "Termin reserviert",
+  "Unknown Status": "Unbekannter Status",
+  "Your lesson has been delivered. Review your learning profile or schedule another session in your student portal.": "Ihr Unterricht wurde abgeschlossen. Sehen Sie Ihr Lernprofil an oder buchen Sie eine weitere Sitzung im Studierendenportal.",
+  "This booking was canceled. Its time slot has been released.": "Diese Buchung wurde storniert. Der Termin wurde freigegeben.",
+  "This session was forfeited. Contact your tutor if you have questions.": "Diese Sitzung ist verfallen. Bei Fragen kontaktieren Sie Ihren Tutor.",
+  "Your session has been rescheduled. Your updated lesson details are below.": "Ihre Sitzung wurde verschoben. Die aktualisierten Unterrichtsdetails finden Sie unten.",
+  "Your booking is confirmed. Your calendar invitation and meeting details are below.": "Ihre Buchung ist bestätigt. Die Kalendereinladung und Verbindungsdetails finden Sie unten.",
+  "Your booking is awaiting confirmation.": "Ihre Buchung wartet auf Bestätigung.",
+  "This time is reserved temporarily. Complete your booking to confirm it.": "Dieser Termin ist vorübergehend reserviert. Schließen Sie die Buchung ab, um ihn zu bestätigen.",
+  "We could not determine the status of this booking. Please contact your tutor.": "Der Status dieser Buchung konnte nicht festgestellt werden. Bitte kontaktieren Sie Ihren Tutor."
 }

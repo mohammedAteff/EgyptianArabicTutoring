@@ -18,10 +18,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class AnalyticsFunnelAndAttributionTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected FunnelProgressionService $funnelService;
@@ -33,6 +35,7 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->funnelService = app(FunnelProgressionService::class);
         $this->analyticsService = app(AnalyticsService::class);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Student;
 
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
@@ -97,6 +98,8 @@ class BookingController extends Controller
         } catch (SlotUnavailableException|InvalidArgumentException $exception) {
             return back()->withInput()->withErrors(['slot_id' => $exception->getMessage()]);
         }
+
+        app(AnalyticsService::class)->track('package_session_scheduled', ['booking_id' => $booking->id], $request, eventUuid: 'package-booking-'.$booking->id);
 
         return redirect()->route('student.dashboard')->with('success', 'Your confirmed session is booked and one package credit has been reserved.');
     }

@@ -13,10 +13,12 @@ use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class CanonicalAvailabilityValidationTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected AvailabilityService $availabilityService;
@@ -30,6 +32,7 @@ class CanonicalAvailabilityValidationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
         $this->availabilityService = app(AvailabilityService::class);
         $this->holdService = app(BookingHoldService::class);
         $this->bookingService = app(BookingService::class);

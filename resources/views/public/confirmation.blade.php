@@ -15,42 +15,25 @@
 
     <!-- Status Card -->
     <div class="bg-white rounded-3xl border border-stone-200/80 p-8 shadow-sm text-center mb-8">
-        @if($booking->status === 'confirmed')
-            <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-                </svg>
-            </div>
-            <span class="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full mb-2">
-                {{ __('Booking Confirmed') }}
-            </span>
-            <h1 class="text-3xl font-extrabold text-stone-900 tracking-tight">
-                {{ __("You're Scheduled!") }}
-            </h1>
-            <p class="text-stone-600 text-sm mt-2 max-w-md mx-auto">
-                {{ __('Abdallah has received your booking. We have prepared your calendar invitation and direct meeting details below.') }}
-            </p>
-        @else
-            <div class="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </div>
-            <span class="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-rose-700 bg-rose-50 px-3 py-1 rounded-full mb-2">
-                {{ __('Cancelled') }}
-            </span>
-            <h1 class="text-3xl font-extrabold text-stone-900 tracking-tight">
-                {{ __('Booking Cancelled') }}
-            </h1>
-            <p class="text-stone-600 text-sm mt-2 max-w-md mx-auto">
-                {{ __('This lesson was cancelled on :date. The slot has been released back to the schedule.', ['date' => $booking->cancelled_at?->format('M j, Y \a\t g:i A') ?? __('recently')]) }}
-            </p>
-            <div class="mt-6">
-                <a href="{{ localized_url('booking') }}" class="inline-flex items-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white font-semibold text-sm px-6 py-2.5 rounded-full shadow-sm">
-                    {{ __('Book a New Time') }}
-                </a>
-            </div>
-        @endif
+        @php
+            $statusLabel = $booking->studentStatusLabel();
+            $isScheduled = $booking->status === 'confirmed';
+            $isDelivered = $booking->status === 'completed';
+            $statusDescription = match ($booking->status) {
+                'completed' => 'Your lesson has been delivered. Review your learning profile or schedule another session in your student portal.',
+                'cancelled' => 'This booking was canceled. Its time slot has been released.',
+                'no_show', 'no-show' => 'This session was forfeited. Contact your tutor if you have questions.',
+                'confirmed' => $booking->reschedules_exists ? 'Your session has been rescheduled. Your updated lesson details are below.' : 'Your booking is confirmed. Your calendar invitation and meeting details are below.',
+                'pending' => 'Your booking is awaiting confirmation.',
+                'held' => 'This time is reserved temporarily. Complete your booking to confirm it.',
+                default => 'We could not determine the status of this booking. Please contact your tutor.',
+            };
+        @endphp
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full {{ $isScheduled || $isDelivered ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800' }}" aria-hidden="true"><span class="text-3xl">{{ $isScheduled || $isDelivered ? '✓' : '!' }}</span></div>
+        <span class="mb-2 inline-flex rounded-full bg-stone-100 px-3 py-1 text-xs font-bold uppercase">{{ __($statusLabel) }}</span>
+        <h1 class="text-3xl font-extrabold tracking-tight text-stone-900">{{ __($statusLabel) }}</h1>
+        <p class="mx-auto mt-2 max-w-md text-sm text-stone-600">{{ __($statusDescription) }}</p>
+        @unless($isScheduled)<a href="{{ localized_url('booking') }}" class="mt-6 inline-flex rounded-full bg-terracotta-500 px-6 py-2.5 text-sm font-semibold text-white">{{ __('Book a New Time') }}</a>@endunless
 
         <div class="mt-6 pt-6 border-t border-stone-100 flex flex-wrap items-center justify-center gap-6 text-xs text-stone-500 font-mono">
             <div>
@@ -153,28 +136,14 @@
     <div class="bg-white rounded-3xl border border-stone-200/80 p-8 shadow-sm mb-8 space-y-4">
         <h2 class="text-lg font-bold text-stone-900">{{ __('What Happens Next?') }}</h2>
         <div class="space-y-3 text-sm text-stone-600">
-            <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-stone-100 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
-                <p>{{ __('Bookmark this page for your direct booking link and session access.') }}</p>
-            </div>
-            <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-stone-100 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
-                <p>{{ __('Add the lesson to your digital calendar using the button above so you receive a local reminder.') }}</p>
-            </div>
-            <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-stone-100 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
-                @if($booking->status === 'confirmed' && $meetingUrl)
-                    <p>{{ __('At lesson time, connect directly via your video meeting link:') }} <a href="{{ $meetingUrl }}" target="_blank" rel="noopener noreferrer" class="font-bold text-terracotta-600 hover:text-terracotta-700 underline">{{ __('Join Video Classroom →') }}</a></p>
-                @elseif($booking->status === 'confirmed')
-                    <p>{{ __('Your tutor will share the private video meeting link before the lesson.') }}</p>
-                @else
-                    <p>{{ __('This booking is no longer active, so its meeting link is unavailable.') }}</p>
-                @endif
-            </div>
-            <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-stone-100 text-stone-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
-                <p>{{ __('Your booking is confirmed! If this is your first session, your student portal access will become active once your student profile has been verified. To log in at /student/login, you will need your Date of Birth plus any two of your registered identifiers: your name, email address, or phone number.') }}</p>
-            </div>
+            @if($isScheduled)
+                <p>{{ __('Save this page and add your lesson to your calendar using the button above.') }}</p>
+                @if($meetingUrl)<p>{{ __('At lesson time, connect via your private classroom:') }} <a href="{{ $meetingUrl }}" target="_blank" rel="noopener noreferrer" class="font-bold text-terracotta-600 underline">{{ __('Join Video Classroom →') }}</a></p>
+                @else<p>{{ __('Your tutor will share the private video meeting link before the lesson.') }}</p>@endif
+                <p>{{ __('If this is your first session, your student portal access becomes active once your profile has been verified.') }}</p>
+            @else<p>{{ __('This session has no active meeting link. Review your sessions or book another time in your student portal.') }}</p>@endif
+            <p>{{ __('To sign in, use your Date of Birth plus any two registered identifiers: your name, email address, or phone number.') }}</p>
+            <a href="{{ route('student.login') }}" class="inline-block font-semibold text-nile-800 underline">{{ __('Student Portal') }}</a>
         </div>
     </div>
 

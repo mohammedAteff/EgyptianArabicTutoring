@@ -246,5 +246,21 @@
   "pricing.fluency_benefit_priority": "Planification prioritaire et réservation de créneaux",
   "pricing.fluency_benefit_voice": "Cliniques quotidiennes de prononciation par note vocale",
   "pricing.invariants_title": "Règles de paiement et de réservation",
-  "pricing.operational_note": "Tous les cours sont individuels via des appels privés Zoom, Google Meet ou Microsoft Teams avec Abdallah au Caire. Les périodes de validité commencent à la date du règlement de la facture, évaluée à 00:00:00 en Afrique/Le Caire."
+  "pricing.operational_note": "Tous les cours sont individuels via des appels privés Zoom, Google Meet ou Microsoft Teams avec Abdallah au Caire. Les périodes de validité commencent à la date du règlement de la facture, évaluée à 00:00:00 en Afrique/Le Caire.",
+  "Confirmed": "Réservation confirmée",
+  "Session Rescheduled": "Séance reportée",
+  "Session Delivered": "Séance effectuée",
+  "Session Forfeited": "Séance perdue",
+  "Booking Canceled": "Réservation annulée",
+  "Pending Confirmation": "En attente de confirmation",
+  "Reservation Held": "Créneau réservé",
+  "Unknown Status": "Statut inconnu",
+  "Your lesson has been delivered. Review your learning profile or schedule another session in your student portal.": "Votre cours a été effectué. Consultez votre profil ou réservez une autre séance dans votre espace étudiant.",
+  "This booking was canceled. Its time slot has been released.": "Cette réservation a été annulée. Le créneau a été libéré.",
+  "This session was forfeited. Contact your tutor if you have questions.": "Cette séance a été perdue. Contactez votre tuteur pour toute question.",
+  "Your session has been rescheduled. Your updated lesson details are below.": "Votre séance a été reportée. Les nouveaux détails figurent ci-dessous.",
+  "Your booking is confirmed. Your calendar invitation and meeting details are below.": "Votre réservation est confirmée. Votre invitation au calendrier et les détails de connexion figurent ci-dessous.",
+  "Your booking is awaiting confirmation.": "Votre réservation est en attente de confirmation.",
+  "This time is reserved temporarily. Complete your booking to confirm it.": "Ce créneau est réservé temporairement. Terminez votre réservation pour le confirmer.",
+  "We could not determine the status of this booking. Please contact your tutor.": "Nous ne pouvons pas déterminer le statut de cette réservation. Contactez votre tuteur."
 }

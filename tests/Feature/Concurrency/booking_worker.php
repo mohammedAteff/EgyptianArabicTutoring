@@ -12,6 +12,7 @@ use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Forms\Services\FormBuilderService;
+use App\Domains\Forms\Services\FormSubmissionService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentBookingService;
@@ -169,7 +170,7 @@ try {
             'answers' => $data['answers'] ?? [],
         ]);
         $request->attributes->set('student', $student);
-        $response = app(FormController::class)->autosave($request, (string) $data['slug']);
+        $response = app(FormController::class)->autosave($request, (string) $data['slug'], app(FormSubmissionService::class));
 
         echo 'RESULT:SUCCESS:'.$response->getData()->draft_id."\n";
         exit(0);

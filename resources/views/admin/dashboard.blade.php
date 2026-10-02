@@ -71,7 +71,7 @@
                     <span class="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
                         Next Lesson
                     </span>
-                    <span class="text-xs text-slate-400">Cairo: {{ $cairoNow->format('h:i A') }}</span>
+                    <span class="text-xs text-slate-400">Cairo: {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($cairoNow) }}</span>
                 </div>
 
                 @if($nextBooking)
@@ -86,11 +86,11 @@
                     <div class="mt-6 space-y-3 bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60">
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-slate-400 font-medium">Your Time (Cairo):</span>
-                            <span class="font-bold text-white">{{ $nextLocal->format('l, M j · h:i A') }}</span>
+                            <span class="font-bold text-white">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($nextLocal) }}</span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-slate-400 font-medium">Student Time:</span>
-                            <span class="font-bold text-amber-300">{{ $studentLocal->format('h:i A') }} ({{ $nextBooking->customer_timezone }})</span>
+                            <span class="font-bold text-amber-300">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentLocal) }} ({{ $nextBooking->customer_timezone }})</span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-slate-400 font-medium">Email:</span>
@@ -153,14 +153,14 @@
                                 @endphp
                                 <tr class="hover:bg-slate-50/80 transition-colors">
                                     <td class="px-4 py-3.5 font-bold text-slate-900">
-                                        {{ $bStartLocal->format('h:i A') }}
+                                        {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartLocal) }}
                                     </td>
                                     <td class="px-4 py-3.5">
                                         <div class="font-medium text-slate-900">{{ $b->contact->name ?? 'Student' }}</div>
                                         <div class="text-xs text-slate-500">{{ $b->contact->email }}</div>
                                     </td>
                                     <td class="px-4 py-3.5 text-xs text-slate-600">
-                                        <span class="font-semibold text-slate-900">{{ $bStudentLocal->format('h:i A') }}</span>
+                                        <span class="font-semibold text-slate-900">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStudentLocal) }}</span>
                                         <span class="text-slate-400">({{ $b->customer_timezone }})</span>
                                     </td>
                                     <td class="px-4 py-3.5">

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Domains\Analytics\Models\DailyCountryMetric;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
@@ -10,7 +9,6 @@ use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -57,43 +55,11 @@ class AnalyticsDashboardController extends Controller
         $gameFunnel = $this->analyticsService->getGameFunnel($startDateUtc, $endDateUtc);
         $acquisition = $this->analyticsService->getAcquisitionPerformance($startDateUtc, $endDateUtc);
 
-        $countryActivity = DailyCountryMetric::query()
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->selectRaw('
-                country_code,
-                SUM(unique_visitors) AS unique_visitors,
-                SUM(sessions) AS sessions,
-                SUM(bounced_sessions_count) AS bounced_sessions_count,
-                SUM(booking_cta_clicks) AS booking_cta_clicks,
-                SUM(bookings_completed) AS bookings_completed,
-                SUM(resource_requests) AS resource_requests
-            ')
-            ->groupBy('country_code')
-            ->orderByDesc('unique_visitors')
-            ->orderBy('country_code')
-            ->get();
-
-        // Site-wide bounce rate calculation & trend
-        $bounceData = DB::table('daily_metrics')
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->where('dimension_key', '')
-            ->where('dimension_value', '')
-            ->whereIn('metric_name', ['bounced_sessions', 'sessions'])
-            ->selectRaw('metric_name, SUM(count) as total_count')
-            ->groupBy('metric_name')
-            ->pluck('total_count', 'metric_name');
-
-        $siteBounces = (int) ($bounceData['bounced_sessions'] ?? 0);
-        $siteSessions = (int) ($bounceData['sessions'] ?? 0);
+        $countryActivity = $this->analyticsService->reportingCountries($startCairo, $endCairo);
+        $dailyMetrics = $this->analyticsService->reportingMetrics($startCairo, $endCairo)->where('dimension_key', '')->where('dimension_value', '');
+        $siteBounces = (int) $dailyMetrics->where('metric_name', 'bounced_sessions')->sum('count');
+        $siteSessions = (int) $dailyMetrics->where('metric_name', 'sessions')->sum('count');
         $siteBounceRate = $siteSessions > 0 ? round(($siteBounces / $siteSessions) * 100, 1) : 0.0;
-
-        $dailyMetrics = DB::table('daily_metrics')
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->where('dimension_key', '')
-            ->where('dimension_value', '')
-            ->whereIn('metric_name', ['bounced_sessions', 'sessions'])
-            ->select('metric_date', 'metric_name', 'count')
-            ->get();
 
         $dailyBounces = $dailyMetrics->where('metric_name', 'bounced_sessions')->pluck('count', 'metric_date');
         $dailySessions = $dailyMetrics->where('metric_name', 'sessions')->pluck('count', 'metric_date');
@@ -129,6 +95,8 @@ class AnalyticsDashboardController extends Controller
             'siteBounces' => $siteBounces,
             'siteSessions' => $siteSessions,
             'bounceTrend' => $bounceTrend,
+            'goals' => $this->analyticsService->goalReport($startDateUtc, $endDateUtc),
+            'whatsappActivity' => $this->analyticsService->whatsappReport($startDateUtc, $endDateUtc),
         ]);
     }
 
@@ -140,20 +108,7 @@ class AnalyticsDashboardController extends Controller
         $sort = (string) $request->query('sort', 'unique_visitors');
         $dir = strtolower((string) $request->query('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $rawRows = DailyCountryMetric::query()
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->selectRaw('
-                country_code,
-                SUM(unique_visitors) AS unique_visitors,
-                SUM(sessions) AS sessions,
-                SUM(page_views) AS page_views,
-                SUM(bounced_sessions_count) AS bounced_sessions_count,
-                SUM(booking_cta_clicks) AS booking_cta_clicks,
-                SUM(bookings_completed) AS bookings_completed,
-                SUM(resource_requests) AS resource_requests
-            ')
-            ->groupBy('country_code')
-            ->get();
+        $rawRows = $this->analyticsService->reportingCountries($startCairo, $endCairo);
 
         $timezoneService = app(TimezoneDisplayService::class);
 
@@ -236,81 +191,7 @@ class AnalyticsDashboardController extends Controller
     {
         [$range, $startCairo, $endCairo] = $this->resolveDateRange($request);
 
-        $templateMap = [
-            'hero' => 'landing',
-            'pricing' => 'landing',
-            'curriculum' => 'landing',
-            'tutor-bio' => 'landing',
-            'blog-content' => 'blog',
-            'resource-preview' => 'resource',
-            'game-board' => 'game',
-        ];
-
-        $rawMetrics = DB::table('daily_metrics')
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->where('dimension_key', 'section')
-            ->whereIn('metric_name', ['section_views', 'section_dwell_seconds'])
-            ->selectRaw('dimension_value as section_id, metric_name, SUM(count) as total_count')
-            ->groupBy('dimension_value', 'metric_name')
-            ->get();
-
-        $sectionsData = [];
-        foreach ($rawMetrics as $row) {
-            $secId = $row->section_id;
-            if (! isset($sectionsData[$secId])) {
-                $sectionsData[$secId] = [
-                    'section_id' => $secId,
-                    'page_template' => $templateMap[$secId] ?? 'general',
-                    'total_views' => 0,
-                    'total_dwell_seconds' => 0,
-                ];
-            }
-            if ($row->metric_name === 'section_views') {
-                $sectionsData[$secId]['total_views'] = (int) $row->total_count;
-            } elseif ($row->metric_name === 'section_dwell_seconds') {
-                $sectionsData[$secId]['total_dwell_seconds'] = (int) $row->total_count;
-            }
-        }
-
-        foreach ($templateMap as $secId => $tpl) {
-            if (! isset($sectionsData[$secId])) {
-                $sectionsData[$secId] = [
-                    'section_id' => $secId,
-                    'page_template' => $tpl,
-                    'total_views' => 0,
-                    'total_dwell_seconds' => 0,
-                ];
-            }
-        }
-
-        $heroViews = $sectionsData['hero']['total_views'] ?? 0;
-
-        $sections = collect($sectionsData)->map(function ($item) use ($heroViews) {
-            $views = $item['total_views'];
-            $dwell = $item['total_dwell_seconds'];
-            $avgDwell = $views > 0 ? round($dwell / $views, 1) : 0.0;
-
-            $entryBounceRate = match ($item['page_template']) {
-                'landing' => 42.5,
-                'blog' => 61.2,
-                'resource' => 38.0,
-                'game' => 29.4,
-                default => 45.0,
-            };
-
-            $dropOffRate = 0.0;
-            if ($item['page_template'] === 'landing' && $heroViews > 0) {
-                $dropOffRate = round(max(0, ($heroViews - $views) / $heroViews) * 100, 1);
-            } else {
-                $dropOffRate = $entryBounceRate;
-            }
-
-            return array_merge($item, [
-                'avg_attention_duration' => $avgDwell,
-                'entry_bounce_rate' => $entryBounceRate,
-                'drop_off_rate' => $dropOffRate,
-            ]);
-        })->values();
+        $sections = $this->analyticsService->sectionReport($startCairo, $endCairo);
 
         return view('admin.analytics.sections', [
             'title' => 'Content & Section Attention Panel',
@@ -326,36 +207,22 @@ class AnalyticsDashboardController extends Controller
         [$range, $startCairo, $endCairo] = $this->resolveDateRange($request);
         $format = $request->query('format', 'csv');
 
-        $bounceData = DB::table('daily_metrics')
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->where('dimension_key', '')
-            ->where('dimension_value', '')
-            ->whereIn('metric_name', ['bounced_sessions', 'sessions'])
-            ->selectRaw('metric_name, SUM(count) as total_count')
-            ->groupBy('metric_name')
-            ->pluck('total_count', 'metric_name');
-
-        $siteBounces = (int) ($bounceData['bounced_sessions'] ?? 0);
-        $siteSessions = (int) ($bounceData['sessions'] ?? 0);
-        $siteBounceRate = $siteSessions > 0 ? round(($siteBounces / $siteSessions) * 100, 2) : 0.0;
-
+        $metrics = $this->analyticsService->reportingMetrics($startCairo, $endCairo);
+        $global = $metrics->where('dimension_key', '')->where('dimension_value', '');
+        $sessions = $global->where('metric_name', 'sessions')->sum('count');
+        $siteBounceRate = $sessions ? round(100 * $global->where('metric_name', 'bounced_sessions')->sum('count') / $sessions, 2) : 0;
         $headers = ['Date', 'Metric Name', 'Dimension Key', 'Dimension Value', 'Count', 'Site Bounce Rate (%)'];
-
-        $rowsGenerator = function () use ($startCairo, $endCairo, $siteBounceRate) {
-            $query = DB::table('daily_metrics')
-                ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-                ->orderBy('metric_date')
-                ->orderBy('metric_name');
-
-            foreach ($query->cursor() as $row) {
-                yield [
-                    $row->metric_date,
-                    $row->metric_name,
-                    $row->dimension_key ?: '-',
-                    $row->dimension_value ?: '-',
-                    $row->count,
-                    $siteBounceRate.'%',
-                ];
+        $clicks = $this->analyticsService->whatsappReport($startCairo->setTimezone('UTC'), $endCairo->setTimezone('UTC'));
+        $goals = $this->analyticsService->goalReport($startCairo->setTimezone('UTC'), $endCairo->setTimezone('UTC'));
+        $rowsGenerator = function () use ($metrics, $siteBounceRate, $clicks, $goals) {
+            foreach ($metrics->sortBy('metric_date') as $row) {
+                yield [$row->metric_date, $row->metric_name, $row->dimension_key ?: '-', $row->dimension_value ?: '-', $row->count, $siteBounceRate.'%'];
+            }
+            foreach ($clicks as $click) {
+                yield [$click['date'], 'whatsapp_clicked', 'country/source/medium/campaign/content/context/language', implode(' / ', [$click['country'], $click['source'], $click['medium'], $click['campaign'], $click['content'], $click['context'], $click['language']]), $click['clicks'], $siteBounceRate.'%'];
+            }
+            foreach ($goals as $goal) {
+                yield ['Selected period', $goal['event'], 'goal_unique_visitors', $goal['rate'].'% visitor conversion', $goal['visitors'], $siteBounceRate.'%'];
             }
         };
 
@@ -373,19 +240,7 @@ class AnalyticsDashboardController extends Controller
         $headers = ['Country Code', 'Country Name', 'Unique Visitors', 'Total Sessions', 'Bounce Rate (%)', 'Booking Conversion Rate (%)'];
 
         $rowsGenerator = function () use ($startCairo, $endCairo, $timezoneService) {
-            $query = DailyCountryMetric::query()
-                ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-                ->selectRaw('
-                    country_code,
-                    SUM(unique_visitors) AS unique_visitors,
-                    SUM(sessions) AS sessions,
-                    SUM(bounced_sessions_count) AS bounced_sessions_count,
-                    SUM(bookings_completed) AS bookings_completed
-                ')
-                ->groupBy('country_code')
-                ->orderByDesc('unique_visitors');
-
-            foreach ($query->cursor() as $row) {
+            foreach ($this->analyticsService->reportingCountries($startCairo, $endCairo) as $row) {
                 $code = strtoupper((string) $row->country_code);
                 $countryName = $timezoneService->resolveCountryName($code === 'ZZ' ? null : $code);
                 $sessions = (int) $row->sessions;
@@ -426,85 +281,10 @@ class AnalyticsDashboardController extends Controller
             'Drop-off Rate (%)',
         ];
 
-        $templateMap = [
-            'hero' => 'landing',
-            'pricing' => 'landing',
-            'curriculum' => 'landing',
-            'tutor-bio' => 'landing',
-            'blog-content' => 'blog',
-            'resource-preview' => 'resource',
-            'game-board' => 'game',
-        ];
-
-        $rawMetrics = DB::table('daily_metrics')
-            ->whereBetween('metric_date', [$startCairo->toDateString(), $endCairo->toDateString()])
-            ->where('dimension_key', 'section')
-            ->whereIn('metric_name', ['section_views', 'section_dwell_seconds'])
-            ->selectRaw('dimension_value as section_id, metric_name, SUM(count) as total_count')
-            ->groupBy('dimension_value', 'metric_name')
-            ->get();
-
-        $sectionsData = [];
-        foreach ($rawMetrics as $row) {
-            $secId = $row->section_id;
-            if (! isset($sectionsData[$secId])) {
-                $sectionsData[$secId] = [
-                    'section_id' => $secId,
-                    'page_template' => $templateMap[$secId] ?? 'general',
-                    'total_views' => 0,
-                    'total_dwell_seconds' => 0,
-                ];
-            }
-            if ($row->metric_name === 'section_views') {
-                $sectionsData[$secId]['total_views'] = (int) $row->total_count;
-            } elseif ($row->metric_name === 'section_dwell_seconds') {
-                $sectionsData[$secId]['total_dwell_seconds'] = (int) $row->total_count;
-            }
-        }
-
-        foreach ($templateMap as $secId => $tpl) {
-            if (! isset($sectionsData[$secId])) {
-                $sectionsData[$secId] = [
-                    'section_id' => $secId,
-                    'page_template' => $tpl,
-                    'total_views' => 0,
-                    'total_dwell_seconds' => 0,
-                ];
-            }
-        }
-
-        $heroViews = $sectionsData['hero']['total_views'] ?? 0;
-
-        $rowsGenerator = function () use ($sectionsData, $heroViews) {
-            foreach ($sectionsData as $item) {
-                $views = $item['total_views'];
-                $dwell = $item['total_dwell_seconds'];
-                $avgDwell = $views > 0 ? round($dwell / $views, 1) : 0.0;
-
-                $entryBounceRate = match ($item['page_template']) {
-                    'landing' => 42.5,
-                    'blog' => 61.2,
-                    'resource' => 38.0,
-                    'game' => 29.4,
-                    default => 45.0,
-                };
-
-                $dropOffRate = 0.0;
-                if ($item['page_template'] === 'landing' && $heroViews > 0) {
-                    $dropOffRate = round(max(0, ($heroViews - $views) / $heroViews) * 100, 1);
-                } else {
-                    $dropOffRate = $entryBounceRate;
-                }
-
-                yield [
-                    $item['section_id'],
-                    $item['page_template'],
-                    $views,
-                    $dwell,
-                    $avgDwell,
-                    $entryBounceRate.'%',
-                    $dropOffRate.'%',
-                ];
+        $sections = $this->analyticsService->sectionReport($startCairo, $endCairo);
+        $rowsGenerator = function () use ($sections) {
+            foreach ($sections as $item) {
+                yield [$item['section_id'], $item['page_template'], $item['total_views'], $item['total_dwell_seconds'], $item['avg_attention_duration'], $item['entry_bounce_rate'] === null ? 'Unavailable' : $item['entry_bounce_rate'].'%', $item['drop_off_rate'] === null ? 'Unavailable' : $item['drop_off_rate'].'%'];
             }
         };
 

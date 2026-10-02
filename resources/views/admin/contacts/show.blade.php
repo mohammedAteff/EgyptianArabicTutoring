@@ -44,7 +44,7 @@
                 </div>
                 <div>
                     <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">First Seen</span>
-                    <span class="text-xs text-slate-700">{{ $contact->first_seen_at ? $contact->first_seen_at->format('M j, Y h:i A') : '—' }}</span>
+                    <span class="text-xs text-slate-700">{{ $contact->first_seen_at ? app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($contact->first_seen_at) : '—' }}</span>
                 </div>
                 <div>
                     <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Last Active</span>
@@ -114,10 +114,10 @@
                         @endphp
                         <tr class="hover:bg-slate-50/70">
                             <td class="px-4 py-3.5 font-bold text-slate-900">
-                                {{ $bStartCairo->format('D, M j, Y · h:i A') }}
+                                {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($bStartCairo) }}
                             </td>
                             <td class="px-4 py-3.5 text-xs text-slate-600">
-                                <span class="font-semibold text-slate-900">{{ $bStartStudent->format('h:i A') }}</span>
+                                <span class="font-semibold text-slate-900">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent) }}</span>
                                 <span class="text-slate-400">({{ $b->customer_timezone }})</span>
                             </td>
                             <td class="px-4 py-3.5 text-xs font-semibold text-slate-800">
@@ -173,7 +173,7 @@
                                 {{ $req->resource->title ?? 'Learning Resource' }}
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-500">
-                                {{ $req->created_at ? $req->created_at->format('M j, Y h:i A') : '—' }}
+                                {{ $req->created_at ? app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($req->created_at) : '—' }}
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-600">
                                 {{ $req->source ? ucfirst($req->source) : 'Direct / Organic' }}

@@ -99,3 +99,5 @@ Schedule::command('booking:send-telegram-reminders')
     ->everyFiveMinutes()
     ->withoutOverlapping(10)
     ->name('booking:send-telegram-reminders');
+
+Schedule::command('geoip:update')->monthlyOn(2, '04:00')->timezone('Africa/Cairo')->withoutOverlapping(120);

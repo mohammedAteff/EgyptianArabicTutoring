@@ -300,8 +300,12 @@
                                     <p class="text-xs text-slate-500 mt-0.5">Created {{ $pkg->created_at->format('M j, Y') }} • Expires {{ $pkg->expiration_date ? $pkg->expiration_date->format('M j, Y') : 'Never' }}</p>
                                 </div>
                                 <div class="flex items-center gap-4 text-xs font-mono">
+                                    <div>Original Price: <span class="font-bold">${{ $pkg->original_price }}</span></div>
+                                    <div>Discount: <span class="font-bold">${{ $pkg->discount_amount }}</span></div>
+                                    <div>Amount Paid (net): <span class="font-bold">${{ $pkg->net_paid }}</span></div>
                                     <div>Final Price: <span class="font-bold text-slate-800">${{ $pkg->final_price }}</span></div>
-                                    <div>Remaining Due: <span class="font-bold {{ bccomp($pkg->remaining_balance, '0.00', 2) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">${{ $pkg->remaining_balance }}</span></div>
+                                    @if(bccomp($pkg->overpaid, '0.00', 2) > 0)<div>Overpaid: <span class="font-bold text-amber-700">${{ $pkg->overpaid }}</span></div>@else
+                                    <div>Remaining Due: <span class="font-bold {{ bccomp($pkg->remaining_balance, '0.00', 2) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">${{ $pkg->remaining_balance }}</span></div>@endif
                                     <div>Available Credits: <span class="font-bold text-slate-800">{{ $pkg->available_credits }}</span></div>
                                 </div>
                             </div>
@@ -321,11 +325,11 @@
                                                     @if($pmt->transaction_reference)
                                                         <span class="text-slate-400 ml-1">({{ $pmt->transaction_reference }})</span>
                                                     @endif
-                                                    <span class="text-slate-400 ml-2">{{ $pmt->paid_at->format('M j, Y H:i') }}</span>
+                                                    <span class="text-slate-400 ml-2">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($pmt->paid_at) }}</span>
                                                 </div>
                                                 <button type="button" @click="refundPaymentId = {{ $pmt->id }}; refundPackageId = {{ $pkg->id }}; refundAmount = '{{ $pmt->amount_paid }}'"
                                                         class="text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors">
-                                                    Issue Refund &rarr;
+                                                    Record Manual Refund &rarr;
                                                 </button>
                                             </div>
                                         @endforeach
@@ -367,7 +371,7 @@
                             <div x-show="refundPackageId === {{ $pkg->id }}" class="p-4 bg-rose-50 rounded-xl border border-rose-200 space-y-3">
                                 <div class="text-xs font-bold text-rose-900">Issue Refund for Payment #<span x-text="refundPaymentId"></span></div>
                                 <form action="{{ route('admin.students.refunds.store', ['student' => $selectedStudent->id, 'payment' => 0]) }}"
-                                      :action="'/admin/students/{{ $selectedStudent->id }}/payments/' + refundPaymentId + '/refunds'"
+                                      :action="@js(route('admin.students.refunds.store', ['student' => $selectedStudent->id, 'payment' => 0])).replace('/0/refunds', '/' + refundPaymentId + '/refunds')"
                                       method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                                     @csrf
                                     <input type="hidden" name="refund_idempotency_key" :value="refundIdempotency">
@@ -388,7 +392,7 @@
                                     </div>
                                     <div class="sm:col-span-4 flex justify-end gap-2">
                                         <button type="button" @click="refundPackageId = null; refundPaymentId = null" class="px-3 py-1 bg-white text-slate-600 rounded-lg text-xs border border-slate-300">Cancel</button>
-                                        <button type="submit" class="px-4 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold">Confirm Refund</button>
+                                        <button type="submit" class="px-4 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold">Save Manual Refund</button>
                                     </div>
                                 </form>
                             </div>

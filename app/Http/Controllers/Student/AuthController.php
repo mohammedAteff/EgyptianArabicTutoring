@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentAuthAttemptTracker;
 use App\Domains\Students\Services\StudentIdentityService;
@@ -48,14 +49,7 @@ class AuthController extends Controller
                 $isValid = false;
             }
         }
-        $phone = null;
-        try {
-            if ($isValid) {
-                $phone = $identity->normalizePhone($input['phone'] ?? null, $input['phone_country'] ?? null);
-            }
-        } catch (InvalidArgumentException) {
-            $isValid = false;
-        }
+        $phone = trim((string) ($input['phone'] ?? '')) ?: null;
 
         $fingerprints = $identity->authFingerprints(
             is_string($input['email'] ?? null) ? $input['email'] : null,
@@ -63,52 +57,30 @@ class AuthController extends Controller
             $dateOfBirth,
             is_string($input['phone_country'] ?? null) ? $input['phone_country'] : null,
         );
-        $result = $attempts->attempt($fingerprints, function () use ($isValid, $dateOfBirth, $name, $email, $phone, $notifications): ?Student {
+        $result = $attempts->attempt($fingerprints, function () use ($isValid, $dateOfBirth, $name, $email, $phone, $notifications, $identity): ?Student {
             if (! $isValid || count(array_filter([$name, $email, $phone])) < 2) {
                 return null;
             }
 
-            $identifiers = array_filter([
-                'name_normalized' => $name,
-                'email_normalized' => $email,
-                'phone_normalized' => $phone,
-            ], fn (?string $value): bool => $value !== null);
-            $identifierColumns = array_keys($identifiers);
             $candidates = Student::verified()
                 ->whereDate('date_of_birth', $dateOfBirth)
-                ->where(function ($query) use ($name, $email, $phone): void {
+                ->where(function ($query) use ($name, $email): void {
                     if ($name) {
                         $query->orWhere('name_normalized', $name);
                     }
                     if ($email) {
                         $query->orWhere('email_normalized', $email);
                     }
-                    if ($phone) {
-                        $query->orWhere('phone_normalized', $phone);
-                    }
-                })
-                ->where(function ($query) use ($identifiers, $identifierColumns): void {
-                    for ($first = 0; $first < count($identifierColumns) - 1; $first++) {
-                        for ($second = $first + 1; $second < count($identifierColumns); $second++) {
-                            $firstColumn = $identifierColumns[$first];
-                            $secondColumn = $identifierColumns[$second];
-                            $query->orWhere(function ($pair) use ($identifiers, $firstColumn, $secondColumn): void {
-                                $pair->where($firstColumn, $identifiers[$firstColumn])
-                                    ->where($secondColumn, $identifiers[$secondColumn]);
-                            });
-                        }
-                    }
                 })
                 ->select(['id', 'name_normalized', 'email_normalized', 'phone_normalized'])
                 ->orderBy('id')
-                ->limit(2)
                 ->get();
 
-            $matches = $candidates->filter(function (Student $student) use ($name, $email, $phone): bool {
+            $matches = $candidates->filter(function (Student $student) use ($name, $email, $phone, $identity): bool {
                 $matched = 0;
                 $matched += $name !== null && $name === $student->name_normalized ? 1 : 0;
                 $matched += $email !== null && $email === $student->email_normalized ? 1 : 0;
-                $matched += $phone !== null && $phone === $student->phone_normalized ? 1 : 0;
+                $matched += $identity->phoneMatches($phone, $student->phone_normalized) ? 1 : 0;
 
                 return $matched >= 2;
             });
@@ -136,6 +108,8 @@ class AuthController extends Controller
             'student_authenticated_at' => now('UTC')->toIso8601String(),
             'student_auth_expires_at' => now('UTC')->addMinutes(180)->toIso8601String(),
         ]);
+
+        app(AnalyticsService::class)->linkAuthenticatedStudent($request, $student->id);
 
         return redirect()->route('student.dashboard');
     }

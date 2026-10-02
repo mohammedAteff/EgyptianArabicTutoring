@@ -15,6 +15,7 @@ class Visitor extends Model
     protected $table = 'visitors';
 
     protected $fillable = [
+        'student_id',
         'visitor_token',
         'visitor_id',
         'first_seen_at',

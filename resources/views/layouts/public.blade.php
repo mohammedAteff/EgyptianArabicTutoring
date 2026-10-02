@@ -44,11 +44,13 @@
 
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="analytics-disabled" content="{{ app(\App\Domains\Analytics\Services\AnalyticsService::class)->excluded(request()) ? '1' : '0' }}">
     <meta name="analytics-event-url" content="{{ route('analytics.track') }}">
     <meta name="analytics-base-path" content="{{ parse_url(route('home'), PHP_URL_PATH) }}">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
+</head>
 <body class="min-h-full flex flex-col bg-[#FAF8F5] text-stone-900 font-sans antialiased selection:bg-terracotta-500 selection:text-white"
       x-data="{ mobileNav: false }">
 
@@ -108,7 +110,7 @@
                     <a href="{{ localized_url('resources') }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('resources*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('Resources') }}
-                    </a>
+                    </a><a href="{{ route('student.login') }}" class="text-sm font-semibold text-nile-800 hover:underline">{{ ['en'=>'Student Portal','fr'=>'Espace étudiant','de'=>'Schülerportal'][app()->getLocale()] ?? 'Student Portal' }}</a>
                     <a href="{{ localized_url('games') }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('games*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('Games') }}
@@ -194,6 +196,7 @@
              class="lg:hidden bg-white border-b border-stone-200 px-4 pt-2 pb-6 space-y-3 shadow-lg">
             <a href="{{ localized_url('home') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('Home') }}</a>
             <a href="{{ localized_url('booking') }}" data-cta="booking" class="block px-3 py-2 text-base font-semibold rounded-lg bg-terracotta-50 text-terracotta-600">📅 {{ __('Book a Lesson') }}</a>
+            <a href="{{ route('student.login') }}" class="block rounded-lg px-3 py-2 text-base font-semibold text-nile-800">{{ ['en'=>'Student Portal','fr'=>'Espace étudiant','de'=>'Schülerportal'][app()->getLocale()] ?? 'Student Portal' }}</a>
             <a href="{{ localized_url('resources') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">📚 {{ __('Resources') }}</a>
             <a href="{{ localized_url('games') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">🎮 {{ __('Games') }}</a>
             <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
@@ -350,12 +353,14 @@
                 </div>
             </div>
         </div>
+        <p class="pb-5 text-center text-xs text-stone-400">IP country data by <a href="https://db-ip.com/" class="underline">DB-IP</a> (CC BY 4.0).</p>
     </footer>
 
     @livewireScripts
 
     <script>
     window.vaTrack = function(eventName, metadata = {}) {
+        if (document.querySelector('meta[name="analytics-disabled"]')?.content === '1') return;
         try {
             const payload = JSON.stringify({
                 event_name: eventName,
@@ -395,7 +400,7 @@
                 href.includes('facebook.com') || href.includes('twitter.com') || href.includes('x.com') ||
                 href.includes('linkedin.com');
 
-            if (isWhatsApp) {
+            if (isWhatsApp && !el.hasAttribute('data-whatsapp-cta')) {
                 el.addEventListener('click', () => {
                     window.vaTrack('whatsapp_clicked', { target: href, target_url: href, platform: 'whatsapp', placement: 'footer' });
                 });
@@ -430,5 +435,6 @@
         });
     });
     </script>
+<x-whatsapp-cta context="public" />
 </body>
 </html>

@@ -383,8 +383,16 @@
                     <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-full text-xs font-semibold">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', now('UTC')); @endphp
-                        <span>Cairo Time: {{ now('Africa/Cairo')->format('H:i') }} ({{ $cairoClock['utc_offset'] }})</span>
-                    </div>
+                        <span>Cairo Time: {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime(now('Africa/Cairo')) }} ({{ $cairoClock['utc_offset'] }})</span>
+                    </div>    <form method="POST" action="{{ route('admin.preferences.time') }}" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 ">
+        @csrf
+        <label for="staff-time-format" class="text-xs">My time format</label>
+        <select id="staff-time-format" name="time_format" class="rounded border p-1 text-xs">
+            <option value="12" @selected(auth('web')->user()?->time_format === '12')>12-hour</option>
+            <option value="24" @selected(auth('web')->user()?->time_format !== '12')>24-hour</option>
+        </select>
+        <button class="rounded bg-slate-800 px-2 py-1 text-xs text-white">Save</button>
+    </form>
 
                     <!-- Notification Bell -->
                     <a href="{{ route('admin.notifications.index') }}" class="relative p-2 text-slate-500 hover:text-amber-600 transition-colors" title="Notifications">
@@ -642,6 +650,7 @@
         });
     }
     </script>
+
     @livewireScripts
 </body>
 </html>

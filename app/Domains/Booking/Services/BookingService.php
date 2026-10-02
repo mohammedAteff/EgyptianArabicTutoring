@@ -381,6 +381,9 @@ class BookingService
                         }
                     }
                 } else {
+                    if (! $effectiveFormVersionId) {
+                        throw ValidationException::withMessages(['intakeForm' => 'First-time booking requires the published Short Form. Please contact your tutor if it is unavailable.']);
+                    }
                     $newStudent = Student::create([
                         'first_name' => $firstName,
                         'last_name' => $lastName,
@@ -394,6 +397,10 @@ class BookingService
                         'identity_status' => 'legacy_unverified',
                     ]);
                     $studentId = $newStudent->id;
+                }
+
+                if (! $effectiveFormVersionId && ! Booking::where('student_id', $studentId)->exists()) {
+                    throw ValidationException::withMessages(['intakeForm' => 'First-time booking requires the published Short Form. Please contact your tutor if it is unavailable.']);
                 }
 
                 // Lock and verify the hold only after contact and student rows, keeping one global lock order.
@@ -516,7 +523,7 @@ class BookingService
                 }
 
                 // Persist FormSubmission and FormAnswers if formVersionId provided
-                if ($effectiveFormVersionId) {
+                if ($effectiveFormVersionId && ! FormSubmission::where('form_version_id', $effectiveFormVersionId)->where('student_id', $studentId)->where('status', 'submitted')->exists()) {
                     $version = FormVersion::with('questions.options')->findOrFail($effectiveFormVersionId);
                     if ($version) {
                         $submission = FormSubmission::create([
@@ -573,6 +580,10 @@ class BookingService
 
                 // Track authoritative server-side analytics event post-commit
                 DB::afterCommit(function () use ($booking, $sessionType, $startUtc, $endUtc, $customerTimezone, $analyticsVisitorToken, $visitorToken, $analyticsSessionToken, $sessionToken) {
+                    $intakeSubmission = FormSubmission::where('booking_id', $booking->id)->first();
+                    if ($intakeSubmission) {
+                        $this->analyticsService->trackEvent('short_form_completed', '/booking/confirmed', $analyticsVisitorToken ?? $visitorToken, $analyticsSessionToken ?? $sessionToken, ['form_id' => $intakeSubmission->version->form_id, 'submission_id' => $intakeSubmission->id, 'form_kind' => 'short'], eventUuid: 'intake-submitted-'.$intakeSubmission->id);
+                    }
                     $this->analyticsService->trackEvent(
                         eventType: 'booking_completed',
                         page: '/booking/confirmed',

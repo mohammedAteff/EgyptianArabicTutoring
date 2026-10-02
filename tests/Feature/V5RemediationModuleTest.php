@@ -3,8 +3,6 @@
 namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
-use App\Domains\Analytics\Models\Visitor;
-use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
@@ -19,13 +17,13 @@ use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Resources\Models\ResourceRequest;
+use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Middleware\EnsureNotUnderMaintenance;
 use App\Livewire\BookingWizard;
-use App\Mail\ResourceVerificationPinMail;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -42,10 +40,12 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Symfony\Component\Process\Process;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class V5RemediationModuleTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected Administrator $admin;
@@ -55,6 +55,10 @@ class V5RemediationModuleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
+        $quality = $this->getMockBuilder(EmailQualityService::class)->onlyMethods(['dnsRecords'])->getMock();
+        $quality->method('dnsRecords')->willReturn([['type' => 'MX', 'target' => 'mx.example.test']]);
+        $this->app->instance(EmailQualityService::class, $quality);
 
         $this->admin = Administrator::create([
             'name' => 'Module Admin',
@@ -169,43 +173,23 @@ class V5RemediationModuleTest extends TestCase
             ->set('email', 'review@example.test')->set('phone', '+201012345678')->set('date_of_birth', '1990-01-01');
     }
 
-    public function test_pin_issuance_queues_mail_and_verification_unlocks_a_localized_download(): void
+    public function test_legacy_pin_setting_cannot_send_mail_and_access_unlocks_immediately(): void
     {
         Mail::fake();
         Config::set('business.resources.require_pin_verification', true);
-        Config::set('cache.default', 'database');
-        $category = ResourceCategory::create(['name' => 'PIN review', 'slug' => 'pin-review', 'active' => true]);
-        $resource = Resource::create([
-            'title' => 'PIN review guide', 'slug' => 'pin-review-guide', 'category_id' => $category->id,
-            'status' => 'published', 'published_at' => now()->subDay(), 'is_gated' => true,
-            'external_url' => 'https://example.org/guide.pdf',
-        ]);
+        $category = ResourceCategory::create(['name' => 'Access review', 'slug' => 'access-review', 'active' => true]);
+        $resource = Resource::create(['title' => 'Access guide', 'slug' => 'access-guide', 'category_id' => $category->id, 'status' => 'published', 'published_at' => now()->subDay(), 'is_gated' => true, 'external_url' => 'https://example.org/guide.pdf']);
         $page = $this->get(route('resources.show.fr', $resource->slug));
-        $this->withCredentials()->withCookies([
-            '_va_visitor' => $page->getCookie('_va_visitor')->getValue(),
-            '_va_session' => $page->getCookie('_va_session')->getValue(),
-        ]);
-
-        $issued = $this->postJson(route('resources.request.fr', $resource->slug), ['name' => 'Review learner', 'email' => 'pin-review@example.test']);
-        $issued->assertOk()->assertJsonPath('requires_pin', true);
-        $challenge = $issued->json('challenge');
-        $this->assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/', $challenge);
-        $this->assertDatabaseCount('resource_requests', 0);
-        $pin = null;
-        Mail::assertQueued(ResourceVerificationPinMail::class, function ($mail) use (&$pin): bool {
-            $pin = $mail->pin;
-
-            return $mail->hasTo('pin-review@example.test');
-        });
-        $this->assertMatchesRegularExpression('/\A[0-9]{6}\z/', $pin);
-
-        $verified = $this->postJson(route('resources.verify-pin.fr', $resource->slug), ['challenge' => $challenge, 'pin' => $pin]);
-        $verified->assertOk();
-        $this->assertStringStartsWith(route('resources.download.fr', $resource->slug), $verified->json('download_url'));
-        $this->assertDatabaseHas('resource_requests', ['resource_id' => $resource->id, 'consumed_challenge_hash' => hash('sha256', $challenge)]);
-        $this->withCookie(config('session.cookie'), $verified->getCookie(config('session.cookie'))->getValue());
-        $this->get($verified->json('download_url'))->assertRedirect('https://example.org/guide.pdf');
-        $this->assertDatabaseHas('resource_downloads', ['resource_id' => $resource->id]);
+        $this->withCredentials()->withCookies(['_va_visitor' => $page->getCookie('_va_visitor')->getValue(), '_va_session' => $page->getCookie('_va_session')->getValue()]);
+        $issued = $this->postJson(route('resources.request.fr', $resource->slug), ['name' => 'Review learner', 'email' => 'review@example.test'])->assertOk()->assertJsonPath('requires_pin', false);
+        Mail::assertNothingOutgoing();
+        $this->assertDatabaseCount('resource_requests', 1);
+        $this->assertStringStartsWith(route('resources.download.fr', $resource->slug), $issued->json('download_url'));
+        $this->withCookie(config('session.cookie'), $issued->getCookie(config('session.cookie'))->getValue());
+        $this->get($issued->json('download_url'))->assertRedirect('https://example.org/guide.pdf');
+        $this->assertDatabaseCount('resource_downloads', 1);
+        $this->get($issued->json('download_url'))->assertRedirect();
+        $this->assertDatabaseCount('resource_downloads', 1);
     }
 
     public function test_broken_student_merge_chains_are_rejected_instead_of_linked(): void
@@ -767,214 +751,32 @@ class V5RemediationModuleTest extends TestCase
             'session_token' => $spoofedToken,
         ]);
 
-        $responseVerify->assertStatus(403);
+        $responseVerify->assertStatus(404);
 
         Config::set('business.resources.require_pin_verification', true);
-        $challenge = bin2hex(random_bytes(32));
-        $challengeHash = hash('sha256', $challenge);
-        Cache::put("resource_pin:{$challenge}", [
-            'hash' => Hash::make('123456'),
-            'name' => 'Cookie Owner',
-            'email' => 'cookie-owner@example.test',
-            'resource_id' => $resource->id,
-            'visitor_token' => $visitorToken,
-            'session_token' => $sessionToken,
-            'attribution' => [],
-            'attempts' => 0,
-        ], now()->addMinutes(10));
-
-        $verifyUrl = route('resources.verify-pin', $resource->slug).'?'.http_build_query([
-            'visitor_token' => $spoofedToken,
-            'session_token' => $spoofedToken,
-        ]);
-        $this->withCredentials()->withCookies([
-            '_va_visitor' => $visitorToken,
-            '_va_session' => $sessionToken,
-        ])->postJson($verifyUrl, [
-            'challenge' => $challenge,
-            'pin' => '123456',
-            'visitor_token' => $spoofedToken,
-            'session_token' => $spoofedToken,
-        ])->assertOk();
-
-        $this->assertDatabaseHas('resource_requests', [
-            'resource_id' => $resource->id,
-            'visitor_token' => $visitorToken,
-            'session_token' => $sessionToken,
-            'consumed_challenge_hash' => $challengeHash,
-        ]);
+        $this->postJson(route('resources.verify-pin', $resource->slug), ['challenge' => $challenge, 'pin' => '123456'])->assertNotFound();
+        $this->assertDatabaseCount('resource_requests', 1);
     }
 
-    public function test_granular_challenge_hash_replay_and_race_verification(): void
+    public function test_inactive_pin_endpoint_never_consumes_cached_challenges(): void
     {
-        Config::set('cache.default', 'database');
-        Config::set('business.resources.require_pin_verification', true);
-
-        $category = ResourceCategory::create([
-            'slug' => 'workbooks-'.uniqid(),
-            'name' => 'Workbooks',
-            'sort_order' => 1,
-            'active' => true,
-        ]);
-
-        $resource = Resource::create([
-            'title' => 'Gated Workbook',
-            'slug' => 'gated-workbook-'.uniqid(),
-            'category_id' => $category->id,
-            'status' => 'published',
-            'published_at' => now()->subDay(),
-            'sort_order' => 1,
-        ]);
-
-        $visitorToken = (string) Str::uuid();
-        $sessionToken = (string) Str::uuid();
         $challenge = bin2hex(random_bytes(32));
-        $challengeHash = hash('sha256', $challenge);
-
-        $visitor = Visitor::create([
-            'visitor_token' => $visitorToken,
-            'first_seen_at' => now(),
-            'last_seen_at' => now(),
-            'device_type' => 'desktop',
-            'user_agent' => 'PHPUnit',
-            'is_bot' => false,
-        ]);
-        VisitorSession::create([
-            'session_token' => $sessionToken,
-            'visitor_id' => $visitor->id,
-            'started_at' => now(),
-            'last_activity_at' => now(),
-            'is_bot' => false,
-        ]);
-
-        // Mark challenge as already consumed
-        $contact = Contact::create(['name' => 'Test Lead', 'email' => 'lead@example.test']);
-        ResourceRequest::create([
-            'resource_id' => $resource->id,
-            'contact_id' => $contact->id,
-            'visitor_token' => $visitorToken,
-            'session_token' => $sessionToken,
-            'consumed_challenge_hash' => $challengeHash,
-        ]);
-
-        // Ordinary replay: Submitting an already consumed challenge hash is intercepted by the locked pre-check and returns 409 Conflict
-        $response = $this->withCredentials()->withCookies([
-            '_va_visitor' => $visitorToken,
-            '_va_session' => $sessionToken,
-        ])->postJson(route('resources.verify-pin', $resource->slug), [
-            'challenge' => $challenge,
-            'pin' => '123456',
-        ]);
-
-        $response->assertStatus(409);
-
-        // Concurrent collision: Bypassing the pre-check under a simulated concurrent write race triggers HTTP 409 Conflict
-        // specifically from the database catch block on resource_requests_consumed_challenge_hash_unique
-        $challenge2 = bin2hex(random_bytes(32));
-        $challengeHash2 = hash('sha256', $challenge2);
-        Cache::put("resource_pin:{$challenge2}", [
-            'hash' => Hash::make('123456'),
-            'name' => 'Race Lead',
-            'email' => 'race@example.test',
-            'resource_id' => $resource->id,
-            'visitor_token' => $visitorToken,
-            'session_token' => $sessionToken,
-            'attribution' => [],
-            'attempts' => 0,
-        ], now()->addMinutes(10));
-
-        $inserted = false;
-        ResourceRequest::creating(function () use ($resource, $contact, $visitorToken, $sessionToken, $challengeHash2, &$inserted) {
-            if (! $inserted) {
-                $inserted = true;
-                ResourceRequest::withoutEvents(function () use ($resource, $contact, $visitorToken, $sessionToken, $challengeHash2) {
-                    ResourceRequest::create([
-                        'resource_id' => $resource->id,
-                        'contact_id' => $contact->id,
-                        'visitor_token' => $visitorToken,
-                        'session_token' => $sessionToken,
-                        'consumed_challenge_hash' => $challengeHash2,
-                        'created_at' => now(),
-                    ]);
-                });
-            }
-        });
-
-        $responseCollision = $this->withCredentials()->withCookies([
-            '_va_visitor' => $visitorToken,
-            '_va_session' => $sessionToken,
-        ])->postJson(route('resources.verify-pin', $resource->slug), [
-            'challenge' => $challenge2,
-            'pin' => '123456',
-        ]);
-
-        $responseCollision->assertStatus(409);
+        Cache::put('resource_pin:'.$challenge, ['hash' => Hash::make('123456'), 'attempts' => 0], 600);
+        $this->postJson(route('resources.verify-pin', 'unused-resource'), ['challenge' => $challenge, 'pin' => '123456'])->assertNotFound();
+        $this->assertSame(0, Cache::get('resource_pin:'.$challenge)['attempts']);
+        $this->assertDatabaseCount('resource_requests', 0);
     }
 
-    public function test_immediate_fifth_pin_attempt_invalidation(): void
+    public function test_inactive_pin_endpoint_never_creates_leads_or_download_grants(): void
     {
-        Config::set('cache.default', 'database');
+        Mail::fake();
         Config::set('business.resources.require_pin_verification', true);
-
-        $category = ResourceCategory::create([
-            'slug' => 'pin-cat-'.uniqid(),
-            'name' => 'PIN Category',
-            'sort_order' => 1,
-            'active' => true,
-        ]);
-
-        $resource = Resource::create([
-            'title' => 'PIN Resource',
-            'slug' => 'pin-resource-'.uniqid(),
-            'category_id' => $category->id,
-            'status' => 'published',
-            'published_at' => now()->subDay(),
-            'sort_order' => 1,
-        ]);
-
-        $visitorToken = (string) Str::uuid();
-        $sessionToken = (string) Str::uuid();
-        $challenge = bin2hex(random_bytes(32));
-        $realPin = '654321';
-
-        $visitor = Visitor::create([
-            'visitor_token' => $visitorToken,
-            'first_seen_at' => now(),
-            'last_seen_at' => now(),
-            'device_type' => 'desktop',
-            'user_agent' => 'PHPUnit',
-            'is_bot' => false,
-        ]);
-        VisitorSession::create([
-            'session_token' => $sessionToken,
-            'visitor_id' => $visitor->id,
-            'started_at' => now(),
-            'last_activity_at' => now(),
-            'is_bot' => false,
-        ]);
-
-        Cache::put("resource_pin:{$challenge}", [
-            'hash' => Hash::make($realPin),
-            'name' => 'PIN User',
-            'email' => 'pinuser@example.test',
-            'resource_id' => $resource->id,
-            'visitor_token' => $visitorToken,
-            'session_token' => $sessionToken,
-            'attribution' => [],
-            'attempts' => 4, // 4 attempts already made; next is 5th
-        ], now()->addMinutes(10));
-
-        // Submit wrong pin on 5th attempt
-        $response = $this->withCredentials()->withCookies([
-            '_va_visitor' => $visitorToken,
-            '_va_session' => $sessionToken,
-        ])->postJson(route('resources.verify-pin', $resource->slug), [
-            'challenge' => $challenge,
-            'pin' => '000000',
-        ]);
-
-        $response->assertStatus(429);
-        $this->assertNull(Cache::get("resource_pin:{$challenge}"));
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson(route('resources.verify-pin', 'unused-resource'), ['challenge' => bin2hex(random_bytes(32)), 'pin' => '000000'])->assertNotFound();
+        }
+        Mail::assertNothingOutgoing();
+        $this->assertDatabaseCount('resource_requests', 0);
+        $this->assertDatabaseCount('resource_downloads', 0);
     }
 
     public function test_maintenance_mode_boundary(): void

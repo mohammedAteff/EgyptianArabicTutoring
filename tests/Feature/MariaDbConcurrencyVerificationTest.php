@@ -23,10 +23,13 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class MariaDbConcurrencyVerificationTest extends TestCase
 {
+    use HasPublishedShortForm;
+
     protected AvailabilityService $availabilityService;
 
     protected BookingService $bookingService;
@@ -593,6 +596,10 @@ class MariaDbConcurrencyVerificationTest extends TestCase
 
     public function test_concurrent_public_bookings_for_new_identity_create_one_legacy_student(): void
     {
+        $intake = $this->installShortFormFixture();
+        $this->raceFormIds[] = $intake->id;
+        $this->raceAdministratorIds[] = $intake->created_by;
+
         $date = CarbonImmutable::now('Africa/Cairo')->addDays(24)->startOfDay();
         $email = 'public-identity-race-'.Str::uuid().'@boltlanding.test';
         $phone = '+201088776655';

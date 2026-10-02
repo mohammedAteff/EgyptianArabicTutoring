@@ -18,7 +18,9 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 
 class RescheduleService
 {
@@ -233,18 +235,21 @@ class RescheduleService
                 adminId: $performedBy === 'admin' ? $performedById : null
             );
 
-            // 9. Track authoritative server-side analytics event
-            $this->analyticsService->trackEvent(
-                eventType: 'booking_rescheduled',
-                page: '/booking/reschedule',
-                metadata: [
-                    'booking_id' => $lockedBooking->id,
-                    'performed_by' => $performedBy,
-                    'start_at_utc' => $startUtc->toDateTimeString(),
-                    'end_at_utc' => $endUtc->toDateTimeString(),
-                    'customer_timezone' => $lockedBooking->customer_timezone,
-                ]
-            );
+            DB::afterCommit(function () use ($lockedBooking, $performedBy, $startUtc, $endUtc, $idempotencyKey): void {
+                $this->analyticsService->trackEvent(
+                    eventType: 'booking_rescheduled',
+                    page: '/booking/reschedule',
+                    metadata: [
+                        'booking_id' => $lockedBooking->id,
+                        'performed_by' => $performedBy,
+                        'start_at_utc' => $startUtc->toDateTimeString(),
+                        'end_at_utc' => $endUtc->toDateTimeString(),
+                        'customer_timezone' => $lockedBooking->customer_timezone,
+                    ],
+                    eventUuid: Uuid::uuid5(Uuid::NAMESPACE_URL, 'booking-reschedule:'.$idempotencyKey)->toString(),
+                );
+
+            });
 
             return $lockedBooking->fresh();
         }, 5);

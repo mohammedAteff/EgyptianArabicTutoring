@@ -92,7 +92,7 @@
                             <div class="space-y-2">
                                 <div class="flex items-center gap-3">
                                     <span class="text-lg font-bold text-slate-900 font-mono">
-                                        {{ $bStartCairo->format('g:i A') }} – {{ $bEndCairo->format('g:i A') }}
+                                        {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartCairo) }} – {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bEndCairo) }}
                                     </span>
                                     <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider
                                         {{ $b->status === 'confirmed' ? 'bg-amber-100 text-amber-800' : '' }}
@@ -111,7 +111,7 @@
                                     </div>
                                     <div>
                                         <span class="text-slate-400">Student Local Time:</span>
-                                        <span class="font-medium text-slate-700 font-mono">{{ $bStartStudent->format('g:i A') }} ({{ $b->customer_timezone }})</span>
+                                        <span class="font-medium text-slate-700 font-mono">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent) }} ({{ $b->customer_timezone }})</span>
                                     </div>
                                     <div>
                                         <span class="text-slate-400">Session Type:</span>
@@ -201,7 +201,7 @@
                                            {{ $b->status === 'completed' ? 'bg-emerald-50 border-emerald-300 text-emerald-950 hover:bg-emerald-100' : '' }}
                                            {{ $b->status === 'no_show' ? 'bg-red-50 border-red-300 text-red-950 hover:bg-red-100' : '' }}
                                            {{ $b->status === 'cancelled' ? 'bg-slate-100 border-slate-200 text-slate-500 line-through' : '' }}">
-                                        <div class="font-bold font-mono text-[11px]">{{ $bStartCairo->format('H:i') }} (Tutor Time)</div>
+                                        <div class="font-bold font-mono text-[11px]">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartCairo) }} (Tutor Time)</div>
                                         <div class="truncate text-[11px]">{{ $b->contact->name ?? 'Student' }}</div>
                                     </a>
                                 @empty
@@ -293,11 +293,11 @@
                             <tr class="hover:bg-slate-50/70 transition-colors">
                                 <td class="px-4 py-4 whitespace-nowrap">
                                     <div class="font-bold text-slate-900">{{ $bStartCairo->format('D, M j, Y') }}</div>
-                                    <div class="text-xs text-amber-700 font-mono font-semibold">{{ $bStartCairo->format('H:i') }} Tutor Time</div>
+                                    <div class="text-xs text-amber-700 font-mono font-semibold">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartCairo) }} Tutor Time</div>
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="font-bold text-slate-900">{{ $booking->contact->name ?? 'Student' }}</div>
-                                    <div class="text-xs text-slate-500 font-mono">{{ $bStartStudent->format('H:i') }} ({{ $booking->customer_timezone }})</div>
+                                    <div class="text-xs text-slate-500 font-mono">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent) }} ({{ $booking->customer_timezone }})</div>
                                     <div class="text-[11px] text-slate-400">{{ $booking->contact->email ?? '' }}</div>
                                 </td>
                                 <td class="px-4 py-4 whitespace-nowrap">
@@ -408,7 +408,7 @@
                                        {{ $b->status === 'completed' ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' : '' }}
                                        {{ $b->status === 'no_show' ? 'bg-red-50 text-red-900 border border-red-200' : '' }}
                                        {{ $b->status === 'cancelled' ? 'bg-slate-100 text-slate-500 line-through' : '' }}">
-                                    {{ $bTime->format('H:i') }} - {{ $b->contact->name ?? 'Student' }}
+                                    {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bTime) }} - {{ $b->contact->name ?? 'Student' }}
                                 </a>
                             @endforeach
                         </div>

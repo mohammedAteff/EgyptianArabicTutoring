@@ -16,6 +16,7 @@ use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class CriticalBookingQAMatrixTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected SessionType $sessionType;
@@ -40,6 +42,7 @@ class CriticalBookingQAMatrixTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->sessionType = SessionType::create([
             'title' => 'Conversational Egyptian Arabic (Private)',
@@ -113,8 +116,8 @@ class CriticalBookingQAMatrixTest extends TestCase
         // Verify admin show view renders both accurately
         $response = $this->actingAs($this->admin, 'web')->get(route('admin.bookings.show', $booking->id));
         $response->assertStatus(200);
-        $response->assertSee('02:00 PM');
-        $response->assertSee('01:00 PM');
+        $response->assertSee('14:00');
+        $response->assertSee('13:00');
         $response->assertSee('Europe/Berlin');
     }
 
@@ -256,18 +259,18 @@ class CriticalBookingQAMatrixTest extends TestCase
         // First visit
         $resp1 = $this->get(route('booking.confirmation', $token));
         $resp1->assertStatus(200);
-        $resp1->assertSee('Booking Confirmed');
+        $resp1->assertSee('Confirmed');
         $resp1->assertSee('Sophie Bernard');
 
         // Refresh 1
         $resp2 = $this->get(route('booking.confirmation', $token));
         $resp2->assertStatus(200);
-        $resp2->assertSee('Booking Confirmed');
+        $resp2->assertSee('Confirmed');
 
         // Refresh 2
         $resp3 = $this->get(route('booking.confirmation', $token));
         $resp3->assertStatus(200);
-        $resp3->assertSee('Booking Confirmed');
+        $resp3->assertSee('Confirmed');
 
         $this->assertDatabaseCount('bookings', 1);
     }

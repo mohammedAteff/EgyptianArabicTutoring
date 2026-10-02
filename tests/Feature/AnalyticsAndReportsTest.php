@@ -17,13 +17,16 @@ use App\Domains\Games\Models\Game;
 use App\Domains\Reporting\Services\ReportService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
+use App\Domains\Resources\Services\EmailQualityService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class AnalyticsAndReportsTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected Administrator $admin;
@@ -31,6 +34,10 @@ class AnalyticsAndReportsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
+        $quality = $this->getMockBuilder(EmailQualityService::class)->onlyMethods(['dnsRecords'])->getMock();
+        $quality->method('dnsRecords')->willReturn([['type' => 'MX', 'target' => 'mx.example.test']]);
+        $this->app->instance(EmailQualityService::class, $quality);
 
         $this->admin = Administrator::create([
             'name' => 'Dr. Ahmad',
@@ -65,22 +72,11 @@ class AnalyticsAndReportsTest extends TestCase
         ]);
     }
 
-    public function test_bot_user_agents_are_classified_as_bots(): void
+    public function test_bot_user_agents_do_not_create_visitor_or_page_view_rows(): void
     {
-        $response = $this->withHeaders([
-            'User-Agent' => 'Googlebot/2.1 (+http://www.google.com/bot.html)',
-        ])->get('/');
-
-        $response->assertStatus(200);
-
-        $this->assertDatabaseHas('visitors', [
-            'is_bot' => true,
-        ]);
-
-        $this->assertDatabaseHas('analytics_events', [
-            'event_name' => 'page_view',
-            'is_bot' => true,
-        ]);
+        $this->withHeaders(['User-Agent' => 'Googlebot/2.1 (+http://www.google.com/bot.html)'])->get('/')->assertOk();
+        $this->assertDatabaseCount('visitors', 0);
+        $this->assertDatabaseCount('analytics_events', 0);
     }
 
     public function test_utm_parameters_are_captured_on_session_and_events(): void
@@ -494,7 +490,7 @@ class AnalyticsAndReportsTest extends TestCase
         ])->get('/')->assertOk();
 
         $event = AnalyticsEvent::latest('id')->first();
-        $this->assertTrue($event->is_bot);
+        $this->assertNull($event);
 
         $reportService = app(ReportService::class);
         $traffic = $reportService->getTrafficReport(

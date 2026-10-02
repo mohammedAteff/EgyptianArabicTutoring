@@ -1,290 +1,86 @@
-/**
- * First-Party Granular Telemetry & Engagement Tracker
- * Egyptian Arabic with Abdallah - Analytics Telemetry Pipeline
- */
-
-(function () {
-    if (typeof window === 'undefined' || typeof document === 'undefined') {
-        return;
+(() => {
+    if (typeof document === 'undefined') return;
+    const endpoint = document.querySelector('meta[name="analytics-event-url"]')?.content;
+    if (!endpoint || document.querySelector('meta[name="analytics-disabled"]')?.content === '1') return;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    if (window.__awaTelemetryInitialized) return;
+    window.__awaTelemetryInitialized = true;
+    const location = window.location;
+    const clock = typeof performance !== 'undefined' ? performance : {now: () => Date.now()};
+    const path = location.pathname;
+    const template = /resources|ressources|ressourcen/.test(path) ? 'resource' : /games|jeux|spiele/.test(path) ? 'game' : /blog/.test(path) ? 'blog' : 'landing';
+    const sections = new Map();
+    let queue = [], sending = false, active = null, since = clock.now();
+    let visible = document.visibilityState !== 'hidden', focused = true;
+    function enqueue(name, metadata = {}) {
+        queue.push({event_uuid: (crypto.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => { const number = Math.floor(Math.random() * 16); return (character === 'x' ? number : (number & 3) | 8).toString(16); })), event_name: name, page: location.href.slice(0, 500), metadata});
+        if (queue.length >= 10) flush();
     }
-
-    // Generate cryptographic or pseudo-random UUID v4
-    function generateUuid() {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            return crypto.randomUUID();
+    async function flush(exit = false) {
+        if (!queue.length || (sending && !exit)) return;
+        const batch = queue.splice(0, 20);
+        const body = JSON.stringify({events: batch, _token: csrf});
+        if (exit && navigator.sendBeacon?.(endpoint, new Blob([body], {type: 'application/json'}))) return;
+        sending = true;
+        try {
+            const response = await fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf}, body, keepalive: exit});
+            if (!response.ok && (response.status === 429 || response.status >= 500)) queue.unshift(...batch);
+        } catch { queue.unshift(...batch); }
+        finally { sending = false; }
+        queue = queue.slice(-100);
+    }
+    function commit() {
+        const now = clock.now();
+        const seconds = (now - since) / 1000;
+        if (active && seconds > 0) enqueue('section_dwell', {section_id: active, page_template: template, path, dwell_seconds: Math.min(seconds, 30)});
+        since = now;
+    }
+    function evaluate() {
+        let chosen = null, greatest = 0;
+        for (const [id, entry] of sections) {
+            const rect = entry.element.getBoundingClientRect();
+            const height = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0));
+            const width = Math.max(0, Math.min(rect.right, innerWidth) - Math.max(rect.left, 0));
+            const ratio = rect.height > 0 && rect.width > 0 ? (height * width) / (Math.min(rect.height, innerHeight) * Math.min(rect.width, innerWidth)) : 0;
+            const exposed = visible && focused && ratio >= 0.5;
+            if (exposed && !entry.exposed) enqueue('section_view', {section_id: id, page_template: template, path});
+            entry.exposed = exposed;
+            if (exposed && ratio > greatest) { greatest = ratio; chosen = id; }
         }
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            const r = (Math.random() * 16) | 0;
-            const v = c === 'x' ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
+        if (chosen !== active) { commit(); active = chosen; since = clock.now(); }
+    }
+    function initialize() {
+        document.querySelectorAll('[data-whatsapp-cta]').forEach(link => link.addEventListener('click', () => {
+            enqueue('whatsapp_clicked', {target_url: link.href, platform: 'whatsapp', placement: 'floating', context: link.dataset.context, language: link.dataset.language});
+            flush(true);
+        }));
+        document.querySelectorAll('[data-analytics-event]').forEach(element => {
+            try { enqueue(element.dataset.analyticsEvent, JSON.parse(element.dataset.analyticsMetadata || '{}')); }
+            catch { /* Invalid markup contributes no event. */ }
         });
-    }
-
-    function getCsrfToken() {
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute('content') : '';
-    }
-
-    function detectTemplate() {
-        const basePath = (document.querySelector('meta[name="analytics-base-path"]')?.content || '').replace(/\/$/, '');
-        const pathname = window.location.pathname;
-        const path = basePath && (pathname === basePath || pathname.startsWith(basePath + '/'))
-            ? pathname.slice(basePath.length) || '/'
-            : pathname;
-        if (path === '/' || path === '/fr' || path === '/de') return 'landing';
-        if (path.includes('/blog')) return 'blog';
-        if (path.includes('/resources') || path.includes('/ressources') || path.includes('/ressourcen')) return 'resource';
-        if (path.includes('/games') || path.includes('/jeux') || path.includes('/spiele')) return 'game';
-        if (path.includes('/pricing') || path.includes('/tarifs') || path.includes('/preise')) return 'pricing';
-        return 'general';
-    }
-
-    const pageTemplate = detectTemplate();
-    const currentPath = window.location.pathname;
-
-    let eventQueue = [];
-    const sentEventUuids = new Set();
-    const viewedSections = new Set();
-
-    // Map section IDs to element and intersection ratio
-    const observedSections = new Map();
-
-    function enqueueEvent(eventName, metadata = {}) {
-        const eventUuid = generateUuid();
-        const payload = {
-            event_uuid: eventUuid,
-            event_name: eventName,
-            page: window.location.href.substring(0, 500),
-            metadata: Object.assign({}, metadata, {
-                path: currentPath.substring(0, 200),
-                page_template: pageTemplate,
-            }),
-        };
-        eventQueue.push(payload);
-        if (eventQueue.length >= 10) {
-            flushQueue();
-        }
-    }
-
-    function setupPageEvents() {
-        document.querySelectorAll('[data-analytics-event]').forEach(function (element) {
-            const eventName = element.dataset.analyticsEvent;
-            if (!eventName) return;
-
-            let metadata = {};
-            try {
-                metadata = JSON.parse(element.dataset.analyticsMetadata || '{}');
-            } catch (e) {
-                metadata = {};
-            }
-
-            enqueueEvent(eventName, metadata);
-            element.removeAttribute('data-analytics-event');
-            element.removeAttribute('data-analytics-metadata');
-            flushQueue();
+        document.querySelectorAll('[data-section-id], #hero, #pricing, #curriculum, #tutor-bio, #blog-content, #resource-preview, #game-board').forEach(element => {
+            const id = element.dataset.sectionId || element.id;
+            if (/^[a-zA-Z0-9_-]{1,64}$/.test(id)) sections.set(id, {element, exposed: false});
         });
-    }
-
-    function flushQueue(isExit = false) {
-        if (eventQueue.length === 0) return;
-
-        // Take up to 20 events per batch (server bounds limit)
-        const batch = eventQueue.splice(0, 20);
-        const unsentBatch = batch.filter(evt => !sentEventUuids.has(evt.event_uuid));
-
-        if (unsentBatch.length === 0) return;
-
-        unsentBatch.forEach(evt => sentEventUuids.add(evt.event_uuid));
-
-        const csrfToken = getCsrfToken();
-        const payloadString = JSON.stringify({ events: unsentBatch, _token: csrfToken });
-        const endpoint = document.querySelector('meta[name="analytics-event-url"]')?.content;
-        if (!endpoint) return;
-
-        if (isExit && typeof navigator !== 'undefined' && navigator.sendBeacon) {
-            try {
-                const blob = new Blob([payloadString], { type: 'application/json' });
-                const success = navigator.sendBeacon(endpoint, blob);
-                if (success) return;
-            } catch (e) {
-                // Fallback to fetch keepalive
-            }
+        if (typeof IntersectionObserver !== 'undefined') {
+            const observer = new IntersectionObserver(evaluate, {threshold: [0, 0.25, 0.5, 0.75, 1]});
+            sections.forEach(entry => observer.observe(entry.element));
         }
-
-        fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: payloadString,
-            keepalive: isExit,
-        }).catch(function () {
-            // Silently handle network drops
-        });
+        evaluate(); flush();
+        setInterval(() => { if (visible && focused) { evaluate(); commit(); } flush(); }, 10000);
+        setInterval(() => { if (visible && focused) { enqueue('session_activity'); flush(); } }, 45000);
     }
-
-    // Dwell Time Tracking State
-    let activeDwellSection = null;
-    let accruedDwellSeconds = 0;
-    let dwellIntervalId = null;
-    let heartbeatIntervalId = null;
-
-    function commitCurrentDwell() {
-        if (activeDwellSection && accruedDwellSeconds > 0) {
-            enqueueEvent('section_dwell', {
-                section_id: activeDwellSection,
-                page_template: pageTemplate,
-                dwell_seconds: accruedDwellSeconds,
-            });
-            accruedDwellSeconds = 0;
-        }
-    }
-
-    function evaluateActiveSection() {
-        if (document.visibilityState === 'hidden') {
-            return null;
-        }
-
-        let highestRatio = -1;
-        let chosenSection = null;
-
-        // Deterministic Dwell Ownership:
-        // Highest intersectionRatio >= 0.5; break ties deterministically by DOM order
-        for (const [sectionId, info] of observedSections.entries()) {
-            if (info.ratio >= 0.5) {
-                if (info.ratio > highestRatio) {
-                    highestRatio = info.ratio;
-                    chosenSection = sectionId;
-                }
-            }
-        }
-
-        return chosenSection;
-    }
-
-    function tickDwell() {
-        if (document.visibilityState === 'hidden') return;
-
-        const currentActive = evaluateActiveSection();
-
-        if (currentActive !== activeDwellSection) {
-            // Section switched: commit previous dwell
-            commitCurrentDwell();
-            activeDwellSection = currentActive;
-            accruedDwellSeconds = currentActive ? 1 : 0;
-        } else if (activeDwellSection) {
-            accruedDwellSeconds += 1;
-            // Periodically commit accumulated dwell every 30 seconds
-            if (accruedDwellSeconds >= 30) {
-                commitCurrentDwell();
-            }
-        }
-    }
-
-    function startTimers() {
-        if (!dwellIntervalId) {
-            dwellIntervalId = setInterval(tickDwell, 1000);
-        }
-        if (!heartbeatIntervalId) {
-            // 45-second heartbeat interval (below the 60s activity threshold)
-            heartbeatIntervalId = setInterval(function () {
-                if (document.visibilityState === 'visible') {
-                    commitCurrentDwell();
-                    enqueueEvent('session_activity');
-                    flushQueue();
-                }
-            }, 45000);
-        }
-    }
-
-    function pauseTimers() {
-        if (dwellIntervalId) {
-            clearInterval(dwellIntervalId);
-            dwellIntervalId = null;
-        }
-        if (heartbeatIntervalId) {
-            clearInterval(heartbeatIntervalId);
-            heartbeatIntervalId = null;
-        }
-    }
-
-    function setupObservers() {
-        const trackedElements = document.querySelectorAll(
-            '[data-section-id], #hero, #pricing, #curriculum, #tutor-bio'
-        );
-
-        if (trackedElements.length === 0 || typeof IntersectionObserver === 'undefined') {
-            return;
-        }
-
-        const observer = new IntersectionObserver(
-            function (entries) {
-                entries.forEach(function (entry) {
-                    const el = entry.target;
-                    const sectionId = el.getAttribute('data-section-id') || el.id;
-                    if (!sectionId) return;
-
-                    const ratio = entry.intersectionRatio;
-                    observedSections.set(sectionId, {
-                        ratio: ratio,
-                        element: el,
-                    });
-
-                    // Section View Firing Rule: strictly once per pageview when >= 50% visible
-                    if (ratio >= 0.5 && !viewedSections.has(sectionId)) {
-                        viewedSections.add(sectionId);
-                        enqueueEvent('section_view', {
-                            section_id: sectionId,
-                            page_template: pageTemplate,
-                        });
-                    }
-                });
-            },
-            {
-                threshold: [0.0, 0.25, 0.5, 0.75, 1.0],
-            }
-        );
-
-        trackedElements.forEach(function (el) {
-            const sectionId = el.getAttribute('data-section-id') || el.id;
-            if (sectionId) {
-                observedSections.set(sectionId, { ratio: 0, element: el });
-                observer.observe(el);
-            }
-        });
-    }
-
-    // Lifecycle Listeners
-    function handleVisibilityChange() {
-        if (document.visibilityState === 'hidden') {
-            pauseTimers();
-            commitCurrentDwell();
-            flushQueue(true);
-        } else if (document.visibilityState === 'visible') {
-            startTimers();
-        }
-    }
-
-    function handlePageHide() {
-        pauseTimers();
-        commitCurrentDwell();
-        flushQueue(true);
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageHide);
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () {
-            setupPageEvents();
-            setupObservers();
-            startTimers();
-        });
-    } else {
-        setupPageEvents();
-        setupObservers();
-        startTimers();
-    }
+    document.addEventListener('visibilitychange', () => {
+        commit(); visible = document.visibilityState !== 'hidden';
+        if (!visible) active = null;
+        evaluate(); flush(!visible);
+    });
+    window.addEventListener('blur', () => { commit(); focused = false; active = null; evaluate(); flush(true); });
+    window.addEventListener('focus', () => { focused = true; since = clock.now(); evaluate(); });
+    window.addEventListener('pagehide', () => { commit(); active = null; visible = false; flush(true); });
+    window.addEventListener('pageshow', () => { visible = document.visibilityState !== 'hidden'; since = clock.now(); evaluate(); });
+    window.addEventListener('scroll', evaluate, {passive: true});
+    window.addEventListener('resize', evaluate);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, {once: true});
+    else initialize();
 })();

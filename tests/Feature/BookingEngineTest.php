@@ -15,10 +15,12 @@ use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Models\Contact;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
 
 class BookingEngineTest extends TestCase
 {
+    use HasPublishedShortForm;
     use RefreshDatabase;
 
     protected BookingService $bookingService;
@@ -36,6 +38,7 @@ class BookingEngineTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
         $this->bookingService = app(BookingService::class);
         $this->holdService = app(BookingHoldService::class);
         $this->rescheduleService = app(RescheduleService::class);
