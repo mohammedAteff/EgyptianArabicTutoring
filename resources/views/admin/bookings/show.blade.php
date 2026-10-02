@@ -50,7 +50,7 @@
 
     <!-- Dual Timezone Comparison Card -->
     @php
-        $cairoStart = $booking->business_start;
+        $cairoStart = $booking->start_at_utc->copy()->setTimezone($businessTz);
         $cairoEnd = $booking->end_at_utc->copy()->setTimezone($cairoStart->timezoneName);
         $studentStart = $booking->customer_start;
         $studentEnd = $booking->end_at_utc->copy()->setTimezone($studentStart->timezoneName);
@@ -83,7 +83,7 @@
                 </div>
                 <div class="text-2xl font-bold font-serif text-white">{{ $studentStart->format('l, F j, Y') }}</div>
                 <div class="text-lg font-semibold text-amber-300 mt-1">
-                    {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentStart) }} &ndash; {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentEnd) }}
+                    {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentStart, $studentStart->timezoneName) }} &ndash; {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentEnd, $studentEnd->timezoneName) }}
                 </div>
                 <div class="text-xs text-slate-400 mt-2">
                     Student Timezone: {{ $booking->customer_timezone }}

@@ -63,7 +63,7 @@
             this.finalPrice = parseFloat(preset.price).toFixed(2);
         }
 
-        // Calculate expiration date (Cairo local + validity days)
+        // Calculate expiration date (business local + validity days)
         const d = new Date();
         d.setDate(d.getDate() + preset.validity_days);
         this.expirationDate = d.toISOString().split('T')[0];
@@ -164,7 +164,7 @@
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div>
             <h2 class="text-lg font-bold font-serif text-slate-900">Canonical Pricing Presets (Abdallah Specification)</h2>
-            <p class="text-xs text-slate-500 mt-1">One-click standard coaching tiers with preset durations, standard rates, and Cairo midnight validity windows.</p>
+            <p class="text-xs text-slate-500 mt-1">One-click standard coaching tiers with preset durations, standard rates, and business-day validity windows.</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -248,7 +248,7 @@
                                class="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 font-mono">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Expiration Date (Cairo)</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Expiration Date (Business Time)</label>
                         <input type="date" name="expiration_date" x-model="expirationDate"
                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                     </div>
@@ -306,6 +306,9 @@
                                     <div>Final Price: <span class="font-bold text-slate-800">${{ $pkg->final_price }}</span></div>
                                     @if(bccomp($pkg->overpaid, '0.00', 2) > 0)<div>Overpaid: <span class="font-bold text-amber-700">${{ $pkg->overpaid }}</span></div>@else
                                     <div>Remaining Due: <span class="font-bold {{ bccomp($pkg->remaining_balance, '0.00', 2) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">${{ $pkg->remaining_balance }}</span></div>@endif
+                                    <div>Allocated: <strong>{{ $pkg->credit_summary['allocated_credits'] }}</strong></div>
+                                    <div>Consumed: <strong>{{ $pkg->credit_summary['consumed_credits'] }}</strong></div>
+                                    <div>Courtesy / adjustments: <strong>{{ $pkg->credit_summary['courtesy_credits'] }}</strong></div>
                                     <div>Available Credits: <span class="font-bold text-slate-800">{{ $pkg->available_credits }}</span></div>
                                 </div>
                             </div>
@@ -366,12 +369,9 @@
                                     <input type="text" name="amount_paid" placeholder="Amount (e.g. {{ $pkg->remaining_balance }})" required
                                            class="w-32 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none">
                                     <select name="payment_method" class="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                                        <option value="PayPal - Manual">PayPal</option>
-                                        <option value="InstaPay (Egypt)">InstaPay (Egypt)</option>
-                                        <option value="Bank Wire">Bank Wire</option>
-                                        <option value="Vodafone Cash">Vodafone Cash</option>
-                                        <option value="Wise">Wise</option>
-                                        <option value="Cash">Cash</option>
+                                        @foreach($paymentMethods as $method)
+                                            <option value="{{ $method->id }}" @selected($method->is_default)>{{ $method->name }}</option>
+                                        @endforeach
                                     </select>
                                     <input type="text" name="transaction_reference" placeholder="Ref / Trans ID"
                                            class="w-32 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
@@ -388,6 +388,12 @@
                             </div>
 
                             <!-- Refund Modal / Collapsible -->
+                            <details class="rounded-xl border border-slate-200 bg-white p-4">
+                                <summary class="cursor-pointer font-semibold text-slate-800">Credit ledger and courtesy history</summary>
+                                @forelse($pkg->ledgerEntries->sortByDesc('id') as $entry)
+                                    <div class="mt-3 border-t border-slate-100 pt-3 text-sm"><strong>{{ $entry->credit_change > 0 ? '+' : '' }}{{ $entry->credit_change }}</strong> · {{ str_replace('_', ' ', $entry->entry_type) }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($entry->created_at) }} · Staff #{{ $entry->created_by ?? 'System' }}<p class="mt-1 text-slate-500">{{ $entry->description }}</p></div>
+                                @empty <p class="mt-3 text-slate-500">No credit entries.</p> @endforelse
+                            </details>
                             <div x-show="refundPackageId === {{ $pkg->id }}" class="p-4 bg-rose-50 rounded-xl border border-rose-200 space-y-3">
                                 <div class="text-xs font-bold text-rose-900">Issue Refund for Payment #<span x-text="refundPaymentId"></span></div>
                                 <form action="{{ route('admin.students.refunds.store', ['student' => $selectedStudent->id, 'payment' => 0]) }}"

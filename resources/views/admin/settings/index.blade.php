@@ -235,10 +235,10 @@
             </div>
 
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Lesson Video Meeting Link</label>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Legacy Lesson Video Meeting Link</label>
                 <input type="url" name="video_meeting_url" value="{{ old('video_meeting_url', $settings['video_meeting_url']->value ?? '') }}" maxlength="2048" placeholder="https://…" autocomplete="url"
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                <p class="text-[11px] text-slate-400 mt-1">Use the private lesson-room URL. It appears in confirmed student sessions, booking confirmations, and calendar files. Leave blank until a real join link is available.</p>
+                <p class="text-[11px] text-slate-400 mt-1">Manage providers, rooms, and session assignments in Meeting Links. This legacy value is retained for historical compatibility; new sessions use assigned rooms.</p>
             </div>
 
             <div>
@@ -271,14 +271,14 @@
         <!-- 5. Social Proof Counters -->
         <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
             <h2 class="text-lg font-bold font-serif text-slate-900 pb-3 border-b border-slate-100">5. Social Proof Counters</h2>
-            <p class="text-xs text-slate-500">Configure public engagement counters displayed on the website banner. All calculations use Cairo calendar boundaries and flat caching.</p>
+            <p class="text-xs text-slate-500">Configure public engagement counters displayed on the website banner. All calculations use the configured business calendar boundaries and flat caching.</p>
 
             <!-- Counter 1: Collective Learning Hours -->
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-sm font-bold text-slate-800">Counter 1: Collective Learning Activity Hours</h3>
-                        <p class="text-xs text-slate-500">Aggregates completed lesson hours plus student study dwell time over completed Cairo days.</p>
+                        <p class="text-xs text-slate-500">Aggregates completed lesson hours plus student study dwell time over the business reporting window.</p>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" name="counters_learning_hours_public_enabled" value="1" class="sr-only peer"
@@ -373,7 +373,7 @@
             </div>
         </div>
 
-        <div class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">Telegram automation is managed in <a class="font-semibold text-amber-700 underline" href="{{ route('admin.telegram.index') }}">Telegram Bots</a>.</div>
+
         @php
             $inputClass = 'mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none';
             $cardClass = 'bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6';

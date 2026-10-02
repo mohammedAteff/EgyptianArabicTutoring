@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Reporting\Services\ReportService;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -23,7 +25,7 @@ class AnalyticsDashboardController extends Controller
     {
         $range = $request->query('range', '30d');
 
-        $cairoTz = 'Africa/Cairo';
+        $cairoTz = app(TimezoneService::class)->getBusinessTimezone();
         $now = CarbonImmutable::now($cairoTz);
         $startCairo = match ($range) {
             'today' => $now->startOfDay(),
@@ -47,6 +49,7 @@ class AnalyticsDashboardController extends Controller
     {
         [$range, $startCairo, $endCairo, $startDateUtc, $endDateUtc] = $this->resolveDateRange($request);
 
+        $traffic = app(ReportService::class)->getTrafficReport($startDateUtc, $endDateUtc)['summary'];
         $windowMinutes = (int) Setting::get('active_visitor_window', 5);
         $activeVisitorsCount = $this->analyticsService->getActiveVisitorsCount($windowMinutes);
         $activeVisitors = $this->analyticsService->getActiveVisitorsSummary($windowMinutes);
@@ -91,6 +94,7 @@ class AnalyticsDashboardController extends Controller
             'gameFunnel' => $gameFunnel,
             'acquisition' => $acquisition,
             'countryActivity' => $countryActivity,
+            'traffic' => $traffic,
             'siteBounceRate' => $siteBounceRate,
             'siteBounces' => $siteBounces,
             'siteSessions' => $siteSessions,
@@ -214,7 +218,11 @@ class AnalyticsDashboardController extends Controller
         $headers = ['Date', 'Metric Name', 'Dimension Key', 'Dimension Value', 'Count', 'Site Bounce Rate (%)'];
         $clicks = $this->analyticsService->whatsappReport($startCairo->setTimezone('UTC'), $endCairo->setTimezone('UTC'));
         $goals = $this->analyticsService->goalReport($startCairo->setTimezone('UTC'), $endCairo->setTimezone('UTC'));
-        $rowsGenerator = function () use ($metrics, $siteBounceRate, $clicks, $goals) {
+        $traffic = app(ReportService::class)->getTrafficReport($startCairo->utc(), $endCairo->utc())['summary'];
+        $rowsGenerator = function () use ($metrics, $siteBounceRate, $clicks, $goals, $traffic) {
+            foreach (['visitors', 'sessions', 'page_views'] as $metric) {
+                yield ['Period total', $metric, 'period', $metric === 'visitors' ? $traffic['visitors_basis'] : 'total', $traffic[$metric], $siteBounceRate.'%'];
+            }
             foreach ($metrics->sortBy('metric_date') as $row) {
                 yield [$row->metric_date, $row->metric_name, $row->dimension_key ?: '-', $row->dimension_value ?: '-', $row->count, $siteBounceRate.'%'];
             }

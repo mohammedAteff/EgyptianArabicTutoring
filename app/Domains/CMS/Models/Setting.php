@@ -20,6 +20,7 @@ class Setting extends Model
             }
             if ($setting->key === 'business_timezone') {
                 Cache::forget('active_business_tz');
+                DB::afterCommit(fn () => Cache::forget('active_business_tz'));
             }
         });
         static::deleted(function (self $setting): void {
@@ -29,6 +30,7 @@ class Setting extends Model
             }
             if ($setting->key === 'business_timezone') {
                 Cache::forget('active_business_tz');
+                DB::afterCommit(fn () => Cache::forget('active_business_tz'));
             }
         });
     }

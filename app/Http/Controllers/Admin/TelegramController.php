@@ -16,6 +16,7 @@ use App\Domains\Notifications\Services\TelegramReadService;
 use App\Domains\Notifications\Services\TelegramRuleCatalog;
 use App\Domains\Notifications\Services\TelegramTemplateService;
 use App\Domains\Students\Models\Student;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
@@ -44,7 +45,7 @@ class TelegramController extends Controller
             }
         }
         if (! empty($filters['date'])) {
-            $start = CarbonImmutable::parse($filters['date'], 'Africa/Cairo')->startOfDay();
+            $start = CarbonImmutable::parse($filters['date'], app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
             $history->where('created_at', '>=', $start->setTimezone('UTC'))->where('created_at', '<', $start->addDay()->setTimezone('UTC'));
         }
 
@@ -132,7 +133,7 @@ class TelegramController extends Controller
     public function run(TelegramRule $rule, TelegramReadService $read, TelegramAutomationService $automation): RedirectResponse
     {
         abort_unless($rule->mode === 'on_demand' && in_array($rule->trigger, ['business_digest', 'analytics_digest'], true), 422);
-        $automation->emit($rule->trigger, 'manual:'.Str::uuid(), ['date' => now('Africa/Cairo')->toDateString(), 'digest' => $rule->trigger === 'business_digest' ? $read->businessDigest($rule->sections ?? []) : $read->stats(1)], null, $rule->id);
+        $automation->emit($rule->trigger, 'manual:'.Str::uuid(), ['date' => now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(), 'digest' => $rule->trigger === 'business_digest' ? $read->businessDigest($rule->sections ?? []) : $read->stats(1)], null, $rule->id);
         $this->audit('run', $rule->id, ['trigger' => $rule->trigger]);
 
         return back()->with('success', 'On-demand report requested. Check delivery history for its outcome.');

@@ -10,6 +10,8 @@ use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Analytics\Services\FunnelProgressionService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Reporting\Services\ReportService;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -17,17 +19,17 @@ use Illuminate\Support\Facades\File;
 
 class AggregateDailyAnalyticsCommand extends Command
 {
-    protected $signature = 'analytics:aggregate-daily 
-                            {--date= : The target date in YYYY-MM-DD format (defaults to yesterday in Cairo)} 
+    protected $signature = 'analytics:aggregate-daily
+                            {--date= : The target date in YYYY-MM-DD format (defaults to yesterday in the business timezone)}
                             {--prune : Whether to execute raw event and export file retention cleanup}
                             {--rebuild-funnel : Rebuild visitor_funnel_progressions from retained events}';
 
-    protected $description = 'Pre-aggregate raw analytics events into daily_metrics in Africa/Cairo and manage retention';
+    protected $description = 'Pre-aggregate raw analytics events into daily_metrics in the configured business timezone and manage retention';
 
     public function handle(): int
     {
         $dateInput = $this->option('date');
-        $cairoTz = 'Africa/Cairo';
+        $cairoTz = app(TimezoneService::class)->getBusinessTimezone();
 
         $targetDate = $dateInput
             ? CarbonImmutable::parse($dateInput, $cairoTz)->toDateString()
@@ -73,11 +75,8 @@ class AggregateDailyAnalyticsCommand extends Command
             ->groupBy('event_name')
             ->pluck('count', 'event_name');
 
-        // 2. Unique Visitors within Cairo day
-        $uniqueVisitors = (clone $baseQuery)
-            ->whereNotNull('visitor_token')
-            ->distinct('visitor_token')
-            ->count('visitor_token');
+        $sessionTokens = app(ReportService::class)->nonBotSessionQuery()->with('visitor')->where('started_at', '>=', $startUtc)->where('started_at', '<', $endUtc)->get()->map(fn ($session) => $session->visitor?->visitor_token);
+        $uniqueVisitors = (clone $baseQuery)->pluck('visitor_token')->merge($sessionTokens)->filter()->unique()->count();
 
         // 3. Unique Sessions strictly attributed by session started_at in Cairo day (EDITS V1 §15)
         $uniqueSessions = VisitorSession::query()
@@ -203,11 +202,12 @@ class AggregateDailyAnalyticsCommand extends Command
             $dwellBySection,
             $viewsBySection
         ) {
-            DailyMetric::where('metric_date', $targetDate)->delete();
+            DailyMetric::where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())->where('metric_date', $targetDate)->delete();
 
             foreach ($eventCounts as $eventName => $count) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => $eventName,
                     'dimension_key' => '',
                     'dimension_value' => '',
@@ -217,6 +217,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             DailyMetric::create([
                 'metric_date' => $targetDate,
+                'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'metric_name' => 'unique_visitors',
                 'dimension_key' => '',
                 'dimension_value' => '',
@@ -225,6 +226,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             DailyMetric::create([
                 'metric_date' => $targetDate,
+                'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'metric_name' => 'sessions',
                 'dimension_key' => '',
                 'dimension_value' => '',
@@ -233,6 +235,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             DailyMetric::create([
                 'metric_date' => $targetDate,
+                'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'metric_name' => 'bounced_sessions',
                 'dimension_key' => '',
                 'dimension_value' => '',
@@ -241,6 +244,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             DailyMetric::create([
                 'metric_date' => $targetDate,
+                'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'metric_name' => 'bookings_created',
                 'dimension_key' => '',
                 'dimension_value' => '',
@@ -249,6 +253,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             DailyMetric::create([
                 'metric_date' => $targetDate,
+                'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'metric_name' => 'social_clicks',
                 'dimension_key' => '',
                 'dimension_value' => '',
@@ -257,6 +262,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             DailyMetric::create([
                 'metric_date' => $targetDate,
+                'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'metric_name' => 'resource_downloads',
                 'dimension_key' => '',
                 'dimension_value' => '',
@@ -266,6 +272,7 @@ class AggregateDailyAnalyticsCommand extends Command
             foreach ($pageViewsByPage as $row) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => 'page_views',
                     'dimension_key' => 'page',
                     'dimension_value' => substr($row->page, 0, 128),
@@ -276,6 +283,7 @@ class AggregateDailyAnalyticsCommand extends Command
             foreach ($visitorsBySource as $row) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => 'visitors_by_source',
                     'dimension_key' => 'source',
                     'dimension_value' => substr($row->utm_source, 0, 128),
@@ -286,6 +294,7 @@ class AggregateDailyAnalyticsCommand extends Command
             foreach ($sessionsBySource as $row) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => 'sessions_by_source',
                     'dimension_key' => 'source',
                     'dimension_value' => substr($row->utm_source, 0, 128),
@@ -296,6 +305,7 @@ class AggregateDailyAnalyticsCommand extends Command
             foreach ($pageViewsBySource as $row) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => 'page_views_by_source',
                     'dimension_key' => 'source',
                     'dimension_value' => substr($row->utm_source, 0, 128),
@@ -306,6 +316,7 @@ class AggregateDailyAnalyticsCommand extends Command
             foreach ($dwellBySection as $secId => $dwellSecs) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => 'section_dwell_seconds',
                     'dimension_key' => 'section',
                     'dimension_value' => substr($secId, 0, 128),
@@ -316,6 +327,7 @@ class AggregateDailyAnalyticsCommand extends Command
             foreach ($viewsBySection as $secId => $viewsCount) {
                 DailyMetric::create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'metric_name' => 'section_views',
                     'dimension_key' => 'section',
                     'dimension_value' => substr($secId, 0, 128),
@@ -376,7 +388,7 @@ class AggregateDailyAnalyticsCommand extends Command
         // Retention Pruning (EDITS V1 §9, §13-15: whole Cairo calendar days, verified durable rollups)
         if ($this->option('prune') || ! $dateInput) {
             $retentionDays = (int) Setting::get('analytics_retention_days', 180);
-            $pruneCutoffDateCairo = CarbonImmutable::now('Africa/Cairo')->subDays($retentionDays)->startOfDay();
+            $pruneCutoffDateCairo = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->subDays($retentionDays)->startOfDay();
             $pruneCutoffUtc = $pruneCutoffDateCairo->setTimezone('UTC');
 
             $oldestEvent = AnalyticsEvent::where('created_at', '<', $pruneCutoffUtc)->min('created_at');
@@ -388,7 +400,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
             if ($oldestEvent || $oldestSession) {
                 $oldestTimestamp = min(array_filter([$oldestEvent, $oldestSession]));
-                $currDay = CarbonImmutable::parse($oldestTimestamp)->setTimezone('Africa/Cairo')->startOfDay();
+                $currDay = CarbonImmutable::parse($oldestTimestamp)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
                 $latestPrunableDay = $pruneCutoffDateCairo->subDay()->startOfDay();
 
                 while ($currDay->lte($latestPrunableDay)) {
@@ -403,7 +415,7 @@ class AggregateDailyAnalyticsCommand extends Command
                     $hasCountryRollup = DailyCountryMetric::where('metric_date', $dayStr)->exists();
 
                     if (! $hasRollup || ! $hasCountryRollup) {
-                        $this->warn("Skipping retention pruning for Cairo date {$dayStr}: durable daily or country rollup is missing.");
+                        $this->warn("Skipping retention pruning for business date {$dayStr}: durable daily or country rollup is missing.");
                         $currDay = $currDay->addDay();
 
                         continue;
@@ -449,20 +461,20 @@ class AggregateDailyAnalyticsCommand extends Command
             // Bounded Telemetry & Auth Pruning (V4 Phase 1 §5)
             $cutoff90Days = CarbonImmutable::now('UTC')->subDays(90);
             $prunedRawEvents = 0;
-            $ninetyDayCutoffCairo = CarbonImmutable::now('Africa/Cairo')->subDays(90)->startOfDay();
+            $ninetyDayCutoffCairo = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->subDays(90)->startOfDay();
             $oldestRemainingEvent = AnalyticsEvent::query()
                 ->where('created_at', '<', $ninetyDayCutoffCairo->setTimezone('UTC'))
                 ->min('created_at');
             if ($oldestRemainingEvent) {
-                $pruneDay = CarbonImmutable::parse($oldestRemainingEvent, 'UTC')->setTimezone('Africa/Cairo')->startOfDay();
+                $pruneDay = CarbonImmutable::parse($oldestRemainingEvent, 'UTC')->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
                 while ($pruneDay->lt($ninetyDayCutoffCairo)) {
                     $dayStartUtc = $pruneDay->setTimezone('UTC');
                     $dayEndUtc = $pruneDay->addDay()->setTimezone('UTC');
-                    $hasRollup = DailyMetric::query()
+                    $hasRollup = DailyMetric::query()->where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())
                         ->where('metric_date', $pruneDay->toDateString())
                         ->where('metric_name', 'unique_visitors')
                         ->exists();
-                    $hasCountryRollup = DailyCountryMetric::query()
+                    $hasCountryRollup = DailyCountryMetric::query()->where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())
                         ->where('metric_date', $pruneDay->toDateString())
                         ->exists();
 
@@ -477,7 +489,7 @@ class AggregateDailyAnalyticsCommand extends Command
                             $prunedRawEvents += $deletedChunk;
                         } while ($deletedChunk === 1000);
                     } else {
-                        $this->warn("Skipping 90-day event pruning for Cairo date {$pruneDay->toDateString()}: durable daily or country rollup is missing.");
+                        $this->warn("Skipping 90-day event pruning for business date {$pruneDay->toDateString()}: durable daily or country rollup is missing.");
                     }
 
                     $pruneDay = $pruneDay->addDay();

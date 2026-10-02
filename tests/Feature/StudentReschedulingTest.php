@@ -6,7 +6,10 @@ use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\MeetingProvider;
+use App\Domains\Booking\Models\MeetingRoom;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Students\Models\Student;
@@ -175,10 +178,13 @@ class StudentReschedulingTest extends TestCase
         $this->assertSame(1, DB::table('session_reschedules')->where('booking_id', $booking->id)->count());
     }
 
-    public function test_student_dashboard_shows_tutor_and_only_a_configured_https_meeting_link(): void
+    public function test_student_dashboard_shows_tutor_and_only_an_assigned_https_meeting_link_in_the_reveal_window(): void
     {
-        [$student] = $this->prepareBooking();
-        Setting::set('video_meeting_url', 'https://meet.example.test/arabic-room', 'booking', true);
+        [$student, $booking] = $this->prepareBooking();
+        $provider = MeetingProvider::where('is_default', true)->firstOrFail();
+        $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'QA meeting', 'url' => 'https://meet.example.test/arabic-room', 'url_hash' => hash('sha256', 'https://meet.example.test/arabic-room')]);
+        app(MeetingLinkService::class)->assign($booking, roomId: $room->id);
+        $this->travelTo($booking->start_at_utc->copy()->subMinutes(10));
 
         $response = $this->actingAs($student, 'student')
             ->withSession($this->studentSession($student))
@@ -189,12 +195,12 @@ class StudentReschedulingTest extends TestCase
             ->assertSee('href="https://meet.example.test/arabic-room"', false)
             ->assertSeeText('Join lesson with Abdallah');
 
-        Setting::set('video_meeting_url', 'javascript:alert(1)', 'booking', true);
+        $booking->update(['meeting_url_snapshot' => 'javascript:alert(1)']);
         $this->actingAs($student, 'student')
             ->withSession($this->studentSession($student))
             ->get(route('student.dashboard'))
             ->assertDontSee('href="javascript:alert(1)"', false)
-            ->assertSeeText('Your tutor will share the private meeting link before the lesson.');
+            ->assertSeeText('link opens 15 minutes before the lesson.');
     }
 
     /** @return array{Student, Booking, SessionType} */

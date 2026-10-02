@@ -8,6 +8,8 @@ use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\MeetingProvider;
+use App\Domains\Booking\Models\MeetingRoom;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
@@ -22,6 +24,7 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use Database\Factories\AdministratorFactory;
 use Database\Factories\TelegramBotFactory;
 use Database\Factories\TelegramDestinationFactory;
 use Database\Factories\TelegramRuleFactory;
@@ -789,6 +792,44 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             $bot->delete();
             Setting::set('telegram.automation_enabled', $previous);
         }
+    }
+
+    public function test_concurrent_meeting_assignment_cannot_share_an_overlapping_room(): void
+    {
+        $provider = MeetingProvider::where('is_default', true)->firstOrFail();
+        $url = 'https://example.org/race-'.Str::uuid();
+        $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'Race room', 'url' => $url, 'url_hash' => hash('sha256', $url)]);
+        $contact = Contact::create(['email' => 'room-race-'.Str::uuid().'@example.org', 'name' => 'Room race QA']);
+        $bookings = [];
+        try {
+            $start = CarbonImmutable::now('UTC')->addDays(5);
+            for ($i = 0; $i < 2; $i++) {
+                $instant = $start->addMinutes($i * 30);
+                $bookings[] = Booking::create(app(TimezoneService::class)->createBookingSnapshot($instant, $instant->addHour()) + ['session_type_id' => $this->sessionType->id, 'contact_id' => $contact->id, 'status' => 'confirmed', 'idempotency_key' => (string) Str::uuid(), 'confirmation_token' => Str::random(64)]);
+            }
+            $results = $this->runConcurrentWorkers(array_map(fn (Booking $booking): array => ['action' => 'assign_meeting_room', 'booking_id' => $booking->id, 'room_id' => $room->id], $bookings));
+            $this->assertSame([0, 2], collect($results)->pluck('exit_code')->sort()->values()->all(), json_encode($results));
+            $this->assertSame(1, Booking::where('meeting_room_id', $room->id)->count());
+        } finally {
+            DB::table('bookings')->whereIn('id', array_map(fn (Booking $booking): int => $booking->id, $bookings))->delete();
+            $room->delete();
+            $contact->forceDelete();
+        }
+    }
+
+    public function test_concurrent_super_administrators_cannot_suspend_each_other_and_leave_both_inactive(): void
+    {
+        $first = AdministratorFactory::new()->create(['role' => 'super_admin']);
+        $second = AdministratorFactory::new()->create(['role' => 'super_admin']);
+        $this->raceAdministratorIds = [...$this->raceAdministratorIds, $first->id, $second->id];
+        $results = $this->runConcurrentWorkers([
+            ['action' => 'suspend_staff', 'actor_id' => $first->id, 'target_id' => $second->id],
+            ['action' => 'suspend_staff', 'actor_id' => $second->id, 'target_id' => $first->id],
+        ]);
+        $codes = array_column($results, 'exit_code');
+        sort($codes);
+        $this->assertSame([0, 2], $codes);
+        $this->assertSame(1, Administrator::whereIn('id', [$first->id, $second->id])->whereNull('suspended_at')->count());
     }
 
     private function runConcurrentWorkers(array $payloads): array

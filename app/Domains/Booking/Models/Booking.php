@@ -21,6 +21,7 @@ class Booking extends Model
     protected $table = 'bookings';
 
     protected $fillable = [
+        'meeting_room_id', 'meeting_url_snapshot', 'meeting_provider_snapshot', 'meeting_assigned_at', 'meeting_assigned_by',
         'contact_id',
         'student_id',
         'admin_reconfirmation_needed',

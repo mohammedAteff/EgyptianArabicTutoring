@@ -13,6 +13,9 @@ use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest as ResourceRequestModel;
 use App\Domains\Resources\Services\EmailQualityService;
+use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentEmailService;
+use App\Domains\Students\Services\StudentIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -74,8 +77,20 @@ class ResourceController extends Controller
             'isFallback' => $resolved['is_fallback'],
             'isStale' => $resolved['is_stale'],
             'entityLocales' => $resource->getAvailableLocales(),
+            'resourceStudent' => $this->authenticatedStudent(request()),
             'title' => ($resolved['translation']?->title ?? $resource->title).' — Free Egyptian Arabic Resource',
         ]);
+    }
+
+    private function authenticatedStudent(Request $request): ?Student
+    {
+        $id = Auth::guard('student')->id();
+        $expires = $request->session()->get('student_auth_expires_at');
+        if (! $id || (int) $request->session()->get('student_id') !== (int) $id || ! is_string($expires) || now('UTC')->gte($expires)) {
+            return null;
+        }
+
+        return Student::verified()->whereNull('suspended_at')->find($id);
     }
 
     public function preview(Request $request, string $slug): View
@@ -190,14 +205,19 @@ class ResourceController extends Controller
         ];
 
         $result = DB::transaction(function () use ($resource, $request, $visitorToken, $sessionToken, $attribution) {
+            $student = $this->authenticatedStudent($request);
+            $submittedEmail = app(StudentIdentityService::class)->normalizeEmail((string) $request->email);
+            $trustedEmail = $student && app(StudentEmailService::class)->trusted($student, $submittedEmail);
             $contact = app(ContactService::class)->resolveOrCreate(
-                email: $request->email,
+                email: $trustedEmail ? $student->email : $submittedEmail,
                 name: $request->name,
                 phone: null,
                 attribution: $attribution
             );
 
             $resourceRequest = ResourceRequestModel::create([
+                'student_id' => $student?->id,
+                'submitted_email' => $submittedEmail,
                 'resource_id' => $resource->id,
                 'contact_id' => $contact->id,
                 'visitor_token' => $visitorToken,

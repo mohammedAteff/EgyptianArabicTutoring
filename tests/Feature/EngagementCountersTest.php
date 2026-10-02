@@ -202,12 +202,12 @@ class EngagementCountersTest extends TestCase
         $this->assertSame(3.0, $activity['study_dwell_hours']);
     }
 
-    public function test_public_counters_payload_uses_the_cairo_day_cache(): void
+    public function test_public_counters_payload_uses_the_business_timezone_day_cache(): void
     {
         Setting::set('counters.live_users.public_enabled', true, 'counters', true);
         Setting::set('counters.live_users.template', '{count} online now', 'counters', true);
 
-        $cacheKey = 'counters.public.'.now('Africa/Cairo')->toDateString();
+        $cacheKey = EngagementCounterService::cacheKey();
         Cache::forget($cacheKey);
 
         $payload = $this->counterService->getCachedPublicPayload();

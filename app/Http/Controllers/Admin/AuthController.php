@@ -48,7 +48,7 @@ class AuthController extends Controller
 
         $remember = $request->boolean('remember');
 
-        if (! Auth::guard('web')->attempt($credentials, $remember)) {
+        if (! Auth::guard('web')->attempt([...$credentials, 'suspended_at' => null], $remember)) {
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([

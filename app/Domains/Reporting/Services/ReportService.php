@@ -26,15 +26,15 @@ class ReportService
     {
         $current = $this->resolvePeriodTrafficMetrics($start, $end, $source);
 
-        $startCairoStr = CarbonImmutable::parse($start)->setTimezone('Africa/Cairo')->toDateString();
-        $endCairoStr = CarbonImmutable::parse($end)->setTimezone('Africa/Cairo')->toDateString();
+        $startCairoStr = CarbonImmutable::parse($start)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->toDateString();
+        $endCairoStr = CarbonImmutable::parse($end)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->toDateString();
 
         $dateCount = max(1, (new \DateTimeImmutable($startCairoStr))->diff(new \DateTimeImmutable($endCairoStr))->days + 1);
         $prevStartDateStr = (new \DateTimeImmutable($startCairoStr))->sub(new \DateInterval("P{$dateCount}D"))->format('Y-m-d');
         $prevEndDateStr = (new \DateTimeImmutable($startCairoStr))->sub(new \DateInterval('P1D'))->format('Y-m-d');
 
-        $prevStart = CarbonImmutable::parse($prevStartDateStr, 'Africa/Cairo')->startOfDay()->setTimezone('UTC');
-        $prevEnd = CarbonImmutable::parse($prevEndDateStr, 'Africa/Cairo')->endOfDay()->setTimezone('UTC');
+        $prevStart = CarbonImmutable::parse($prevStartDateStr, app(TimezoneService::class)->getBusinessTimezone())->startOfDay()->setTimezone('UTC');
+        $prevEnd = CarbonImmutable::parse($prevEndDateStr, app(TimezoneService::class)->getBusinessTimezone())->endOfDay()->setTimezone('UTC');
 
         $prev = $this->resolvePeriodTrafficMetrics($prevStart, $prevEnd, $source);
 
@@ -88,7 +88,7 @@ class ReportService
             $query->where('utm_source', $source);
         }
 
-        $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
+        $dateExpr = $this->getBusinessDateExpression('created_at', $start, $end);
 
         // Daily traffic totals grouped strictly by Cairo calendar date (one row per date)
         $dailyTotals = (clone $query)
@@ -99,10 +99,10 @@ class ReportService
             )
             ->groupBy('report_date')
             ->orderByDesc('report_date')
-            ->get();
+            ->toBase()->get();
 
         // Sessions strictly attributed by session started_at in Cairo day (matching daily_metrics.sessions)
-        $sessionDateExpr = $this->getCairoDateExpression('started_at', $start, $end);
+        $sessionDateExpr = $this->getBusinessDateExpression('started_at', $start, $end);
         $sessionsByDate = $this->nonBotSessionQuery()
             ->whereBetween('started_at', [$start, $end])
             ->when($source, fn ($q) => $q->where('utm_source', $source))
@@ -122,8 +122,21 @@ class ReportService
             )
             ->groupBy('report_date', 'source_name')
             ->orderByDesc('total_events')
-            ->get()
+            ->toBase()->get()
             ->groupBy('report_date');
+
+        $sessionQuery = $this->nonBotSessionQuery()->with('visitor')->whereBetween('started_at', [$start, $end])->when($source, fn ($q) => $q->where('utm_source', $source));
+        $sessionRows = $sessionQuery->get();
+        foreach ($sessionsByDate as $date => $count) {
+            if (! $dailyTotals->firstWhere('report_date', (string) $date)) {
+                $dailyTotals->push((object) ['report_date' => (string) $date, 'visitors' => 0, 'page_views' => 0]);
+            }
+        }
+        $eventTokens = (clone $query)->get(['visitor_token', 'created_at']);
+        foreach ($dailyTotals as $row) {
+            $tokens = $eventTokens->filter(fn ($event) => $event->created_at->copy()->setTimezone($this->timezoneService->getBusinessTimezone())->toDateString() === $row->report_date)->pluck('visitor_token');
+            $row->visitors = $tokens->merge($sessionRows->filter(fn ($session) => $session->started_at->copy()->setTimezone($this->timezoneService->getBusinessTimezone())->toDateString() === $row->report_date)->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique()->count();
+        }
 
         $dailyRows = $dailyTotals->map(function ($row) use ($sourcesByDate, $sessionsByDate) {
             $top = $sourcesByDate->get($row->report_date)?->first();
@@ -134,10 +147,10 @@ class ReportService
         });
 
         // Merge with durable daily_metrics rollups for dates where raw events were pruned (EDITS V1 §9, §13-15)
-        $startCairoDate = CarbonImmutable::parse($start)->setTimezone('Africa/Cairo')->toDateString();
-        $endCairoDate = CarbonImmutable::parse($end)->setTimezone('Africa/Cairo')->toDateString();
+        $startCairoDate = CarbonImmutable::parse($start)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->toDateString();
+        $endCairoDate = CarbonImmutable::parse($end)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->toDateString();
 
-        $historicalMetrics = DailyMetric::whereBetween('metric_date', [$startCairoDate, $endCairoDate])
+        $historicalMetrics = DailyMetric::where('reporting_timezone', $this->timezoneService->getBusinessTimezone())->whereBetween('metric_date', [$startCairoDate, $endCairoDate])
             ->get()
             ->groupBy(function ($metric) {
                 return $metric->metric_date instanceof CarbonInterface
@@ -148,19 +161,23 @@ class ReportService
         $hasPrunedDates = false;
         foreach ($historicalMetrics as $mDate => $metricsForDate) {
             $mDateStr = (string) $mDate;
+            $day = CarbonImmutable::parse($mDateStr, $this->timezoneService->getBusinessTimezone());
+            if ($start->greaterThan($day->startOfDay()->utc()) || $end->lessThan($day->endOfDay()->utc()->startOfSecond())) {
+                continue;
+            }
             $existingRow = $dailyRows->firstWhere('report_date', $mDateStr);
 
             $visitorsMetric = $source
                 ? (int) $metricsForDate->where('metric_name', 'visitors_by_source')->where('dimension_value', $source)->sum('count')
-                : (int) $metricsForDate->where('metric_name', 'unique_visitors')->sum('count');
+                : (int) $metricsForDate->where('dimension_key', '')->where('metric_name', 'unique_visitors')->sum('count');
 
             $sessionsMetric = $source
                 ? (int) $metricsForDate->where('metric_name', 'sessions_by_source')->where('dimension_value', $source)->sum('count')
-                : (int) $metricsForDate->where('metric_name', 'sessions')->sum('count');
+                : (int) $metricsForDate->where('dimension_key', '')->where('metric_name', 'sessions')->sum('count');
 
             $pvMetric = $source
                 ? (int) $metricsForDate->where('metric_name', 'page_views_by_source')->where('dimension_value', $source)->sum('count')
-                : (int) ($metricsForDate->where('metric_name', 'page_view')->sum('count') ?: $metricsForDate->where('metric_name', 'page_views')->sum('count'));
+                : (int) ($metricsForDate->where('dimension_key', '')->where('metric_name', 'page_view')->sum('count') ?: $metricsForDate->where('metric_name', 'page_views')->sum('count'));
 
             $topSourceRow = $metricsForDate->where('metric_name', 'visitors_by_source')->sortByDesc('count')->first();
             $topSource = $source ?: ($topSourceRow?->dimension_value ?: 'direct');
@@ -177,9 +194,9 @@ class ReportService
                 $hasPrunedDates = true;
 
                 if ($existingRow) {
-                    $existingRow->visitors = $visitorsMetric;
-                    $existingRow->sessions = $sessionsMetric;
-                    $existingRow->page_views = $pvMetric;
+                    $existingRow->visitors = max($existingRow->visitors, $visitorsMetric);
+                    $existingRow->sessions = max($existingRow->sessions, $sessionsMetric);
+                    $existingRow->page_views = max($existingRow->page_views, $pvMetric);
                     $existingRow->top_source = $topSource;
                 } else {
                     $dailyRows->push((object) [
@@ -203,7 +220,7 @@ class ReportService
 
         if (! $hasPrunedDates && ($rawEventsExist || $rawSessionsExist || $dailyRows->isEmpty())) {
             // Raw events retain exact distinct visitor identity across the full queried period
-            $totalVisitors = (clone $query)->whereNotNull('visitor_token')->distinct('visitor_token')->count('visitor_token');
+            $totalVisitors = $eventTokens->pluck('visitor_token')->merge($sessionRows->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique()->count();
             $totalSessions = $this->nonBotSessionQuery()
                 ->whereBetween('started_at', [$start, $end])
                 ->when($source, fn ($q) => $q->where('utm_source', $source))
@@ -323,7 +340,7 @@ class ReportService
             'outbound_link_clicked',
         ];
 
-        $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
+        $dateExpr = $this->getBusinessDateExpression('created_at', $start, $end);
 
         $platformExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.platform')), ''), CASE event_name WHEN 'whatsapp_clicked' THEN 'whatsapp' WHEN 'telegram_clicked' THEN 'telegram' WHEN 'social_link_clicked' THEN 'social channel' ELSE 'outbound link' END)";
         $placementExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.placement')), ''), 'unknown')";
@@ -369,7 +386,7 @@ class ReportService
             $query->where('event_name', $eventName);
         }
 
-        $dateExpr = $this->getCairoDateExpression('created_at', $start, $end);
+        $dateExpr = $this->getBusinessDateExpression('created_at', $start, $end);
 
         $rows = (clone $query)
             ->select(
@@ -417,7 +434,7 @@ class ReportService
                 DB::raw('COALESCE(utm_source, "direct") as utm_source'),
                 'created_at as touch_time'
             )
-            ->get();
+            ->toBase()->get();
 
         // 2. Discover marketing touches in [$start, $end] via MarketingTouch
         $touchesQuery = MarketingTouch::query()
@@ -504,7 +521,7 @@ class ReportService
                 DB::raw('COUNT(CASE WHEN status IN ("confirmed", "completed") THEN 1 END) as confirmed_created')
             )
             ->groupBy('campaign', DB::raw('COALESCE(content, "(not set)")'), DB::raw('COALESCE(source, "direct")'))
-            ->get();
+            ->toBase()->get();
 
         $createdInPeriod = [];
         $confirmedCreatedInPeriod = [];
@@ -651,7 +668,8 @@ class ReportService
      * Build the canonical non-bot event scope, including defensive checks
      * against malformed events linked to bot visitors or sessions.
      */
-    protected function nonBotEventQuery(): Builder
+    /** @return Builder<AnalyticsEvent> */
+    public function nonBotEventQuery(): Builder
     {
         return AnalyticsEvent::query()
             ->where('is_bot', false)
@@ -679,7 +697,8 @@ class ReportService
     /**
      * Build the canonical non-bot session scope.
      */
-    protected function nonBotSessionQuery(): Builder
+    /** @return Builder<VisitorSession> */
+    public function nonBotSessionQuery(): Builder
     {
         return VisitorSession::query()
             ->where('is_bot', false)
@@ -691,7 +710,8 @@ class ReportService
     /**
      * Exclude bookings that can be traced to a visitor flagged as a bot.
      */
-    protected function nonBotBookingQuery(): Builder
+    /** @return Builder<Booking> */
+    public function nonBotBookingQuery(): Builder
     {
         return Booking::query()
             ->whereNotExists(function ($query): void {
@@ -704,9 +724,14 @@ class ReportService
 
     public function getCairoDateExpression(string $column = 'created_at', ?CarbonInterface $start = null, ?CarbonInterface $end = null): string
     {
+        return $this->getBusinessDateExpression($column, $start, $end);
+    }
+
+    public function getBusinessDateExpression(string $column = 'created_at', ?CarbonInterface $start = null, ?CarbonInterface $end = null): string
+    {
         if ($start && $end) {
-            $startCairo = CarbonImmutable::parse($start)->setTimezone('Africa/Cairo')->startOfDay();
-            $endCairo = CarbonImmutable::parse($end)->setTimezone('Africa/Cairo')->startOfDay();
+            $startCairo = CarbonImmutable::parse($start)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
+            $endCairo = CarbonImmutable::parse($end)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
 
             $diff = $startCairo->diffInDays($endCairo);
             if ($diff >= 0 && $diff <= 1096) {
@@ -728,9 +753,9 @@ class ReportService
         }
 
         // For long ranges >3 years: partition into exact DST transition intervals (EDITS V1 §13-15)
-        $tz = new \DateTimeZone('Africa/Cairo');
-        $startTs = $start ? CarbonImmutable::parse($start)->getTimestamp() : CarbonImmutable::now('Africa/Cairo')->subDays(30)->getTimestamp();
-        $endTs = $end ? CarbonImmutable::parse($end)->getTimestamp() : CarbonImmutable::now('Africa/Cairo')->getTimestamp();
+        $tz = new \DateTimeZone(app(TimezoneService::class)->getBusinessTimezone());
+        $startTs = $start ? CarbonImmutable::parse($start)->getTimestamp() : CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->subDays(30)->getTimestamp();
+        $endTs = $end ? CarbonImmutable::parse($end)->getTimestamp() : CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->getTimestamp();
         $transitions = $tz->getTransitions($startTs, $endTs);
 
         if (! empty($transitions) && count($transitions) > 1) {
@@ -740,12 +765,12 @@ class ReportService
 
             for ($i = 0; $i < $count; $i++) {
                 $t = $transitions[$i];
-                $offsetHours = (int) ($t['offset'] / 3600);
-                $offsetStr = sprintf('%+03d:00', $offsetHours);
+                $offsetSeconds = (int) $t['offset'];
+                $offsetStr = sprintf('%s%02d:%02d', $offsetSeconds < 0 ? '-' : '+', intdiv(abs($offsetSeconds), 3600), intdiv(abs($offsetSeconds) % 3600, 60));
                 $fromUtc = date('Y-m-d H:i:s', $t['ts']);
 
                 $sqlExpr = $isSqlite
-                    ? "DATE(datetime({$column}, '{$offsetHours} hours'))"
+                    ? "DATE(datetime({$column}, '{$offsetSeconds} seconds'))"
                     : "DATE(CONVERT_TZ({$column}, '+00:00', '{$offsetStr}'))";
 
                 if (isset($transitions[$i + 1])) {
@@ -756,10 +781,10 @@ class ReportService
                 }
             }
 
-            $firstHours = (int) ($transitions[0]['offset'] / 3600);
-            $firstOffset = sprintf('%+03d:00', $firstHours);
+            $firstSeconds = (int) $transitions[0]['offset'];
+            $firstOffset = sprintf('%s%02d:%02d', $firstSeconds < 0 ? '-' : '+', intdiv(abs($firstSeconds), 3600), intdiv(abs($firstSeconds) % 3600, 60));
             $firstSqlExpr = $isSqlite
-                ? "DATE(datetime({$column}, '{$firstHours} hours'))"
+                ? "DATE(datetime({$column}, '{$firstSeconds} seconds'))"
                 : "DATE(CONVERT_TZ({$column}, '+00:00', '{$firstOffset}'))";
             $firstFrom = date('Y-m-d H:i:s', $transitions[0]['ts']);
             array_unshift($cases, "WHEN {$column} < '{$firstFrom}' THEN {$firstSqlExpr}");
@@ -767,14 +792,13 @@ class ReportService
             return '(CASE '.implode(' ', $cases).' ELSE NULL END)';
         }
 
-        $ref = $start ?? CarbonImmutable::now('Africa/Cairo');
+        $ref = $start ?? CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone());
         $refDateTime = new \DateTime($ref->toIso8601String(), new \DateTimeZone('UTC'));
-        $offsetSeconds = (new \DateTimeZone('Africa/Cairo'))->getOffset($refDateTime);
-        $hours = intdiv($offsetSeconds, 3600);
-        $offset = sprintf('%+03d:00', $hours);
+        $offsetSeconds = (new \DateTimeZone(app(TimezoneService::class)->getBusinessTimezone()))->getOffset($refDateTime);
+        $offset = sprintf('%s%02d:%02d', $offsetSeconds < 0 ? '-' : '+', intdiv(abs($offsetSeconds), 3600), intdiv(abs($offsetSeconds) % 3600, 60));
 
         if (DB::connection()->getDriverName() === 'sqlite') {
-            return "DATE(datetime({$column}, '{$hours} hours'))";
+            return "DATE(datetime({$column}, '{$offsetSeconds} seconds'))";
         }
 
         return "DATE(CONVERT_TZ({$column}, '+00:00', '{$offset}'))";

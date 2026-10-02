@@ -9,7 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $suspended_at
+ */
 class Administrator extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes;
@@ -17,6 +21,7 @@ class Administrator extends Authenticatable
     protected $table = 'administrators';
 
     protected $fillable = [
+        'suspended_at', 'suspended_by', 'suspension_reason',
         'name',
         'email',
         'password',
@@ -33,6 +38,7 @@ class Administrator extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'suspended_at' => 'datetime',
         ];
     }
 

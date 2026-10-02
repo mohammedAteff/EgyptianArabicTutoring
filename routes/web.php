@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AccountSuspensionController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\AnalyticsDashboardController;
 use App\Http\Controllers\Admin\AuthController;
@@ -10,8 +11,10 @@ use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FormController;
 use App\Http\Controllers\Admin\MediaController;
+use App\Http\Controllers\Admin\MeetingLinkController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\PasswordResetController;
+use App\Http\Controllers\Admin\PaymentMethodController;
 use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ResourceCategoryController;
@@ -34,6 +37,7 @@ use App\Http\Controllers\Student\AuthController as StudentAuthController;
 use App\Http\Controllers\Student\BookingController as StudentBookingController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Student\FormController as StudentFormController;
+use App\Http\Controllers\Student\ProfileController;
 use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
@@ -59,6 +63,9 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
     Route::middleware('student.auth')->group(function () {
+        Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
+        Route::post('/profile/emails', [ProfileController::class, 'requestVerification'])->middleware('throttle:6,1')->name('profile.email.request');
+        Route::get('/profile/emails/verify/{token}', [ProfileController::class, 'verify'])->middleware('throttle:10,1')->name('profile.email.verify');
         Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
         Route::get('/forms/{slug}', [StudentFormController::class, 'show'])->name('forms.show');
         Route::post('/forms/{slug}', [StudentFormController::class, 'save'])->middleware('throttle:student-form-save')->name('forms.save');
@@ -204,7 +211,20 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     | Authenticated Admin Operations
     |--------------------------------------------------------------------------
     */
-    Route::middleware('auth:web')->group(function () {
+    Route::middleware(['auth:web', 'account.active'])->group(function () {
+        Route::post('/students/{student}/packages/{package}/validity', [StudentBillingController::class, 'extendValidity'])->middleware('role:super_admin,admin')->name('students.packages.validity');
+        Route::post('/accounts/{type}/{account}/suspension', [AccountSuspensionController::class, 'update'])->middleware('role:super_admin')->name('accounts.suspension');
+        Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->middleware('role:super_admin,admin')->name('payment-methods.index');
+        Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->middleware('role:super_admin,admin')->name('payment-methods.store');
+        Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update'])->middleware('role:super_admin,admin')->name('payment-methods.update');
+        Route::middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/meeting-links', [MeetingLinkController::class, 'index'])->name('meeting-links.index');
+            Route::post('/meeting-links/providers', [MeetingLinkController::class, 'provider'])->name('meeting-links.providers');
+            Route::post('/meeting-links/rooms', [MeetingLinkController::class, 'room'])->name('meeting-links.rooms');
+            Route::post('/meeting-links/settings', [MeetingLinkController::class, 'settings'])->name('meeting-links.settings');
+            Route::post('/bookings/{booking}/meeting-room', [MeetingLinkController::class, 'assign'])->name('meeting-links.assign');
+            Route::post('/students/{student}/meeting-preference', [MeetingLinkController::class, 'preference'])->name('students.meeting-preference');
+        });
         Route::post('/preferences/time', [SettingController::class, 'timePreference'])->middleware('role:super_admin,admin,assistant')->name('preferences.time');
         Route::post('/settings/operations', [SettingController::class, 'operational'])->middleware('role:super_admin,admin')->name('settings.operations');
         Route::get('/', [DashboardController::class, 'index'])->middleware('role:super_admin,admin')->name('dashboard');

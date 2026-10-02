@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ReportService;
+use App\Domains\Students\Models\Student;
 use Database\Factories\AdministratorFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -102,5 +103,27 @@ class OperationalSettingsWorkflowTest extends TestCase
         });
         $this->assertFalse(Cache::has('maintenance_mode_active'));
         $this->get('/')->assertStatus(503);
+    }
+
+    public function test_draft_publish_reload_applies_portal_goals_and_connection_exclusion_then_clears_them(): void
+    {
+        $admin = AdministratorFactory::new()->create(['role' => 'super_admin']);
+        $student = Student::factory()->verified()->create();
+        $fields = array_merge($this->fields(), ['whatsapp_portal' => 1, 'goals' => ['booking_completed'], 'exclude_connection' => 1]);
+        foreach (['draft', 'publish'] as $action) {
+            $this->actingAs($admin, 'web')->post(route('admin.settings.update'), array_merge($fields, ['action' => $action]))->assertSessionHasNoErrors();
+            $this->get(route('admin.settings.index'))->assertOk()->assertSee('Chat QA');
+        }
+        $this->assertSame(['booking_completed'], Setting::get('analytics.goals'));
+        $this->assertCount(1, Setting::get('analytics.internal_hashes'));
+        auth('web')->logout();
+        $this->get('/')->assertOk()->assertSee('name="analytics-disabled" content="1"', false);
+        $this->actingAs($student, 'student')->withSession(['student_id' => $student->id, 'student_auth_expires_at' => now('UTC')->addHours(3)->toIso8601String()])->get(route('student.dashboard'))->assertOk()->assertSee('aria-label="Chat QA"', false);
+        $this->actingAs($admin, 'web')->post(route('admin.settings.update'), array_merge($this->fields(), ['whatsapp_public' => 0, 'whatsapp_portal' => 0, 'goals' => [], 'clear_exclusions' => 1]))->assertSessionHasNoErrors();
+        $this->assertSame([], Setting::get('analytics.goals'));
+        $this->assertSame([], Setting::get('analytics.internal_hashes'));
+        auth('web')->logout();
+        $this->get(route('student.dashboard'))->assertOk()->assertDontSee('data-whatsapp-cta', false);
+        $this->get('/')->assertOk()->assertDontSee('name="analytics-disabled" content="1"', false);
     }
 }

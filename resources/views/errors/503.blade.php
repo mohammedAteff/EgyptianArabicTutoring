@@ -27,11 +27,6 @@
             </p>
         </div>
 
-        <div class="p-4 rounded-2xl bg-stone-800/60 border border-stone-700/60 text-xs text-stone-400 font-serif" dir="rtl">
-            <div class="font-bold text-stone-200 mb-1">الموقع تحت الصيانة الدورية حالياً</div>
-            <div>سنعود للعمل واستقبال الحجوزات في أقرب وقت. شكراً لتفهمكم.</div>
-        </div>
-
         <div class="pt-4 text-xs text-stone-500">
             &copy; {{ date('Y') }} {{ config('business.site_name') }}. All rights reserved.
         </div>

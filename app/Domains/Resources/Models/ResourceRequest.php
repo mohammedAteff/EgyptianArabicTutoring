@@ -17,6 +17,7 @@ class ResourceRequest extends Model
     protected $table = 'resource_requests';
 
     protected $fillable = [
+        'student_id', 'submitted_email',
         'contact_id',
         'resource_id',
         'visitor_token',
@@ -35,6 +36,7 @@ class ResourceRequest extends Model
     {
         return [
             'created_at' => 'datetime',
+            'submitted_email' => 'encrypted',
         ];
     }
 

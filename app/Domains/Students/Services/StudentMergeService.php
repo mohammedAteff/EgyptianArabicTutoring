@@ -105,6 +105,8 @@ class StudentMergeService
                 'payment_refunds',
                 'session_ledger_entries',
                 'form_submissions',
+                'resource_requests',
+                'student_emails',
             ] as $table) {
                 $changes = ['student_id' => $primaryId];
                 if (in_array($table, ['payment_records', 'payment_refunds', 'session_ledger_entries'], true)) {
@@ -126,6 +128,7 @@ class StudentMergeService
                 $primary->save();
             }
 
+            DB::table('student_email_verifications')->whereIn('student_id', $studentIds)->whereNull('consumed_at')->update(['consumed_at' => now('UTC')]);
             $secondary->identity_status = 'merged';
             $secondary->merged_into_student_id = $primaryId;
             $secondary->possible_duplicate_of_student_id = null;

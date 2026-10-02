@@ -2,6 +2,7 @@
 
 @section('content')
 <a href="{{ route('student.dashboard') }}" class="text-sm font-medium text-nile-800 underline">← Student dashboard</a>
+<x-student-timezone :timezone="$timezone" />
 <h1 class="mt-3 text-3xl font-semibold tracking-tight text-nile-900">Book a session</h1>
 <p class="mt-2 text-stone-600">Confirmed student bookings use one credit from your earliest-expiring eligible package.</p>
 @if($errors->any())<div role="alert" class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
@@ -11,14 +12,16 @@
 @endif
 <form method="GET" action="{{ route('student.bookings.create') }}" class="mt-5 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 sm:grid-cols-3">
     <label class="text-sm font-medium">Session type<select name="session_type_id" required class="mt-1 block w-full rounded-lg border-stone-300">@foreach($sessionTypes as $type)<option value="{{ $type->id }}" @selected($selectedSessionType?->id === $type->id)>{{ $type->title }} · {{ $type->duration_minutes }} min</option>@endforeach</select></label>
-    <label class="text-sm font-medium">Your timezone<input name="timezone" value="{{ $timezone }}" list="student-timezones" required class="mt-1 block w-full rounded-lg border-stone-300"><datalist id="student-timezones"><option value="Africa/Cairo"><option value="Europe/London"><option value="Europe/Paris"><option value="America/New_York"><option value="Asia/Dubai"></datalist></label>
+    <input type="hidden" name="timezone" value="{{ $timezone }}">
     <label class="text-sm font-medium">Starting date<input type="date" name="date" min="{{ now($timezone)->toDateString() }}" max="{{ now($timezone)->addDays(60)->toDateString() }}" value="{{ $fromDate->toDateString() }}" required class="mt-1 block w-full rounded-lg border-stone-300"></label>
     <div class="sm:col-span-3"><button @disabled($availableCredits < 1 || $sessionTypes->isEmpty()) class="rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white enabled:hover:bg-nile-900 disabled:cursor-not-allowed disabled:opacity-50">Show available times</button></div>
 </form>
 @if($selectedSessionType && $availableCredits > 0)
+    <div class="mt-7 grid gap-6 lg:grid-cols-2" x-data="{ selectedDate: @js(array_key_first($slots) ?? $fromDate->toDateString()) }">
+    <x-booking-calendar :month="$fromDate->format('Y-m')" :timezone="$timezone" :slots="$slots" :previous-url="request()->fullUrlWithQuery(['date' => $fromDate->subMonthNoOverflow()->startOfMonth()->toDateString()])" :next-url="request()->fullUrlWithQuery(['date' => $fromDate->addMonthNoOverflow()->startOfMonth()->toDateString()])" />
     <section class="mt-7 space-y-5" aria-label="Available appointment times">
         @forelse($slots as $date => $daySlots)
-            <div><h2 class="font-semibold text-nile-900">{{ \Carbon\CarbonImmutable::parse($date, $timezone)->format('l, F j, Y') }}</h2><div class="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div x-show="selectedDate === '{{ $date }}'"><h2 class="font-semibold text-nile-900">{{ \Carbon\CarbonImmutable::parse($date, $timezone)->format('l, F j, Y') }}</h2><div class="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach($daySlots as $slot)
                     <form method="POST" action="{{ route('student.bookings.store') }}" class="rounded-xl border border-stone-200 bg-white p-4">
                         @csrf
@@ -35,5 +38,6 @@
             <p class="rounded-xl border border-stone-200 bg-white p-5 text-sm text-stone-600">No times are available in this date range. Choose another start date.</p>
         @endforelse
     </section>
+    </div>
 @endif
 @endsection

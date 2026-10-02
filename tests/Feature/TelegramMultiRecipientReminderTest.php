@@ -4,7 +4,10 @@ namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\MeetingProvider;
+use App\Domains\Booking\Models\MeetingRoom;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Notifications\Services\TelegramNotificationService;
@@ -68,6 +71,10 @@ class TelegramMultiRecipientReminderTest extends TestCase
             'confirmation_token' => Str::random(64),
             'admin_reconfirmation_needed' => false,
         ]));
+
+        $provider = MeetingProvider::where('is_default', true)->firstOrFail();
+        $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'QA reminder room', 'url' => 'https://meet.example.com/abdallah', 'url_hash' => hash('sha256', 'https://meet.example.com/abdallah')]);
+        app(MeetingLinkService::class)->assign($booking, roomId: $room->id);
 
         // 1. Run reminder command
         $this->artisan('booking:send-telegram-reminders')

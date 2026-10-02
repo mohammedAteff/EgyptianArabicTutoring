@@ -51,7 +51,8 @@ class DashboardController extends Controller
             'availableCredits' => (int) $packageSummaries->sum(fn (array $package): int => $package['summary']['remaining_credits']),
             'businessTimezone' => $timezones->getBusinessTimezone(),
             'tutorName' => config('business.tutor_name'),
-            'meetingUrl' => $meetingLinks->current(),
+            'timezone' => $request->session()->get('student_display_timezone', $student->preferred_timezone ?: $timezones->getBusinessTimezone()),
+            'meetingLinks' => $meetingLinks,
             'forms' => $forms,
             'formSubmissions' => $formSubmissions,
         ]);

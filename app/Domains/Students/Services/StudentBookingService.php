@@ -9,6 +9,7 @@ use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\Student;
@@ -72,6 +73,7 @@ class StudentBookingService
                 $lockedStudent = Student::query()
                     ->whereKey($student->id)
                     ->where('identity_status', 'verified')
+                    ->whereNull('suspended_at')
                     ->lockForUpdate()
                     ->firstOrFail();
 
@@ -111,6 +113,7 @@ class StudentBookingService
                     'source' => 'student_portal',
                     'notes' => null,
                 ]));
+                $booking = app(MeetingLinkService::class)->assign($booking);
                 $bookingCreated = true;
 
                 BookingEvent::query()->create([

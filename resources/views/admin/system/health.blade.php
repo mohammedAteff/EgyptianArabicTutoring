@@ -190,7 +190,7 @@
             </div>
 
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
-                <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Cairo Business Clock</span>
+                <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Business Clock</span>
                 <span class="font-mono text-xs font-bold text-amber-700 block mt-0.5 truncate whitespace-nowrap">{{ $cairoTime }}</span>
             </div>
         </div>

@@ -14,7 +14,7 @@ class PaymentRecord extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['student_package_id', 'student_id', 'idempotency_key', 'amount_paid', 'currency', 'payment_method', 'transaction_reference', 'paid_at', 'recorded_by', 'notes', 'created_at'];
+    protected $fillable = ['student_package_id', 'student_id', 'idempotency_key', 'amount_paid', 'currency', 'payment_method', 'payment_method_id', 'transaction_reference', 'paid_at', 'recorded_by', 'notes', 'created_at'];
 
     protected function casts(): array
     {

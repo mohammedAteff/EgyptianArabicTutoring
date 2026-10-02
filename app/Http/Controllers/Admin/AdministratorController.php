@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -83,84 +84,92 @@ class AdministratorController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        // Prevent removing super_admin if it's the last super_admin
-        if ($administrator->isSuperAdmin() && $validated['role'] !== 'super_admin') {
-            $superAdminCount = Administrator::where('role', 'super_admin')->count();
-            if ($superAdminCount <= 1) {
-                return back()->with('error', 'Cannot demote the last remaining Super Administrator.');
+        return DB::transaction(function () use ($administrator, $validated): RedirectResponse {
+            Administrator::query()->orderBy('id')->lockForUpdate()->get();
+            $administrator = Administrator::query()->findOrFail($administrator->id);
+            // Prevent removing super_admin if it's the last super_admin
+            if ($administrator->isSuperAdmin() && $validated['role'] !== 'super_admin') {
+                $superAdminCount = Administrator::where('role', 'super_admin')->whereNull('suspended_at')->count();
+                if ($superAdminCount <= 1) {
+                    return back()->with('error', 'Cannot demote the last remaining Super Administrator.');
+                }
             }
-        }
 
-        $prev = [
-            'name' => $administrator->name,
-            'email' => $administrator->email,
-            'role' => $administrator->role,
-        ];
-
-        $updateData = [
-            'name' => $validated['name'],
-            'email' => strtolower(trim($validated['email'])),
-            'role' => $validated['role'],
-        ];
-
-        if (! empty($validated['password'])) {
-            $updateData['password'] = Hash::make($validated['password']);
-        }
-
-        $administrator->update($updateData);
-
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'administrator_updated',
-            'entity_type' => Administrator::class,
-            'entity_id' => $administrator->id,
-            'previous_data' => $prev,
-            'new_data' => [
+            $prev = [
                 'name' => $administrator->name,
                 'email' => $administrator->email,
                 'role' => $administrator->role,
-                'password_changed' => ! empty($validated['password']),
-            ],
-            'created_at' => now(),
-        ]);
+            ];
 
-        return redirect()->route('admin.administrators.index')
-            ->with('success', "Administrator {$administrator->name} updated successfully.");
+            $updateData = [
+                'name' => $validated['name'],
+                'email' => strtolower(trim($validated['email'])),
+                'role' => $validated['role'],
+            ];
+
+            if (! empty($validated['password'])) {
+                $updateData['password'] = Hash::make($validated['password']);
+            }
+
+            $administrator->update($updateData);
+
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'administrator_updated',
+                'entity_type' => Administrator::class,
+                'entity_id' => $administrator->id,
+                'previous_data' => $prev,
+                'new_data' => [
+                    'name' => $administrator->name,
+                    'email' => $administrator->email,
+                    'role' => $administrator->role,
+                    'password_changed' => ! empty($validated['password']),
+                ],
+                'created_at' => now(),
+            ]);
+
+            return redirect()->route('admin.administrators.index')
+                ->with('success', "Administrator {$administrator->name} updated successfully.");
+        }, 5);
     }
 
     public function destroy(Administrator $administrator): RedirectResponse
     {
-        // Prevent self-deletion
-        if (Auth::id() === $administrator->id) {
-            return back()->with('error', 'You cannot delete your own administrator account.');
-        }
-
-        // Prevent deleting the last super_admin
-        if ($administrator->isSuperAdmin()) {
-            $superAdminCount = Administrator::where('role', 'super_admin')->count();
-            if ($superAdminCount <= 1) {
-                return back()->with('error', 'Cannot delete the last remaining Super Administrator.');
+        return DB::transaction(function () use ($administrator): RedirectResponse {
+            Administrator::query()->orderBy('id')->lockForUpdate()->get();
+            $administrator = Administrator::query()->findOrFail($administrator->id);
+            // Prevent self-deletion
+            if (Auth::id() === $administrator->id) {
+                return back()->with('error', 'You cannot delete your own administrator account.');
             }
-        }
 
-        $adminData = [
-            'name' => $administrator->name,
-            'email' => $administrator->email,
-            'role' => $administrator->role,
-        ];
+            // Prevent deleting the last super_admin
+            if ($administrator->isSuperAdmin()) {
+                $superAdminCount = Administrator::where('role', 'super_admin')->whereNull('suspended_at')->count();
+                if ($superAdminCount <= 1) {
+                    return back()->with('error', 'Cannot delete the last remaining Super Administrator.');
+                }
+            }
 
-        $administrator->delete();
+            $adminData = [
+                'name' => $administrator->name,
+                'email' => $administrator->email,
+                'role' => $administrator->role,
+            ];
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'administrator_deleted',
-            'entity_type' => Administrator::class,
-            'entity_id' => $administrator->id,
-            'previous_data' => $adminData,
-            'created_at' => now(),
-        ]);
+            $administrator->delete();
 
-        return redirect()->route('admin.administrators.index')
-            ->with('success', "Administrator {$administrator->name} removed.");
+            AuditLog::create([
+                'administrator_id' => Auth::id(),
+                'action' => 'administrator_deleted',
+                'entity_type' => Administrator::class,
+                'entity_id' => $administrator->id,
+                'previous_data' => $adminData,
+                'created_at' => now(),
+            ]);
+
+            return redirect()->route('admin.administrators.index')
+                ->with('success', "Administrator {$administrator->name} removed.");
+        }, 5);
     }
 }

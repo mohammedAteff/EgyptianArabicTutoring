@@ -157,72 +157,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <!-- Left: Calendar Widget (7 cols) -->
                 <div class="lg:col-span-7">
-                    @php
-                        $currMonth = \Carbon\CarbonImmutable::createFromFormat('Y-m', $calendarMonth, $customerTimezone);
-                        $monthTitle = $currMonth->format('F Y');
-                        $firstDayOfMonth = $currMonth->startOfMonth();
-                        $startDayOfWeek = $firstDayOfMonth->dayOfWeek; // 0=Sunday
-                        $daysInMonth = $currMonth->daysInMonth;
-                        $todayDate = now($customerTimezone)->toDateString();
-                    @endphp
-
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="font-bold text-stone-900 text-lg">{{ $monthTitle }}</h3>
-                        <div class="flex items-center gap-2">
-                            <button type="button"
-                                    wire:click="previousMonth"
-                                    class="p-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-600 transition-colors"
-                                    aria-label="Previous Month">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                                </svg>
-                            </button>
-                            <button type="button"
-                                    wire:click="nextMonth"
-                                    class="p-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-600 transition-colors"
-                                    aria-label="Next Month">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Weekdays Header -->
-                    <div class="grid grid-cols-7 text-center text-xs font-bold text-stone-400 mb-2">
-                        <span>{{ __('Sun') }}</span><span>{{ __('Mon') }}</span><span>{{ __('Tue') }}</span><span>{{ __('Wed') }}</span><span>{{ __('Thu') }}</span><span>{{ __('Fri') }}</span><span>{{ __('Sat') }}</span>
-                    </div>
-
-                    <!-- Calendar Grid -->
-                    <div class="grid grid-cols-7 gap-1.5 sm:gap-2">
-                        <!-- Blank leading days -->
-                        @for($i = 0; $i < $startDayOfWeek; $i++)
-                            <div class="aspect-square"></div>
-                        @endfor
-
-                        <!-- Days of month -->
-                        @for($day = 1; $day <= $daysInMonth; $day++)
-                            @php
-                                $dateStr = $currMonth->setDay($day)->toDateString();
-                                $hasSlots = !empty($availableSlotsByDate[$dateStr]);
-                                $isSelected = $selectedDate === $dateStr;
-                                $isPast = $dateStr < $todayDate;
-                            @endphp
-
-                            <button type="button"
-                                    @if($hasSlots && !$isPast) wire:click="selectDate('{{ $dateStr }}')" @endif
-                                    @disabled(!$hasSlots || $isPast)
-                                    class="aspect-square rounded-2xl flex flex-col items-center justify-center text-sm font-semibold transition-all relative
-                                        {{ $isSelected ? 'bg-terracotta-500 text-white shadow-md scale-105 z-10' : '' }}
-                                        {{ $hasSlots && !$isSelected && !$isPast ? 'bg-stone-50 hover:bg-terracotta-50 text-stone-900 border border-stone-200/80 hover:border-terracotta-300 cursor-pointer' : '' }}
-                                        {{ !$hasSlots || $isPast ? 'text-stone-300 bg-transparent cursor-not-allowed' : '' }}">
-                                <span>{{ $day }}</span>
-                                @if($hasSlots && !$isSelected && !$isPast)
-                                    <span class="w-1.5 h-1.5 rounded-full bg-terracotta-500 mt-1"></span>
-                                @endif
-                            </button>
-                        @endfor
-                    </div>
+                    <x-booking-calendar :month="$calendarMonth" :timezone="$customerTimezone" :slots="$availableSlotsByDate" :selected-date="$selectedDate" :livewire="true" />
                 </div>
 
                 <!-- Right: Slots for Selected Date (5 cols) -->

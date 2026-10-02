@@ -50,7 +50,7 @@ class BookingController extends Controller
                 sessionType: $selectedSessionType,
                 customerTimezone: $timezone,
                 fromDate: $fromDate,
-                toDate: $fromDate->addDays(13),
+                toDate: $fromDate->endOfMonth()->min($today->addDays(60)),
                 currentVisitorToken: $ownerToken,
             );
             foreach ($available as $date => $dailySlots) {

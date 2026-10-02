@@ -6,7 +6,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Offers & Promotions Portal</h1>
-            <p class="text-sm text-slate-500 mt-1">Manage public promotional banners, modals, and inline announcement cards with Cairo-scheduled time windows.</p>
+            <p class="text-sm text-slate-500 mt-1">Manage public promotional banners, modals, and inline announcement cards with business-time scheduled time windows.</p>
         </div>
         <div class="flex items-center gap-3">
             <a href="{{ route('admin.promotions.create') }}" class="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors">
@@ -39,7 +39,7 @@
                             <th class="px-6 py-3.5">Campaign & Headline</th>
                             <th class="px-4 py-3.5">Format</th>
                             <th class="px-4 py-3.5">Status</th>
-                            <th class="px-4 py-3.5">Cairo Schedule</th>
+                            <th class="px-4 py-3.5">Business Schedule</th>
                             <th class="px-4 py-3.5">Timer</th>
                             <th class="px-6 py-3.5 text-right">Actions</th>
                         </tr>

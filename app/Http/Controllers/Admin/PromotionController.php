@@ -6,6 +6,7 @@ use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Media;
 use App\Domains\Marketing\Models\Promotion;
 use App\Domains\Marketing\Services\PromotionService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Closure;
@@ -62,11 +63,11 @@ class PromotionController extends Controller
 
         // Store timestamps as UTC instants; form inputs are in Cairo local time
         $startsAtUtc = ! empty($validated['starts_at'])
-            ? Carbon::parse($validated['starts_at'], 'Africa/Cairo')->setTimezone('UTC')
+            ? Carbon::parse($validated['starts_at'], app(TimezoneService::class)->getBusinessTimezone())->setTimezone('UTC')
             : null;
 
         $endsAtUtc = ! empty($validated['ends_at'])
-            ? Carbon::parse($validated['ends_at'], 'Africa/Cairo')->setTimezone('UTC')
+            ? Carbon::parse($validated['ends_at'], app(TimezoneService::class)->getBusinessTimezone())->setTimezone('UTC')
             : null;
 
         $promotion = Promotion::create([
@@ -101,11 +102,11 @@ class PromotionController extends Controller
     public function edit(Promotion $promotion): View
     {
         $startsAtCairo = $promotion->starts_at
-            ? $promotion->starts_at->copy()->setTimezone('Africa/Cairo')->format('Y-m-d\TH:i')
+            ? $promotion->starts_at->copy()->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('Y-m-d\TH:i')
             : null;
 
         $endsAtCairo = $promotion->ends_at
-            ? $promotion->ends_at->copy()->setTimezone('Africa/Cairo')->format('Y-m-d\TH:i')
+            ? $promotion->ends_at->copy()->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('Y-m-d\TH:i')
             : null;
 
         return view('admin.promotions.edit', [
@@ -140,11 +141,11 @@ class PromotionController extends Controller
         }
 
         $startsAtUtc = ! empty($validated['starts_at'])
-            ? Carbon::parse($validated['starts_at'], 'Africa/Cairo')->setTimezone('UTC')
+            ? Carbon::parse($validated['starts_at'], app(TimezoneService::class)->getBusinessTimezone())->setTimezone('UTC')
             : null;
 
         $endsAtUtc = ! empty($validated['ends_at'])
-            ? Carbon::parse($validated['ends_at'], 'Africa/Cairo')->setTimezone('UTC')
+            ? Carbon::parse($validated['ends_at'], app(TimezoneService::class)->getBusinessTimezone())->setTimezone('UTC')
             : null;
 
         $oldData = $promotion->toArray();

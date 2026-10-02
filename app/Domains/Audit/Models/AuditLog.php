@@ -96,6 +96,10 @@ class AuditLog extends Model
                 return $value;
             }
 
+            if ($key === 'expiration_date' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                return $value;
+            }
+
             $value = preg_replace_callback('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', fn (array $matches): string => self::blind($matches[0], $secret), $value) ?? $value;
             $value = preg_replace_callback('/\+?[0-9][0-9\s().-]{7,18}[0-9]/', fn (array $matches): string => self::blind($matches[0], $secret), $value) ?? $value;
 

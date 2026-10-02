@@ -2,8 +2,9 @@
 
 namespace App\Domains\Analytics\Services;
 
-use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Reporting\Services\ReportService;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,11 +24,8 @@ class EngagementCounterService
      */
     public function getLiveUsersCount(): int
     {
-        return DB::table('visitor_sessions')
-            ->where('is_bot', false)
-            ->where('last_activity_at', '>', now()->subSeconds(60))
-            ->distinct('visitor_id')
-            ->count('visitor_id');
+        return app(ReportService::class)->nonBotSessionQuery()
+            ->where('last_activity_at', '>', now()->subSeconds(60))->distinct()->count('visitor_id');
     }
 
     /**
@@ -38,30 +36,16 @@ class EngagementCounterService
      */
     public function getPreviousMonthTraffic(): array
     {
-        $cairoNow = CarbonImmutable::now('Africa/Cairo');
+        $cairoNow = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone());
         $cairoMonthStart = $cairoNow->subMonthNoOverflow()->startOfMonth();
         $cairoMonthEnd = $cairoNow->startOfMonth();
 
         $utcMonthStart = $cairoMonthStart->setTimezone('UTC');
         $utcMonthEnd = $cairoMonthEnd->setTimezone('UTC');
 
-        $visitorsCount = DB::table('visitor_sessions')
-            ->where('is_bot', false)
-            ->where('started_at', '>=', $utcMonthStart)
-            ->where('started_at', '<', $utcMonthEnd)
-            ->distinct('visitor_id')
-            ->count('visitor_id');
+        $summary = app(ReportService::class)->getTrafficReport($utcMonthStart, $utcMonthEnd->subMicrosecond())['summary'];
 
-        $sessionsCount = DB::table('visitor_sessions')
-            ->where('is_bot', false)
-            ->where('started_at', '>=', $utcMonthStart)
-            ->where('started_at', '<', $utcMonthEnd)
-            ->count('id');
-
-        return [
-            'unique_visitors' => $visitorsCount,
-            'sessions' => $sessionsCount,
-        ];
+        return ['unique_visitors' => $summary['visitors'], 'sessions' => $summary['sessions']];
     }
 
     /**
@@ -79,7 +63,7 @@ class EngagementCounterService
      */
     public function getCollectiveLearningActivity(int $windowDays = 7): array
     {
-        $cairoNow = CarbonImmutable::now('Africa/Cairo');
+        $cairoNow = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone());
         $cairoDate = $cairoNow->toDateString();
         $cairoWindowStart = $cairoNow->startOfDay()->subDays(max(1, $windowDays) - 1);
         $utcWindowStart = $cairoWindowStart->setTimezone('UTC');
@@ -95,28 +79,9 @@ class EngagementCounterService
 
         $lessonHours = $completedLessonMinutes / 60.0;
 
-        // Completed Cairo days come from rollups; today comes from raw events until the next rollup.
-        $historicalDwellSeconds = (float) DB::table('daily_metrics')
-            ->where('metric_name', 'section_dwell_seconds')
-            ->where('dimension_key', 'section')
-            ->whereIn('dimension_value', ['curriculum', 'blog-content', 'resource-preview', 'game-board'])
-            ->where('metric_date', '>=', $cairoWindowStart->toDateString())
-            ->where('metric_date', '<', $cairoDate)
-            ->sum('count');
-
-        $utcTodayStart = $cairoNow->startOfDay()->setTimezone('UTC');
-        $todayEvents = AnalyticsEvent::query()
-            ->where('event_name', 'section_dwell')
-            ->where('is_bot', false)
-            ->where('created_at', '>=', $utcTodayStart)
-            ->where('created_at', '<', $utcWindowEnd)
-            ->get(['metadata']);
-        $realtimeDwellSeconds = (float) $todayEvents->sum(function (AnalyticsEvent $event): int {
-            $seconds = in_array($event->metadata['section_id'] ?? null, ['curriculum', 'blog-content', 'resource-preview', 'game-board'], true) ? ($event->metadata['dwell_seconds'] ?? 0) : 0;
-
-            return is_numeric($seconds) ? max(0, (int) $seconds) : 0;
-        });
-        $dwellSeconds = $historicalDwellSeconds + $realtimeDwellSeconds;
+        $dwellSeconds = (float) app(AnalyticsService::class)->reportingMetrics($utcWindowStart, $utcWindowEnd)
+            ->where('metric_name', 'section_dwell_seconds')->where('dimension_key', 'section')
+            ->whereIn('dimension_value', ['curriculum', 'blog-content', 'resource-preview', 'game-board'])->sum('count');
         $studyDwellHours = $dwellSeconds / 3600.0;
         $totalHours = $lessonHours + $studyDwellHours;
 
@@ -201,19 +166,25 @@ class EngagementCounterService
     }
 
     /**
-     * Return the current Cairo day's cached public payload.
-     *
-     * @return array<string, mixed>
+     * Build a cache key isolated by business timezone and calendar day.
      */
+    public static function cacheKey(): string
+    {
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+
+        return 'counters.public.'.hash('sha256', $timezone).'.'.CarbonImmutable::now($timezone)->toDateString();
+    }
+
     public function getCachedPublicPayload(): array
     {
-        $cairoDate = CarbonImmutable::now('Africa/Cairo')->toDateString();
+        $cairoDate = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->toDateString();
 
-        $payload = Cache::remember("counters.public.{$cairoDate}", self::CACHE_TTL, function () {
+        $payload = Cache::remember(self::cacheKey(), self::CACHE_TTL, function () {
             return $this->getPublicCountersPayload();
         });
         $count = $this->getLiveUsersCount();
         $payload['live_users']['count'] = $count;
+        $payload['live_users']['enabled'] = (bool) Setting::get('counters.live_users.public_enabled', false);
         $payload['live_users']['text'] = str_replace('{count}', number_format($count), (string) Setting::get('counters.live_users.template', '{count} active visitors online right now'));
 
         return $payload;

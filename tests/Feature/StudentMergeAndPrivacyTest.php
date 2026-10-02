@@ -201,7 +201,7 @@ class StudentMergeAndPrivacyTest extends TestCase
         $this->actingAs($secondary, 'student')->withSession($studentSession)
             ->get(route('student.dashboard'))
             ->assertOk();
-        $this->assertTrue(Cache::has('student_auth_check_'.$secondary->id));
+        $this->assertAuthenticatedAs($secondary, 'student');
 
         app(StudentMergeService::class)->merge($primary->id, $secondary->id, $owner->id);
 

@@ -111,7 +111,7 @@
                                     </div>
                                     <div>
                                         <span class="text-slate-400">Student Local Time:</span>
-                                        <span class="font-medium text-slate-700 font-mono">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent) }} ({{ $b->customer_timezone }})</span>
+                                        <span class="font-medium text-slate-700 font-mono">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent, $bStartStudent->timezoneName) }} ({{ $b->customer_timezone }})</span>
                                     </div>
                                     <div>
                                         <span class="text-slate-400">Session Type:</span>
@@ -297,7 +297,7 @@
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="font-bold text-slate-900">{{ $booking->contact->name ?? 'Student' }}</div>
-                                    <div class="text-xs text-slate-500 font-mono">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent) }} ({{ $booking->customer_timezone }})</div>
+                                    <div class="text-xs text-slate-500 font-mono">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStartStudent, $bStartStudent->timezoneName) }} ({{ $booking->customer_timezone }})</div>
                                     <div class="text-[11px] text-slate-400">{{ $booking->contact->email ?? '' }}</div>
                                 </td>
                                 <td class="px-4 py-4 whitespace-nowrap">

@@ -30,7 +30,7 @@ class RescheduleController extends Controller
             return redirect()->route('student.dashboard')->with('info', 'Contact your tutor to change this session.');
         }
 
-        $timezone = $this->displayTimezone($student, $ownedBooking, $timezones);
+        $timezone = $this->displayTimezone($student, $ownedBooking, $timezones, $request->input('timezone'));
         $from = $request->query('date');
         $today = CarbonImmutable::now($timezone)->startOfDay();
         $fromDate = is_string($from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
@@ -50,7 +50,7 @@ class RescheduleController extends Controller
             sessionType: $ownedBooking->sessionType,
             customerTimezone: $timezone,
             fromDate: $fromDate,
-            toDate: $fromDate->addDays(13),
+            toDate: $fromDate->endOfMonth()->min($today->addDays(60)),
             currentVisitorToken: $visitorToken,
         );
         $slots = [];
@@ -79,13 +79,14 @@ class RescheduleController extends Controller
         $input = $request->validate([
             'slot_id' => ['required', 'string', 'max:4096'],
             'idempotency_key' => ['required', 'string', 'size:48'],
+            'timezone' => ['nullable', 'timezone'],
         ]);
 
         if (DB::table('session_reschedules')->where('booking_id', $ownedBooking->id)->where('idempotency_key', $input['idempotency_key'])->exists()) {
             return redirect()->route('student.dashboard')->with('success', 'Your session change was recorded.');
         }
 
-        $timezone = $this->displayTimezone($student, $ownedBooking, $timezones);
+        $timezone = $this->displayTimezone($student, $ownedBooking, $timezones, $request->input('timezone'));
         $visitorToken = $request->session()->get('student_reschedule_visitor_token');
         if (! is_string($visitorToken)) {
             return back()->withErrors(['slot_id' => 'Select a new time slot.']);
@@ -111,9 +112,9 @@ class RescheduleController extends Controller
         return redirect()->route('student.dashboard')->with('success', 'Your session change was recorded.');
     }
 
-    private function displayTimezone(Student $student, Booking $booking, TimezoneService $timezones): string
+    private function displayTimezone(Student $student, Booking $booking, TimezoneService $timezones, ?string $requested = null): string
     {
-        foreach ([$student->preferred_timezone, $booking->customer_timezone, $timezones->getBusinessTimezone()] as $candidate) {
+        foreach ([$requested, $student->preferred_timezone, $booking->customer_timezone, $timezones->getBusinessTimezone()] as $candidate) {
             try {
                 return $timezones->validate($candidate);
             } catch (Throwable) {

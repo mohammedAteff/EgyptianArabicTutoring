@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<p class="mb-4 text-xs text-slate-500">Reports use {{ app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone() }} boundaries. Historical aggregates from another timezone are preserved separately. Once raw activity is pruned, it cannot be reconstructed in a new timezone; older periods may have incomplete coverage.</p>
 <div class="space-y-8">
 
     <!-- Top Header & Time Range Filter -->
@@ -40,8 +41,8 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
             <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Audience Reach</span>
-            <div class="text-2xl font-black text-slate-900 mt-2">{{ number_format($primaryFunnel['visitors']) }}</div>
-            <p class="text-xs text-slate-500 mt-1">Unique visitors in period</p>
+            <div class="text-2xl font-black text-slate-900 mt-2">{{ number_format($traffic['visitors']) }}</div>
+            <p class="text-xs text-slate-500 mt-1">{{ $traffic['visitors_is_daily_sum'] ? 'Sum of daily visitors (retained history)' : 'Unique active visitors in period' }}</p>
         </div>
 
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
@@ -103,7 +104,7 @@
 
         <!-- Recent Active Stream -->
         <div class="mt-4">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Recent Active Visitors (Non-PII Telemetry)</h4>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Recent Active Visitors</h4>
             @if($activeVisitors->isEmpty())
                 <p class="text-xs text-slate-500 italic">No public visitors recorded in the last 5 minutes.</p>
             @else
@@ -111,11 +112,11 @@
                     @foreach($activeVisitors as $item)
                         <div class="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 flex flex-col justify-between text-xs">
                             <div class="flex items-center justify-between text-slate-400 mb-1">
-                                <span class="font-mono text-amber-400">{{ $item['visitor_token'] }}</span>
+
                                 <span class="text-[11px]">{{ $item['minutes_ago'] === 0 ? 'Just now' : $item['minutes_ago'] . ($item['minutes_ago'] === 1 ? ' minute ago' : ' minutes ago') }}</span>
                             </div>
                             <div class="truncate font-medium text-slate-200" title="{{ $item['page'] }}">
-                                {{ parse_url($item['page'], PHP_URL_PATH) ?: '/' }}
+                                {{ $item['page_label'] }}
                             </div>
                             <div class="text-[11px] text-slate-400 mt-1">
                                 Source: <span class="text-slate-300">{{ $item['source'] }}</span>
@@ -274,7 +275,7 @@
                 <p class="text-xs text-slate-500 mt-0.5">Country dimensions are separate: visitors use immutable acquisition country, sessions use session-start country, and events/bookings use their server snapshot. ZZ means unresolved.</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="text-[11px] text-slate-400 whitespace-nowrap">Africa/Cairo calendar days</span>
+                <span class="text-[11px] text-slate-400 whitespace-nowrap">Business calendar days</span>
                 <a href="{{ route('admin.analytics.countries', ['range' => $range]) }}" class="text-xs font-semibold text-amber-700 hover:text-amber-800">
                     Full Country Breakdown →
                 </a>
@@ -285,7 +286,7 @@
                 <thead class="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-200">
                     <tr>
                         <th class="py-3 px-4">Country</th>
-                        <th class="py-3 px-4 text-right">Unique active visitors</th>
+                        <th class="py-3 px-4 text-right">{{ $traffic['visitors_is_daily_sum'] ? 'Daily visitor totals' : 'Unique active visitors' }}</th>
                         <th class="py-3 px-4 text-right">Sessions</th>
                         <th class="py-3 px-4 text-right">Bounce Rate (%)</th>
                         <th class="py-3 px-4 text-right">Booking CTAs</th>
@@ -335,7 +336,7 @@
         <div class="flex items-center justify-between mb-4">
             <div>
                 <h3 class="text-sm font-bold text-slate-900">UTM Attribution & Campaign Performance</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Which channels and content pieces drove actual student conversions.</p>
+                <p class="text-xs text-slate-500 mt-0.5">Retained activity by acquisition source. A visitor may appear in multiple source groups; rows are not additive.</p>
             </div>
             <a href="{{ route('admin.reports.index', ['type' => 'traffic']) }}" class="text-xs font-semibold text-amber-700 hover:text-amber-800">
                 Full Traffic Breakdown →
@@ -377,6 +378,6 @@
     </div>
 
 </div>
-<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-6"><h2 class="font-bold">Configured conversion goals</h2><div class="overflow-x-auto"><table class="mt-4 w-full text-left text-sm"><thead><tr><th>Outcome</th><th>Events</th><th>Unique visitors</th><th>Visitor conversion</th></tr></thead><tbody>@forelse($goals as $goal)<tr class="border-t"><td class="py-3">{{ ucfirst(str_replace('_', ' ', $goal['event'])) }}</td><td>{{ $goal['count'] }}</td><td>{{ $goal['visitors'] }}</td><td>{{ $goal['rate'] }}%</td></tr>@empty<tr><td colspan="4" class="py-4 text-slate-500">Select outcomes in System & Business Settings.</td></tr>@endforelse</tbody></table></div></section>
-<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-6"><h2 class="font-bold">WhatsApp click activity</h2><p class="mt-1 text-sm text-slate-500">Selected Cairo date range. Clicks indicate outbound interest; they do not confirm a conversation. Included in overview exports.</p><div class="overflow-x-auto"><table class="mt-4 w-full text-left text-xs"><thead><tr><th>Date / country</th><th>Source / medium</th><th>Campaign / content</th><th>Context / language</th><th>Clicks</th><th>Unique visitors</th></tr></thead><tbody>@forelse($whatsappActivity as $click)<tr class="border-t"><td class="py-3">{{ $click['date'] }} / {{ $click['country'] }}</td><td>{{ $click['source'] }} / {{ $click['medium'] }}</td><td>{{ $click['campaign'] }} / {{ $click['content'] }}</td><td>{{ $click['context'] }} / {{ $click['language'] }}</td><td>{{ $click['clicks'] }}</td><td>{{ $click['visitors'] }}</td></tr>@empty<tr><td colspan="6" class="py-4 text-slate-500">No WhatsApp clicks recorded in this period.</td></tr>@endforelse</tbody></table></div></section>
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs"><h2 class="text-sm font-bold text-slate-900">Configured conversion goals</h2><div class="overflow-x-auto"><table class="mt-4 w-full text-left text-xs text-slate-600"><thead class="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-200"><tr><th class="py-3 px-4">Outcome</th><th class="py-3 px-4">Events</th><th class="py-3 px-4">Unique visitors</th><th class="py-3 px-4">Visitor conversion</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($goals as $goal)<tr class="hover:bg-slate-50/80 transition-colors"><td class="py-3 px-4">{{ ucfirst(str_replace('_', ' ', $goal['event'])) }}</td><td class="py-3 px-4">{{ $goal['count'] }}</td><td class="py-3 px-4">{{ $goal['visitors'] }}</td><td class="py-3 px-4">{{ $goal['rate'] }}%</td></tr>@empty<tr><td colspan="4" class="py-8 text-center text-slate-400 italic">Select outcomes in System & Business Settings.</td></tr>@endforelse</tbody></table></div></section>
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs"><h2 class="text-sm font-bold text-slate-900">WhatsApp click activity</h2><p class="mt-1 text-sm text-slate-500">Selected business date range. Clicks indicate outbound interest; they do not confirm a conversation. Included in overview exports.</p><div class="overflow-x-auto"><table class="mt-4 w-full text-left text-xs text-slate-600"><thead class="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-200"><tr><th class="py-3 px-4">Date / country</th><th class="py-3 px-4">Source / medium</th><th class="py-3 px-4">Campaign / content</th><th class="py-3 px-4">Context / language</th><th class="py-3 px-4">Clicks</th><th class="py-3 px-4">Unique visitors</th></tr></thead><tbody class="divide-y divide-slate-100">@forelse($whatsappActivity as $click)<tr class="hover:bg-slate-50/80 transition-colors"><td class="py-3 px-4">{{ $click['date'] }} / {{ $click['country'] }}</td><td class="py-3 px-4">{{ $click['source'] }} / {{ $click['medium'] }}</td><td class="py-3 px-4">{{ $click['campaign'] }} / {{ $click['content'] }}</td><td class="py-3 px-4">{{ $click['context'] }} / {{ $click['language'] }}</td><td class="py-3 px-4">{{ $click['clicks'] }}</td><td class="py-3 px-4">{{ $click['visitors'] }}</td></tr>@empty<tr><td colspan="6" class="py-8 text-center text-slate-400 italic">No WhatsApp clicks recorded in this period.</td></tr>@endforelse</tbody></table></div></section>
 @endsection

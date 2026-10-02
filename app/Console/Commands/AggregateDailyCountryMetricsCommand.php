@@ -8,6 +8,7 @@ use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -16,18 +17,18 @@ use Illuminate\Support\Facades\DB;
 class AggregateDailyCountryMetricsCommand extends Command
 {
     protected $signature = 'analytics:aggregate-daily-country
-                            {--date= : Target Africa/Cairo calendar date in YYYY-MM-DD format (defaults to yesterday)}';
+                            {--date= : Target business calendar date in YYYY-MM-DD format (defaults to yesterday)}';
 
-    protected $description = 'Aggregate first-party activity by detected country for one complete Africa/Cairo calendar day';
+    protected $description = 'Aggregate first-party activity by detected country for one complete business calendar day';
 
     public function handle(): int
     {
         $dateInput = $this->option('date');
         $targetDate = $dateInput
-            ? CarbonImmutable::parse((string) $dateInput, 'Africa/Cairo')->toDateString()
-            : CarbonImmutable::now('Africa/Cairo')->subDay()->toDateString();
+            ? CarbonImmutable::parse((string) $dateInput, app(TimezoneService::class)->getBusinessTimezone())->toDateString()
+            : CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->subDay()->toDateString();
 
-        $cairoStart = CarbonImmutable::parse($targetDate, 'Africa/Cairo')->startOfDay();
+        $cairoStart = CarbonImmutable::parse($targetDate, app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
         $cairoEnd = $cairoStart->addDay();
         $startUtc = $cairoStart->setTimezone('UTC');
         $endUtc = $cairoEnd->setTimezone('UTC');
@@ -200,7 +201,7 @@ class AggregateDailyCountryMetricsCommand extends Command
             // Rebuild this one activity day as a deterministic set. This removes
             // stale country buckets when an operator reruns the command after
             // correcting source data, while the unique key prevents duplicates.
-            DailyCountryMetric::query()->whereDate('metric_date', $targetDate)->delete();
+            DailyCountryMetric::query()->where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())->whereDate('metric_date', $targetDate)->delete();
 
             foreach ($countries as $country) {
                 $uniqueVisitors = (int) ($metrics['unique_visitors'][$country] ?? 0);
@@ -208,6 +209,7 @@ class AggregateDailyCountryMetricsCommand extends Command
 
                 DailyCountryMetric::query()->create([
                     'metric_date' => $targetDate,
+                    'reporting_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                     'country_code' => $country,
                     'unique_visitors' => $uniqueVisitors,
                     'sessions' => (int) ($metrics['sessions'][$country] ?? 0),

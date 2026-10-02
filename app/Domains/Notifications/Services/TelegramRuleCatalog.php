@@ -7,7 +7,7 @@ class TelegramRuleCatalog
     /** @return array<string, array{label:string,group:string,modes:list<string>,fields:list<string>,template:string,defaults:array{minutes:int,threshold:int}}> */
     public function all(): array
     {
-        $booking = ['booking_id', 'student_name', 'email', 'phone', 'session_title', 'tutor_time', 'student_time', 'booking_context', 'remaining_credits', 'session_number', 'total_sessions', 'admin_url', 'meeting_url'];
+        $booking = ['booking_id', 'student_name', 'email', 'phone', 'session_title', 'tutor_time', 'student_time', 'booking_context', 'remaining_credits', 'session_number', 'total_sessions', 'admin_url', 'meeting_url', 'meeting_provider'];
         $package = ['student_name', 'email', 'phone', 'package_name', 'remaining_credits', 'expiry_date', 'admin_url'];
         $definitions = [
             'booking_created' => ['Booking created', 'Bookings', $booking], 'booking_rescheduled' => ['Booking rescheduled', 'Bookings', $booking], 'booking_cancelled' => ['Booking cancelled', 'Bookings', $booking],

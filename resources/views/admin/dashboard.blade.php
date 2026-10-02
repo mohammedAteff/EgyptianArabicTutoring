@@ -71,7 +71,7 @@
                     <span class="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
                         Next Lesson
                     </span>
-                    <span class="text-xs text-slate-400">Cairo: {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($cairoNow) }}</span>
+                    <span class="text-xs text-slate-400">Business: {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($cairoNow) }}</span>
                 </div>
 
                 @if($nextBooking)
@@ -85,7 +85,7 @@
 
                     <div class="mt-6 space-y-3 bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60">
                         <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-400 font-medium">Your Time (Cairo):</span>
+                            <span class="text-slate-400 font-medium">Your Time (Business Time):</span>
                             <span class="font-bold text-white">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($nextLocal) }}</span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
@@ -126,7 +126,7 @@
             <div class="flex items-center justify-between mb-4">
                 <div>
                     <h2 class="text-lg font-bold font-serif text-slate-900">Today's Schedule</h2>
-                    <p class="text-xs text-slate-500">{{ $cairoNow->format('l, F j, Y') }} (Cairo Time)</p>
+                    <p class="text-xs text-slate-500">{{ $cairoNow->format('l, F j, Y') }} (Business Time)</p>
                 </div>
                 <span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold">
                     {{ $todaysBookings->count() }} Session(s) Today
@@ -138,7 +138,7 @@
                     <table class="w-full text-left text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                                <th class="px-4 py-3 font-semibold">Cairo Time</th>
+                                <th class="px-4 py-3 font-semibold">Business Time</th>
                                 <th class="px-4 py-3 font-semibold">Student</th>
                                 <th class="px-4 py-3 font-semibold">Student Timezone</th>
                                 <th class="px-4 py-3 font-semibold">Status</th>

@@ -340,10 +340,11 @@ class BookingService
                 if ($normEmail && $normPhone) {
                     $candidateQuery->where(function ($q) use ($normEmail, $normPhone) {
                         $q->where('email_normalized', $normEmail)
+                            ->orWhereHas('verifiedEmails', fn ($emails) => $emails->where('email_normalized', $normEmail))
                             ->orWhere('phone_normalized', $normPhone);
                     });
                 } elseif ($normEmail) {
-                    $candidateQuery->where('email_normalized', $normEmail);
+                    $candidateQuery->where(fn ($query) => $query->where('email_normalized', $normEmail)->orWhereHas('verifiedEmails', fn ($emails) => $emails->where('email_normalized', $normEmail)));
                 } elseif ($normPhone) {
                     $candidateQuery->where('phone_normalized', $normPhone);
                 } else {
@@ -507,6 +508,7 @@ class BookingService
                         'referrer' => $referrer,
                         'touch_at' => $touchAt,
                     ]));
+                    $booking = app(MeetingLinkService::class)->assign($booking);
                     $bookingCreated = true;
                 } catch (QueryException $e) {
                     // Granular Duplicate-Key Exception Handling
@@ -791,6 +793,7 @@ class BookingService
                     'referrer' => $data['referrer'] ?? null,
                     'touch_at' => isset($data['touch_at']) ? CarbonImmutable::parse($data['touch_at']) : null,
                 ]));
+                $booking = app(MeetingLinkService::class)->assign($booking);
                 $bookingCreated = true;
             } catch (QueryException $e) {
                 $isIdempotencyDuplicate = $e->getCode() === '23000'

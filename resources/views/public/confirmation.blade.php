@@ -1,6 +1,7 @@
 @extends('layouts.public')
 
 @section('content')
+<x-student-timezone :timezone="$timezone" />
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     @if(session('success'))
         <div class="mb-6 bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded-r-xl text-sm text-emerald-800 font-medium shadow-sm">
@@ -50,7 +51,7 @@
     <!-- Dual Timezone Breakdown Card -->
     @php
         $confirmationInstant = \Carbon\CarbonImmutable::instance($booking->start_at_utc);
-        $customerStart = $booking->customer_start;
+        $customerStart = $booking->start_at_utc->copy()->setTimezone($timezone);
         $customerEnd = $booking->end_at_utc->copy()->setTimezone($customerStart->timezoneName);
         $customerTimezoneDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)
             ->formatSlotForDisplay($customerStart->timezoneName, $confirmationInstant);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -239,7 +240,7 @@ class SystemHealthController extends Controller
             'phpVersion' => PHP_VERSION,
             'laravelVersion' => app()->version(),
             'serverTimeUtc' => now('UTC')->toDateTimeString(),
-            'cairoTime' => now('Africa/Cairo')->toDateTimeString(),
+            'cairoTime' => now(app(TimezoneService::class)->getBusinessTimezone())->toDateTimeString(),
             'environment' => app()->environment(),
             'debugMode' => config('app.debug'),
             'maintenanceHitsCount' => $maintenanceHitsCount,

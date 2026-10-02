@@ -78,7 +78,7 @@
                     <tr>
                         <th class="py-3.5 px-6">Archive Filename</th>
                         <th class="py-3.5 px-6">Archive Size</th>
-                        <th class="py-3.5 px-6">Created Date (UTC)</th>
+                        <th class="py-3.5 px-6">Created Date (Business Time)</th>
                         <th class="py-3.5 px-6 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -95,7 +95,7 @@
                                 {{ $backup['size_formatted'] }}
                             </td>
                             <td class="py-4 px-6 text-xs text-slate-500">
-                                <div>{{ $backup['created_at']->format('M j, Y H:i:s') }} UTC</div>
+                                <div>{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($backup['created_at']) }}</div>
                                 <div class="text-[11px] text-slate-400">{{ $backup['created_at']->diffForHumans() }}</div>
                             </td>
                             <td class="py-4 px-6 text-right space-x-2">

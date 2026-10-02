@@ -145,6 +145,9 @@ class StudentPrivacyService
                 });
 
             $this->scrubAuditPayloads($student);
+            DB::table('student_emails')->where('student_id', $studentId)->delete();
+            DB::table('student_email_verifications')->where('student_id', $studentId)->delete();
+            DB::table('resource_requests')->where('student_id', $studentId)->update(['submitted_email' => null]);
 
             $student->forceFill([
                 'first_name' => 'Anonymized',
@@ -182,6 +185,7 @@ class StudentPrivacyService
             trim($student->first_name.' '.$student->last_name),
             $student->email,
             $student->email_normalized,
+            ...$student->verifiedEmails()->pluck('email_normalized')->all(),
             $student->phone,
             $student->phone_normalized,
             $student->date_of_birth?->toDateString(),

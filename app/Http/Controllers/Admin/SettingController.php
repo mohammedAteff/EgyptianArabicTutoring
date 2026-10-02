@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\Analytics\Services\EngagementCounterService;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Notifications\Services\TelegramNotificationService;
@@ -98,7 +99,7 @@ class SettingController extends Controller
 
         $rules = [
             'site_name' => ['required', 'string', 'max:100'],
-            'business_timezone' => ['required', 'string'],
+            'business_timezone' => ['required', 'timezone'],
             'default_language' => ['required', 'string', Rule::in(['en', 'fr', 'de'])],
             'hero_title' => ['required', 'string', 'max:255'],
             'hero_subtitle' => ['required', 'string', 'max:1000'],
@@ -238,7 +239,7 @@ class SettingController extends Controller
 
             Cache::forget('active_business_tz');
             Cache::forget('maintenance_mode_active');
-            Cache::forget('counters.public.'.now('Africa/Cairo')->toDateString());
+            Cache::forget(EngagementCounterService::cacheKey());
 
             AuditLog::create([
                 'administrator_id' => Auth::id(),

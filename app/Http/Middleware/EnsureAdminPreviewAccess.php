@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domains\Administration\Models\Administrator;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,10 +17,10 @@ class EnsureAdminPreviewAccess
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $administrator = Auth::guard('web')->user();
+        $administrator = Auth::guard('web')->id() ? Administrator::query()->whereNull('suspended_at')->find(Auth::guard('web')->id()) : null;
 
         abort_unless(
-            $administrator !== null && in_array($administrator->role, ['super_admin', 'admin'], true),
+            $administrator !== null && $administrator->suspended_at === null && in_array($administrator->role, ['super_admin', 'admin'], true),
             403,
             'Draft previews are restricted to administrators.'
         );

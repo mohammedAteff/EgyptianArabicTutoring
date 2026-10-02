@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<p class="mb-4 text-xs text-slate-500">Country totals use the current business timezone. Older aggregates from other timezones are preserved separately; periods without retained raw activity or matching aggregates may be incomplete. Multi-day visitor totals from pruned history sum daily unique visitors.</p>
 <div class="space-y-8">
 
     <!-- Top Header & Time Range Filter -->
@@ -52,7 +53,7 @@
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
             <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Sessions</span>
             <div class="text-2xl font-black text-slate-900 mt-2">{{ number_format($totalSessions) }}</div>
-            <p class="text-xs text-slate-500 mt-1">Visitor sessions started in Cairo time</p>
+            <p class="text-xs text-slate-500 mt-1">Visitor sessions started in business time</p>
         </div>
 
         <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">

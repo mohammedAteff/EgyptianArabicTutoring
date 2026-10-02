@@ -3,19 +3,21 @@
 namespace App\Console\Commands;
 
 use App\Domains\Analytics\Models\AnalyticsReconciliationAudit;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
 class BackfillDailyCountryMetricsCommand extends Command
 {
     protected $signature = 'analytics:backfill-daily-country
-                            {--from= : First Africa/Cairo calendar date (YYYY-MM-DD)}
-                            {--to= : Last Africa/Cairo calendar date (YYYY-MM-DD)}';
+                            {--from= : First business calendar date (YYYY-MM-DD)}
+                            {--to= : Last business calendar date (YYYY-MM-DD)}';
 
-    protected $description = 'Rebuild auditable daily country rollups for an explicit Cairo date range';
+    protected $description = 'Rebuild auditable daily country rollups for an explicit business date range';
 
     public function handle(): int
     {
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
         $fromInput = (string) $this->option('from');
         $toInput = (string) ($this->option('to') ?: $fromInput);
 
@@ -26,10 +28,10 @@ class BackfillDailyCountryMetricsCommand extends Command
         }
 
         try {
-            $from = CarbonImmutable::createFromFormat('Y-m-d', $fromInput, 'Africa/Cairo')->startOfDay();
-            $to = CarbonImmutable::createFromFormat('Y-m-d', $toInput, 'Africa/Cairo')->startOfDay();
+            $from = CarbonImmutable::createFromFormat('Y-m-d', $fromInput, $timezone)->startOfDay();
+            $to = CarbonImmutable::createFromFormat('Y-m-d', $toInput, $timezone)->startOfDay();
         } catch (\Throwable) {
-            $this->error('Dates must use YYYY-MM-DD in Africa/Cairo.');
+            $this->error("Dates must use YYYY-MM-DD in {$timezone}.");
 
             return self::INVALID;
         }
@@ -62,10 +64,10 @@ class BackfillDailyCountryMetricsCommand extends Command
             'audit_type' => 'daily_country_backfill',
             'cutover_at' => now('UTC'),
             'preserved_historical_count' => $days,
-            'notes' => "Rebuilt daily_country_metrics for {$from->toDateString()} through {$to->toDateString()} in Africa/Cairo. Unresolved or unavailable historical country context is represented as ZZ.",
+            'notes' => "Rebuilt daily_country_metrics for {$from->toDateString()} through {$to->toDateString()} in {$timezone}. Unresolved or unavailable historical country context is represented as ZZ.",
         ]);
 
-        $this->info("Country backfill completed for {$days} Cairo calendar day(s).");
+        $this->info("Country backfill completed for {$days} business calendar day(s).");
 
         return self::SUCCESS;
     }

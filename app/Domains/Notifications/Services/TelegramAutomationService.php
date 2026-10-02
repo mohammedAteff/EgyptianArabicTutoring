@@ -6,6 +6,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Notifications\Models\TelegramRule;
 use App\Domains\Notifications\Models\TelegramRuleState;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Jobs\DeliverTelegramMessage;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -55,7 +56,7 @@ class TelegramAutomationService
             }
             $due = CarbonImmutable::now('UTC')->addMinutes($rule->mode === 'delayed' ? $rule->minutes : 0);
             if ($rule->priority !== 'critical' && $rule->quiet_start && $rule->quiet_end) {
-                $tz = (string) Setting::get('business_timezone', 'Africa/Cairo');
+                $tz = (string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone());
                 $local = $due->setTimezone($tz);
                 $time = $local->format('H:i');
                 $quiet = $rule->quiet_start < $rule->quiet_end ? ($time >= $rule->quiet_start && $time < $rule->quiet_end) : ($time >= $rule->quiet_start || $time < $rule->quiet_end);

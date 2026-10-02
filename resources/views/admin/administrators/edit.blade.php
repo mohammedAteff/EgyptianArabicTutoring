@@ -1,6 +1,16 @@
 @extends('layouts.admin')
 
 @section('content')
+@if(auth('web')->user()?->isSuperAdmin())
+<form method="POST" action="{{ route('admin.accounts.suspension', ['type' => 'administrator', 'account' => $admin->id]) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    @csrf
+    <input type="hidden" name="suspend" value="{{ $admin->suspended_at ? '0' : '1' }}">
+    <label class="flex-1 text-sm">Reason<input name="reason" required maxlength="1000" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label>
+    <span class="pb-2 text-sm font-semibold {{ $admin->suspended_at ? 'text-rose-700' : 'text-emerald-700' }}">{{ $admin->suspended_at ? 'Suspended' : 'Active' }}</span>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{{ $admin->suspended_at ? 'Restore account' : 'Suspend account' }}</button>
+</form>
+@endif
+
 <div class="max-w-2xl mx-auto space-y-6">
 
     <div class="flex items-center justify-between">

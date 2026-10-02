@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
+use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
 use App\Http\Middleware\EnsureAdminRole;
 use App\Http\Middleware\EnsureNotUnderMaintenance;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.role' => EnsureAdminRole::class,
             'admin.noindex' => ApplyAdminNoindexHeaders::class,
             'admin.preview' => EnsureAdminPreviewAccess::class,
+            'account.active' => EnsureAccountActive::class,
             'student.auth' => EnsureStudentAuthenticated::class,
         ]);
         $middleware->web(append: [

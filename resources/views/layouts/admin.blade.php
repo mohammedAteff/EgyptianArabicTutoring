@@ -257,7 +257,9 @@
                 <div>
                     <div class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Configuration</div>
                     @if(in_array(auth()->user()->role, ['admin', 'super_admin']))
-                    <a href="{{ route('admin.telegram.index') }}" class="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800">Telegram Bots</a>
+                    <a href="{{ route('admin.meeting-links.index') }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs('admin.meeting-links.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}"><svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-3v10l-6-3"/></svg>Meeting Links</a>
+                <a href="{{ route('admin.payment-methods.index') }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs('admin.payment-methods.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}"><svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 9h20M6 15h3"/></svg>Payment Methods</a>
+                <a href="{{ route('admin.telegram.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg {{ request()->routeIs('admin.telegram.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}"><svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M21.4 3.4 2.8 10.6c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 1.8 5.6c.2.6.1.8.8.8.5 0 .8-.2 1-.4l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8L23 5c.3-1.3-.5-1.9-1.6-1.6ZM9.3 13.3l9.4-5.9c.4-.2.7-.1.4.2l-7.8 7.1-.3 3.4-1.7-4.8Z"/></svg><span>Telegram Bots</span></a>
                     @endif
                     <div class="space-y-1">
                         <a href="{{ route('admin.settings.index') }}" 
@@ -385,8 +387,8 @@
                 <div class="flex items-center gap-4 text-sm font-medium">
                     <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-full text-xs font-semibold">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', now('UTC')); @endphp
-                        <span>Cairo Time: {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime(now('Africa/Cairo')) }} ({{ $cairoClock['utc_offset'] }})</span>
+                        @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay(app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone(), now('UTC')); @endphp
+                        <span>{{ $cairoClock['city'] }} Time: {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime(now(app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone())) }} ({{ $cairoClock['utc_offset'] }})</span>
                     </div>    <form method="POST" action="{{ route('admin.preferences.time') }}" class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 ">
         @csrf
         <label for="staff-time-format" class="text-xs">My time format</label>
@@ -430,6 +432,12 @@
                 </div>
             @endif
 
+            @if(isset($errors) && $errors->any())
+                <div role="alert" class="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                    <p class="font-semibold">Changes were not saved. Please correct these fields:</p>
+                    <ul class="mt-2 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+                </div>
+            @endif
             @if(session('success'))
                 <div class="shrink-0 bg-emerald-50 border-b border-emerald-200 px-6 py-3 flex items-center justify-between text-sm text-emerald-800">
                     <div class="flex items-center gap-2">

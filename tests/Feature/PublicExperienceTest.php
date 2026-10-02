@@ -4,8 +4,11 @@ namespace Tests\Feature;
 
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\MeetingProvider;
+use App\Domains\Booking\Models\MeetingRoom;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingService;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
@@ -159,7 +162,9 @@ class PublicExperienceTest extends TestCase
         $this->assertStringContainsString($booking->confirmation_token, $icsResponse->getContent());
         $this->assertStringNotContainsString('meet.google.com', $icsResponse->getContent());
 
-        Setting::set('video_meeting_url', 'https://meet.example.test/arabic-room', 'booking', true);
+        $room = MeetingRoom::factory()->create(['meeting_provider_id' => MeetingProvider::where('is_default', true)->firstOrFail()->id, 'url' => 'https://meet.example.test/arabic-room', 'url_hash' => hash('sha256', 'https://meet.example.test/arabic-room')]);
+        $booking = app(MeetingLinkService::class)->assign($booking, roomId: $room->id);
+        $this->travelTo($startUtc->subMinutes(15));
         $this->get(route('booking.confirmation', ['token' => $booking->confirmation_token]))
             ->assertSee('href="https://meet.example.test/arabic-room"', false)
             ->assertSeeText('Join Video Classroom');

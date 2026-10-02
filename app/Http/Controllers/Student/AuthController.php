@@ -6,6 +6,7 @@ use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentAuthAttemptTracker;
+use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -62,14 +63,14 @@ class AuthController extends Controller
                 return null;
             }
 
-            $candidates = Student::verified()
+            $candidates = Student::verified()->whereNull('suspended_at')
                 ->whereDate('date_of_birth', $dateOfBirth)
                 ->where(function ($query) use ($name, $email): void {
                     if ($name) {
                         $query->orWhere('name_normalized', $name);
                     }
                     if ($email) {
-                        $query->orWhere('email_normalized', $email);
+                        $query->orWhere('email_normalized', $email)->orWhereHas('verifiedEmails', fn ($emails) => $emails->where('email_normalized', $email));
                     }
                 })
                 ->select(['id', 'name_normalized', 'email_normalized', 'phone_normalized'])
@@ -79,7 +80,7 @@ class AuthController extends Controller
             $matches = $candidates->filter(function (Student $student) use ($name, $email, $phone, $identity): bool {
                 $matched = 0;
                 $matched += $name !== null && $name === $student->name_normalized ? 1 : 0;
-                $matched += $email !== null && $email === $student->email_normalized ? 1 : 0;
+                $matched += $email !== null && app(StudentEmailService::class)->trusted($student, $email) ? 1 : 0;
                 $matched += $identity->phoneMatches($phone, $student->phone_normalized) ? 1 : 0;
 
                 return $matched >= 2;

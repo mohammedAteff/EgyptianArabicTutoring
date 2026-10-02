@@ -13,6 +13,7 @@ class DailyMetric extends Model
     protected $table = 'daily_metrics';
 
     protected $fillable = [
+        'reporting_timezone',
         'metric_date',
         'metric_name',
         'dimension_key',

@@ -2,6 +2,8 @@
 
 @section('content')
 <h1 class="text-3xl font-semibold tracking-tight text-nile-900">Your sessions</h1>
+<a href="{{ route('student.profile') }}" class="mt-3 inline-block text-sm font-semibold text-nile-800 underline">Your profile and verified emails</a>
+<x-student-timezone :timezone="$timezone" />
 <p class="mt-2 text-stone-600">Welcome, {{ $student->first_name }}.</p>
 @if(session('success'))<p role="status" class="mt-5 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{{ session('success') }}</p>@endif
 @if(session('info'))<p role="status" class="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{{ session('info') }}</p>@endif
@@ -36,15 +38,16 @@
 <section class="mt-8" aria-labelledby="upcoming-title">
     <h2 id="upcoming-title" class="text-xl font-semibold">Upcoming sessions</h2>
     @forelse($upcoming as $booking)
-        @php $customerStart = $booking->customer_start; @endphp
+        @php $customerStart = $booking->start_at_utc->copy()->setTimezone($timezone); $meetingUrl = $meetingLinks->studentUrl($booking); @endphp
         <article class="mt-4 rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
             <p class="font-semibold">{{ $customerStart->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $customerStart->timezoneName }}</span></p>
             <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ $booking->studentStatusLabel() }}</p>
             <p class="mt-1 text-sm text-stone-600">Tutor: {{ $tutorName }}</p>
+            <p class="mt-2 text-sm text-stone-600" x-data="{ remaining: 0, timer: null, destroy() { clearInterval(this.timer); }, refresh() { const reveal = Number(this.$el.dataset.reveal); if (reveal > 0 && Date.now() >= reveal) { clearInterval(this.timer); location.reload(); return; } this.remaining = Math.max(0, Math.floor((Date.parse($el.dataset.start) - Date.now()) / 1000)); } }" data-reveal="{{ !$meetingUrl && $booking->meeting_room_id && $booking->status === 'confirmed' && $booking->start_at_utc->copy()->subMinutes((int) \App\Domains\CMS\Models\Setting::get('meeting.student_reveal_minutes', 15))->isFuture() ? $booking->start_at_utc->copy()->subMinutes((int) \App\Domains\CMS\Models\Setting::get('meeting.student_reveal_minutes', 15))->timestamp * 1000 : 0 }}" data-start="{{ $booking->start_at_utc->toIso8601String() }}" x-init="refresh(); timer = setInterval(() => refresh(), 1000)"><span x-text="Math.floor(remaining / 3600) + 'h ' + Math.floor(remaining % 3600 / 60) + 'm until lesson'"></span></p>
             @if($booking->status === 'confirmed' && $meetingUrl)
                 <a href="{{ $meetingUrl }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block rounded-lg bg-nile-800 px-4 py-2 text-sm font-semibold text-white hover:bg-nile-900">Join lesson with {{ $tutorName }}</a>
             @elseif($booking->status === 'confirmed')
-                <p class="mt-2 text-sm text-stone-600">Your tutor will share the private meeting link before the lesson.</p>
+                <p class="mt-2 text-sm text-stone-600">@if($booking->meeting_room_id)Your {{ $booking->meeting_provider_snapshot }} link opens {{ \App\Domains\CMS\Models\Setting::get('meeting.student_reveal_minutes', 15) }} minutes before the lesson.@else Your tutor will assign your meeting room before the lesson.@endif</p>
             @endif
             @if($booking->status === 'confirmed' && now('UTC')->addHours(24)->lessThanOrEqualTo($booking->start_at_utc))
                 <a href="{{ route('student.bookings.reschedule', $booking->id) }}" class="mt-3 inline-block text-sm font-semibold text-nile-800 underline">Reschedule</a>
@@ -59,7 +62,7 @@
 <section class="mt-10" aria-labelledby="history-title">
     <h2 id="history-title" class="text-xl font-semibold">Session history</h2>
     @foreach($history as $booking)
-        @php $customerStart = $booking->customer_start; @endphp
+        @php $customerStart = $booking->start_at_utc->copy()->setTimezone($timezone); $meetingUrl = $meetingLinks->studentUrl($booking); @endphp
         <article class="mt-4 rounded-xl border border-stone-200 bg-white p-5">
             <p class="font-semibold">{{ $customerStart->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $customerStart->timezoneName }}</span></p>
             <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ $booking->studentStatusLabel() }}</p>

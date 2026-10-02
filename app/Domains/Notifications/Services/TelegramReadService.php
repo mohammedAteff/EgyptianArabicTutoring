@@ -5,6 +5,7 @@ namespace App\Domains\Notifications\Services;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormAssignmentService;
@@ -15,6 +16,7 @@ use App\Domains\Resources\Models\ResourceRequest;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -31,7 +33,7 @@ class TelegramReadService
             $entry = SessionLedgerEntry::where('booking_id', $booking->id)->where('credit_change', '<', 0)->first();
         }
         $package = $entry?->package;
-        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->customer_start->format('Y-m-d H:i T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => $booking->status === 'confirmed' ? (string) Setting::get('video_meeting_url', '') : 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package)['remaining_credits'] : 0, 'session_number' => $package ? (int) $package->ledgerEntries()->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
+        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('Y-m-d g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package)['remaining_credits'] : 0, 'session_number' => $package ? (int) $package->ledgerEntries()->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
 
         return $data;
     }
@@ -58,7 +60,7 @@ class TelegramReadService
         }
         $data = $this->package($package);
         $remaining = (int) $data['remaining_credits'];
-        $expiry = $package->expiration_date ? CarbonImmutable::parse($package->expiration_date->format('Y-m-d'), (string) Setting::get('business_timezone', 'Africa/Cairo'))->endOfDay()->setTimezone('UTC') : null;
+        $expiry = $package->expiration_date ? CarbonImmutable::parse($package->expiration_date->format('Y-m-d'), (string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone()))->endOfDay()->setTimezone('UTC') : null;
         if ($expiry && $expiry->lt($now)) {
             return;
         }
@@ -85,6 +87,8 @@ class TelegramReadService
                 Booking::where('status', 'confirmed')->where('start_at_utc', '>', $now)->where('start_at_utc', '<=', $now->addMinutes($rule->minutes))->chunkById(100, function ($bookings) use ($rule): void {
                     foreach ($bookings as $booking) {
                         $data = $this->booking($booking);
+                        $data['meeting_url'] = app(MeetingLinkService::class)->notificationUrl($booking, $rule->minutes) ?? 'Unavailable';
+                        $data['meeting_provider'] = $booking->meeting_provider_snapshot ?? 'Unassigned';
                         $identity = 'booking:'.$booking->id.':'.$booking->start_at_utc->timestamp;
                         if ($rule->trigger === 'session_reminder') {
                             $this->automation->emit($rule->trigger, $identity, $data, null, $rule->id);
@@ -110,7 +114,7 @@ class TelegramReadService
                     $this->automation->emit('maintenance_duration', 'maintenance:'.$now->timestamp, ['enabled_at' => $since, 'duration_minutes' => (int) CarbonImmutable::parse($since)->diffInMinutes($now)], 'maintenance:'.$since, $rule->id);
                 }
             } elseif (in_array($rule->trigger, ['business_digest', 'analytics_digest'], true)) {
-                $local = $now->setTimezone((string) Setting::get('business_timezone', 'Africa/Cairo'));
+                $local = $now->setTimezone((string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone()));
                 if ($rule->mode === 'scheduled' && $local->format('H:i') >= $rule->send_time) {
                     $this->automation->emit($rule->trigger, 'digest:'.$local->toDateString(), ['date' => $local->toDateString(), 'digest' => $rule->trigger === 'business_digest' ? $this->businessDigest($rule->sections ?? []) : $this->stats(1)], null, $rule->id);
                 }
@@ -135,7 +139,7 @@ class TelegramReadService
     /** @param list<string> $sections */
     public function businessDigest(array $sections): string
     {
-        $today = CarbonImmutable::now((string) Setting::get('business_timezone', 'Africa/Cairo'))->startOfDay();
+        $today = CarbonImmutable::now((string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone()))->startOfDay();
         $start = $today->setTimezone('UTC');
         $end = $today->addDay()->setTimezone('UTC');
         $lines = [];
@@ -178,11 +182,11 @@ class TelegramReadService
 
     public function stats(int $days): string
     {
-        $end = CarbonImmutable::now('Africa/Cairo')->endOfDay();
+        $end = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->endOfDay();
         $start = $end->startOfDay()->subDays($days - 1);
         $metrics = $this->analytics->reportingMetrics($start, $end)->where('dimension_key', '');
         $traffic = $this->reports->getTrafficReport($start, $end)['summary'];
-        $lines = ['Analytics — '.$start->toDateString().' to '.$end->toDateString().' (Africa/Cairo)'];
+        $lines = ['Analytics — '.$start->toDateString().' to '.$end->toDateString().' ('.app(TimezoneService::class)->getBusinessTimezone().')'];
         $lines[] = ($traffic['visitors_is_daily_sum'] ? 'Sum of daily unique visitors' : 'Unique visitors').': '.$traffic['visitors'];
         $lines[] = 'Sessions: '.$traffic['sessions'];
         $lines[] = 'Page views: '.$traffic['page_views'];
@@ -214,7 +218,7 @@ class TelegramReadService
 
     public function sessions(bool $tomorrow, bool $personal): string
     {
-        $date = CarbonImmutable::now((string) Setting::get('business_timezone', 'Africa/Cairo'))->startOfDay();
+        $date = CarbonImmutable::now((string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone()))->startOfDay();
         if ($tomorrow) {
             $date = $date->addDay();
         }

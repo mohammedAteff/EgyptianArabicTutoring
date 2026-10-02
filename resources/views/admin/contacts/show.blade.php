@@ -99,7 +99,7 @@
             <table class="w-full text-left text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                        <th class="px-4 py-3 font-semibold">Cairo Time</th>
+                        <th class="px-4 py-3 font-semibold">Business Time</th>
                         <th class="px-4 py-3 font-semibold">Student Time</th>
                         <th class="px-4 py-3 font-semibold">Session Type</th>
                         <th class="px-4 py-3 font-semibold">Status</th>
@@ -109,7 +109,7 @@
                 <tbody class="divide-y divide-slate-100">
                     @forelse($contact->bookings as $b)
                         @php
-                            $bStartCairo = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone('Africa/Cairo');
+                            $bStartCairo = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone(app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone());
                             $bStartStudent = \Carbon\CarbonImmutable::instance($b->start_at_utc)->setTimezone($b->customer_timezone);
                         @endphp
                         <tr class="hover:bg-slate-50/70">

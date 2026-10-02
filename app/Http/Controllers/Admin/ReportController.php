@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Reporting\Services\ReportService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class ReportController extends Controller
             ? $cutoverDate
             : null;
         $isBeforeCutover = $cutoverDate !== null
-            && $start->setTimezone('Africa/Cairo')->toDateString() < $cutoverDate;
+            && $start->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->toDateString() < $cutoverDate;
 
         $data = match ($reportType) {
             'bookings' => $this->reportService->getBookingsReport($start, $end, $request->query('status')),
@@ -44,8 +45,8 @@ class ReportController extends Controller
             'title' => 'Operational Reports & Data Exports',
             'reportType' => $reportType,
             'range' => $range,
-            'start' => $start->setTimezone('Africa/Cairo'),
-            'end' => $end->setTimezone('Africa/Cairo'),
+            'start' => $start->setTimezone(app(TimezoneService::class)->getBusinessTimezone()),
+            'end' => $end->setTimezone(app(TimezoneService::class)->getBusinessTimezone()),
             'reportData' => $data,
             'authoritativeCutoverDate' => $cutoverDate,
             'isBeforeAuthoritativeCutover' => $isBeforeCutover,
@@ -84,6 +85,8 @@ class ReportController extends Controller
             $r->top_source,
         ]);
 
+        $rows->push([$report['summary']['visitors_is_daily_sum'] ? 'Period total (sum of daily uniques)' : 'Period total (unique visitors)', $report['summary']['visitors'], $report['summary']['sessions'], $report['summary']['page_views'], $source ?: 'all']);
+
         $filename = "traffic_report_{$ts}.{$format}";
 
         return $format === 'xlsx'
@@ -100,8 +103,8 @@ class ReportController extends Controller
             'Customer Email',
             'Session Type',
             'Status',
-            'Date (Cairo)',
-            'Time (Cairo)',
+            'Date (Business Time)',
+            'Time (Business Time)',
             'Time (Student Local)',
             'Acquisition Source',
             'Campaign',
@@ -216,7 +219,7 @@ class ReportController extends Controller
      */
     protected function resolveDateRange(string $range, Request $request): array
     {
-        $cairoTz = 'Africa/Cairo';
+        $cairoTz = app(TimezoneService::class)->getBusinessTimezone();
         $now = CarbonImmutable::now($cairoTz);
 
         if ($range === 'custom' && $request->filled('start_date') && $request->filled('end_date')) {

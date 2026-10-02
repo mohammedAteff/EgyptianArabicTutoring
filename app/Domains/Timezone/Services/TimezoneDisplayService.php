@@ -16,14 +16,14 @@ class TimezoneDisplayService
         return $instant->format('g:i A');
     }
 
-    public function administratorTime(DateTimeInterface $instant): string
+    public function administratorTime(DateTimeInterface $instant, ?string $timezone = null): string
     {
-        return $instant->format(auth('web')->user()?->time_format === '12' ? 'g:i A' : 'H:i');
+        return Carbon::instance($instant)->setTimezone($timezone ?? app(TimezoneService::class)->getBusinessTimezone())->format(auth('web')->user()?->time_format === '12' ? 'g:i A' : 'H:i');
     }
 
     public function administratorDateTime(DateTimeInterface $instant): string
     {
-        return $instant->format('M j, Y').' '.$this->administratorTime($instant);
+        return Carbon::instance($instant)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('M j, Y').' '.$this->administratorTime($instant);
     }
 
     /**

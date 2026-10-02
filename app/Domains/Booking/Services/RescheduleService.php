@@ -85,7 +85,7 @@ class RescheduleService
             }
 
             if ($performedBy === 'student') {
-                if (! $lockedStudent || $lockedStudent->trashed() || $lockedStudent->identity_status !== 'verified'
+                if (! $lockedStudent || $lockedStudent->trashed() || $lockedStudent->identity_status !== 'verified' || $lockedStudent->suspended_at !== null
                     || (int) $booking->student_id !== (int) $performedById) {
                     throw new BookingPolicyViolationException('This booking is not available to the student.');
                 }
@@ -190,6 +190,8 @@ class RescheduleService
                 'status' => 'confirmed',
                 'admin_reconfirmation_needed' => true,
             ]));
+
+            $lockedBooking = app(MeetingLinkService::class)->assign($lockedBooking, roomId: $lockedBooking->meeting_room_id, actorId: $performedBy === 'admin' ? $performedById : null);
 
             if (in_array($performedBy, ['student', 'admin', 'system'], true)) {
                 SessionReschedule::create([

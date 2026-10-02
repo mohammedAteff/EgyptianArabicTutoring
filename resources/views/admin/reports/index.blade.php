@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<p class="mb-4 text-xs text-slate-500">Traffic uses eligible public activity and matching business-timezone aggregates. Older periods may be incomplete after a timezone change if raw activity was pruned. The bookings ledger uses lesson dates and all selected statuses; resource records include operational requests. Those scopes differ from public conversion telemetry.</p>
 <div class="space-y-6">
 
     <!-- Top Header -->
@@ -191,7 +192,7 @@
                                 <th class="py-3 px-4">Booking</th>
                                 <th class="py-3 px-4">Student</th>
                                 <th class="py-3 px-4">Status</th>
-                                <th class="py-3 px-4">Date & Time (Cairo)</th>
+                                <th class="py-3 px-4">Date & Time (Business Time)</th>
                                 <th class="py-3 px-4">Student Local Time</th>
                                 <th class="py-3 px-4">Source</th>
                                 <th class="py-3 px-4">Campaign</th>

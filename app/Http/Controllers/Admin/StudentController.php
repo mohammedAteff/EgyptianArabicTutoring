@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentEmail;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -58,7 +61,7 @@ class StudentController extends Controller
         }
 
         $students = Student::query()
-            ->select(['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at'])
+            ->select(['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id'])
             ->when($searchTerms !== [], function (Builder $query) use ($searchTerms): void {
                 $query->where(function (Builder $query) use ($searchTerms): void {
                     foreach ($searchTerms as $index => $like) {
@@ -84,7 +87,7 @@ class StudentController extends Controller
     public function show(Request $request, int $student, StudentLedgerService $ledger, TimezoneService $timezones): View
     {
         $isAssistant = $request->user('web')?->role === 'assistant';
-        $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at'];
+        $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id'];
         if (! $isAssistant) {
             array_push($columns, 'name_normalized', 'email_normalized', 'phone_normalized', 'date_of_birth', 'identity_status', 'possible_duplicate_of_student_id', 'internal_notes');
         }
@@ -116,6 +119,7 @@ class StudentController extends Controller
                     'summary' => $ledger->summary($package),
                     'payments' => PaymentRecord::query()->where('student_package_id', $package->id)->orderByDesc('paid_at')->get(),
                     'refunds' => PaymentRefund::query()->where('student_package_id', $package->id)->orderByDesc('refunded_at')->get(),
+                    'validityHistory' => AuditLog::query()->where('entity_type', StudentPackage::class)->where('entity_id', $package->id)->where('action', 'package_validity_extended')->orderByDesc('id')->get(),
                     'entries' => SessionLedgerEntry::query()->where('student_package_id', $package->id)->orderByDesc('id')->get(),
                 ];
             });
@@ -126,6 +130,7 @@ class StudentController extends Controller
             'bookings' => $bookings,
             'formSubmissions' => $formSubmissions,
             'financialPackages' => $financialPackages,
+            'paymentMethods' => $isAssistant ? collect() : PaymentMethod::available()->get(),
             'isAssistant' => $isAssistant,
             'businessTz' => $timezones->getBusinessTimezone(),
         ]);
@@ -173,6 +178,9 @@ class StudentController extends Controller
 
         $database->transaction(function () use ($student, $validated, $identity, $email, $phone, $timezone, $auditLogs, $request): void {
             $record = Student::query()->whereKey($student)->lockForUpdate()->firstOrFail();
+            if ($email && StudentEmail::query()->where('email_normalized', $email)->where('student_id', '!=', $record->id)->lockForUpdate()->exists()) {
+                throw ValidationException::withMessages(['email' => 'This email belongs to another verified student profile.']);
+            }
             $previous = [
                 'first_name' => $record->first_name,
                 'last_name' => $record->last_name,

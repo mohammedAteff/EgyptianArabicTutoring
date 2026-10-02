@@ -3,6 +3,7 @@
 namespace App\Domains\Marketing\Services;
 
 use App\Domains\Marketing\Models\Promotion;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -113,7 +114,7 @@ class PromotionService
             return null;
         }
 
-        return Carbon::parse($cairoDateTime, 'Africa/Cairo')->setTimezone('UTC');
+        return Carbon::parse($cairoDateTime, app(TimezoneService::class)->getBusinessTimezone())->setTimezone('UTC');
     }
 
     /**
@@ -129,6 +130,6 @@ class PromotionService
             $utcDateTime = Carbon::parse($utcDateTime, 'UTC');
         }
 
-        return $utcDateTime->copy()->setTimezone('Africa/Cairo');
+        return $utcDateTime->copy()->setTimezone(app(TimezoneService::class)->getBusinessTimezone());
     }
 }

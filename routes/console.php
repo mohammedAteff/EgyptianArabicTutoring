@@ -2,6 +2,7 @@
 
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Timezone\Services\TimezoneService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
@@ -36,7 +37,7 @@ Schedule::call(function (): bool {
     return Artisan::call('analytics:aggregate-daily-country', ['--date' => $cairoYesterday]) === 0;
 })
     ->dailyAt('00:02')
-    ->timezone('Africa/Cairo')
+    ->timezone(app(TimezoneService::class)->getBusinessTimezone())
     ->name('analytics:aggregate-daily-country')
     ->onSuccess(function () {
         Setting::set('last_country_analytics_aggregation_at', now('UTC')->toIso8601String(), 'system');
@@ -55,7 +56,7 @@ Schedule::call(function (): bool {
 // 3. Analytics Aggregation: computes daily traffic and conversion rollups
 Schedule::call(fn (): bool => Artisan::call('analytics:aggregate-daily', ['--prune' => true]) === 0)
     ->dailyAt('00:05')
-    ->timezone('Africa/Cairo')
+    ->timezone(app(TimezoneService::class)->getBusinessTimezone())
     ->name('analytics:aggregate-daily --prune')
     ->onSuccess(function () {
         Setting::set('last_analytics_aggregation_at', now('UTC')->toIso8601String(), 'system');
@@ -100,4 +101,4 @@ Schedule::command('telegram:tick')
     ->withoutOverlapping(10)
     ->name('telegram:tick');
 
-Schedule::command('geoip:update')->monthlyOn(2, '04:00')->timezone('Africa/Cairo')->withoutOverlapping(120);
+Schedule::command('geoip:update')->monthlyOn(2, '04:00')->timezone(app(TimezoneService::class)->getBusinessTimezone())->withoutOverlapping(120);

@@ -81,8 +81,8 @@
         <!-- Download Gate Card (5 cols) -->
         <div class="lg:col-span-5" x-data="{
             state: '{{ (! $resource->is_gated || session('access_granted')) ? 'unlocked' : 'idle' }}',
-            name: @js(old('name', '')),
-            email: @js(old('email', '')),
+            name: @js(old('name', ($resourceStudent ?? null)?->name ?? '')),
+            email: @js(old('email', ($resourceStudent ?? null)?->email ?? '')),
             pin: '',
             challenge: '',
             downloadUrl: '{{ session('download_token') ? route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) : '' }}',

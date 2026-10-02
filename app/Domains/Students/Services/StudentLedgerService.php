@@ -4,6 +4,7 @@ namespace App\Domains\Students\Services;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
@@ -151,7 +152,7 @@ class StudentLedgerService
             ? $settlementDate
             : CarbonImmutable::instance($settlementDate ?? now('UTC'));
 
-        $cairoMidnight = $settlement->setTimezone('Africa/Cairo')->startOfDay();
+        $cairoMidnight = $settlement->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
 
         return $cairoMidnight->addDays($validityDays)->toDateString();
     }
@@ -337,14 +338,14 @@ class StudentLedgerService
         ]);
     }
 
-    public function recordPayment(StudentPackage $package, string $amount, string $idempotencyKey, ?int $administratorId, string $method = 'PayPal - Manual', ?string $reference = null, ?string $notes = null): PaymentRecord
+    public function recordPayment(StudentPackage $package, string $amount, string $idempotencyKey, ?int $administratorId, string $method = 'PayPal - Manual', ?string $reference = null, ?string $notes = null, ?int $paymentMethodId = null): PaymentRecord
     {
         $cents = $this->toCents($amount);
         if ($cents <= 0) {
             throw new InvalidArgumentException('Payment amount must be positive.');
         }
 
-        return $this->database->transaction(function () use ($package, $cents, $idempotencyKey, $administratorId, $method, $reference, $notes): PaymentRecord {
+        return $this->database->transaction(function () use ($package, $cents, $idempotencyKey, $administratorId, $method, $reference, $notes, $paymentMethodId): PaymentRecord {
             $lockedStudent = Student::withTrashed()->whereKey($package->student_id)->lockForUpdate()->firstOrFail();
             $lockedPackage = StudentPackage::query()->whereKey($package->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged' || (int) $lockedPackage->student_id !== (int) $lockedStudent->id) {
@@ -359,6 +360,14 @@ class StudentLedgerService
                 return $existing;
             }
 
+            if ($paymentMethodId !== null) {
+                $configuredMethod = PaymentMethod::query()->whereKey($paymentMethodId)->where('active', true)->lockForUpdate()->first();
+                if (! $configuredMethod) {
+                    throw new InvalidArgumentException('Choose an enabled payment method.');
+                }
+                $method = $configuredMethod->name;
+            }
+
             $recordedPayment = PaymentRecord::create([
                 'student_package_id' => $package->id,
                 'student_id' => $package->student_id,
@@ -366,6 +375,7 @@ class StudentLedgerService
                 'amount_paid' => $this->fromCents($cents),
                 'currency' => $package->currency,
                 'payment_method' => $method,
+                'payment_method_id' => $paymentMethodId,
                 'transaction_reference' => $reference,
                 'paid_at' => now('UTC'),
                 'recorded_by' => $administratorId,
@@ -541,7 +551,13 @@ class StudentLedgerService
         $refunded = $this->toCents((string) PaymentRefund::query()->where('student_package_id', $package->id)->sum('amount_refunded'));
         $netPaid = $paid - $refunded;
 
+        $entries = SessionLedgerEntry::query()->where('student_package_id', $package->id)->get();
+
         return [
+            'allocated_credits' => (int) $entries->where('entry_type', 'package_grant')->sum('credit_change'),
+            'courtesy_credits' => (int) $entries->where('entry_type', 'courtesy_adjustment')->sum('credit_change'),
+            'consumed_credits' => -(int) $entries->where('entry_type', 'session_consumed')->sum('credit_change'),
+            'restored_credits' => (int) $entries->where('entry_type', 'cancellation_restore')->sum('credit_change'),
             'gross_paid' => $this->fromCents($paid),
             'gross_refunded' => $this->fromCents($refunded),
             'net_paid' => $this->fromCents($netPaid),

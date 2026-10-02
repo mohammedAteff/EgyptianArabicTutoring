@@ -3,7 +3,9 @@
 namespace App\Domains\Notifications\Services;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Crypt;
@@ -138,10 +140,10 @@ class TelegramNotificationService
         $sessionTitle = $booking->sessionType?->title ?: '1-on-1 Egyptian Arabic Session';
 
         $startUtc = Carbon::parse($booking->start_at_utc, 'UTC');
-        $startBusiness = $booking->business_start;
+        $startBusiness = $startUtc->copy()->setTimezone(app(TimezoneService::class)->getBusinessTimezone());
 
         $windowLabel = $this->humanizeMinutes($windowMinutes);
-        $meetingUrl = (string) Setting::get('video_meeting_url', '');
+        $meetingUrl = app(MeetingLinkService::class)->notificationUrl($booking, $windowMinutes) ?? '';
         $meetingLine = filter_var($meetingUrl, FILTER_VALIDATE_URL)
             && strtolower((string) parse_url($meetingUrl, PHP_URL_SCHEME)) === 'https'
                 ? "🔗 *Classroom Room:* [Join Session]({$meetingUrl})"

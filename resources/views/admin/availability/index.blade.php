@@ -7,7 +7,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Tutor Availability Management</h1>
-            <p class="text-sm text-slate-500 mt-1">Configure weekly recurring lesson intervals and date-specific exceptions in Cairo Time ({{ $businessTz }}).</p>
+            <p class="text-sm text-slate-500 mt-1">Configure weekly recurring lesson intervals and date-specific exceptions in Business Time ({{ $businessTz }}).</p>
         </div>
         <div class="flex items-center gap-3">
             <button @click="addExceptionModalOpen = true" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition-colors shadow-xs">
@@ -159,7 +159,7 @@
         
         <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200" @click.away="addRuleModalOpen = false">
             <h3 class="text-lg font-bold font-serif text-slate-900 mb-1">Add Weekly Time Window</h3>
-            <p class="text-xs text-slate-500 mb-6">Create a recurring availability interval in Cairo Time ({{ $businessTz }}).</p>
+            <p class="text-xs text-slate-500 mb-6">Create a recurring availability interval in Business Time ({{ $businessTz }}).</p>
 
             <form action="{{ route('admin.availability.rules.store') }}" method="POST" class="space-y-4">
                 @csrf

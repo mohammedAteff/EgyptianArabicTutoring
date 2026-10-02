@@ -1,6 +1,23 @@
 @extends('layouts.admin')
 
 @section('content')
+@if(auth('web')->user()?->isAdmin())
+<form method="POST" action="{{ route('admin.students.meeting-preference', $student->id) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    @csrf
+    <label class="flex-1 text-sm">Preferred meeting provider<select name="preferred_meeting_provider_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">Use default provider</option>@foreach(\App\Domains\Booking\Models\MeetingProvider::query()->where('active', true)->orderBy('sort_order')->get() as $provider)<option value="{{ $provider->id }}" @selected($student->preferred_meeting_provider_id === $provider->id)>{{ $provider->name }}</option>@endforeach</select></label>
+    <button class="rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save meeting preference</button>
+</form>
+@endif
+@if(auth('web')->user()?->isSuperAdmin())
+<form method="POST" action="{{ route('admin.accounts.suspension', ['type' => 'student', 'account' => $student->id]) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    @csrf
+    <input type="hidden" name="suspend" value="{{ $student->suspended_at ? '0' : '1' }}">
+    <label class="flex-1 text-sm">Reason<input name="reason" required maxlength="1000" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label>
+    <span class="pb-2 text-sm font-semibold {{ $student->suspended_at ? 'text-rose-700' : 'text-emerald-700' }}">{{ $student->suspended_at ? 'Suspended' : 'Active' }}</span>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{{ $student->suspended_at ? 'Restore account' : 'Suspend account' }}</button>
+</form>
+@endif
+
 <div class="mx-auto max-w-7xl space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -144,7 +161,7 @@
                 <input name="discount_amount" required inputmode="decimal" value="0.00" placeholder="Discount" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                 <input name="currency" required maxlength="3" value="USD" placeholder="Currency" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm uppercase">
                 <input name="expiration_date" type="date" min="{{ now()->toDateString() }}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-                <input type="hidden" name="package_idempotency_key" value="{{ old('package_idempotency_key', 'pkg-'.\Illuminate\Support\Str::uuid()) }}">
+                <input type="hidden" name="package_idempotency_key" value="{{ old('package_idempotency_key', (string) \Illuminate\Support\Str::uuid()) }}">
                 <button class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800">Create package</button>
             </form>
 
@@ -166,10 +183,10 @@
                                 @csrf
                                 <h4 class="font-semibold text-slate-800 sm:col-span-2">Record payment</h4>
                                 <input name="amount_paid" required inputmode="decimal" placeholder="Amount" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <input name="payment_method" required maxlength="80" value="PayPal - Manual" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                <select name="payment_method" required aria-label="Payment method" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">@foreach($paymentMethods as $method)<option value="{{ $method->id }}" @selected($method->is_default)>{{ $method->name }}</option>@endforeach</select>
                                 <input name="transaction_reference" maxlength="255" placeholder="Transaction reference (staff only)" class="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2">
                                 <textarea name="notes" rows="2" maxlength="4000" placeholder="Private staff notes" class="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"></textarea>
-                                <input type="hidden" name="payment_idempotency_key_{{ $package->id }}" value="pay-{{ $package->id }}-{{ \Illuminate\Support\Str::uuid() }}">
+                                <input type="hidden" name="payment_idempotency_key_{{ $package->id }}" value="{{ \Illuminate\Support\Str::uuid() }}">
                                 <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:col-span-2">Save payment</button>
                             </form>
                             <form method="POST" action="{{ route('admin.students.credits.adjust', [$student->id, $package->id]) }}" class="grid gap-2 sm:grid-cols-2">
@@ -177,36 +194,52 @@
                                 <h4 class="font-semibold text-slate-800 sm:col-span-2">Adjust credits</h4>
                                 <input name="credit_change" required type="number" min="-500" max="500" placeholder="+ / − credits" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
                                 <input name="description" required maxlength="255" placeholder="Reason" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <input type="hidden" name="credit_idempotency_key_{{ $package->id }}" value="credit-{{ $package->id }}-{{ \Illuminate\Support\Str::uuid() }}">
+                                <input type="hidden" name="credit_idempotency_key_{{ $package->id }}" value="{{ \Illuminate\Support\Str::uuid() }}">
                                 <button class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:col-span-2">Record adjustment</button>
                             </form>
                         </div>
+                        <form method="POST" action="{{ route('admin.students.packages.validity', [$student->id, $package->id]) }}" class="flex flex-wrap items-end gap-3 border-t border-slate-200 p-4">
+                            @csrf
+                            <input type="hidden" name="previous_expiration_date" value="{{ $package->expiration_date?->toDateString() }}">
+                            <label class="text-sm">Extend expiration<input type="date" name="expiration_date" required min="{{ $package->expiration_date?->copy()->addDay()->toDateString() }}" class="mt-1 block rounded-lg border border-slate-300 px-3 py-2"></label>
+                            <label class="flex-1 text-sm">Reason<input name="reason" required maxlength="1000" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2"></label>
+                            <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Extend validity</button>
+                        </form>
                         @if($financial['payments']->isNotEmpty())
                             <div class="border-t border-slate-200 p-4">
                                 <h4 class="mb-3 text-sm font-semibold text-slate-800">Payment history</h4>
                                 <div class="space-y-3">
                                     @foreach($financial['payments'] as $payment)
                                         <div class="flex flex-col gap-3 rounded-lg border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                            <div class="text-sm"><span class="font-semibold">{{ $payment->currency }} {{ $payment->amount_paid }}</span><span class="text-slate-500"> · {{ $payment->payment_method }} · {{ $payment->paid_at?->format('M j, Y') }}</span>@if($payment->transaction_reference)<span class="mt-1 block text-xs text-slate-500">Reference: {{ $payment->transaction_reference }}</span>@endif</div>
+                                            @php($refundable = app(\App\Domains\Students\Services\StudentLedgerService::class)->refundableAmount($payment, $package))
+                                            <span class="mb-1 block text-xs font-semibold text-slate-600">{{ bccomp($refundable, $payment->amount_paid, 2) === 0 ? 'Not refunded' : (bccomp($refundable, '0.00', 2) === 0 ? 'Fully refunded' : 'Partially refunded') }} · Refundable {{ $payment->currency }} {{ $refundable }} · Payment #{{ $payment->id }}</span>
+                                            <div class="text-sm"><span class="font-semibold">{{ $payment->currency }} {{ $payment->amount_paid }}</span><span class="text-slate-500"> · {{ $payment->payment_method }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($payment->paid_at) }}</span>@if($payment->transaction_reference)<span class="mt-1 block text-xs text-slate-500">Reference: {{ $payment->transaction_reference }}</span>@endif</div>
+                                            @if(bccomp($refundable, '0.00', 2) > 0)
                                             <form method="POST" action="{{ route('admin.students.refunds.store', [$student->id, $payment->id]) }}" class="flex flex-wrap gap-2">
                                                 @csrf
                                                 <input name="amount_refunded" required inputmode="decimal" placeholder="Refund amount" class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
                                                 <input name="reason" maxlength="4000" placeholder="Reason" class="min-w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                                <input type="hidden" name="refund_idempotency_key_{{ $payment->id }}" value="refund-{{ $payment->id }}-{{ \Illuminate\Support\Str::uuid() }}">
+                                                <input type="hidden" name="refund_idempotency_key_{{ $payment->id }}" value="{{ \Illuminate\Support\Str::uuid() }}">
                                                 <button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100">Record refund</button>
                                             </form>
+                                            @endif
                                         </div>
                                     @endforeach
                                 </div>
                             </div>
                         @endif
+                        @foreach($financial['validityHistory'] as $change)
+                            <p class="px-4 py-2 text-xs text-slate-600">Validity extended: {{ $change->previous_data['expiration_date'] ?? 'None' }} → {{ $change->new_data['expiration_date'] ?? 'None' }} · {{ $change->new_data['reason'] ?? '' }} · Staff #{{ $change->administrator_id }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($change->created_at) }}</p>
+                        @endforeach
                         <div class="grid gap-4 border-t border-slate-200 bg-white p-4 lg:grid-cols-2">
                             <div>
                                 <h4 class="mb-3 text-sm font-semibold text-slate-800">Refund history</h4>
                                 @forelse($financial['refunds'] as $refund)
                                     <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 py-2 text-sm last:border-0">
-                                        <span class="font-medium text-slate-900">{{ $refund->currency }} {{ $refund->amount_refunded }} <span class="font-normal text-slate-500">· payment #{{ $refund->payment_record_id }}</span></span>
-                                        <span class="text-slate-500">{{ $refund->refunded_at?->format('M j, Y') }}</span>
+                                        @php($originalPayment = $financial['payments']->firstWhere('id', $refund->payment_record_id))
+                                        <span class="font-medium text-slate-900">Refund #{{ $refund->id }}: {{ $refund->currency }} {{ $refund->amount_refunded }} <span class="font-normal text-slate-500">· payment #{{ $refund->payment_record_id }}</span></span>
+                                        <span class="text-slate-500">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($refund->refunded_at) }}</span>
+                                        <p class="w-full text-xs text-slate-600">Original payment: {{ $originalPayment?->currency }} {{ $originalPayment?->amount_paid }} via {{ $originalPayment?->payment_method }} @if($originalPayment?->transaction_reference) · Reference: {{ $originalPayment->transaction_reference }} @endif</p>
                                         @if($refund->reason)<p class="w-full break-words text-xs text-slate-600">{{ $refund->reason }}</p>@endif
                                     </div>
                                 @empty
@@ -218,7 +251,7 @@
                                 @forelse($financial['entries'] as $entry)
                                     <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 py-2 text-sm last:border-0">
                                         <span class="font-medium text-slate-900">{{ $entry->credit_change > 0 ? '+' : '' }}{{ $entry->credit_change }} credits <span class="font-normal text-slate-500">· {{ str_replace('_', ' ', $entry->entry_type) }}</span></span>
-                                        <span class="text-slate-500">{{ $entry->created_at?->format('M j, Y') }}</span>
+                                        <span class="text-slate-500">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($entry->created_at) }}</span>
                                         <p class="w-full break-words text-xs text-slate-600">{{ $entry->description }}@if($entry->booking_id) · booking #{{ $entry->booking_id }}@endif</p>
                                     </div>
                                 @empty

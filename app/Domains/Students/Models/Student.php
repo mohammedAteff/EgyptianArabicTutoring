@@ -10,12 +10,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $suspended_at
+ */
 class Student extends Authenticatable
 {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
+        'preferred_meeting_provider_id', 'suspended_at', 'suspended_by', 'suspension_reason',
         'first_name',
         'last_name',
         'name_normalized',
@@ -40,7 +45,7 @@ class Student extends Authenticatable
 
     protected function casts(): array
     {
-        return ['date_of_birth' => 'date'];
+        return ['date_of_birth' => 'date', 'suspended_at' => 'datetime'];
     }
 
     protected static function newFactory(): StudentFactory
@@ -59,6 +64,11 @@ class Student extends Authenticatable
     public function packages(): HasMany
     {
         return $this->hasMany(StudentPackage::class);
+    }
+
+    public function verifiedEmails(): HasMany
+    {
+        return $this->hasMany(StudentEmail::class);
     }
 
     public function bookings(): HasMany

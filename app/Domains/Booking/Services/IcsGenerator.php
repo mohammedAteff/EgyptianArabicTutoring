@@ -21,7 +21,7 @@ class IcsGenerator
         $sessionTitle = $this->escape($booking->sessionType?->title ?? config('business.site_name').' Session');
         $confirmationUrl = url("/booking/confirmation/{$booking->confirmation_token}");
 
-        $meetingUrl = $this->meetingLinks->current();
+        $meetingUrl = $this->meetingLinks->studentUrl($booking);
 
         $descriptionText = config('business.site_name').' Session\\n'
             ."Booking Reference: {$booking->confirmation_token}\\n"

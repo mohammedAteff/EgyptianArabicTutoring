@@ -3,10 +3,10 @@
 namespace App\Http\Middleware;
 
 use App\Domains\Students\Models\Student;
+use App\Domains\Timezone\Services\TimezoneService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureStudentAuthenticated
@@ -24,7 +24,7 @@ class EnsureStudentAuthenticated
 
         $isExpired = ! is_string($expiresAt) || now('UTC')->greaterThanOrEqualTo($expiresAt);
         $student = is_numeric($studentId) && ! $isExpired
-            ? Cache::remember('student_auth_check_'.(int) $studentId, 30, fn () => Student::verified()->find((int) $studentId))
+            ? Student::verified()->whereNull('suspended_at')->find((int) $studentId)
             : null;
 
         if (! $student || (int) $guard->id() !== (int) $studentId) {
@@ -34,6 +34,13 @@ class EnsureStudentAuthenticated
             return redirect()->route('student.login')->withErrors(['auth' => 'The session has expired or is invalid.']);
         }
 
+        $timezone = $request->input('timezone');
+        if (is_string($timezone) && app(TimezoneService::class)->isValid($timezone)) {
+            $request->session()->put('student_display_timezone', $timezone);
+            if ($student->preferred_timezone !== $timezone) {
+                $student->update(['preferred_timezone' => $timezone]);
+            }
+        }
         $request->attributes->set('student', $student);
 
         return $next($request);

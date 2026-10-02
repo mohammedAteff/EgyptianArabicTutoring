@@ -1,5 +1,7 @@
 <?php
 
+use App\Domains\Administration\Models\Administrator;
+use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
@@ -8,6 +10,7 @@ use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\Booking\Services\CancellationService;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
@@ -20,6 +23,7 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
+use App\Http\Controllers\Admin\AccountSuspensionController;
 use App\Http\Controllers\Student\FormController;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
@@ -69,6 +73,17 @@ try {
             app(TelegramDeliveryService::class)->deliver($data['delivery_id']);
         }
         echo "RESULT:SUCCESS:telegram\n";
+        exit(0);
+    } elseif ($action === 'assign_meeting_room') {
+        app(MeetingLinkService::class)->assign(Booking::findOrFail((int) $data['booking_id']), roomId: (int) $data['room_id']);
+        echo "RESULT:SUCCESS:assigned\n";
+        exit(0);
+    } elseif ($action === 'suspend_staff') {
+        $actor = Administrator::findOrFail((int) $data['actor_id']);
+        $request = Request::create('/admin/accounts/administrator/'.$data['target_id'].'/suspension', 'POST', ['suspend' => 1, 'reason' => 'Concurrency QA']);
+        $request->setUserResolver(fn () => $actor);
+        app(AccountSuspensionController::class)->update($request, 'administrator', (int) $data['target_id'], app(AuditLogService::class));
+        echo "RESULT:SUCCESS:suspended\n";
         exit(0);
     } elseif ($action === 'book_admin') {
         $service = app(BookingService::class);

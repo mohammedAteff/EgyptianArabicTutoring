@@ -3,10 +3,12 @@
 namespace App\Domains\Notifications\Services;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Notifications\Models\TelegramDestination;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Jobs\DeliverTelegramMessage;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +50,15 @@ class TelegramDeliveryService
 
                 return;
             }
+        }
+        if ($delivery->rule && isset($delivery->payload['source']['booking_id'])) {
+            $source = $delivery->payload['source'];
+            $booking = Booking::find($source['booking_id']);
+            $source['meeting_url'] = $booking ? (app(MeetingLinkService::class)->notificationUrl($booking, (int) $delivery->rule->minutes) ?? 'Unavailable') : 'Unavailable';
+            $source['meeting_provider'] = $booking->meeting_provider_snapshot ?? 'Unassigned';
+            $templates = app(TelegramTemplateService::class);
+            $parts = $templates->split($templates->render($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal'));
+            $delivery->update(['payload' => ['source' => $source, 'parts' => $parts]]);
         }
         $lock = Cache::lock('telegram-send-bot:'.$delivery->telegram_bot_id, 30);
         if (! $lock->get()) {
@@ -126,6 +137,6 @@ class TelegramDeliveryService
 
     public function test(TelegramDestination $destination): TelegramDelivery
     {
-        return $this->direct($destination, ['TEST — Telegram connectivity check. No student or customer data. '.now('Africa/Cairo')->format('Y-m-d H:i').' Cairo time.'], (string) Str::uuid());
+        return $this->direct($destination, ['TEST — Telegram connectivity check. No student or customer data. '.now(app(TimezoneService::class)->getBusinessTimezone())->format('Y-m-d H:i').' Business time.'], (string) Str::uuid());
     }
 }

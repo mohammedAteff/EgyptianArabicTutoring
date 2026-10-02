@@ -89,16 +89,16 @@
         </div>
 
         <div class="pt-4 border-t border-slate-100">
-            <h3 class="text-sm font-bold text-slate-800 mb-3">Scheduling & Timers (Cairo Local Time: Africa/Cairo)</h3>
+            <h3 class="text-sm font-bold text-slate-800 mb-3">Scheduling & Timers (Business Time: {{ app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone() }})</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Start Time (Cairo Time)</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Start Time (Business Time)</label>
                     <input type="datetime-local" name="starts_at" value="{{ old('starts_at', $startsAtCairo) }}"
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">End Time (Cairo Time)</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">End Time (Business Time)</label>
                     <input type="datetime-local" name="ends_at" value="{{ old('ends_at', $endsAtCairo) }}"
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>

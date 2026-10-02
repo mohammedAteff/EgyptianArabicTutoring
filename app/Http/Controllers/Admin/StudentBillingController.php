@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
@@ -12,11 +13,13 @@ use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\BillingReconciliationService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -76,6 +79,7 @@ class StudentBillingController extends Controller
                 $pkg->setAttribute('overpaid', $summary['overpaid']);
                 $pkg->setAttribute('net_paid', $summary['net_paid']);
                 $pkg->available_credits = $summary['remaining_credits'];
+                $pkg->setAttribute('credit_summary', $summary);
                 $pkg->is_paid_in_full = bccomp($pkg->remaining_balance, '0.00', 2) <= 0;
             }
 
@@ -95,6 +99,7 @@ class StudentBillingController extends Controller
                 $pkg->setAttribute('overpaid', $summary['overpaid']);
                 $pkg->setAttribute('net_paid', $summary['net_paid']);
                 $pkg->available_credits = $summary['remaining_credits'];
+                $pkg->setAttribute('credit_summary', $summary);
                 $pkg->is_paid_in_full = bccomp($pkg->remaining_balance, '0.00', 2) <= 0;
                 foreach ($pkg->payments as $payment) {
                     $payment->setAttribute('refundable_amount', $ledger->refundableAmount($payment, $pkg));
@@ -108,6 +113,7 @@ class StudentBillingController extends Controller
             'selectedStudent' => $selectedStudent,
             'diagnosticEligibility' => $diagnosticEligibility,
             'presets' => StudentLedgerService::PRESETS,
+            'paymentMethods' => PaymentMethod::available()->get(),
         ]);
     }
 
@@ -202,6 +208,15 @@ class StudentBillingController extends Controller
             'notes' => ['nullable', 'string', 'max:4000'],
             $idempotencyField => ['required', 'uuid'],
         ]);
+        $method = PaymentMethod::query()->where('active', true)->where(function ($query) use ($validated): void {
+            $query->where('name', $validated['payment_method']);
+            if (ctype_digit($validated['payment_method'])) {
+                $query->orWhere('id', (int) $validated['payment_method']);
+            }
+        })->first();
+        if (! $method) {
+            throw ValidationException::withMessages(['payment_method' => 'Choose an enabled payment method.']);
+        }
         $packageRecord = StudentPackage::query()->where('student_id', $student)->findOrFail($package);
 
         try {
@@ -213,6 +228,7 @@ class StudentBillingController extends Controller
                 $validated['payment_method'],
                 $validated['transaction_reference'] ?? null,
                 $validated['notes'] ?? null,
+                $method->id,
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['payment' => $exception->getMessage()]);
@@ -280,6 +296,26 @@ class StudentBillingController extends Controller
             : ' Refund record saved. Credits were not changed.';
 
         return back()->with('success', $forfeitMsg);
+    }
+
+    public function extendValidity(Request $request, int $student, int $package, AuditLogService $audit): RedirectResponse
+    {
+        $data = $request->validate(['expiration_date' => ['required', 'date_format:Y-m-d'], 'previous_expiration_date' => ['nullable', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000']]);
+        DB::transaction(function () use ($request, $student, $package, $data, $audit): void {
+            Student::query()->whereKey($student)->lockForUpdate()->firstOrFail();
+            $record = StudentPackage::query()->where('student_id', $student)->whereKey($package)->lockForUpdate()->firstOrFail();
+            $oldDate = $record->expiration_date?->toDateString();
+            if ($oldDate !== ($data['previous_expiration_date'] ?? null)) {
+                throw ValidationException::withMessages(['expiration_date' => 'The validity date changed. Reload before extending it.']);
+            }
+            if (! $oldDate || $data['expiration_date'] <= $oldDate) {
+                throw ValidationException::withMessages(['expiration_date' => 'Choose a date later than the current expiration.']);
+            }
+            $record->update(['expiration_date' => $data['expiration_date']]);
+            $audit->log('package_validity_extended', StudentPackage::class, $record->id, ['expiration_date' => $oldDate], ['expiration_date' => $data['expiration_date'], 'reason' => $data['reason']], $request->user('web')->id);
+        }, 5);
+
+        return back()->with('success', 'Package validity extended. Credit ledger entries were preserved.');
     }
 
     public function adjustCredits(Request $request, int $student, int $package, StudentLedgerService $ledger, AuditLogService $auditLogs): RedirectResponse
@@ -417,7 +453,7 @@ class StudentBillingController extends Controller
         };
 
         return $exportService->export(
-            'financial_ledger_'.now('Africa/Cairo')->toDateString(),
+            'financial_ledger_'.now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(),
             $headers,
             $rowsGenerator(),
             $format,
@@ -482,7 +518,7 @@ class StudentBillingController extends Controller
         };
 
         return $exportService->export(
-            'billing_reconciliation_'.now('Africa/Cairo')->toDateString(),
+            'billing_reconciliation_'.now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(),
             $headers,
             $rowsGenerator(),
             $format,

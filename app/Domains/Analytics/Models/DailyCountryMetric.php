@@ -12,6 +12,7 @@ class DailyCountryMetric extends Model
     protected $table = 'daily_country_metrics';
 
     protected $fillable = [
+        'reporting_timezone',
         'metric_date',
         'country_code',
         'unique_visitors',

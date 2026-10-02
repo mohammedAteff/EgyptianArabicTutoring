@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\IcsGenerator;
 use App\Domains\Booking\Services\MeetingLinkService;
+use App\Domains\Timezone\Services\TimezoneService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -20,7 +21,7 @@ class BookingController extends Controller
         ]);
     }
 
-    public function confirmation(string $token, MeetingLinkService $meetingLinks): View
+    public function confirmation(string $token, MeetingLinkService $meetingLinks, Request $request): View
     {
         $booking = Booking::query()
             ->where('confirmation_token', $token)
@@ -30,7 +31,8 @@ class BookingController extends Controller
 
         return view('public.confirmation', [
             'booking' => $booking,
-            'meetingUrl' => $meetingLinks->current(),
+            'timezone' => app(TimezoneService::class)->isValid(is_string($request->query('timezone')) ? $request->query('timezone') : null) ? $request->query('timezone') : $booking->customer_timezone,
+            'meetingUrl' => $meetingLinks->studentUrl($booking),
             'title' => $booking->studentStatusLabel().' — #'.substr($booking->confirmation_token, 0, 8),
         ]);
     }
