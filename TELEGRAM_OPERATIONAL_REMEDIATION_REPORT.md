@@ -77,7 +77,7 @@ Production SSH is available, but the shared account has no `crontab` executable.
 
 # Database Changes
 
-Two additive migrations: Telegram bots, destinations, rules, destination-rule pivot, rule states and encrypted delivery history; encrypted nullable lead-details column on booking holds. Foreign keys and scoped uniqueness protect destination and delivery identities. No existing database, ledger, answers or analytics history was rebuilt. Local migration and test-schema coverage completed; production deployment status appears below.
+Two additive migrations: Telegram bots, destinations, rules, destination-rule pivot, rule states and encrypted delivery history; encrypted nullable lead-details column on booking holds. Foreign keys and scoped uniqueness protect destination and delivery identities. No existing database, ledger, answers or analytics history was rebuilt. Local migration and test-schema coverage completed; both production migrations completed successfully; deployment evidence appears below.
 
 # Files Changed
 
@@ -171,7 +171,7 @@ Actual local Herd browser, existing QA admin and synthetic local student; tempor
 - Dedicated Telegram UI added/reloaded a disabled bot, destination and countdown rule; sample preview rendered fictional data without a send. Reload preserved token masking, destination details, rule values and disabled state. Preview also preserves an unchecked rule switch.
 - Synthetic student verification was temporarily enabled for sign-in and restored to legacy_unverified. Synthetic portal was signed out and administrator cookies restored. Maintenance/message/WhatsApp QA values were restored.
 
-Evidence images: `C:/Users/e/AppData/Local/Temp/awa-telegram-whatsapp-mobile.png`, `awa-telegram-maintenance.png`, `awa-telegram-social-browser.png`. Additional Telegram UI evidence and production verification are recorded below.
+Evidence images: `C:/Users/e/AppData/Local/Temp/awa-telegram-whatsapp-mobile.png`, `awa-telegram-maintenance.png`, `awa-telegram-social-browser.png`. Telegram center evidence: `C:/Users/e/AppData/Local/Temp/awa-telegram-center-browser.png`. Production maintenance evidence: `C:/Users/e/AppData/Local/Temp/awa-telegram-production-maintenance.png`.
 
 # Deployment Requirements
 
@@ -201,7 +201,15 @@ Watch fresh scheduler, tick, queue and watchdog heartbeats over repeated interva
 
 References: [Laravel queue documentation](https://laravel.com/docs/13.x/queues), [Telegram Bot API](https://core.telegram.org/bots/api), [Hostinger cron setup](https://www.hostinger.com/support/1583465-how-to-set-up-a-cron-job-at-hostinger/).
 
-Deployment and real TEST status: pending the final deployment steps in this implementation pass.
+Deployment completed on 2026-10-02. Implementation commit `ac07debe2e86fe9e272a43743675f1bd2a107228` was pushed to GitHub main and fast-forwarded on Hostinger. The built asset archive checksum matched before extraction; app/public/build and the public wrapper build were synchronized. Both migrations, locked legacy import, config/routes/views caching and queue restart signal completed successfully. No dependencies, local QA database or local fake bot were copied to production.
+
+Production verification:
+
+- `.env` SHA-256 matched the private pre-deployment snapshot. The combined existing operational settings, footer SocialLink records and encrypted legacy Telegram configuration fingerprint also matched exactly before and after deployment (`a71c404acf5db1849039a68125d2579e96835f686b899c10f372ae9df4f2011b`). Existing `.env.backup.before-7123f15` was preserved.
+- Imported one enabled Existing Reminder Bot and one enabled private destination, with enabled countdown rules at 1,440 and 210 minutes. Global command access and per-bot commands remain disabled. New alert types are configurable, not silently enabled for customer data.
+- The approved existing bot/destination received only one clearly labeled TEST with no student or customer data. `telegram:test 1` returned `sent`. Delivery #1 stored `trigger=test`, `attempts=1`, Telegram message ID `5`, encrypted payload and a successful bot health timestamp of 2026-10-02 11:13:11 Africa/Cairo. This proves Telegram API acceptance, not that a human read the message.
+- The existing production setting is `maintenance_mode=1`; it was preserved. Fresh anonymous homepage, pricing, resources and booking returned 503 with the saved maintenance message. Admin login, `/up` and the new built JS asset returned 200. The actual production browser showed the configured maintenance page. To open the public website, the owner can select Live and Publish All Settings in the repaired dashboard; the local real browser already proved Live -> HTTP 200.
+- The recorded production scheduler heartbeat remains 2026-10-01 17:08 Africa/Cairo. Recurring scheduler/queue/watchdog/polling operation remains unverified and deferred at the user's request. `queue:restart` sends a restart signal; it does not start a worker.
 
 # Remaining Limitations
 
