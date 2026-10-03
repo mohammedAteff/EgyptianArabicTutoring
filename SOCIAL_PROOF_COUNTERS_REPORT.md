@@ -81,7 +81,7 @@ Nine counter tests pass. Browser fixtures were inserted only into the guarded lo
 
 # Production and Deferred Operations
 
-Deployed feature commit `f889c2d16756953dcacefc0857e1c5bfb30a744b` to the existing Hostinger application at https://mohamedateff.com/arabictutor/ on 2026-10-03. GitHub main and production matched that exact feature SHA. The final documentation-only commit will be fast-forwarded to production after this receipt is committed; application source and built assets remain identical.
+Deployed feature commit `f889c2d16756953dcacefc0857e1c5bfb30a744b` to the existing Hostinger application at https://mohamedateff.com/arabictutor/ on 2026-10-03. GitHub main and production matched that exact feature SHA. The release includes a documentation-only follow-up. Its final release HEAD is checked against GitHub and production in the handoff; application source and built assets are identical to the tested feature commit.
 
 Private pre-deployment recovery point: `/home/u494520852/deployment-backups/20261003-161154-feature-f889c2d`. It contains the full database dump, baseline code archive, both prior builds, uploaded assets and environment copy, with SHA256 checksums. Directory permissions are 700 and recovery files 600; no recovery file was placed in the public web root. Checksums passed before the forward migration.
 
