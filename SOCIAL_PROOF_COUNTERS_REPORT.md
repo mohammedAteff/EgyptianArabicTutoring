@@ -81,6 +81,17 @@ Nine counter tests pass. Browser fixtures were inserted only into the guarded lo
 
 # Production and Deferred Operations
 
-The tested release is prepared for authorized Hostinger deployment with existing production counter settings preserved. A verified production receipt will be appended after deployment.
+Deployed feature commit `f889c2d16756953dcacefc0857e1c5bfb30a744b` to the existing Hostinger application at https://mohamedateff.com/arabictutor/ on 2026-10-03. GitHub main and production matched that exact feature SHA. The final documentation-only commit will be fast-forwarded to production after this receipt is committed; application source and built assets remain identical.
+
+Private pre-deployment recovery point: `/home/u494520852/deployment-backups/20261003-161154-feature-f889c2d`. It contains the full database dump, baseline code archive, both prior builds, uploaded assets and environment copy, with SHA256 checksums. Directory permissions are 700 and recovery files 600; no recovery file was placed in the public web root. Checksums passed before the forward migration.
+
+Forward migration ran as batch 11. Configuration/routes/Blade caches rebuilt; queue restart signal issued only. Environment, all settings/social links, and ordered full-row hashes/counts for students, contacts, bookings, packages, payments, refunds, ledger, resource requests and meeting configuration matched before/after deployment. Preserved counts: 3 students, 7 contacts, 6 bookings, 6 packages, 8 payments, 3 refunds, 7 ledger entries, 3 resource requests, 84 settings, 5 social links, 3 meeting providers and 0 rooms. No QA student/note/financial data was inserted in production.
+
+Build archive SHA256: `3b405c571de5590ba55cfdfe468d9ef317a2a66523487efe6a9107ef4b2a254f`. Both production manifests match local SHA256 `3cd9d2972b0abdceceabf90d64929e05503211f5f124c8a8ea84e1c4d16b8162`. Initial extraction inherited the private recovery umask, causing public assets to return 404. This was caught in actual live browser QA and corrected strictly within the two public build directories: directories 755, files 644. Recovery permissions remained private. CSS and JavaScript now return HTTP 200 and the actual live page renders correctly.
+
+Live homepage and French/German resource pages return 200. Unauthenticated staff/student note requests redirect to their respective sign-in pages. The existing public counter values rendered as 0 live / 69 prior-month visitors / 3 hours 9 minutes; these are observed production values, not the synthetic local fixture. Live screenshot: `C:/Users/e/AppData/Local/Temp/awa-feature-live-website.png`. Browser verification uses a headless test user agent to exclude QA visits from first-party telemetry. Existing configured maintenance state remains Live.
+
+Production has no configured room pool yet. Automatic room assignment is verified with eligible synthetic local rooms; real assignments require active valid production room URLs configured in Meeting Links. No synthetic meeting URL was deployed. Existing offsite warning/host automation state is unchanged. Pre-existing `.env.backup.before-7123f15` remains untouched on the host; the pre-existing local untracked Hostinger handoff remains untouched.
+
 
 No scheduler, queue-worker, watchdog or Telegram-poll cron was installed, and no final Hostinger operations acceptance drill was run. Counter feature verification does not imply that deferred production automation is operational. HOSTINGER_OPERATIONS_HANDOFF.md remains unchanged.

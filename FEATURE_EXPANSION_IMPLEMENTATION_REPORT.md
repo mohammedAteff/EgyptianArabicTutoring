@@ -147,6 +147,9 @@ Forward migration `2026_10_03_141923_create_staff_and_student_bins.php` adds onl
 - `tests/Feature/MeetingRotationTest.php`
 - `tests/clipboard.test.mjs`
 
+- `FEATURE_EXPANSION_IMPLEMENTATION_REPORT.md`
+- `SOCIAL_PROOF_COUNTERS_REPORT.md`
+
 # Automated Tests
 
 Final current-schema result: 685/685 passed, 6472 assertions. The separately executed MariaDB concurrency verification result: 13/13 passed, 57 assertions (separate sequential run). JavaScript: 8/8 pass (clipboard, telemetry and form builder). Vite build, Blade compilation, PHP lint, Pint and git diff whitespace checks pass. Full-schema security/booking/ledger/identity/Telegram tests remain in scope.
@@ -181,7 +184,18 @@ Same level 5/configuration: **285 → 261 findings; 24 removed; zero new**. Full
 
 # Deployment
 
-Prepared for authorized SSH deployment to the existing Hostinger application. A private recovery point, exact release SHA, forward-only migration, matching built assets and before/after preservation fingerprints are required. Production receipt will be appended after deployment.
+Deployed feature commit `f889c2d16756953dcacefc0857e1c5bfb30a744b` to the existing Hostinger application at https://mohamedateff.com/arabictutor/ on 2026-10-03. GitHub main and production matched that exact feature SHA. The final documentation-only commit will be fast-forwarded to production after this receipt is committed; application source and built assets remain identical.
+
+Private pre-deployment recovery point: `/home/u494520852/deployment-backups/20261003-161154-feature-f889c2d`. It contains the full database dump, baseline code archive, both prior builds, uploaded assets and environment copy, with SHA256 checksums. Directory permissions are 700 and recovery files 600; no recovery file was placed in the public web root. Checksums passed before the forward migration.
+
+Forward migration ran as batch 11. Configuration/routes/Blade caches rebuilt; queue restart signal issued only. Environment, all settings/social links, and ordered full-row hashes/counts for students, contacts, bookings, packages, payments, refunds, ledger, resource requests and meeting configuration matched before/after deployment. Preserved counts: 3 students, 7 contacts, 6 bookings, 6 packages, 8 payments, 3 refunds, 7 ledger entries, 3 resource requests, 84 settings, 5 social links, 3 meeting providers and 0 rooms. No QA student/note/financial data was inserted in production.
+
+Build archive SHA256: `3b405c571de5590ba55cfdfe468d9ef317a2a66523487efe6a9107ef4b2a254f`. Both production manifests match local SHA256 `3cd9d2972b0abdceceabf90d64929e05503211f5f124c8a8ea84e1c4d16b8162`. Initial extraction inherited the private recovery umask, causing public assets to return 404. This was caught in actual live browser QA and corrected strictly within the two public build directories: directories 755, files 644. Recovery permissions remained private. CSS and JavaScript now return HTTP 200 and the actual live page renders correctly.
+
+Live homepage and French/German resource pages return 200. Unauthenticated staff/student note requests redirect to their respective sign-in pages. The existing public counter values rendered as 0 live / 69 prior-month visitors / 3 hours 9 minutes; these are observed production values, not the synthetic local fixture. Live screenshot: `C:/Users/e/AppData/Local/Temp/awa-feature-live-website.png`. Browser verification uses a headless test user agent to exclude QA visits from first-party telemetry. Existing configured maintenance state remains Live.
+
+Production has no configured room pool yet. Automatic room assignment is verified with eligible synthetic local rooms; real assignments require active valid production room URLs configured in Meeting Links. No synthetic meeting URL was deployed. Existing offsite warning/host automation state is unchanged. Pre-existing `.env.backup.before-7123f15` remains untouched on the host; the pre-existing local untracked Hostinger handoff remains untouched.
+
 
 # Deferred Hostinger Operations
 
@@ -189,4 +203,4 @@ HOSTINGER_OPERATIONS_HANDOFF.md remains unchanged; SHA256 `C551CD5E06E671DD31CA7
 
 # Remaining Limitations
 
-Browser XLSX download is blocked by the connected browser; file-level endpoint tests verify workbook content. Country browser checks use local country fixtures; real national-network detection still depends on production trusted proxy/MMDB setup. Dropdowns are bounded to 500 student/package/resource options; exports themselves stream the full matched query. Heavy public counters have up to 15-minute freshness lag; live visitors are refreshed on each payload request, with no autonomous live-page refresh guarantee. Historical aggregate-only analytics cannot retroactively reconstruct individual exclusions after raw data is pruned. Two baseline historical-schema tests and 261 baseline static-analysis findings remain. Scheduled host automation is explicitly deferred.
+Browser XLSX download is blocked by the connected browser; file-level endpoint tests verify workbook content. Country browser checks use local country fixtures; real national-network detection still depends on production trusted proxy/MMDB setup. Dropdowns are bounded to 500 student/package/resource options; exports themselves stream the full matched query. Heavy public counters have up to 15-minute freshness lag; live visitors are refreshed on each payload request, with no autonomous live-page refresh guarantee. Historical aggregate-only analytics cannot retroactively reconstruct individual exclusions after raw data is pruned. Two baseline historical-schema tests and 261 baseline static-analysis findings remain. Production currently has zero meeting rooms, so real automatic assignment requires an eligible configured room pool. Scheduled host automation is explicitly deferred.
