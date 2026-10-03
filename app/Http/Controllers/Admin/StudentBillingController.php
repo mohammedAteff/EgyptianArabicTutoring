@@ -6,11 +6,10 @@ use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
-use App\Domains\Students\Models\PaymentRefund;
-use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\BillingReconciliationService;
+use App\Domains\Students\Services\CashierReportService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
@@ -20,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -32,8 +32,9 @@ class StudentBillingController extends Controller
     /**
      * Cashier Hub: Operations desk for manual accounting, payments, installments, and packages.
      */
-    public function cashier(Request $request, StudentLedgerService $ledger): View
+    public function cashier(Request $request, StudentLedgerService $ledger, CashierReportService $report): View
     {
+        $filters = $report->filters($request);
         $search = trim((string) $request->query('q', ''));
         $selectedStudentId = (int) $request->query('student_id', 0);
 
@@ -74,7 +75,7 @@ class StudentBillingController extends Controller
         // Calculate exact remaining balance via bcmath for every package
         $students->getCollection()->transform(function (Student $student) use ($ledger) {
             foreach ($student->packages as $pkg) {
-                $summary = $ledger->summary($pkg);
+                $summary = $ledger->summary($pkg, true);
                 $pkg->remaining_balance = $summary['balance_due'];
                 $pkg->setAttribute('overpaid', $summary['overpaid']);
                 $pkg->setAttribute('net_paid', $summary['net_paid']);
@@ -94,7 +95,7 @@ class StudentBillingController extends Controller
         if ($selectedStudent) {
             $diagnosticEligibility = $ledger->checkDiagnosticCreditEligibility($selectedStudent->id);
             foreach ($selectedStudent->packages as $pkg) {
-                $summary = $ledger->summary($pkg);
+                $summary = $ledger->summary($pkg, true);
                 $pkg->remaining_balance = $summary['balance_due'];
                 $pkg->setAttribute('overpaid', $summary['overpaid']);
                 $pkg->setAttribute('net_paid', $summary['net_paid']);
@@ -108,6 +109,14 @@ class StudentBillingController extends Controller
         }
 
         return view('admin.billing.cashier', [
+            'transactionHeaders' => $report->headers(),
+            'transactionRows' => LazyCollection::make(fn () => $report->rows($filters))->take(100)->collect(),
+            'filters' => $filters,
+            'studentOptions' => Student::query()->where('identity_status', '!=', 'merged')->orderBy('name_normalized')->limit(500)->get(['id', 'first_name', 'last_name'])->mapWithKeys(fn ($student) => [$student->id => $student->first_name.' '.$student->last_name])->all(),
+            'packageOptions' => StudentPackage::query()->when($selectedStudentId > 0, fn ($query) => $query->where('student_id', $selectedStudentId))->orderBy('package_name')->limit(500)->get(['id', 'package_name'])->mapWithKeys(fn ($package) => [$package->id => $package->package_name.' #'.$package->id])->all(),
+            'methodOptions' => PaymentRecord::query()->whereNotNull('payment_method')->distinct()->orderBy('payment_method')->limit(100)->pluck('payment_method', 'payment_method')->all(),
+            'businessTz' => app(TimezoneService::class)->getBusinessTimezone(),
+            'creditPackages' => $selectedStudent?->packages->map(fn ($package) => ['package' => $package, 'summary' => $ledger->summary($package, true)]) ?? collect(),
             'students' => $students,
             'search' => $search,
             'selectedStudent' => $selectedStudent,
@@ -375,89 +384,12 @@ class StudentBillingController extends Controller
      */
     public function exportFinancials(Request $request, ExportService $exportService): StreamedResponse|BinaryFileResponse
     {
-        $format = $request->query('format', 'csv');
-        $headers = [
-            'Date',
-            'Student Name',
-            'Student Email',
-            'Transaction Type',
-            'Package Name',
-            'Amount Paid',
-            'Currency',
-            'Payment Method',
-            'Reference ID',
-            'Admin Logged',
-        ];
-
-        $rowsGenerator = function () {
-            // 1. Payments
-            $payments = PaymentRecord::query()
-                ->with(['student', 'package'])
-                ->orderByDesc('paid_at');
-
-            foreach ($payments->lazy(500) as $pmt) {
-                yield [
-                    $pmt->paid_at?->toIso8601String() ?? '',
-                    $pmt->student?->name ?? 'Unknown',
-                    $pmt->student?->email ?? 'Unknown',
-                    'Payment',
-                    $pmt->package?->package_name ?? 'N/A',
-                    (string) $pmt->amount_paid,
-                    $pmt->currency,
-                    $pmt->payment_method,
-                    $pmt->transaction_reference ?? 'N/A',
-                    (string) ($pmt->recorded_by ?? 'System'),
-                ];
-            }
-
-            // 2. Refunds
-            $refunds = PaymentRefund::query()
-                ->with(['student', 'package'])
-                ->orderByDesc('refunded_at');
-
-            foreach ($refunds->lazy(500) as $ref) {
-                yield [
-                    $ref->refunded_at?->toIso8601String() ?? '',
-                    $ref->student?->name ?? 'Unknown',
-                    $ref->student?->email ?? 'Unknown',
-                    'Refund',
-                    $ref->package?->package_name ?? 'N/A',
-                    '-'.(string) $ref->amount_refunded,
-                    $ref->currency,
-                    'Refund',
-                    'Refund #'.$ref->id.' (Payment #'.$ref->payment_record_id.')',
-                    (string) ($ref->recorded_by ?? 'System'),
-                ];
-            }
-
-            // 3. Courtesy Adjustments
-            $adjustments = SessionLedgerEntry::query()
-                ->where('entry_type', 'courtesy_adjustment')
-                ->with(['student', 'package'])
-                ->orderByDesc('created_at');
-
-            foreach ($adjustments->lazy(500) as $adj) {
-                yield [
-                    $adj->created_at?->toIso8601String() ?? '',
-                    $adj->student?->name ?? 'Unknown',
-                    $adj->student?->email ?? 'Unknown',
-                    'Courtesy Credit',
-                    $adj->package?->package_name ?? 'N/A',
-                    ($adj->credit_change > 0 ? '+' : '').$adj->credit_change.' credits',
-                    $adj->package?->currency ?? 'USD',
-                    'Courtesy Grant',
-                    $adj->idempotency_key,
-                    (string) ($adj->created_by ?? 'System'),
-                ];
-            }
-        };
+        $report = app(CashierReportService::class);
+        $filters = $report->filters($request);
 
         return $exportService->export(
             'financial_ledger_'.now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(),
-            $headers,
-            $rowsGenerator(),
-            $format,
-            'Financial Ledger'
+            $report->headers(), $report->rows($filters), $filters['format'] ?? 'csv', 'Financial Ledger',
         );
     }
 

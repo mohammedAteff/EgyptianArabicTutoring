@@ -7,6 +7,7 @@ use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
@@ -18,9 +19,9 @@ use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentPrivacyService;
+use App\Domains\Students\Services\StudentRecordsQuery;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -28,60 +29,31 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class StudentController extends Controller
 {
-    public function index(Request $request, StudentIdentityService $identity): View
+    public function index(Request $request, StudentRecordsQuery $records): View
     {
-        $search = trim($request->string('q')->toString());
-        $searchTerms = [];
-        if ($search !== '') {
-            $normalizedName = $identity->normalizeName($search);
-            $normalizedEmail = $identity->normalizeEmail($search);
-            $normalizedPhone = null;
+        $filters = $records->filters($request);
+        $students = $records->query($filters)->paginate(25)->withQueryString();
 
-            if (str_starts_with($search, '+')) {
-                try {
-                    $normalizedPhone = $identity->normalizePhone($search);
-                } catch (InvalidArgumentException) {
-                    $normalizedPhone = null;
-                }
+        return view('admin.students.index', ['students' => $students, 'search' => $filters['q'] ?? '', 'filters' => $filters, 'totalStudents' => Student::tutoringRoster()->count()]);
+    }
+
+    public function export(Request $request, StudentRecordsQuery $records, ExportService $exports, StudentLedgerService $ledger, TimezoneService $timezones): StreamedResponse|BinaryFileResponse
+    {
+        $filters = $records->filters($request);
+        $rows = function () use ($records, $filters, $ledger, $timezones): \Generator {
+            foreach ($records->query($filters)->lazy(100) as $student) {
+                $remaining = $student->packages->sum(fn ($package) => $ledger->summary($package, true)['remaining_credits']);
+                yield [$student->name, $student->email ?? '', $student->phone ?? '', $student->suspended_at ? 'Suspended' : $student->identity_status, $student->preferred_timezone ?? '', (int) $student->bookings_count, (int) $remaining, $student->packages->pluck('package_name')->implode('; '), $student->packages->map(fn ($package) => $package->package_name.': '.($package->expiration_date?->toDateString() ?? 'No expiry'))->implode('; '), $student->created_at->setTimezone($timezones->getBusinessTimezone())->format('Y-m-d H:i'), $timezones->getBusinessTimezone()];
             }
+        };
 
-            foreach ([
-                'name_normalized' => $normalizedName,
-                'email_normalized' => $normalizedEmail,
-                'phone_normalized' => $normalizedPhone,
-            ] as $column => $term) {
-                if ($term !== null && $term !== '') {
-                    $searchTerms[$column] = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $term).'%';
-                }
-            }
-        }
-
-        $students = Student::query()
-            ->select(['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id'])
-            ->when($searchTerms !== [], function (Builder $query) use ($searchTerms): void {
-                $query->where(function (Builder $query) use ($searchTerms): void {
-                    foreach ($searchTerms as $index => $like) {
-                        $column = $index;
-                        if ($index === array_key_first($searchTerms)) {
-                            $query->where($column, 'like', $like);
-
-                            continue;
-                        }
-
-                        $query->orWhere($column, 'like', $like);
-                    }
-                });
-            })
-            ->orderBy('name_normalized')
-            ->orderBy('id')
-            ->paginate(25)
-            ->withQueryString();
-
-        return view('admin.students.index', compact('students', 'search'));
+        return $exports->export('student_records', ['Student', 'Email', 'Phone', 'Status', 'Timezone', 'Sessions', 'Remaining Credits', 'Packages', 'Effective Expiry', 'Joined', 'Business Timezone'], $rows(), $filters['format'] ?? 'csv', 'Student Records');
     }
 
     public function show(Request $request, int $student, StudentLedgerService $ledger, TimezoneService $timezones): View
@@ -116,7 +88,7 @@ class StudentController extends Controller
             $financialPackages = $packages->map(function (StudentPackage $package) use ($ledger): array {
                 return [
                     'package' => $package,
-                    'summary' => $ledger->summary($package),
+                    'summary' => $ledger->summary($package, true),
                     'payments' => PaymentRecord::query()->where('student_package_id', $package->id)->orderByDesc('paid_at')->get(),
                     'refunds' => PaymentRefund::query()->where('student_package_id', $package->id)->orderByDesc('refunded_at')->get(),
                     'validityHistory' => AuditLog::query()->where('entity_type', StudentPackage::class)->where('entity_id', $package->id)->where('action', 'package_validity_extended')->orderByDesc('id')->get(),
@@ -130,6 +102,7 @@ class StudentController extends Controller
             'bookings' => $bookings,
             'formSubmissions' => $formSubmissions,
             'financialPackages' => $financialPackages,
+            'creditPackages' => $financialPackages,
             'paymentMethods' => $isAssistant ? collect() : PaymentMethod::available()->get(),
             'isAssistant' => $isAssistant,
             'businessTz' => $timezones->getBusinessTimezone(),

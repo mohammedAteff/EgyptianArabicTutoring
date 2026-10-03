@@ -191,7 +191,7 @@ class RescheduleService
                 'admin_reconfirmation_needed' => true,
             ]));
 
-            $lockedBooking = app(MeetingLinkService::class)->assign($lockedBooking, roomId: $lockedBooking->meeting_room_id, actorId: $performedBy === 'admin' ? $performedById : null);
+            $lockedBooking = app(MeetingLinkService::class)->revalidate($lockedBooking);
 
             if (in_array($performedBy, ['student', 'admin', 'system'], true)) {
                 SessionReschedule::create([

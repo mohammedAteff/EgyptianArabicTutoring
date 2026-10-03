@@ -282,7 +282,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" name="counters_learning_hours_public_enabled" value="1" class="sr-only peer"
-                               {{ old('counters_learning_hours_public_enabled', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.public_enabled', false)) ? 'checked' : '' }}>
+                               {{ old('counters_learning_hours_public_enabled', \App\Domains\CMS\Models\Setting::get('draft:counters.learning_hours.public_enabled', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.public_enabled', false))) ? 'checked' : '' }}>
                         <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
                         <span class="ml-2 text-xs font-semibold text-slate-700">Public Display</span>
                     </label>
@@ -290,22 +290,22 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Window Days (Complete)</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Window days (including today)</label>
                         <input type="number" name="counters_learning_hours_window_days" min="1" max="90"
-                               value="{{ old('counters_learning_hours_window_days', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.window_days', 7)) }}"
+                               value="{{ old('counters_learning_hours_window_days', \App\Domains\CMS\Models\Setting::get('draft:counters.learning_hours.window_days', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.window_days', 7))) }}"
                                class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                     </div>
                     <div class="sm:col-span-2">
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Headline Text</label>
                         <input type="text" name="counters_learning_hours_headline"
-                               value="{{ old('counters_learning_hours_headline', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.headline', 'Globally, Line of Action students have put in...')) }}"
+                               value="{{ old('counters_learning_hours_headline', \App\Domains\CMS\Models\Setting::get('draft:counters.learning_hours.headline', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.headline', 'Globally, students have put in...'))) }}"
                                class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Subtitle Text</label>
                     <input type="text" name="counters_learning_hours_subtitle"
-                           value="{{ old('counters_learning_hours_subtitle', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.subtitle', 'of practice time in the last 7 days')) }}"
+                           value="{{ old('counters_learning_hours_subtitle', \App\Domains\CMS\Models\Setting::get('draft:counters.learning_hours.subtitle', \App\Domains\CMS\Models\Setting::get('counters.learning_hours.subtitle', 'of practice time in the last 7 days'))) }}"
                            class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
             </div>
@@ -319,7 +319,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" name="counters_monthly_traffic_public_enabled" value="1" class="sr-only peer"
-                               {{ old('counters_monthly_traffic_public_enabled', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.public_enabled', false)) ? 'checked' : '' }}>
+                               {{ old('counters_monthly_traffic_public_enabled', \App\Domains\CMS\Models\Setting::get('draft:counters.monthly_traffic.public_enabled', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.public_enabled', false))) ? 'checked' : '' }}>
                         <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
                         <span class="ml-2 text-xs font-semibold text-slate-700">Public Display</span>
                     </label>
@@ -328,7 +328,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Traffic Source Metric</label>
-                        @php $trafficSrc = old('counters_monthly_traffic_source', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.source', 'unique_visitors')); @endphp
+                        @php $trafficSrc = old('counters_monthly_traffic_source', \App\Domains\CMS\Models\Setting::get('draft:counters.monthly_traffic.source', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.source', 'unique_visitors'))); @endphp
                         <select name="counters_monthly_traffic_source" class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             <option value="unique_visitors" {{ $trafficSrc === 'unique_visitors' ? 'selected' : '' }}>Unique Visitors</option>
                             <option value="sessions" {{ $trafficSrc === 'sessions' ? 'selected' : '' }}>Total Sessions</option>
@@ -337,13 +337,13 @@
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Visitors Template ({count})</label>
                         <input type="text" name="counters_monthly_traffic_template_visitors"
-                               value="{{ old('counters_monthly_traffic_template_visitors', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.template_visitors', 'We welcomed {count} visitors last month')) }}"
+                               value="{{ old('counters_monthly_traffic_template_visitors', \App\Domains\CMS\Models\Setting::get('draft:counters.monthly_traffic.template_visitors', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.template_visitors', 'We welcomed {count} visitors last month'))) }}"
                                class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Sessions Template ({count})</label>
                         <input type="text" name="counters_monthly_traffic_template_sessions"
-                               value="{{ old('counters_monthly_traffic_template_sessions', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.template_sessions', 'We had {count} website sessions last month')) }}"
+                               value="{{ old('counters_monthly_traffic_template_sessions', \App\Domains\CMS\Models\Setting::get('draft:counters.monthly_traffic.template_sessions', \App\Domains\CMS\Models\Setting::get('counters.monthly_traffic.template_sessions', 'We had {count} website sessions last month'))) }}"
                                class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                 </div>
@@ -358,7 +358,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" name="counters_live_users_public_enabled" value="1" class="sr-only peer"
-                               {{ old('counters_live_users_public_enabled', \App\Domains\CMS\Models\Setting::get('counters.live_users.public_enabled', false)) ? 'checked' : '' }}>
+                               {{ old('counters_live_users_public_enabled', \App\Domains\CMS\Models\Setting::get('draft:counters.live_users.public_enabled', \App\Domains\CMS\Models\Setting::get('counters.live_users.public_enabled', false))) ? 'checked' : '' }}>
                         <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
                         <span class="ml-2 text-xs font-semibold text-slate-700">Public Display</span>
                     </label>
@@ -367,7 +367,7 @@
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Live Users Template ({count})</label>
                     <input type="text" name="counters_live_users_template"
-                           value="{{ old('counters_live_users_template', \App\Domains\CMS\Models\Setting::get('counters.live_users.template', '{count} active visitors online right now')) }}"
+                           value="{{ old('counters_live_users_template', \App\Domains\CMS\Models\Setting::get('draft:counters.live_users.template', \App\Domains\CMS\Models\Setting::get('counters.live_users.template', '{count} active visitors online right now'))) }}"
                            class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
             </div>
@@ -445,7 +445,7 @@
         </section>
 
         <div class="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-            <p class="mr-auto text-xs text-slate-500">All sections save together. Draft applies operational settings immediately; homepage and About copy stay in preview.</p>
+            <p class="mr-auto text-xs text-slate-500">All sections save together. Draft applies operational settings immediately; homepage, About copy, and public counters require publishing.</p>
             <button type="submit" name="action" value="draft" class="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-800">Save as Draft</button>
             <button type="submit" name="action" value="publish" class="rounded-xl bg-amber-600 px-6 py-3 text-sm font-bold text-white hover:bg-amber-700">Publish All Settings</button>
         </div>

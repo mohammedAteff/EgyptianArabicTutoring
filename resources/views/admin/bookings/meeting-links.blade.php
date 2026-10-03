@@ -33,11 +33,11 @@
             </form>
         @endforeach
     </section>
-    <section class="rounded-2xl border border-slate-200 bg-white p-6"><h2 class="mb-4 text-xl font-semibold">Upcoming assignments</h2><p class="mb-4 text-sm text-slate-500">Disabled rooms stay assigned to existing lessons. Choose another room here to change a lesson's assignment.</p>
+    <section class="rounded-2xl border border-slate-200 bg-white p-6"><h2 class="mb-4 text-xl font-semibold">Upcoming assignments</h2><form method="POST" action="{{ route('admin.meeting-links.reconcile') }}" class="mb-4">@csrf<button class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Assign unassigned future lessons</button></form><p class="mb-4 text-sm text-slate-500">Rooms are assigned automatically from the resolved provider. Consecutive lessons use different rooms. Use the selector for a manual override.</p>
         @forelse($bookings as $booking)
             <form method="POST" action="{{ route('admin.meeting-links.assign', $booking) }}" class="flex flex-wrap items-center gap-4 border-t border-slate-100 py-4">
                 @csrf
-                <div class="flex-1"><p class="font-semibold">#{{ $booking->id }} · {{ $booking->student?->name ?? $booking->contact?->name }} · {{ $booking->sessionType?->title }}</p><p class="mt-1 text-sm text-slate-500">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($booking->start_at_utc) }} · {{ $booking->meeting_provider_snapshot ?? 'No room assigned' }}</p></div>
+                <div class="flex-1"><p class="font-semibold">#{{ $booking->id }} · {{ $booking->student?->name ?? $booking->contact?->name }} · {{ $booking->sessionType?->title }}</p><p class="mt-1 text-sm text-slate-500">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($booking->start_at_utc) }} · {{ $booking->meeting_provider_snapshot ?? 'Meeting room assignment needed' }}</p></div>
                 <label class="text-sm">Room<select name="meeting_room_id" required class="ml-2 rounded-xl border border-slate-300 p-3"><option value="">Choose room</option>@foreach($rooms->filter(fn ($item) => $item->id && $item->active && $item->provider?->active) as $room)<option value="{{ $room->id }}" @selected($booking->meeting_room_id === $room->id)>{{ $room->provider->name }} · {{ $room->name }}</option>@endforeach</select></label>
                 <button class="rounded-xl bg-amber-600 px-5 py-3 text-sm font-semibold text-white">Assign room</button>
             </form>

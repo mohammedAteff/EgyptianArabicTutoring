@@ -545,13 +545,13 @@ class StudentLedgerService
     }
 
     /** @return array{gross_paid: string, gross_refunded: string, net_paid: string, balance_due: string, overpaid: string, remaining_credits: int} */
-    public function summary(StudentPackage $package): array
+    public function summary(StudentPackage $package, bool $useLoadedSnapshot = false): array
     {
-        $paid = $this->toCents((string) PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid'));
-        $refunded = $this->toCents((string) PaymentRefund::query()->where('student_package_id', $package->id)->sum('amount_refunded'));
+        $paid = $this->toCents((string) ($useLoadedSnapshot && $package->relationLoaded('payments') ? $package->payments->sum('amount_paid') : PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid')));
+        $refunded = $this->toCents((string) ($useLoadedSnapshot && $package->relationLoaded('refunds') ? $package->refunds->sum('amount_refunded') : PaymentRefund::query()->where('student_package_id', $package->id)->sum('amount_refunded')));
         $netPaid = $paid - $refunded;
 
-        $entries = SessionLedgerEntry::query()->where('student_package_id', $package->id)->get();
+        $entries = $useLoadedSnapshot && $package->relationLoaded('ledgerEntries') ? $package->ledgerEntries : SessionLedgerEntry::query()->where('student_package_id', $package->id)->get();
 
         return [
             'allocated_credits' => (int) $entries->where('entry_type', 'package_grant')->sum('credit_change'),
@@ -564,7 +564,7 @@ class StudentLedgerService
             'balance_due' => $this->fromCents(max(0, $this->toCents($package->final_price) - $netPaid)),
             'overpaid' => $this->fromCents(max(0, $netPaid - $this->toCents($package->final_price))),
             'remaining_credits' => $this->isEligible($package)
-                ? (int) SessionLedgerEntry::query()->where('student_package_id', $package->id)->sum('credit_change') : 0,
+                ? (int) $entries->sum('credit_change') : 0,
         ];
     }
 

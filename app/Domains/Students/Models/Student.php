@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property Carbon|null $suspended_at
+ * @property int $bookings_count
  */
 class Student extends Authenticatable
 {
@@ -89,5 +90,14 @@ class Student extends Authenticatable
     public function scopeVerified(Builder $query): Builder
     {
         return $query->where('identity_status', 'verified');
+    }
+
+    public function scopeTutoringRoster(Builder $query): Builder
+    {
+        return $query->whereNull('merged_into_student_id')->where('identity_status', '!=', 'merged')
+            ->where(function (Builder $query): void {
+                $query->whereHas('packages', fn (Builder $packages) => $packages->where('total_sessions_allocated', '>', 0))
+                    ->orWhereHas('bookings', fn (Builder $bookings) => $bookings->whereIn('status', ['confirmed', 'completed', 'no_show']));
+            });
     }
 }

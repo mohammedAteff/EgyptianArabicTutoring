@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Domains\Analytics\Services\GeoIpService;
+use App\Domains\CMS\Services\LocalizedUrlService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -36,6 +38,33 @@ class SetRequestLocale
             'de' => 'de',
             default => 'en',
         };
+
+        $urls = app(LocalizedUrlService::class);
+        $routeInfo = $urls->resolveRouteInfo(trim($request->getPathInfo(), '/'), $request);
+        $public = $routeInfo !== null && ! $request->is('admin*', 'student*', 'api*', 'preview*')
+            && $request->isMethod('GET') && ! str_contains($request->path(), '/download')
+            && ! preg_match('/bot|crawler|spider/i', (string) $request->userAgent());
+        if ($public) {
+            $selected = $request->query('lang');
+            if (is_string($selected) && in_array($selected, ['en', 'fr', 'de'], true)) {
+                $request->session()->put('public_locale', $selected);
+                cookie()->queue(cookie('public_locale', $selected, 525600, null, null, $request->isSecure(), true, false, 'lax'));
+            }
+            $saved = $request->session()->get('public_locale', $request->cookie('public_locale'));
+            if (! in_array($saved, ['en', 'fr', 'de'], true)) {
+                $saved = $request->session()->get('public_initial_locale');
+                if (! in_array($saved, ['en', 'fr', 'de'], true)) {
+                    $country = app(GeoIpService::class)->detectCountryFromRequest($request);
+                    $saved = match ($country) {
+                        'FR' => 'fr', 'DE', 'AT' => 'de', default => 'en'
+                    };
+                    $request->session()->put('public_initial_locale', $saved);
+                }
+            }
+            if (! in_array($firstSegment, ['fr', 'de'], true) && $saved !== 'en') {
+                return redirect($urls->getUrlForLocale($saved, $request), 302);
+            }
+        }
 
         app()->setLocale($locale);
 

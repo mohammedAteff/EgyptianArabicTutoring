@@ -782,6 +782,9 @@ class BookingWizard extends Component
 
     public function switchLanguage(string $locale, array $pendingData = []): void
     {
+        abort_unless(in_array($locale, ['en', 'fr', 'de'], true), 422);
+        session()->put('public_locale', $locale);
+        cookie()->queue(cookie('public_locale', $locale, 525600));
         if (! empty($pendingData)) {
             if (isset($pendingData['name'])) {
                 $this->name = (string) $pendingData['name'];

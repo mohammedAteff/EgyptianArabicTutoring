@@ -7,7 +7,6 @@ use App\Domains\Reporting\Services\ReportService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class EngagementCounterService
 {
@@ -25,7 +24,7 @@ class EngagementCounterService
     public function getLiveUsersCount(): int
     {
         return app(ReportService::class)->nonBotSessionQuery()
-            ->where('last_activity_at', '>', now()->subSeconds(60))->distinct()->count('visitor_id');
+            ->where('last_activity_at', '>', now('UTC')->subSeconds(60))->where('last_activity_at', '<=', now('UTC'))->distinct()->count('visitor_id');
     }
 
     /**
@@ -65,12 +64,12 @@ class EngagementCounterService
     {
         $cairoNow = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone());
         $cairoDate = $cairoNow->toDateString();
-        $cairoWindowStart = $cairoNow->startOfDay()->subDays(max(1, $windowDays) - 1);
+        $cairoWindowStart = $cairoNow->startOfDay()->subDays(max(1, min(90, $windowDays)) - 1);
         $utcWindowStart = $cairoWindowStart->setTimezone('UTC');
         $utcWindowEnd = $cairoNow->setTimezone('UTC');
 
         // Lesson Hours = sum(bookings duration where status='completed', within window) / 60
-        $completedLessonMinutes = (float) DB::table('bookings')
+        $completedLessonMinutes = (float) app(ReportService::class)->nonBotBookingQuery()
             ->where('status', 'completed')
             ->where('start_at_utc', '>=', $utcWindowStart)
             ->where('start_at_utc', '<', $utcWindowEnd)
@@ -136,7 +135,7 @@ class EngagementCounterService
         $learningHoursEnabled = (bool) Setting::get('counters.learning_hours.public_enabled', false);
         $windowDays = max(1, (int) Setting::get('counters.learning_hours.window_days', 7));
         $learningActivity = $this->getCollectiveLearningActivity($windowDays);
-        $headlineTemplate = (string) Setting::get('counters.learning_hours.headline', 'Globally, Line of Action students have put in...');
+        $headlineTemplate = (string) Setting::get('counters.learning_hours.headline', 'Globally, students have put in...');
         $subtitleTemplate = (string) Setting::get('counters.learning_hours.subtitle', 'of practice time in the last 7 days');
 
         $headline = str_replace('{time}', $learningActivity['formatted_time'], $headlineTemplate);

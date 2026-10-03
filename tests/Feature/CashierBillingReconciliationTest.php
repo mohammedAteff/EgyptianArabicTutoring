@@ -525,7 +525,9 @@ class CashierBillingReconciliationTest extends TestCase
         $this->assertNotNull($creditRow);
         $this->assertSame('Layla Hassan', $creditRow[1]);
         $this->assertSame('layla@example.com', $creditRow[2]);
-        $this->assertSame("'+2 credits", $creditRow[5]);
+        $this->assertSame('', $creditRow[5]);
+        $this->assertSame('', $creditRow[6]);
+        $this->assertSame('2', $creditRow[7]);
     }
 
     public function test_cashier_hub_and_reconciliation_http_endpoints(): void

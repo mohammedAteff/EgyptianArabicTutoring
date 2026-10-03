@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use RuntimeException;
 
+/** @property-read Student|null $student */
 class SessionLedgerEntry extends Model
 {
     use HasFactory;

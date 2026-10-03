@@ -2,6 +2,7 @@
 
 namespace App\Domains\Reporting\Services;
 
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -118,7 +119,10 @@ class ExportService
             $colIndex = 1;
             foreach (array_values($row) as $value) {
                 $sanitized = self::sanitizeCell($value);
-                $sheet->getCell([$colIndex, $rowIndex])->setValue($sanitized);
+                $sheet->getCell([$colIndex, $rowIndex])->setValueExplicit(
+                    $sanitized,
+                    is_int($value) || is_float($value) ? DataType::TYPE_NUMERIC : DataType::TYPE_STRING,
+                );
                 $colIndex++;
             }
             $rowIndex++;

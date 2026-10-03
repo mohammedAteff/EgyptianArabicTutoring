@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\CMS\Models\Setting;
-use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest;
+use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -76,9 +76,7 @@ class DashboardController extends Controller
                 ->where('created_at', '>=', $periodStartUtc)
                 ->where('status', 'completed')
                 ->count(),
-            'total_students' => Contact::query()
-                ->where('first_seen_at', '>=', $periodStartUtc)
-                ->count(),
+            'total_students' => Student::tutoringRoster()->count(),
             'resource_requests' => ResourceRequest::query()
                 ->where('created_at', '>=', $periodStartUtc)
                 ->count(),

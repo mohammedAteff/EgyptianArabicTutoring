@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ResourceCategoryController;
 use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\StaffBinController;
 use App\Http\Controllers\Admin\StudentBillingController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SystemHealthController;
@@ -39,6 +40,7 @@ use App\Http\Controllers\Student\DashboardController as StudentDashboardControll
 use App\Http\Controllers\Student\FormController as StudentFormController;
 use App\Http\Controllers\Student\ProfileController;
 use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
+use App\Http\Controllers\StudentBinController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
 use Illuminate\Http\Request;
@@ -63,6 +65,11 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
     Route::middleware('student.auth')->group(function () {
+        Route::get('/notes', [StudentBinController::class, 'index'])->name('bins.index');
+        Route::post('/notes', [StudentBinController::class, 'store'])->name('bins.store');
+        Route::get('/notes/{bin}/edit', [StudentBinController::class, 'edit'])->name('bins.edit');
+        Route::put('/notes/{bin}', [StudentBinController::class, 'update'])->name('bins.update');
+
         Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
         Route::post('/profile/emails', [ProfileController::class, 'requestVerification'])->middleware('throttle:6,1')->name('profile.email.request');
         Route::get('/profile/emails/verify/{token}', [ProfileController::class, 'verify'])->middleware('throttle:10,1')->name('profile.email.verify');
@@ -218,6 +225,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->middleware('role:super_admin,admin')->name('payment-methods.store');
         Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update'])->middleware('role:super_admin,admin')->name('payment-methods.update');
         Route::middleware('role:super_admin,admin')->group(function (): void {
+            Route::post('/meeting-links/reconcile', [MeetingLinkController::class, 'reconcile'])->name('meeting-links.reconcile');
             Route::get('/meeting-links', [MeetingLinkController::class, 'index'])->name('meeting-links.index');
             Route::post('/meeting-links/providers', [MeetingLinkController::class, 'provider'])->name('meeting-links.providers');
             Route::post('/meeting-links/rooms', [MeetingLinkController::class, 'room'])->name('meeting-links.rooms');
@@ -252,6 +260,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         });
 
         // Contacts & Leads
+        Route::get('/contacts/export', [ContactController::class, 'export'])->middleware('role:super_admin,admin')->name('contacts.export');
         Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
         Route::get('/leads', [ContactController::class, 'leads'])->name('leads');
         Route::get('/contacts/duplicates', [ContactController::class, 'duplicates'])->name('contacts.duplicates');
@@ -358,8 +367,20 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         });
 
         Route::middleware('role:super_admin,admin,assistant')->group(function () {
+            Route::get('/students/export', [StudentController::class, 'export'])->middleware('role:super_admin,admin')->name('students.export');
             Route::get('/students', [StudentController::class, 'index'])->name('students.index');
             Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
+            Route::get('/staff-notes', [StaffBinController::class, 'index'])->name('staff-bins.index');
+            Route::post('/staff-notes', [StaffBinController::class, 'store'])->name('staff-bins.store');
+            Route::get('/staff-notes/{bin}/edit', [StaffBinController::class, 'edit'])->name('staff-bins.edit');
+            Route::put('/staff-notes/{bin}', [StaffBinController::class, 'update'])->name('staff-bins.update');
+            Route::delete('/staff-notes/{bin}', [StaffBinController::class, 'destroy'])->name('staff-bins.destroy');
+            Route::get('/students/{student}/notes', [StudentBinController::class, 'index'])->name('student-bins.index');
+            Route::post('/students/{student}/notes', [StudentBinController::class, 'store'])->name('student-bins.store');
+            Route::get('/students/{student}/notes/{bin}/edit', [StudentBinController::class, 'edit'])->name('student-bins.edit');
+            Route::put('/students/{student}/notes/{bin}', [StudentBinController::class, 'update'])->name('student-bins.update');
+            Route::delete('/students/{student}/notes/{bin}', [StudentBinController::class, 'destroy'])->name('student-bins.destroy');
+
             Route::get('/forms', [FormController::class, 'index'])->name('forms.index');
             Route::get('/forms/{form}/submissions', [FormController::class, 'submissions'])->name('forms.submissions');
             Route::get('/forms/{form}/export', [FormController::class, 'export'])->name('forms.export');

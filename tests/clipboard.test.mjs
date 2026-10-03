@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { studentDetailValue, studentDetails } from '../resources/js/clipboard.js';
+function form(values) { return { elements: { namedItem(name) { return values[name] === undefined ? null : { value: values[name], ...(name === 'identity_status' ? { selectedOptions: [{ textContent: 'Verified' }] } : {}) }; } } }; }
+test('copy reads current unsaved values and readable dates', () => { const values = { first_name: 'Before', date_of_birth: '1990-03-21' }; const current = form(values); values.first_name = ' Unsaved '; assert.equal(studentDetailValue(current,'first_name'),'Unsaved'); assert.equal(studentDetailValue(current,'date_of_birth'),'21/03/1990'); });
+test('phone retains country context and international format', () => { assert.equal(studentDetailValue(form({ phone:'01012345678', phone_country:'eg' }),'phone'),'EG 01012345678'); assert.equal(studentDetailValue(form({ phone:'+201012345678', phone_country:'EG' }),'phone'),'+201012345678'); });
+test('copy all includes empty fields and notes but no hidden secrets', () => { const output = studentDetails(form({first_name:'QA', identity_status:'verified', internal_notes:'Vocabulary', confirmation_token:'SECRET', password:'SECRET'})); assert.match(output,/Identity status: Verified/); assert.match(output,/Email: —/); assert.match(output,/Internal notes: Vocabulary/); assert.doesNotMatch(output,/SECRET|password|confirmation/); });

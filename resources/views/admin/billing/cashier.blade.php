@@ -96,16 +96,24 @@
                 <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 <span>Reconcile Diagnostic</span>
             </a>
-            <a href="{{ route('admin.billing.export', ['format' => 'csv']) }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold shadow-xs transition-colors">
+            <a href="{{ route('admin.billing.export', array_merge($filters, ['format' => 'csv'])) }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold shadow-xs transition-colors">
                 <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 <span>Export CSV</span>
             </a>
-            <a href="{{ route('admin.billing.export', ['format' => 'xlsx']) }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-semibold shadow-xs transition-colors">
+            <a href="{{ route('admin.billing.export', array_merge($filters, ['format' => 'xlsx'])) }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-semibold shadow-xs transition-colors">
                 <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 <span>Export XLSX</span>
             </a>
         </div>
     </div>
+
+    <x-report-filters :filters="$filters" :action="route('admin.billing.cashier')" export-route="admin.billing.export" :fields="[
+        'student_id'=>['Student',$studentOptions], 'date_from'=>['Date from','date'], 'date_to'=>['Date through','date'], 'transaction_type'=>['Transaction type',['payment'=>'Payment','refund'=>'Refund','credit'=>'Courtesy credit / adjustment']], 'package_id'=>['Package',$packageOptions], 'payment_method'=>['Payment method',$methodOptions], 'package_status'=>['Package status',['active'=>'Active','expired'=>'Expired','completed'=>'Completed','cancelled'=>'Cancelled']]
+    ]" />
+    <section class="rounded-2xl border border-slate-200 bg-white p-5"><h2 class="text-xl font-semibold">Filtered Transactions</h2><p class="mt-1 text-sm text-slate-500">{{ $businessTz }} · First 100 matching transactions. Exports include every matching row.</p>
+        <div class="mt-4 overflow-x-auto"><table class="min-w-[70rem] w-full text-left text-xs"><thead><tr>@foreach($transactionHeaders as $header)<th class="border-b border-slate-200 p-3">{{ $header }}</th>@endforeach</tr></thead><tbody>@forelse($transactionRows as $row)<tr>@foreach($row as $value)<td class="border-b border-slate-100 p-3">{{ $value }}</td>@endforeach</tr>@empty<tr><td colspan="13" class="p-6 text-slate-500">No transactions match these filters.</td></tr>@endforelse</tbody></table></div>
+    </section>
+    @if($selectedStudent)<x-credit-expiry-table :packages="$creditPackages" />@endif
 
     <!-- Student Selector & Search Filter -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-4">

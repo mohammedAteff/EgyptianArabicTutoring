@@ -5,17 +5,17 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Student records</p>
-            <h1 class="mt-2 font-serif text-3xl font-bold tracking-tight text-slate-950">Students</h1>
+            <h1 class="mt-2 font-serif text-3xl font-bold tracking-tight text-slate-950">Student Records</h1>
             <p class="mt-2 max-w-2xl text-sm text-slate-600">Review student contact details, upcoming sessions, and submitted questionnaires.</p>
         </div>
-        <form method="GET" action="{{ route('admin.students.index') }}" class="flex w-full gap-2 sm:max-w-md">
-            <label class="sr-only" for="student-search">Search students</label>
-            <input id="student-search" name="q" value="{{ $search }}" type="search" placeholder="Name, email, or phone"
-                   class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
-            <button class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">Search</button>
-        </form>
+
     </div>
 
+    <p class="text-sm text-slate-600">Total Students: <strong>{{ $totalStudents }}</strong> · Roster members with allocated credits or confirmed/delivered sessions.</p>
+    <x-report-filters :filters="$filters" :action="route('admin.students.index')" export-route="admin.students.export" :fields="[
+        'q'=>['Name, email or phone','search'], 'status'=>['Status',['verified'=>'Verified','legacy_unverified'=>'Unverified','suspended'=>'Suspended']], 'package'=>['Package name','text'], 'credits'=>['Credits',['available'=>'Available','none'=>'None available']],
+        'expiry_from'=>['Expiry from','date'], 'expiry_to'=>['Expiry to','date'], 'timezone'=>['Preferred timezone','text'], 'session_status'=>['Session status',['confirmed'=>'Confirmed','completed'=>'Completed','cancelled'=>'Cancelled','no_show'=>'No show']], 'joined_from'=>['Joined from','date'], 'joined_to'=>['Joined through','date']
+    ]" />
     @if(session('success'))
         <div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('success') }}</div>
     @endif

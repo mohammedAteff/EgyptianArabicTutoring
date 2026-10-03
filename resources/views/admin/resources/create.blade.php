@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<x-resources-tabs />
 <div class="max-w-4xl mx-auto space-y-6">
 
     <!-- Header -->

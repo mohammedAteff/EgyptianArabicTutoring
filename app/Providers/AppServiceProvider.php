@@ -2,14 +2,19 @@
 
 namespace App\Providers;
 
+use App\Domains\Administration\Models\StaffBin;
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentBin;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Policies\StaffBinPolicy;
+use App\Policies\StudentBinPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -44,6 +49,8 @@ class AppServiceProvider extends ServiceProvider
             @ini_set('memory_limit', '512M');
         }
 
+        Gate::policy(StaffBin::class, StaffBinPolicy::class);
+        Gate::policy(StudentBin::class, StudentBinPolicy::class);
         class_exists(Student::class);
         app(TelegramBusinessEvents::class)->register();
 

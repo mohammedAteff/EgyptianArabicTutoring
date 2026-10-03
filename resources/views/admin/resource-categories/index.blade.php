@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<x-resources-tabs />
 <div class="space-y-6">
 
     <!-- Header & Action Bar -->

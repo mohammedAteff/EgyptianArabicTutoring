@@ -8,6 +8,7 @@ use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentLedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -25,6 +26,8 @@ class AdministratorAuthorizationTest extends TestCase
             'phone' => '+201012345678',
             'phone_normalized' => '+201012345678',
         ]);
+
+        app(StudentLedgerService::class)->createPackage($student, 'Search roster fixture', 1, '10.00', '0.00', 'USD', null, 'search-roster-fixture');
 
         $this->actingAs($admin, 'web')
             ->get(route('admin.students.index', ['q' => 'Test, Student']))

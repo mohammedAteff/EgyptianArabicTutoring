@@ -179,10 +179,16 @@ class SettingController extends Controller
             foreach ($counterMap as $inputKey => $meta) {
                 if ($meta['type'] === 'bool') {
                     $val = $request->boolean($inputKey);
-                    Setting::set($meta['key'], $val, 'counters', true);
+                    Setting::set(($isDraft ? 'draft:' : '').$meta['key'], $val, 'counters', ! $isDraft);
+                    if (! $isDraft) {
+                        Setting::set('draft:'.$meta['key'], $val, 'counters', false);
+                    }
                 } elseif (array_key_exists($inputKey, $validated) && $validated[$inputKey] !== null) {
                     $val = $meta['type'] === 'int' ? (int) $validated[$inputKey] : (string) $validated[$inputKey];
-                    Setting::set($meta['key'], $val, 'counters', true);
+                    Setting::set(($isDraft ? 'draft:' : '').$meta['key'], $val, 'counters', ! $isDraft);
+                    if (! $isDraft) {
+                        Setting::set('draft:'.$meta['key'], $val, 'counters', false);
+                    }
                 }
             }
 

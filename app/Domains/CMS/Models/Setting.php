@@ -2,6 +2,7 @@
 
 namespace App\Domains\CMS\Models;
 
+use App\Domains\Analytics\Services\EngagementCounterService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,11 @@ class Setting extends Model
     protected static function booted(): void
     {
         static::saved(function (self $setting): void {
+            if (str_starts_with($setting->key, 'counters.') || $setting->key === 'business_timezone') {
+                $clearCounters = fn () => Cache::forget(EngagementCounterService::cacheKey());
+                $clearCounters();
+                DB::afterCommit($clearCounters);
+            }
             if (in_array($setting->key, ['maintenance_mode', 'system.maintenance_mode'], true)) {
                 Cache::forget('maintenance_mode_active');
                 DB::afterCommit(fn () => Cache::forget('maintenance_mode_active'));

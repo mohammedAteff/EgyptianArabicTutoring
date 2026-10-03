@@ -213,9 +213,9 @@
             </div>
 
             <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-                <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Students / Leads</div>
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Students</div>
                 <div class="text-2xl font-bold font-serif text-slate-900 mt-2">{{ $kpis['total_students'] }}</div>
-                <div class="text-xs text-slate-500 mt-1">First seen in 30 days</div>
+                <div class="text-xs text-slate-500 mt-1">Tutoring roster</div>
             </div>
 
             <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">

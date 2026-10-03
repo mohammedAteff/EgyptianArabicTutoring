@@ -5,11 +5,19 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
+use App\Domains\Contacts\Services\DirectoryQuery;
+use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Resources\Models\Resource;
+use App\Domains\Resources\Models\ResourceCategory;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContactController extends Controller
 {
@@ -17,29 +25,24 @@ class ContactController extends Controller
         protected ContactService $contactService
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request, DirectoryQuery $directory): View
     {
-        $query = Contact::query()
-            ->withCount(['bookings', 'resourceRequests', 'resourceDownloads']);
+        $filters = $directory->filters($request);
 
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('display_email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-        }
+        return view('admin.contacts.index', ['title' => 'Students & Contacts Directory', 'contacts' => $directory->query($filters)->paginate(20)->withQueryString(), 'search' => $filters['search'] ?? '', 'filters' => $filters, 'resourceOptions' => Resource::query()->orderBy('title')->limit(500)->pluck('title', 'id')->all(), 'categoryOptions' => ResourceCategory::query()->orderBy('name')->limit(500)->pluck('name', 'id')->all(), 'duplicateCount' => count($this->contactService->findSuspectedDuplicates())]);
+    }
 
-        $contacts = $query->orderByDesc('last_seen_at')->paginate(20)->withQueryString();
-        $suspectedDuplicates = $this->contactService->findSuspectedDuplicates();
+    public function export(Request $request, DirectoryQuery $directory, ExportService $exports): StreamedResponse|BinaryFileResponse
+    {
+        $filters = $directory->filters($request);
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+        $rows = function () use ($directory, $filters, $timezone): \Generator {
+            foreach ($directory->query($filters)->lazy(250) as $person) {
+                yield [$person->name ?? '', $person->email ?? '', $person->phone ?? '', $person->person_type, (int) $person->bookings_count, (int) $person->resource_requests_count, (int) $person->resource_downloads_count, $person->last_seen_at ? CarbonImmutable::parse($person->last_seen_at, 'UTC')->setTimezone($timezone)->format('Y-m-d H:i') : '', $timezone];
+            }
+        };
 
-        return view('admin.contacts.index', [
-            'title' => 'Student Contacts & Directory',
-            'contacts' => $contacts,
-            'search' => $search,
-            'duplicateCount' => count($suspectedDuplicates),
-        ]);
+        return $exports->export('students_contacts', ['Name', 'Email', 'Phone', 'Population', 'Bookings', 'Resource Requests', 'Downloads', 'Last Active', 'Business Timezone'], $rows(), $filters['format'] ?? 'csv', 'Students and Contacts');
     }
 
     public function leads(Request $request): View

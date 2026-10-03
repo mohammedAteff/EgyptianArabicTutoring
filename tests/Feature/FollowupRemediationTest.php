@@ -13,6 +13,7 @@ use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
+use App\Domains\Timezone\Services\TimezoneService;
 use Database\Factories\AdministratorFactory;
 use DOMDocument;
 use DOMXPath;
@@ -123,9 +124,9 @@ class FollowupRemediationTest extends TestCase
         $this->assertSame('0.00', $ledger->summary($package)['net_paid']);
         $csv = $this->get(route('admin.billing.export', ['format' => 'csv']))->assertOk()->streamedContent();
         foreach (PaymentRefund::all() as $refund) {
-            $this->assertStringContainsString('Refund #'.$refund->id.' (Payment #'.$payment->id.')', $csv);
-            $this->assertStringContainsString('-'.$refund->amount_refunded, $csv);
-            $this->assertStringContainsString($refund->refunded_at->toIso8601String(), $csv);
+            $this->assertStringContainsString('REF-'.$refund->id.',PAY-'.$payment->id, $csv);
+            $this->assertStringContainsString('-'.(float) $refund->amount_refunded, $csv);
+            $this->assertStringContainsString($refund->refunded_at->copy()->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('Y-m-d H:i'), $csv);
         }
         $this->assertDatabaseCount('payment_records', 1);
         $this->assertDatabaseCount('payment_refunds', 2);

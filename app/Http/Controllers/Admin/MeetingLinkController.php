@@ -92,6 +92,13 @@ class MeetingLinkController extends Controller
         return back()->with('success', 'Lesson room assigned.');
     }
 
+    public function reconcile(MeetingLinkService $links): RedirectResponse
+    {
+        $result = $links->reconcileUpcoming();
+
+        return back()->with('success', "Assigned {$result['assigned']} lessons; {$result['needed']} still need an eligible room.");
+    }
+
     public function preference(Request $request, Student $student, AuditLogService $audit): RedirectResponse
     {
         $data = $request->validate(['preferred_meeting_provider_id' => ['nullable', 'integer', Rule::exists('meeting_providers', 'id')->where('active', true)]]);

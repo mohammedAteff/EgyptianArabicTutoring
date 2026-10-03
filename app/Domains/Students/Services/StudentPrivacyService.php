@@ -117,6 +117,7 @@ class StudentPrivacyService
                 ])->save();
             }
 
+            DB::table('student_bins')->where('student_id', $studentId)->update(['title' => 'Redacted educational note', 'body' => '[redacted]', 'student_visible' => false]);
             DB::table('bookings')->where('student_id', $studentId)->update([
                 'notes' => null,
                 'cancellation_reason' => null,

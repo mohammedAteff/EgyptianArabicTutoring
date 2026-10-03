@@ -14,6 +14,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use Database\Factories\AdministratorFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -255,5 +256,72 @@ class EngagementCountersTest extends TestCase
         $this->assertEquals(14, (int) Setting::get('counters.learning_hours.window_days'));
         $this->assertEquals('Our students completed...', Setting::get('counters.learning_hours.headline'));
         $this->assertEquals('sessions', Setting::get('counters.monthly_traffic.source'));
+    }
+
+    public function test_live_window_excludes_future_and_exact_sixty_seconds_and_remains_fresh_inside_cached_payload(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-03 12:00:00', 'UTC'));
+        Setting::set('counters.live_users.public_enabled', true);
+        $visitor = Visitor::create(['visitor_token' => 'boundary-live', 'first_seen_at' => now(), 'last_seen_at' => now(), 'is_bot' => false]);
+        $session = VisitorSession::create(['visitor_id' => $visitor->id, 'session_token' => 'boundary-live-session', 'session_uuid' => 'boundary-live-uuid', 'started_at' => now()->subMinutes(2), 'last_activity_at' => now()->subSeconds(59), 'is_bot' => false]);
+        VisitorSession::create(['visitor_id' => $visitor->id, 'session_token' => 'duplicate-live', 'session_uuid' => 'duplicate-live', 'started_at' => now()->subMinutes(2), 'last_activity_at' => now()->subSeconds(60), 'is_bot' => false]);
+        $future = Visitor::create(['visitor_token' => 'future-live', 'first_seen_at' => now(), 'last_seen_at' => now(), 'is_bot' => false]);
+        VisitorSession::create(['visitor_id' => $future->id, 'session_token' => 'future-live', 'session_uuid' => 'future-live', 'started_at' => now(), 'last_activity_at' => now()->addMinute(), 'is_bot' => false]);
+        $this->assertSame(1, $this->counterService->getCachedPublicPayload()['live_users']['count']);
+        $session->update(['last_activity_at' => now()->subSeconds(60)]);
+        $this->assertSame(0, $this->counterService->getCachedPublicPayload()['live_users']['count']);
+    }
+
+    public function test_counter_draft_does_not_publish_and_publish_invalidates_public_cache(): void
+    {
+        Setting::set('counters.learning_hours.window_days', 7);
+        Setting::set('counters.learning_hours.headline', 'Published headline');
+        $this->counterService->getCachedPublicPayload();
+        $admin = AdministratorFactory::new()->create(['role' => 'super_admin']);
+        $payload = ['site_name' => 'QA', 'business_timezone' => 'Africa/Cairo', 'default_language' => 'en', 'hero_title' => 'QA title', 'hero_subtitle' => 'QA subtitle', 'cancellation_policy' => 'QA policy', 'rescheduling_policy' => 'QA policy', 'booking_instructions' => 'QA instructions', 'booking_cancellation_cutoff_hours' => 4, 'booking_reschedule_cutoff_hours' => 24, 'counters_learning_hours_window_days' => 14, 'counters_learning_hours_headline' => 'Draft headline', 'counters_learning_hours_public_enabled' => 1, 'counters_monthly_traffic_source' => 'sessions', 'counters_monthly_traffic_template_sessions' => '{count} sessions'];
+        $this->actingAs($admin, 'web')->post('/admin/settings', [...$payload, 'action' => 'draft'])->assertSessionHasNoErrors();
+        $this->assertSame(7, Setting::get('counters.learning_hours.window_days'));
+        $this->assertSame(14, Setting::get('draft:counters.learning_hours.window_days'));
+        $this->get('/admin/settings')->assertOk()->assertSee('value="14"', false);
+        $this->assertSame('Published headline', $this->counterService->getCachedPublicPayload()['learning_hours']['headline']);
+        $this->post('/admin/settings', [...$payload, 'action' => 'publish'])->assertSessionHasNoErrors();
+        $this->assertFalse(Cache::has(EngagementCounterService::cacheKey()));
+        $published = $this->counterService->getCachedPublicPayload();
+        $this->assertSame(14, $published['learning_hours']['window_days']);
+        $this->assertSame('Draft headline', $published['learning_hours']['headline']);
+        $this->assertTrue($published['learning_hours']['enabled']);
+        $this->assertSame('sessions', $published['monthly_traffic']['source']);
+        $this->assertSame('Draft headline', Setting::get('draft:counters.learning_hours.headline'));
+        $this->post('/admin/settings', [...$payload, 'counters_learning_hours_window_days' => 91, 'action' => 'publish'])->assertSessionHasErrors('counters_learning_hours_window_days');
+    }
+
+    public function test_all_public_counters_render_known_fixture_values_with_the_selected_traffic_source(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-03 12:00:00', 'UTC'));
+        $visitor = Visitor::create(['visitor_token' => 'public-fixture', 'first_seen_at' => now()->subMonth(), 'last_seen_at' => now(), 'is_bot' => false]);
+        foreach ([1, 2] as $index) {
+            VisitorSession::create(['visitor_id' => $visitor->id, 'session_token' => 'public-month-'.$index, 'session_uuid' => 'public-month-'.$index, 'started_at' => now()->subMonth()->addHours($index), 'last_activity_at' => now()->subMonth()->addHours($index)->addMinutes(5), 'is_bot' => false]);
+        }
+        VisitorSession::create(['visitor_id' => $visitor->id, 'session_token' => 'public-live', 'session_uuid' => 'public-live', 'started_at' => now()->subMinute(), 'last_activity_at' => now()->subSeconds(10), 'is_bot' => false]);
+        DailyMetric::create(['metric_date' => '2026-10-02', 'metric_name' => 'section_dwell_seconds', 'dimension_key' => 'section', 'dimension_value' => 'curriculum', 'count' => 7200]);
+        DailyMetric::create(['metric_date' => '2026-10-02', 'metric_name' => 'section_dwell_seconds', 'dimension_key' => 'section', 'dimension_value' => 'hero', 'count' => 90000]);
+        $type = SessionType::create(['title' => 'Counter fixture lesson', 'slug' => 'counter-fixture', 'duration_minutes' => 60, 'price' => 25, 'currency' => 'USD', 'active' => true]);
+        $contact = Contact::create(['name' => 'Counter fixture', 'email' => 'counter-fixture@example.test']);
+        $start = now('UTC')->subDay();
+        $snapshot = app(TimezoneService::class)->createBookingSnapshot($start, $start->copy()->addHour(), 'Africa/Cairo', 'Africa/Cairo');
+        Booking::create([...$snapshot, 'session_type_id' => $type->id, 'contact_id' => $contact->id, 'status' => 'completed', 'confirmation_token' => 'public-counter-booking', 'idempotency_key' => 'public-counter-booking']);
+        foreach (['learning_hours', 'monthly_traffic', 'live_users'] as $counter) {
+            Setting::set('counters.'.$counter.'.public_enabled', true);
+        }
+        Setting::set('counters.monthly_traffic.source', 'sessions');
+        Setting::set('counters.monthly_traffic.template_sessions', 'QA {count} sessions last month');
+        Setting::set('counters.live_users.template', 'QA {count} online now');
+        $payload = $this->counterService->getCachedPublicPayload();
+        $this->assertSame('3 hours, 0 minutes', $payload['learning_hours']['formatted_time']);
+        $this->assertSame(2, $payload['monthly_traffic']['count']);
+        $this->assertSame(1, $payload['live_users']['count']);
+        $this->withHeaders(['X-Analytics-Synthetic' => '1'])->get('/')->assertOk()->assertSee('3 hours, 0 minutes')->assertSee('QA 2 sessions last month')->assertSee('QA 1 online now');
+        Setting::set('counters.monthly_traffic.source', 'unique_visitors');
+        $this->assertSame(1, $this->counterService->getCachedPublicPayload()['monthly_traffic']['count']);
     }
 }

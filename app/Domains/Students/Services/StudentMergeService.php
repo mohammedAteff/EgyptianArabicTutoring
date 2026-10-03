@@ -107,6 +107,7 @@ class StudentMergeService
                 'form_submissions',
                 'resource_requests',
                 'student_emails',
+                'student_bins',
             ] as $table) {
                 $changes = ['student_id' => $primaryId];
                 if (in_array($table, ['payment_records', 'payment_refunds', 'session_ledger_entries'], true)) {

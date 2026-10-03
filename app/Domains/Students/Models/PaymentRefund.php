@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use RuntimeException;
 
+/** @property-read Student|null $student */
 class PaymentRefund extends Model
 {
     use HasFactory;
@@ -32,16 +33,19 @@ class PaymentRefund extends Model
         return PaymentRefundFactory::new();
     }
 
+    /** @return BelongsTo<PaymentRecord, $this> */
     public function payment(): BelongsTo
     {
         return $this->belongsTo(PaymentRecord::class, 'payment_record_id');
     }
 
+    /** @return BelongsTo<StudentPackage, $this> */
     public function package(): BelongsTo
     {
         return $this->belongsTo(StudentPackage::class, 'student_package_id');
     }
 
+    /** @return BelongsTo<Student, $this> */
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class, 'student_id');

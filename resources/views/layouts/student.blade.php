@@ -16,6 +16,7 @@
         <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
             <a href="{{ route('home') }}" class="font-semibold tracking-tight text-nile-900">Egyptian Arabic Tutoring</a>
             @if(session()->has('student_id'))
+                <a href="{{ route('student.bins.index') }}" class="text-sm font-semibold text-nile-800">Educational Notes</a>
                 <form method="POST" action="{{ route('student.logout') }}">@csrf<button type="submit" class="text-sm font-medium text-nile-800 hover:underline">Sign out</button></form>
             @endif
         </div>

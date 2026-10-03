@@ -21,7 +21,7 @@
 <div class="mx-auto max-w-7xl space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <a href="{{ route('admin.students.index') }}" class="text-sm font-semibold text-amber-800 hover:text-amber-950">← Students</a>
+            <a href="{{ route('admin.students.index') }}" class="text-sm font-semibold text-amber-800 hover:text-amber-950">← Student Records</a>
             <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Student #{{ $student->id }}</p>
             <h1 class="mt-2 font-serif text-3xl font-bold tracking-tight text-slate-950">{{ $student->first_name }} {{ $student->last_name }}</h1>
             <p class="mt-2 text-sm text-slate-600">{{ $student->email ?: 'No email on file' }} <span class="px-1 text-slate-300">·</span> {{ $student->phone ?: 'No phone on file' }}</p>
@@ -43,26 +43,26 @@
     @if(! $isAssistant)
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div class="mb-5">
-                <h2 class="font-serif text-xl font-bold text-slate-900">Identity details</h2>
+                <h2 class="font-serif text-xl font-bold text-slate-900">Identity details <x-copy-button :all="true" label="Copy Student Details" /></h2>
                 <p class="mt-1 text-sm text-slate-500">Only authorized administrators can change identity and verification information.</p>
             </div>
-            <form method="POST" action="{{ route('admin.students.update', $student->id) }}" class="grid gap-4 sm:grid-cols-2">
+            <form method="POST" action="{{ route('admin.students.update', $student->id) }}" data-student-identity class="grid gap-4 sm:grid-cols-2">
                 @csrf
                 @method('PATCH')
                 <div>
-                    <label for="first_name" class="mb-1 block text-sm font-semibold text-slate-700">First name</label>
+                    <label for="first_name" class="mb-1 block text-sm font-semibold text-slate-700">First name <x-copy-button field="first_name" label="Copy First name" /></label>
                     <input id="first_name" name="first_name" required value="{{ old('first_name', $student->first_name) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="last_name" class="mb-1 block text-sm font-semibold text-slate-700">Last name</label>
+                    <label for="last_name" class="mb-1 block text-sm font-semibold text-slate-700">Last name <x-copy-button field="last_name" label="Copy Last name" /></label>
                     <input id="last_name" name="last_name" required value="{{ old('last_name', $student->last_name) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="email" class="mb-1 block text-sm font-semibold text-slate-700">Email</label>
+                    <label for="email" class="mb-1 block text-sm font-semibold text-slate-700">Email <x-copy-button field="email" label="Copy Email" /></label>
                     <input id="email" name="email" type="email" value="{{ old('email', $student->email) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="phone" class="mb-1 block text-sm font-semibold text-slate-700">Phone (E.164 after save)</label>
+                    <label for="phone" class="mb-1 block text-sm font-semibold text-slate-700">Phone (E.164 after save) <x-copy-button field="phone" label="Copy Phone (E.164 after save)" /></label>
                     <div class="grid grid-cols-[5rem_1fr] gap-2">
                         <input name="phone_country" aria-label="Phone country code" value="{{ old('phone_country') }}" maxlength="2" placeholder="EG" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm uppercase focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                         <input id="phone" name="phone" type="tel" value="{{ old('phone', $student->phone) }}" class="min-w-0 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
@@ -70,22 +70,22 @@
                     <p class="mt-1 text-xs text-slate-500">Enter a country code only for national-format numbers; international numbers should start with +.</p>
                 </div>
                 <div>
-                    <label for="date_of_birth" class="mb-1 block text-sm font-semibold text-slate-700">Date of birth</label>
+                    <label for="date_of_birth" class="mb-1 block text-sm font-semibold text-slate-700">Date of birth <x-copy-button field="date_of_birth" label="Copy Date of birth" /></label>
                     <input id="date_of_birth" name="date_of_birth" type="date" value="{{ old('date_of_birth', $student->date_of_birth?->format('Y-m-d')) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="identity_status" class="mb-1 block text-sm font-semibold text-slate-700">Identity status</label>
+                    <label for="identity_status" class="mb-1 block text-sm font-semibold text-slate-700">Identity status <x-copy-button field="identity_status" label="Copy Identity status" /></label>
                     <select id="identity_status" name="identity_status" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                         <option value="legacy_unverified" @selected(old('identity_status', $student->identity_status) === 'legacy_unverified')>Legacy — unverified</option>
                         <option value="verified" @selected(old('identity_status', $student->identity_status) === 'verified')>Verified</option>
                     </select>
                 </div>
                 <div>
-                    <label for="preferred_timezone" class="mb-1 block text-sm font-semibold text-slate-700">Preferred timezone (IANA)</label>
+                    <label for="preferred_timezone" class="mb-1 block text-sm font-semibold text-slate-700">Preferred timezone (IANA) <x-copy-button field="preferred_timezone" label="Copy Preferred timezone (IANA)" /></label>
                     <input id="preferred_timezone" name="preferred_timezone" value="{{ old('preferred_timezone', $student->preferred_timezone) }}" placeholder="Africa/Cairo" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="internal_notes" class="mb-1 block text-sm font-semibold text-slate-700">Internal staff notes</label>
+                    <label for="internal_notes" class="mb-1 block text-sm font-semibold text-slate-700">Internal staff notes <x-copy-button field="internal_notes" label="Copy Internal staff notes" /></label>
                     <textarea id="internal_notes" name="internal_notes" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">{{ old('internal_notes', $student->internal_notes) }}</textarea>
                 </div>
                 <div class="sm:col-span-2 flex justify-end">
@@ -95,6 +95,8 @@
         </section>
     @endif
 
+    @if(! $isAssistant)<x-credit-expiry-table :packages="$creditPackages" />@endif
+    <a href="{{ route('admin.student-bins.index', $student->id) }}" class="inline-flex rounded-xl bg-white px-4 py-3 text-sm font-semibold text-amber-800">Educational Notes →</a>
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div class="mb-4 flex items-end justify-between gap-4">
             <div>
