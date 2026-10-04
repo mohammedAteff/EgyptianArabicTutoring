@@ -2,6 +2,7 @@
 
 namespace App\Domains\Students\Models;
 
+use App\Domains\Booking\Models\Booking;
 use Database\Factories\SessionLedgerEntryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ class SessionLedgerEntry extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['student_id', 'student_package_id', 'booking_id', 'idempotency_key', 'entry_type', 'credit_change', 'description', 'created_by', 'created_at'];
+    protected $fillable = ['student_package_entitlement_id', 'entitlement_type_id', 'student_id', 'student_package_id', 'booking_id', 'idempotency_key', 'entry_type', 'credit_change', 'description', 'created_by', 'created_at'];
 
     protected function casts(): array
     {
@@ -33,10 +34,22 @@ class SessionLedgerEntry extends Model
         return SessionLedgerEntryFactory::new();
     }
 
+    /** @return BelongsTo<EntitlementType, $this> */
+    public function type(): BelongsTo
+    {
+        return $this->belongsTo(EntitlementType::class, 'entitlement_type_id');
+    }
+
     /** @return BelongsTo<StudentPackage, $this> */
     public function package(): BelongsTo
     {
         return $this->belongsTo(StudentPackage::class, 'student_package_id');
+    }
+
+    /** @return BelongsTo<Booking, $this> */
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class)->withTrashed();
     }
 
     /** @return BelongsTo<Student, $this> */

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
@@ -15,6 +16,7 @@ use App\Domains\Timezone\Services\TimezoneService;
 use App\Livewire\BookingWizard;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -302,6 +304,23 @@ class RateLimitingTest extends TestCase
 
         // Verify no hold record was written to DB
         $this->assertEquals(0, BookingHold::where('visitor_token', $visitorToken)->count());
+    }
+
+    public function test_booking_address_throttle_uses_opaque_database_keys_with_existing_expiration(): void
+    {
+        config(['cache.default' => 'database']);
+        $this->app->forgetInstance(\Illuminate\Cache\RateLimiter::class);
+        RateLimiter::clearResolvedInstances();
+        SessionType::create(['title' => 'Privacy QA', 'slug' => 'privacy-qa', 'duration_minutes' => 50, 'price' => 25, 'currency' => 'USD', 'active' => true]);
+        $key = TransientRateLimitKey::make('throttle:hold:ip', '127.0.0.1');
+        $component = Livewire::test(BookingWizard::class)->call('selectSlot', 'invalid-slot-id');
+        $this->assertSame(1, RateLimiter::attempts($key));
+        for ($i = 1; $i < 10; $i++) {
+            RateLimiter::hit($key, 60);
+        }
+        $component->call('selectSlot', 'invalid-slot-id')->assertSet('errorMessage', 'Too many slot reservation attempts. Please wait a moment before selecting another slot.');
+        $this->assertLessThanOrEqual(60, RateLimiter::availableIn($key));
+        $this->assertSame(0, DB::table('cache')->where('key', 'like', '%127.0.0.1%')->count());
     }
 
     public function test_livewire_booking_confirmation_rate_limiting(): void

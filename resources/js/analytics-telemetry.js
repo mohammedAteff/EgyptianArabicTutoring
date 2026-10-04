@@ -12,15 +12,22 @@
     const sections = new Map();
     let queue = [], sending = false, active = null, since = clock.now();
     let visible = document.visibilityState !== 'hidden', focused = true;
+    function eventUuid() {
+        try { if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID(); }
+        catch { /* Older or restricted contexts use the HTTP-compatible fallback. */ }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => { const number = Math.floor(Math.random() * 16); return (character === 'x' ? number : (number & 3) | 8).toString(16); });
+    }
     function enqueue(name, metadata = {}) {
-        queue.push({event_uuid: (crypto.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => { const number = Math.floor(Math.random() * 16); return (character === 'x' ? number : (number & 3) | 8).toString(16); })), event_name: name, page: location.href.slice(0, 500), metadata});
+        queue.push({event_uuid: eventUuid(), event_name: name, page: location.href.slice(0, 500), metadata});
         if (queue.length >= 10) flush();
     }
     async function flush(exit = false) {
         if (!queue.length || (sending && !exit)) return;
         const batch = queue.splice(0, 20);
         const body = JSON.stringify({events: batch, _token: csrf});
-        if (exit && navigator.sendBeacon?.(endpoint, new Blob([body], {type: 'application/json'}))) return;
+        try {
+            if (exit && navigator.sendBeacon?.(endpoint, new Blob([body], {type: 'application/json'}))) return;
+        } catch { /* Beacon failure falls through to fetch; navigation stays native. */ }
         sending = true;
         try {
             const response = await fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf}, body, keepalive: exit});

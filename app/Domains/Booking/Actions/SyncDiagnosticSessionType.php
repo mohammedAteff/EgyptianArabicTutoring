@@ -3,6 +3,7 @@
 namespace App\Domains\Booking\Actions;
 
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Students\Models\EntitlementType;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -41,6 +42,9 @@ class SyncDiagnosticSessionType
                 if (! $canonical) {
                     try {
                         $canonical = SessionType::create([
+                            'funding_mode' => 'package',
+                            'required_entitlement_type_id' => EntitlementType::query()->where('code', 'one_hour')->value('id'),
+                            'required_entitlement_units' => 1,
                             'slug' => 'diagnostic-session',
                             'title' => 'Diagnostic & Learning Roadmap',
                             'description' => 'Initial 60-minute diagnostic assessment and customized learning roadmap for Egyptian Arabic fluency with Abdallah.',
@@ -64,6 +68,9 @@ class SyncDiagnosticSessionType
                 }
 
                 $canonical->fill([
+                    'funding_mode' => 'package',
+                    'required_entitlement_type_id' => EntitlementType::query()->where('code', 'one_hour')->value('id'),
+                    'required_entitlement_units' => 1,
                     'slug' => 'diagnostic-session',
                     'title' => 'Diagnostic & Learning Roadmap',
                     'description' => 'Initial 60-minute diagnostic assessment and customized learning roadmap for Egyptian Arabic fluency with Abdallah.',

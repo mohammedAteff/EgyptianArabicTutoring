@@ -19,6 +19,7 @@ use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -112,6 +113,25 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
             'idempotency_key' => 'idem-'.uniqid('', true),
             'confirmation_token' => bin2hex(random_bytes(32)),
         ]));
+    }
+
+    public function test_web_reschedule_history_preserves_schedule_without_request_address(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-01 10:00:00');
+        $originalStart = CarbonImmutable::parse('2026-10-05 10:00:00', 'UTC');
+        $booking = $this->createTestBooking($originalStart);
+        $start = CarbonImmutable::parse('2026-10-10 10:50:00', 'Africa/Cairo')->utc();
+        $this->app->instance('request', Request::create('/reschedule', 'POST', [], [], [], ['REMOTE_ADDR' => '203.0.113.8']));
+        $console = new \ReflectionProperty($this->app, 'isRunningInConsole');
+        $originalConsole = $console->getValue($this->app);
+        $console->setValue($this->app, false);
+        try {
+            $this->rescheduleService->reschedule($booking, $start, $start->addMinutes(50), 'admin', $this->admin->id, 'Privacy QA');
+        } finally {
+            $console->setValue($this->app, $originalConsole);
+        }
+        $this->assertDatabaseHas('session_reschedules', ['booking_id' => $booking->id, 'ip_address' => null, 'old_start_at_utc' => $originalStart->toDateTimeString(), 'new_start_at_utc' => $start->toDateTimeString()]);
+        $this->assertDatabaseHas('booking_events', ['booking_id' => $booking->id, 'event_type' => 'rescheduled']);
     }
 
     public function test_confirmed_booking_allowed_to_cancel_outside_cutoff(): void

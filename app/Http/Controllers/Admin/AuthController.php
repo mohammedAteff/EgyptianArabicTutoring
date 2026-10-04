@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Administration\Services\AdministratorLoginService;
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Http\Controllers\Controller;
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,14 +29,14 @@ class AuthController extends Controller
         ]);
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(Request $request, AdministratorLoginService $login): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $throttleKey = Str::transliterate(Str::lower($credentials['email']).'|'.$request->ip());
+        $throttleKey = TransientRateLimitKey::make('staff-login', Str::transliterate(Str::lower($credentials['email']).'|'.$request->ip()));
 
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
@@ -48,7 +51,11 @@ class AuthController extends Controller
 
         $remember = $request->boolean('remember');
 
-        if (! Auth::guard('web')->attempt([...$credentials, 'suspended_at' => null], $remember)) {
+        /** @var SessionGuard $guard */
+        $guard = Auth::guard('web');
+        $provider = $guard->getProvider();
+        $admin = $provider->retrieveByCredentials([...$credentials, 'suspended_at' => null]);
+        if (! $admin instanceof Administrator || ! in_array($admin->role, ['super_admin', 'admin', 'assistant'], true) || ! $provider->validateCredentials($admin, $credentials)) {
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([
@@ -57,21 +64,9 @@ class AuthController extends Controller
         }
 
         RateLimiter::clear($throttleKey);
-        $request->session()->regenerate();
+        $provider->rehashPasswordIfRequired($admin, $credentials);
 
-        $admin = Auth::guard('web')->user();
-
-        AuditLog::create([
-            'administrator_id' => $admin?->id,
-            'action' => 'admin_login',
-            'entity_type' => Administrator::class,
-            'entity_id' => $admin?->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'created_at' => now(),
-        ]);
-
-        return redirect()->intended(route('admin.dashboard'));
+        return $admin->requiresTwoFactor() ? $login->beginChallenge($request, $admin) : $login->complete($request, $admin, $remember);
     }
 
     public function logout(Request $request): RedirectResponse
@@ -84,7 +79,7 @@ class AuthController extends Controller
                 'action' => 'admin_logout',
                 'entity_type' => Administrator::class,
                 'entity_id' => $admin->id,
-                'ip_address' => $request->ip(),
+                'ip_address' => null,
                 'user_agent' => $request->userAgent(),
                 'created_at' => now(),
             ]);

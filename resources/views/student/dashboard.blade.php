@@ -27,12 +27,12 @@
     <h2 id="credits-title" class="text-xl font-semibold">Sessions and credits</h2>
     @if($availableCredits > 0)<a href="{{ route('student.bookings.create') }}" class="mt-3 inline-block rounded-lg bg-nile-800 px-4 py-2 text-sm font-semibold text-white hover:bg-nile-900">Book with a package credit</a>@endif
     <div class="mt-4 grid gap-4 sm:grid-cols-3">
-        <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Purchased sessions</p><p class="mt-1 text-2xl font-semibold text-nile-900">{{ $totalPurchased }}</p></div>
+        <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Remaining entitlements</p><p class="mt-1 text-2xl font-semibold text-nile-900">@foreach($entitlementBalances as $balance)<span class="block text-base">{{ $balance['label'] }}: {{ $balance['remaining'] }}</span>@endforeach</p></div>
         <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Completed sessions</p><p class="mt-1 text-2xl font-semibold text-nile-900">{{ $completedCount }}</p></div>
-        <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Available credits</p><p class="mt-1 text-2xl font-semibold text-nile-900">{{ $availableCredits }}</p></div>
+        <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Available entitlements</p><p class="mt-1 text-2xl font-semibold text-nile-900">@foreach($entitlementBalances as $balance)<span class="block text-base">{{ $balance['label'] }}: {{ $balance['available'] }}</span>@endforeach</p></div>
     </div>
     @foreach($packageSummaries as $package)
-        <p class="mt-3 text-sm text-stone-600">{{ $package['name'] }} · {{ ucfirst($package['status']) }} · {{ $package['summary']['remaining_credits'] }} credits · {{ $package['summary']['net_paid'] }} {{ $package['currency'] }} paid net · {{ bccomp($package['summary']['overpaid'], '0.00', 2) > 0 ? $package['summary']['overpaid'].' '.$package['currency'].' overpaid' : $package['summary']['balance_due'].' '.$package['currency'].' due' }}</p>
+        <p class="mt-3 text-sm text-stone-600">{{ $package['name'] }} · {{ $package['summary']['entitlement_status'] }} · {{ $package['summary']['balance_text'] }} · Purchase #{{ $package['id'] }} · {{ $package['offering_key'] }} · Expiry {{ $package['expiry'] ?? 'No expiry' }} · {{ $package['summary']['net_paid'] }} {{ $package['currency'] }} paid net · {{ bccomp($package['summary']['overpaid'], '0.00', 2) > 0 ? $package['summary']['overpaid'].' '.$package['currency'].' overpaid' : $package['summary']['balance_due'].' '.$package['currency'].' due' }}</p>
     @endforeach
 </section>
 <section class="mt-8" aria-labelledby="upcoming-title">
@@ -66,6 +66,7 @@
         <article class="mt-4 rounded-xl border border-stone-200 bg-white p-5">
             <p class="font-semibold">{{ $customerStart->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $customerStart->timezoneName }}</span></p>
             <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ $booking->studentStatusLabel() }}</p>
+            <x-lesson-materials :booking="$booking" />
         </article>
     @endforeach
 </section>

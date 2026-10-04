@@ -44,7 +44,7 @@ class PasswordResetController extends Controller
                 'action' => 'password_reset_requested',
                 'entity_type' => Administrator::class,
                 'entity_id' => $admin->id,
-                'ip_address' => $request->ip(),
+                'ip_address' => null,
                 'user_agent' => $request->userAgent(),
                 'created_at' => now(),
             ]);
@@ -90,7 +90,7 @@ class PasswordResetController extends Controller
                     'action' => 'password_reset_completed',
                     'entity_type' => Administrator::class,
                     'entity_id' => $admin->id,
-                    'ip_address' => $request->ip(),
+                    'ip_address' => null,
                     'user_agent' => $request->userAgent(),
                     'created_at' => now(),
                 ]);

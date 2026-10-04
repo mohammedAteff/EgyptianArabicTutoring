@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
@@ -29,7 +30,7 @@ class BookingLanguageSwitchSyncTest extends TestCase
         parent::setUp();
         $this->installShortFormFixture();
 
-        RateLimiter::clear('throttle:hold:ip:127.0.0.1');
+        RateLimiter::clear(TransientRateLimitKey::make('throttle:hold:ip', '127.0.0.1'));
 
         $this->sessionType = SessionType::create([
             'title' => 'Standard Arabic Lesson',

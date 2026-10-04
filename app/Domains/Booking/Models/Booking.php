@@ -6,6 +6,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Students\Models\Student;
 use Carbon\Carbon;
+use Database\Factories\BookingFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,9 +19,21 @@ class Booking extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected static function newFactory(): BookingFactory
+    {
+        return BookingFactory::new();
+    }
+
     protected $table = 'bookings';
 
+    /** @return HasMany<LessonMaterial, $this> */
+    public function lessonMaterials(): HasMany
+    {
+        return $this->hasMany(LessonMaterial::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     protected $fillable = [
+        'funding_mode', 'entitlement_type_id', 'entitlement_code', 'entitlement_units', 'student_package_id', 'student_package_entitlement_id', 'consumed_ledger_entry_id', 'request_fingerprint',
         'meeting_room_id', 'meeting_url_snapshot', 'meeting_provider_snapshot', 'meeting_assigned_at', 'meeting_assigned_by',
         'contact_id',
         'student_id',
@@ -55,6 +68,15 @@ class Booking extends Model
         'completed_at',
         'detected_country_code',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $booking): void {
+            if ($booking->getOriginal('consumed_ledger_entry_id') !== null && $booking->isDirty(['funding_mode', 'entitlement_type_id', 'entitlement_code', 'entitlement_units', 'student_package_id', 'student_package_entitlement_id', 'consumed_ledger_entry_id', 'request_fingerprint'])) {
+                throw new \RuntimeException('Booking entitlement provenance is immutable.');
+            }
+        });
+    }
 
     protected function casts(): array
     {

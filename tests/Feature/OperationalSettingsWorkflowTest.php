@@ -82,7 +82,8 @@ class OperationalSettingsWorkflowTest extends TestCase
         }
         AnalyticsEvent::create(['event_uuid' => (string) Str::uuid(), 'event_name' => 'outbound_link_clicked', 'visitor_token' => 'one', 'page' => '/games', 'metadata' => [], 'created_at' => now('UTC'), 'is_bot' => false]);
         $report = app(ReportService::class)->getSocialReport(now('UTC')->subMinute(), now('UTC')->addMinute());
-        $this->assertSame(16, $report['total_clicks']);
+        $this->assertSame(15, $report['total_clicks']);
+        $this->assertSame(1, $report['outbound_clicks']);
         $this->assertSame(2, $report['unique_visitors']);
         foreach (['YouTube', 'TikTok', 'Instagram', 'Telegram', 'WhatsApp'] as $platform) {
             $row = $report['rows']->firstWhere('platform', $platform);

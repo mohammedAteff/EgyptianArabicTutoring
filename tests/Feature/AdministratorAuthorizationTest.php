@@ -27,7 +27,7 @@ class AdministratorAuthorizationTest extends TestCase
             'phone_normalized' => '+201012345678',
         ]);
 
-        app(StudentLedgerService::class)->createPackage($student, 'Search roster fixture', 1, '10.00', '0.00', 'USD', null, 'search-roster-fixture');
+        app(StudentLedgerService::class)->createPackage($student, 'Search roster fixture', 1, '10.00', '0.00', 'USD', null, 'search-roster-fixture', entitlementCode: 'one_hour');
 
         $this->actingAs($admin, 'web')
             ->get(route('admin.students.index', ['q' => 'Test, Student']))

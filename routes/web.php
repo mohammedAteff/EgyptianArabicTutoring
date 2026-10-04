@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ResourceCategoryController;
 use App\Http\Controllers\Admin\SearchController;
+use App\Http\Controllers\Admin\SessionTypeController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StaffBinController;
 use App\Http\Controllers\Admin\StudentBillingController;
@@ -26,6 +27,8 @@ use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SystemHealthController;
 use App\Http\Controllers\Admin\TelegramController;
 use App\Http\Controllers\Admin\TranslationController;
+use App\Http\Controllers\Admin\TwoFactorChallengeController;
+use App\Http\Controllers\Admin\TwoFactorSecurityController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\BookingController;
@@ -38,6 +41,7 @@ use App\Http\Controllers\Student\AuthController as StudentAuthController;
 use App\Http\Controllers\Student\BookingController as StudentBookingController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Student\FormController as StudentFormController;
+use App\Http\Controllers\Student\LessonWorkspaceController;
 use App\Http\Controllers\Student\ProfileController;
 use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
 use App\Http\Controllers\StudentBinController;
@@ -74,6 +78,8 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::post('/profile/emails', [ProfileController::class, 'requestVerification'])->middleware('throttle:6,1')->name('profile.email.request');
         Route::get('/profile/emails/verify/{token}', [ProfileController::class, 'verify'])->middleware('throttle:10,1')->name('profile.email.verify');
         Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/lessons/{booking}', [LessonWorkspaceController::class, 'show'])->whereNumber('booking')->name('lessons.show');
+        Route::get('/lessons/{booking}/materials/{material}', [LessonWorkspaceController::class, 'open'])->whereNumber(['booking', 'material'])->name('lessons.materials.open');
         Route::get('/forms/{slug}', [StudentFormController::class, 'show'])->name('forms.show');
         Route::post('/forms/{slug}', [StudentFormController::class, 'save'])->middleware('throttle:student-form-save')->name('forms.save');
         Route::post('/forms/{slug}/autosave', [StudentFormController::class, 'autosave'])->middleware('throttle:student-form-save')->name('forms.autosave');
@@ -206,6 +212,8 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/two-factor-challenge', [TwoFactorChallengeController::class, 'show'])->name('two-factor.challenge');
+    Route::post('/two-factor-challenge', [TwoFactorChallengeController::class, 'store'])->middleware('throttle:staff-two-factor-challenge')->name('two-factor.verify');
 
     // Password Recovery
     Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
@@ -219,6 +227,16 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     |--------------------------------------------------------------------------
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
+        Route::prefix('security')->name('security.')->middleware('role:super_admin')->group(function (): void {
+            Route::get('/', [TwoFactorSecurityController::class, 'show'])->name('show');
+            Route::middleware('throttle:staff-two-factor-security')->group(function (): void {
+                Route::post('/enrollment', [TwoFactorSecurityController::class, 'store'])->name('enroll');
+                Route::post('/confirmation', [TwoFactorSecurityController::class, 'confirm'])->name('confirm');
+                Route::post('/recovery-codes', [TwoFactorSecurityController::class, 'regenerate'])->name('regenerate');
+                Route::post('/authenticator', [TwoFactorSecurityController::class, 'reset'])->name('reset');
+                Route::delete('/two-factor', [TwoFactorSecurityController::class, 'destroy'])->name('disable');
+            });
+        });
         Route::post('/students/{student}/packages/{package}/validity', [StudentBillingController::class, 'extendValidity'])->middleware('role:super_admin,admin')->name('students.packages.validity');
         Route::post('/accounts/{type}/{account}/suspension', [AccountSuspensionController::class, 'update'])->middleware('role:super_admin')->name('accounts.suspension');
         Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->middleware('role:super_admin,admin')->name('payment-methods.index');
@@ -243,6 +261,11 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/bookings/create', [App\Http\Controllers\Admin\BookingController::class, 'create'])->middleware('role:super_admin,admin')->name('bookings.create');
         Route::post('/bookings', [App\Http\Controllers\Admin\BookingController::class, 'store'])->middleware('role:super_admin,admin')->name('bookings.store');
         Route::get('/bookings/{booking}', [App\Http\Controllers\Admin\BookingController::class, 'show'])->name('bookings.show');
+        Route::get('/bookings/{booking}/lesson', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'show'])->name('lessons.show');
+        Route::post('/bookings/{booking}/lesson/materials', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'store'])->name('lessons.materials.store');
+        Route::patch('/bookings/{booking}/lesson/materials/{material}', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'update'])->name('lessons.materials.update');
+        Route::delete('/bookings/{booking}/lesson/materials/{material}', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'destroy'])->name('lessons.materials.destroy');
+        Route::get('/bookings/{booking}/lesson/materials/{material}', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'open'])->name('lessons.materials.open');
         Route::patch('/bookings/{booking}/notes', [App\Http\Controllers\Admin\BookingController::class, 'updateNotes'])->middleware('role:super_admin,admin')->name('bookings.notes');
         Route::post('/bookings/{booking}/complete', [App\Http\Controllers\Admin\BookingController::class, 'complete'])->middleware('role:super_admin,admin')->name('bookings.complete');
         Route::post('/bookings/{booking}/no-show', [App\Http\Controllers\Admin\BookingController::class, 'markNoShow'])->middleware('role:super_admin,admin')->name('bookings.no-show');
@@ -327,6 +350,8 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         Route::middleware('role:super_admin,admin')->group(function () {
             // Billing & Cashier Operations Hub (Phase 3)
+            Route::get('/session-types', [SessionTypeController::class, 'index'])->name('session-types.index');
+            Route::post('/session-types/{sessionType?}', [SessionTypeController::class, 'save'])->name('session-types.save');
             Route::get('/billing/cashier', [StudentBillingController::class, 'cashier'])->name('billing.cashier');
             Route::get('/billing/check-diagnostic-credit/{student}', [StudentBillingController::class, 'checkDiagnosticCredit'])->name('billing.check_diagnostic');
             Route::get('/billing/export', [StudentBillingController::class, 'exportFinancials'])->name('billing.export');

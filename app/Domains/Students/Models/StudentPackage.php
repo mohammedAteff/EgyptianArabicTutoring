@@ -13,7 +13,7 @@ class StudentPackage extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['student_id', 'package_name', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated', 'expiration_date', 'status'];
+    protected $fillable = ['offering_key', 'identity_state', 'validity_days', 'purchase_fingerprint', 'student_id', 'package_name', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated', 'expiration_date', 'status'];
 
     protected function casts(): array
     {
@@ -23,7 +23,7 @@ class StudentPackage extends Model
     protected static function booted(): void
     {
         static::updating(function (self $package): void {
-            foreach (['student_id', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated'] as $field) {
+            foreach (['package_name', 'offering_key', 'identity_state', 'validity_days', 'purchase_fingerprint', 'student_id', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated'] as $field) {
                 if ($package->isDirty($field)) {
                     throw new RuntimeException('Historical package terms cannot be changed.');
                 }
@@ -42,6 +42,13 @@ class StudentPackage extends Model
         return $this->belongsTo(Student::class);
     }
 
+    /** @return HasMany<StudentPackageEntitlement, $this> */
+    public function entitlements(): HasMany
+    {
+        return $this->hasMany(StudentPackageEntitlement::class);
+    }
+
+    /** @return HasMany<SessionLedgerEntry, $this> */
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(SessionLedgerEntry::class);

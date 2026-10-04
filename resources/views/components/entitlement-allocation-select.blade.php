@@ -1,0 +1,2 @@
+@props(['package', 'required' => true])
+<label class="block text-sm">Entitlement allocation<select name="allocation_id" @required($required) class="mt-1 block w-full rounded-lg border border-slate-300 bg-white p-3"><option value="">{{ $required ? 'Choose entitlement type' : 'No entitlement forfeiture' }}</option>@foreach($package->entitlements as $allocation)<option value="{{ $allocation->id }}">{{ $allocation->type->label }} · Allocation #{{ $allocation->id }}</option>@endforeach</select></label>

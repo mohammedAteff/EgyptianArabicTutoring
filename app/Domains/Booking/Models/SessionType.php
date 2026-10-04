@@ -2,8 +2,10 @@
 
 namespace App\Domains\Booking\Models;
 
+use App\Domains\Students\Models\EntitlementType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SessionType extends Model
@@ -13,6 +15,7 @@ class SessionType extends Model
     protected $table = 'session_types';
 
     protected $fillable = [
+        'funding_mode', 'required_entitlement_type_id', 'required_entitlement_units',
         'title',
         'slug',
         'description',
@@ -29,6 +32,12 @@ class SessionType extends Model
             'duration_minutes' => 'integer',
             'price' => 'decimal:2',
         ];
+    }
+
+    /** @return BelongsTo<EntitlementType, $this> */
+    public function requiredEntitlementType(): BelongsTo
+    {
+        return $this->belongsTo(EntitlementType::class, 'required_entitlement_type_id');
     }
 
     public function getNameAttribute(): string

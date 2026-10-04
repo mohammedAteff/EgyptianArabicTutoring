@@ -242,12 +242,12 @@ class TelegramAutomationTest extends TestCase
     {
         $this->configured('package_expiring', ['threshold' => 14]);
         $student = Student::factory()->verified()->create();
-        $package = app(StudentLedgerService::class)->createPackage($student, 'QA package', 8, '280', '25', 'USD', now('Africa/Cairo')->addDays(7)->toDateString(), (string) Str::uuid());
+        $package = app(StudentLedgerService::class)->createPackage($student, 'QA package', 8, '280', '25', 'USD', now('Africa/Cairo')->addDays(7)->toDateString(), (string) Str::uuid(), entitlementCode: 'one_hour');
         app(StudentLedgerService::class)->recordPayment($package, '255', (string) Str::uuid(), null);
         app(TelegramReadService::class)->tick();
         app(TelegramReadService::class)->tick();
         $this->assertDatabaseCount('telegram_deliveries', 1);
-        $this->assertSame(8, TelegramDelivery::first()->payload['source']['remaining_credits']);
+        $this->assertSame('1-hour sessions: 8', TelegramDelivery::first()->payload['source']['remaining_credits']);
     }
 
     #[TestWith([true])] #[TestWith([false])]
@@ -377,13 +377,13 @@ class TelegramAutomationTest extends TestCase
         $this->configured('low_credits', ['threshold' => 1]);
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'QA credits', 8, '280', '25', 'USD', now('Africa/Cairo')->addDays(30)->toDateString(), (string) Str::uuid());
+        $package = $ledger->createPackage($student, 'QA credits', 8, '280', '25', 'USD', now('Africa/Cairo')->addDays(30)->toDateString(), (string) Str::uuid(), entitlementCode: 'one_hour');
         $ledger->recordPayment($package, '255', (string) Str::uuid(), null);
         $this->assertDatabaseCount('telegram_deliveries', 0);
-        $ledger->adjustCredits($package, -7, 'QA consumption adjustment', (string) Str::uuid());
+        $ledger->adjustCredits($package, -7, 'QA consumption adjustment', (string) Str::uuid(), allocationId: $package->entitlements()->value('id'));
         app(TelegramReadService::class)->tick();
         $this->assertDatabaseCount('telegram_deliveries', 1);
-        $this->assertSame(1, TelegramDelivery::first()->payload['source']['remaining_credits']);
+        $this->assertSame('1-hour sessions: 1', TelegramDelivery::first()->payload['source']['remaining_credits']);
         $package->update(['expiration_date' => now('Africa/Cairo')->subDay()->toDateString()]);
         $this->travel(2)->days();
         app(TelegramReadService::class)->tick();
@@ -517,6 +517,28 @@ class TelegramAutomationTest extends TestCase
         $this->artisan('telegram:test', ['destination' => $destination->id])->assertSuccessful();
         Http::assertSent(fn ($request): bool => str_contains($request['text'], 'TEST — Telegram connectivity check. No student or customer data.'));
         $this->artisan('telegram:test', ['destination' => 999999])->assertFailed();
+    }
+
+    public function test_contending_sender_does_not_postpone_the_lock_owners_delivery(): void
+    {
+        [$bot, , $rule] = $this->configured();
+        app(TelegramAutomationService::class)->emit('booking_created', 'lock-contention-fixture', [], ruleId: $rule->id);
+        $delivery = TelegramDelivery::query()->where('telegram_rule_id', $rule->id)->firstOrFail();
+        $due = $delivery->due_at->toIso8601String();
+        $lock = Cache::lock('telegram-send-bot:'.$bot->id, 30);
+        $this->assertTrue($lock->get());
+        try {
+            app(TelegramDeliveryService::class)->deliver($delivery->id);
+            $this->assertSame($due, $delivery->fresh()->due_at->toIso8601String());
+            $this->assertSame('pending', $delivery->fresh()->status);
+            Http::assertNothingSent();
+        } finally {
+            $lock->release();
+        }
+        app(TelegramDeliveryService::class)->deliver($delivery->id);
+        $this->assertSame('sent', $delivery->fresh()->status);
+        $this->assertSame(1, $delivery->fresh()->attempts);
+        Http::assertSentCount(1);
     }
 
     public function test_imported_legacy_command_does_not_send_a_second_reminder(): void

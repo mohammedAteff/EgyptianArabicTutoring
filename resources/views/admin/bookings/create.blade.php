@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<p class="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Manual bookings use direct payment. Package entitlements are reserved through the student portal booking flow.</p>
 <div class="max-w-3xl mx-auto space-y-6">
 
     <div class="flex items-center justify-between">

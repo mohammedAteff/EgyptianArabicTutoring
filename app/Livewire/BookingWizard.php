@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
@@ -454,7 +455,7 @@ class BookingWizard extends Component
         $this->errorMessage = null;
 
         $ip = request()->ip() ?? '127.0.0.1';
-        $holdIpKey = 'throttle:hold:ip:'.$ip;
+        $holdIpKey = TransientRateLimitKey::make('throttle:hold:ip', $ip);
         $holdVisitorKey = 'throttle:hold:visitor:'.$this->visitorToken;
 
         if (RateLimiter::tooManyAttempts($holdIpKey, 10) || RateLimiter::tooManyAttempts($holdVisitorKey, 5)) {
@@ -593,7 +594,7 @@ class BookingWizard extends Component
 
         $ip = request()->ip() ?? '127.0.0.1';
         $normalizedEmail = app(StudentIdentityService::class)->normalizeEmail($this->email);
-        $confirmIpKey = 'throttle:booking-confirm:ip:'.$ip;
+        $confirmIpKey = TransientRateLimitKey::make('throttle:booking-confirm:ip', $ip);
         $confirmEmailKey = 'throttle:booking-confirm:email:'.$normalizedEmail;
 
         if (RateLimiter::tooManyAttempts($confirmIpKey, 5) || RateLimiter::tooManyAttempts($confirmEmailKey, 3)) {

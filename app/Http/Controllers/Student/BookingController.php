@@ -8,7 +8,7 @@ use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Students\Models\Student;
-use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
@@ -39,10 +39,11 @@ class BookingController extends Controller
             $fromDate = $today;
         }
 
-        $packages = StudentPackage::query()->where('student_id', $student->id)->get();
-        $availableCredits = (int) $packages->sum(fn (StudentPackage $package): int => $ledger->summary($package)['remaining_credits']);
-        $sessionTypes = SessionType::query()->where('active', true)->orderBy('duration_minutes')->get();
+        $entitlements = app(EntitlementService::class)->forStudent($student->id);
+        $sessionTypes = SessionType::query()->where('active', true)->where('funding_mode', 'package')->with('requiredEntitlementType')->orderBy('duration_minutes')->get();
         $selectedSessionType = $sessionTypes->firstWhere('id', (int) $request->query('session_type_id'));
+        $selectedBalance = $selectedSessionType ? ($entitlements[$selectedSessionType->requiredEntitlementType?->code]['available'] ?? 0) : array_sum(array_column($entitlements, 'available'));
+        $availableCredits = $selectedSessionType && ! app(EntitlementService::class)->canFund($student->id, $selectedSessionType) ? 0 : $selectedBalance;
         $slots = [];
         if ($selectedSessionType && $availableCredits > 0) {
             $ownerToken = $this->slotOwnerToken($request, $student);
@@ -69,6 +70,7 @@ class BookingController extends Controller
             'timezone' => $timezone,
             'fromDate' => $fromDate,
             'slots' => $slots,
+            'entitlementBalances' => $entitlements,
             'availableCredits' => $availableCredits,
             'idempotencyKey' => Str::random(48),
         ]);
@@ -101,7 +103,7 @@ class BookingController extends Controller
 
         app(AnalyticsService::class)->track('package_session_scheduled', ['booking_id' => $booking->id], $request, eventUuid: 'package-booking-'.$booking->id);
 
-        return redirect()->route('student.dashboard')->with('success', 'Your confirmed session is booked and one package credit has been reserved.');
+        return redirect()->route('student.dashboard')->with('success', 'Your confirmed session is booked and the required entitlement has been reserved.');
     }
 
     private function displayTimezone(?string $requested, Student $student, TimezoneService $timezones): string

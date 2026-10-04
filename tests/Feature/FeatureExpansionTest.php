@@ -23,12 +23,12 @@ class FeatureExpansionTest extends TestCase
     {
         $student = Student::factory()->verified()->create(['first_name' => '=FORMULA', 'last_name' => 'Learner']);
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'QA package', 4, '100.00', '0.00', 'USD', null, 'expansion-package');
+        $package = $ledger->createPackage($student, 'QA package', 4, '100.00', '0.00', 'USD', null, 'expansion-package', entitlementCode: 'one_hour');
         $payment = $ledger->recordPayment($package, '100.00', 'expansion-payment', null);
         $refund = $ledger->refund($payment, '20.00', 'expansion-refund', null, 'Manual correction', 0);
-        $credit = $ledger->adjustCredits($package, 2, 'Courtesy', 'expansion-credit', null);
+        $credit = $ledger->adjustCredits($package, 2, 'Courtesy', 'expansion-credit', null, allocationId: $package->entitlements()->value('id'));
         $package->load(['payments', 'refunds', 'ledgerEntries']);
-        $ledger->adjustCredits($package, 1, 'Later courtesy', 'later-credit', null);
+        $ledger->adjustCredits($package, 1, 'Later courtesy', 'later-credit', null, allocationId: $package->entitlements()->value('id'));
         $this->assertSame(7, $ledger->summary($package)['remaining_credits']);
         $this->assertSame(6, $ledger->summary($package, true)['remaining_credits']);
         $service = app(CashierReportService::class);
@@ -63,7 +63,7 @@ class FeatureExpansionTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Boundary package', 3, '90.00', '0.00', 'USD', null, 'boundary-package');
+        $package = $ledger->createPackage($student, 'Boundary package', 3, '90.00', '0.00', 'USD', null, 'boundary-package', entitlementCode: 'one_hour');
         $this->travelTo(CarbonImmutable::parse('2026-10-02 21:00:00', 'UTC'));
         $first = $ledger->recordPayment($package, '30.00', 'boundary-first', null);
         $this->travelTo(CarbonImmutable::parse('2026-10-03 21:00:00', 'UTC'));
@@ -85,9 +85,9 @@ class FeatureExpansionTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
         $student = Student::factory()->verified()->create(['first_name' => 'Tutoring', 'last_name' => 'Only', 'name_normalized' => 'tutoring only']);
         $resource = Student::factory()->verified()->create(['first_name' => 'Resource', 'last_name' => 'Only']);
-        app(StudentLedgerService::class)->createPackage($student, 'Roster package', 2, '20.00', '0.00', 'USD', null, 'roster-package');
+        app(StudentLedgerService::class)->createPackage($student, 'Roster package', 2, '20.00', '0.00', 'USD', null, 'roster-package', entitlementCode: 'one_hour');
         $unsettled = Student::factory()->verified()->create();
-        app(StudentLedgerService::class)->createPackage($unsettled, 'Foundation Coaching Track', 8, '280.00', '0.00', 'USD', null, 'unsettled-roster', null, 'foundation_track');
+        app(StudentLedgerService::class)->createPackage($unsettled, 'Foundation Coaching Track', 8, '280.00', '0.00', 'USD', null, 'unsettled-roster', null, 'foundation_track', entitlementCode: 'one_hour');
         $this->assertSame([$student->id], app(StudentRecordsQuery::class)->query(['credits' => 'available'])->pluck('id')->all());
         $unsettled->delete();
         $this->assertSame([$student->id], app(StudentRecordsQuery::class)->query([])->pluck('id')->all());
@@ -103,7 +103,7 @@ class FeatureExpansionTest extends TestCase
     public function test_directory_collapses_verified_aliases_and_searches_secondary_email(): void
     {
         $student = Student::factory()->verified()->create(['email' => 'primary@example.org', 'email_normalized' => 'primary@example.org']);
-        app(StudentLedgerService::class)->createPackage($student, 'Directory package', 1, '10.00', '0.00', 'USD', null, 'directory-package');
+        app(StudentLedgerService::class)->createPackage($student, 'Directory package', 1, '10.00', '0.00', 'USD', null, 'directory-package', entitlementCode: 'one_hour');
         StudentEmail::factory()->create(['student_id' => $student->id, 'email_normalized' => 'alias@example.org', 'verified_at' => now()]);
         foreach (['primary@example.org', 'alias@example.org'] as $email) {
             Contact::create(['name' => 'Old alias', 'email' => $email, 'last_seen_at' => now()]);
@@ -122,8 +122,8 @@ class FeatureExpansionTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Expiry package', 2, '20.00', '0.00', 'USD', '2026-12-15', 'expiry-package');
-        $ledger->adjustCredits($package, 1, 'Courtesy extension', 'expiry-credit', $admin->id);
+        $package = $ledger->createPackage($student, 'Expiry package', 2, '20.00', '0.00', 'USD', '2026-12-15', 'expiry-package', entitlementCode: 'one_hour');
+        $ledger->adjustCredits($package, 1, 'Courtesy extension', 'expiry-credit', $admin->id, allocationId: $package->entitlements()->value('id'));
         $this->actingAs($admin, 'web')->post(route('admin.students.packages.validity', [$student, $package]), ['previous_expiration_date' => '2026-12-15', 'expiration_date' => '2027-01-15', 'reason' => 'Travel'])->assertSessionHasNoErrors();
         foreach ([route('admin.students.show', $student), route('admin.billing.cashier', ['student_id' => $student->id])] as $url) {
             $this->get($url)->assertOk()->assertSee('2027-01-15')->assertSee('Expiry package');

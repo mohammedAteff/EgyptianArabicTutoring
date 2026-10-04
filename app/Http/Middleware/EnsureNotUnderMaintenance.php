@@ -57,6 +57,9 @@ class EnsureNotUnderMaintenance
         $adminAuthRoutes = [
             'admin.login',
             'admin.login.submit',
+            'admin.two-factor.challenge',
+            'admin.two-factor.verify',
+            'admin.logout',
             'admin.password.request',
             'admin.password.email',
             'admin.password.reset',

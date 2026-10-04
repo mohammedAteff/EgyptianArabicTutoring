@@ -15,6 +15,7 @@ use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
@@ -28,12 +29,9 @@ class TelegramReadService
     public function booking(Booking $booking): array
     {
         $booking->loadMissing(['student', 'contact', 'sessionType']);
-        $entry = SessionLedgerEntry::where('booking_id', $booking->id)->where('entry_type', 'consumed')->first();
-        if (! $entry) {
-            $entry = SessionLedgerEntry::where('booking_id', $booking->id)->where('credit_change', '<', 0)->first();
-        }
+        $entry = SessionLedgerEntry::where('booking_id', $booking->id)->where('entry_type', 'session_consumed')->first();
         $package = $entry?->package;
-        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('Y-m-d g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package)['remaining_credits'] : 0, 'session_number' => $package ? (int) $package->ledgerEntries()->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
+        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('Y-m-d g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package)['balance_text'] : 'Direct booking', 'session_number' => $package ? (int) $package->ledgerEntries()->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
 
         return $data;
     }
@@ -43,7 +41,7 @@ class TelegramReadService
     {
         $package->loadMissing('student');
 
-        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package)['remaining_credits'], 'expiry_date' => $package->expiration_date?->format('Y-m-d') ?? 'Never', 'admin_url' => route('admin.students.show', $package->student_id)];
+        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => $package->expiration_date?->format('Y-m-d') ?? 'Never', 'admin_url' => route('admin.students.show', $package->student_id)];
     }
 
     public function scanPackage(StudentPackage $package): void
@@ -58,15 +56,22 @@ class TelegramReadService
         if ($package->status !== 'active') {
             return;
         }
-        $data = $this->package($package);
-        $remaining = (int) $data['remaining_credits'];
-        $expiry = $package->expiration_date ? CarbonImmutable::parse($package->expiration_date->format('Y-m-d'), (string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone()))->endOfDay()->setTimezone('UTC') : null;
-        if ($expiry && $expiry->lt($now)) {
+        $service = app(EntitlementService::class);
+        if (! $service->eligible($package)) {
             return;
         }
-        $matched = $rule->trigger === 'low_credits' ? $remaining <= $rule->threshold : ($remaining > 0 && $expiry && $expiry->lte($now->addDays($rule->threshold)));
-        if ($matched) {
-            $this->automation->emit($rule->trigger, 'package:'.$package->id.':'.$now->timestamp, $data, 'package:'.$package->id, $rule->id);
+        $expiry = $package->expiration_date ? CarbonImmutable::parse($package->expiration_date->format('Y-m-d'), app(TimezoneService::class)->getBusinessTimezone())->endOfDay()->utc() : null;
+        foreach ($service->projection($package) as $allocation) {
+            if ($allocation['id'] === null) {
+                continue;
+            }
+            $remaining = $allocation['available'];
+            $matched = $rule->trigger === 'low_credits' ? $remaining <= $rule->threshold : ($remaining > 0 && $expiry && $expiry->lte($now->addDays($rule->threshold)));
+            if ($matched) {
+                $data = array_merge($this->package($package), ['remaining_credits' => $allocation['label'].': '.$remaining, 'entitlement_code' => $allocation['code'], 'entitlement_label' => $allocation['label'], 'allocation_id' => $allocation['id'], 'available_units' => $remaining]);
+                $scope = 'package:'.$package->id.':allocation:'.$allocation['id'];
+                $this->automation->emit($rule->trigger, $scope.':'.$now->timestamp, $data, $scope, $rule->id);
+            }
         }
     }
 
@@ -155,14 +160,20 @@ class TelegramReadService
             $low = 0;
             $expiry = 0;
             foreach (StudentPackage::where('status', 'active')->cursor() as $package) {
-                $remaining = $this->ledger->summary($package)['remaining_credits'];
-                if ($remaining <= 1 && (! $package->expiration_date || $package->expiration_date->gte($today))) {
-                    $low++;
-                } if ($remaining > 0 && $package->expiration_date && $package->expiration_date->between($today, $today->addDays(14))) {
-                    $expiry++;
+                foreach (app(EntitlementService::class)->projection($package) as $allocation) {
+                    if ($allocation['id'] === null) {
+                        continue;
+                    }
+                    $remaining = $allocation['available'];
+                    if ($remaining <= 1 && (! $package->expiration_date || $package->expiration_date->gte($today))) {
+                        $low++;
+                    }
+                    if ($remaining > 0 && $package->expiration_date && $package->expiration_date->between($today, $today->addDays(14))) {
+                        $expiry++;
+                    }
                 }
-            } $lines[] = 'Low-credit packages (≤1): '.$low;
-            $lines[] = 'Unused packages expiring within 14 days: '.$expiry;
+            } $lines[] = 'Low entitlement allocations (≤1): '.$low;
+            $lines[] = 'Unused entitlement allocations expiring within 14 days: '.$expiry;
         }
         if (in_array('resources', $sections, true)) {
             $lines[] = 'Resource leads today: '.ResourceRequest::whereBetween('created_at', [$start, $end->subMicrosecond()])->count();

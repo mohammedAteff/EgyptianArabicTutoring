@@ -3,13 +3,16 @@
 namespace App\Domains\Students\Services;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\SessionType;
 use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Models\StudentPackageEntitlement;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +23,7 @@ class StudentLedgerService
     public const PRESETS = [
         'diagnostic_roadmap' => [
             'key' => 'diagnostic_roadmap',
+            'entitlement_code' => 'one_hour',
             'name' => 'Diagnostic & Roadmap',
             'sessions' => 1,
             'duration_minutes' => 60,
@@ -29,6 +33,7 @@ class StudentLedgerService
         ],
         'foundation_track' => [
             'key' => 'foundation_track',
+            'entitlement_code' => 'two_hour',
             'name' => 'Foundation Coaching Track',
             'sessions' => 8,
             'duration_minutes' => 120,
@@ -39,6 +44,7 @@ class StudentLedgerService
         ],
         'fluency_track' => [
             'key' => 'fluency_track',
+            'entitlement_code' => 'two_hour',
             'name' => 'Fluency Immersion Track',
             'sessions' => 12,
             'duration_minutes' => 120,
@@ -49,6 +55,7 @@ class StudentLedgerService
         ],
         'payg_maintenance' => [
             'key' => 'payg_maintenance',
+            'entitlement_code' => 'two_hour',
             'name' => 'Pay-As-You-Go Maintenance',
             'sessions' => 1,
             'duration_minutes' => 120,
@@ -58,6 +65,7 @@ class StudentLedgerService
         ],
         'advanced_conversational' => [
             'key' => 'advanced_conversational',
+            'entitlement_code' => 'one_hour',
             'name' => 'Advanced Conversational',
             'sessions' => 1,
             'duration_minutes' => 60,
@@ -67,7 +75,7 @@ class StudentLedgerService
         ],
     ];
 
-    public function __construct(private TimezoneService $timezones, private DatabaseCapability $database) {}
+    public function __construct(private TimezoneService $timezones, private DatabaseCapability $database, private EntitlementService $entitlements) {}
 
     /**
      * Check if a student is eligible for the 48-Hour Diagnostic Credit (-$25.00).
@@ -79,7 +87,7 @@ class StudentLedgerService
         $cutoff = CarbonImmutable::now('UTC')->subHours(48);
         $diagnosticPackages = StudentPackage::query()
             ->where('student_id', $studentId)
-            ->where('package_name', self::PRESETS['diagnostic_roadmap']['name'])
+            ->where('offering_key', 'diagnostic_roadmap')
             ->where('total_sessions_allocated', 1)
             ->where('currency', 'USD')
             ->whereHas('ledgerEntries', function ($query) use ($studentId): void {
@@ -126,7 +134,7 @@ class StudentLedgerService
             $alreadyClaimed = StudentPackage::query()
                 ->where('student_id', $studentId)
                 ->where('created_at', '>=', $package->created_at)
-                ->whereIn('package_name', [self::PRESETS['foundation_track']['name'], self::PRESETS['fluency_track']['name']])
+                ->whereIn('offering_key', ['foundation_track', 'fluency_track'])
                 ->where('discount_amount', '25.00')
                 ->exists();
 
@@ -152,7 +160,7 @@ class StudentLedgerService
             ? $settlementDate
             : CarbonImmutable::instance($settlementDate ?? now('UTC'));
 
-        $cairoMidnight = $settlement->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->startOfDay();
+        $cairoMidnight = $settlement->setTimezone($this->timezones->getBusinessTimezone())->startOfDay();
 
         return $cairoMidnight->addDays($validityDays)->toDateString();
     }
@@ -169,15 +177,24 @@ class StudentLedgerService
         return bcsub((string) $package->final_price, $netPaid, 2);
     }
 
-    public function createPackage(Student $student, string $name, int $sessions, string $originalPrice, string $discountAmount, string $currency, ?string $expirationDate, string $idempotencyKey, ?int $administratorId = null, ?string $presetKey = null, ?string $overrideNotes = null): StudentPackage
+    public function createPackage(Student $student, string $name, int $sessions, string $originalPrice, string $discountAmount, string $currency, ?string $expirationDate, string $idempotencyKey, ?int $administratorId = null, ?string $presetKey = null, ?string $overrideNotes = null, ?string $entitlementCode = null): StudentPackage
     {
+        if ($presetKey !== null && ! isset(self::PRESETS[$presetKey])) {
+            throw new InvalidArgumentException('Unknown offering key.');
+        }
+        $entitlementCode = $presetKey !== null ? self::PRESETS[$presetKey]['entitlement_code'] : $entitlementCode;
+        $type = EntitlementType::query()->where('code', $entitlementCode)->where('active', true)->first();
+        if (! $type) {
+            throw new InvalidArgumentException('Choose an explicit active entitlement type for this purchase.');
+        }
+        $fingerprint = hash('sha256', json_encode([$name, $sessions, $originalPrice, $discountAmount, strtoupper($currency), $expirationDate, $presetKey, $overrideNotes, $type->code], JSON_THROW_ON_ERROR));
         $originalCents = $this->toCents($originalPrice);
         $discountCents = $this->toCents($discountAmount);
         if ($sessions < 1 || $originalCents < 0 || $discountCents < 0 || $discountCents > $originalCents) {
             throw new InvalidArgumentException('Invalid package terms.');
         }
 
-        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes): StudentPackage {
+        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes, $type, $fingerprint): StudentPackage {
             $lockedStudent = Student::withTrashed()->whereKey($student->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged') {
                 throw new InvalidArgumentException('Packages cannot be assigned to an inactive student record.');
@@ -188,7 +205,12 @@ class StudentLedgerService
                     throw new InvalidArgumentException('Idempotency key was already used.');
                 }
 
-                return StudentPackage::findOrFail($existing->student_package_id);
+                $replay = StudentPackage::findOrFail($existing->student_package_id);
+                if ($replay->purchase_fingerprint !== $fingerprint) {
+                    throw new InvalidArgumentException('Idempotency payload changed.');
+                }
+
+                return $replay;
             }
 
             $effectiveName = $name;
@@ -197,7 +219,7 @@ class StudentLedgerService
             $effectiveDiscountCents = $discountCents;
             $effectiveCurrency = strtoupper($currency);
             $effectiveExpirationDate = $expirationDate;
-            if ($presetKey !== null && isset(self::PRESETS[$presetKey]) && trim((string) $overrideNotes) === '') {
+            if ($presetKey !== null && trim((string) $overrideNotes) === '') {
                 $preset = self::PRESETS[$presetKey];
                 $effectiveName = $preset['name'];
                 $effectiveSessions = $preset['sessions'];
@@ -213,6 +235,10 @@ class StudentLedgerService
             }
 
             $package = StudentPackage::create([
+                'offering_key' => $presetKey ?? 'custom',
+                'identity_state' => $presetKey === null ? 'custom' : 'mapped',
+                'validity_days' => $presetKey !== null && trim((string) $overrideNotes) === '' ? self::PRESETS[$presetKey]['validity_days'] : null,
+                'purchase_fingerprint' => $fingerprint,
                 'student_id' => $student->id,
                 'package_name' => $effectiveName,
                 'original_price' => $this->fromCents($effectiveOriginalCents),
@@ -223,7 +249,10 @@ class StudentLedgerService
                 'expiration_date' => $effectiveExpirationDate,
                 'status' => 'active',
             ]);
+            $allocation = StudentPackageEntitlement::create(['student_package_id' => $package->id, 'student_id' => $student->id, 'entitlement_type_id' => $type->id, 'granted_quantity' => $effectiveSessions]);
             SessionLedgerEntry::create([
+                'student_package_entitlement_id' => $allocation->id,
+                'entitlement_type_id' => $type->id,
                 'student_id' => $student->id,
                 'student_package_id' => $package->id,
                 'idempotency_key' => $idempotencyKey,
@@ -238,47 +267,9 @@ class StudentLedgerService
         }, 5);
     }
 
-    public function selectAndLockEligiblePackageForBooking(int $studentId): ?StudentPackage
+    public function selectAndLockEligiblePackageForBooking(int $studentId, SessionType $session): ?StudentPackage
     {
-        if (DB::transactionLevel() < 1) {
-            throw new InvalidArgumentException('Package allocation requires an active transaction.');
-        }
-
-        $packages = StudentPackage::query()
-            ->where('student_id', $studentId)
-            ->where('status', 'active')
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->get();
-
-        $packagesByFifo = $packages->sort(function (StudentPackage $first, StudentPackage $second): int {
-            if (($first->expiration_date === null) !== ($second->expiration_date === null)) {
-                return $first->expiration_date === null ? 1 : -1;
-            }
-
-            return strcmp((string) $first->expiration_date?->toDateString(), (string) $second->expiration_date?->toDateString())
-                ?: strcmp((string) $first->created_at?->toDateTimeString(), (string) $second->created_at?->toDateTimeString())
-                ?: ($first->id <=> $second->id);
-        })->values();
-
-        $ledgerEntries = SessionLedgerEntry::query()
-            ->whereIn('student_package_id', $packages->modelKeys())
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->get(['id', 'student_package_id', 'credit_change']);
-        $balances = $ledgerEntries->groupBy('student_package_id')->map(fn ($entries): int => (int) $entries->sum('credit_change'));
-
-        foreach ($packagesByFifo as $package) {
-            if (! $this->isEligible($package)) {
-                continue;
-            }
-
-            if (($balances->get($package->id, 0)) > 0) {
-                return $package;
-            }
-        }
-
-        return null;
+        return $this->entitlements->selectAndLock($studentId, $session)?->package;
     }
 
     public function consumeForBooking(Booking $booking, string $idempotencyKey): SessionLedgerEntry
@@ -286,27 +277,32 @@ class StudentLedgerService
         if (! $booking->student_id || DB::transactionLevel() < 1) {
             throw new InvalidArgumentException('A student booking transaction is required.');
         }
-
-        $existing = SessionLedgerEntry::query()->where('booking_id', $booking->id)->where('entry_type', 'session_consumed')->first();
+        $existing = SessionLedgerEntry::query()->where('idempotency_key', $idempotencyKey)->orWhere(fn ($q) => $q->where('booking_id', $booking->id)->where('entry_type', 'session_consumed'))->first();
         if ($existing) {
+            if ($existing->entry_type !== 'session_consumed' || (int) $existing->booking_id !== (int) $booking->id || $existing->idempotency_key !== $idempotencyKey || (int) $booking->consumed_ledger_entry_id !== (int) $existing->id) {
+                throw new InvalidArgumentException('Idempotency key or booking provenance mismatch.');
+            }
+
             return $existing;
         }
-
-        $package = $this->selectAndLockEligiblePackageForBooking($booking->student_id);
-        if (! $package) {
-            throw new InvalidArgumentException('No available session credits.');
+        $requirement = $this->entitlements->requirement($booking->sessionType);
+        $allocation = $this->entitlements->selectAndLock($booking->student_id, $booking->sessionType);
+        if (! $allocation) {
+            throw new InvalidArgumentException('No available compatible session credits.');
         }
-
-        return SessionLedgerEntry::create([
-            'student_id' => $booking->student_id,
-            'student_package_id' => $package->id,
-            'booking_id' => $booking->id,
-            'idempotency_key' => $idempotencyKey,
-            'entry_type' => 'session_consumed',
-            'credit_change' => -1,
-            'description' => 'Session credit used for booking',
-            'created_at' => now('UTC'),
+        $entry = SessionLedgerEntry::create([
+            'student_id' => $booking->student_id, 'student_package_id' => $allocation->student_package_id,
+            'student_package_entitlement_id' => $allocation->id, 'entitlement_type_id' => $allocation->entitlement_type_id,
+            'booking_id' => $booking->id, 'idempotency_key' => $idempotencyKey,
+            'entry_type' => 'session_consumed', 'credit_change' => -$requirement['units'],
+            'description' => $requirement['type']->label.' used for booking', 'created_at' => now('UTC'),
         ]);
+        $booking->update(['funding_mode' => 'package', 'entitlement_type_id' => $allocation->entitlement_type_id,
+            'entitlement_code' => $requirement['type']->code, 'entitlement_units' => $requirement['units'],
+            'student_package_id' => $allocation->student_package_id, 'student_package_entitlement_id' => $allocation->id,
+            'consumed_ledger_entry_id' => $entry->id]);
+
+        return $entry;
     }
 
     public function restoreCancellation(Booking $booking, string $idempotencyKey): ?SessionLedgerEntry
@@ -321,6 +317,12 @@ class StudentLedgerService
         }
 
         $package = StudentPackage::query()->whereKey($consumed->student_package_id)->lockForUpdate()->firstOrFail();
+        if ($consumed->credit_change >= 0 || (int) $package->student_id !== (int) $booking->student_id) {
+            throw new InvalidArgumentException('Invalid historical debit ownership or quantity.');
+        }
+        if ($consumed->student_package_entitlement_id !== null) {
+            $this->entitlements->lockAllocation($package, $consumed->student_package_entitlement_id);
+        }
         $existing = SessionLedgerEntry::query()->where('booking_id', $booking->id)->where('entry_type', 'cancellation_restore')->first();
         if ($existing) {
             return $existing;
@@ -332,8 +334,10 @@ class StudentLedgerService
             'booking_id' => $booking->id,
             'idempotency_key' => $idempotencyKey,
             'entry_type' => 'cancellation_restore',
-            'credit_change' => 1,
-            'description' => 'Credit restored after cancellation',
+            'student_package_entitlement_id' => $consumed->student_package_entitlement_id,
+            'entitlement_type_id' => $consumed->entitlement_type_id,
+            'credit_change' => -$consumed->credit_change,
+            'description' => 'Original entitlement restored after cancellation',
             'created_at' => now('UTC'),
         ]);
     }
@@ -383,13 +387,12 @@ class StudentLedgerService
                 'created_at' => now('UTC'),
             ]);
 
-            $preset = $this->presetForPackage($lockedPackage);
-            if ($preset && $lockedPackage->expiration_date === null) {
+            if ($lockedPackage->validity_days !== null && $lockedPackage->expiration_date === null) {
                 $totalPaid = (string) PaymentRecord::query()->where('student_package_id', $lockedPackage->id)->sum('amount_paid');
                 $totalRefunded = (string) PaymentRefund::query()->where('student_package_id', $lockedPackage->id)->sum('amount_refunded');
                 if (bccomp(bcsub($totalPaid, $totalRefunded, 2), (string) $lockedPackage->final_price, 2) >= 0) {
                     $lockedPackage->update([
-                        'expiration_date' => $this->calculateExpirationDate($recordedPayment->paid_at, $preset['validity_days']),
+                        'expiration_date' => $this->calculateExpirationDate($recordedPayment->paid_at, (int) $lockedPackage->validity_days),
                     ]);
                 }
             }
@@ -398,16 +401,17 @@ class StudentLedgerService
         }, 5);
     }
 
-    public function refund(PaymentRecord $payment, string $amount, string $idempotencyKey, ?int $administratorId, ?string $reason = null, int $forfeitCredits = 0): PaymentRefund
+    public function refund(PaymentRecord $payment, string $amount, string $idempotencyKey, ?int $administratorId, ?string $reason = null, int $forfeitCredits = 0, ?int $allocationId = null): PaymentRefund
     {
         $cents = $this->toCents($amount);
         if ($cents <= 0 || $forfeitCredits < 0) {
             throw new InvalidArgumentException('Refund amount must be positive and forfeited credits cannot be negative.');
         }
 
-        return $this->database->transaction(function () use ($payment, $cents, $idempotencyKey, $administratorId, $reason, $forfeitCredits): PaymentRefund {
+        return $this->database->transaction(function () use ($payment, $cents, $idempotencyKey, $administratorId, $reason, $forfeitCredits, $allocationId): PaymentRefund {
             $lockedStudent = Student::withTrashed()->whereKey($payment->student_id)->lockForUpdate()->firstOrFail();
             $package = StudentPackage::query()->whereKey($payment->student_package_id)->lockForUpdate()->firstOrFail();
+            $allocation = $forfeitCredits > 0 ? $this->entitlements->lockAllocation($package, $allocationId) : null;
             $lockedPayment = PaymentRecord::query()->whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged'
                 || (int) $package->student_id !== (int) $lockedStudent->id
@@ -417,7 +421,8 @@ class StudentLedgerService
             }
             $existing = PaymentRefund::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
-                if ($existing->payment_record_id !== $payment->id) {
+                $forfeit = SessionLedgerEntry::query()->where('idempotency_key', 'forfeit_refund_'.$existing->id)->first();
+                if ($existing->payment_record_id !== $payment->id || $this->toCents($existing->amount_refunded) !== $cents || $existing->reason !== $reason || -(int) ($forfeit ? $forfeit->credit_change : 0) !== $forfeitCredits || ($forfeit && (int) $forfeit->student_package_entitlement_id !== (int) $allocationId)) {
                     throw new InvalidArgumentException('Idempotency key was already used.');
                 }
 
@@ -440,14 +445,9 @@ class StudentLedgerService
             }
 
             if ($forfeitCredits > 0) {
-                $remainingCredits = (int) SessionLedgerEntry::query()
-                    ->where('student_package_id', $package->id)
-                    ->orderBy('id')
-                    ->lockForUpdate()
-                    ->get(['id', 'credit_change'])
-                    ->sum('credit_change');
+                $remainingCredits = $this->entitlements->lockedBalance($allocation);
                 if ($forfeitCredits > $remainingCredits) {
-                    throw new InvalidArgumentException('Cannot forfeit more than the package remaining credits.');
+                    throw new InvalidArgumentException('Cannot forfeit more than the allocation remaining entitlements.');
                 }
             }
 
@@ -469,6 +469,8 @@ class StudentLedgerService
                     'student_id' => $lockedStudent->id,
                     'student_package_id' => $package->id,
                     'idempotency_key' => 'forfeit_refund_'.$refund->id,
+                    'student_package_entitlement_id' => $allocation->id,
+                    'entitlement_type_id' => $allocation->entitlement_type_id,
                     'entry_type' => 'expiration_forfeit',
                     'credit_change' => -$forfeitCredits,
                     'description' => "Credits forfeited upon refund #{$refund->id}",
@@ -498,43 +500,43 @@ class StudentLedgerService
         return max(0, min($this->toCents((string) $payment->amount_paid) - $paymentRefunded, $packageNetPaid));
     }
 
-    public function adjustCredits(StudentPackage $package, int $creditChange, string $description, string $idempotencyKey, ?int $administratorId = null): SessionLedgerEntry
+    public function adjustCredits(StudentPackage $package, int $creditChange, string $description, string $idempotencyKey, ?int $administratorId = null, ?int $allocationId = null): SessionLedgerEntry
     {
         if ($creditChange === 0 || trim($description) === '') {
             throw new InvalidArgumentException('A non-zero credit adjustment and a reason are required.');
         }
 
-        return $this->database->transaction(function () use ($package, $creditChange, $description, $idempotencyKey, $administratorId): SessionLedgerEntry {
+        return $this->database->transaction(function () use ($package, $creditChange, $description, $idempotencyKey, $administratorId, $allocationId): SessionLedgerEntry {
             $lockedStudent = Student::withTrashed()->whereKey($package->student_id)->lockForUpdate()->firstOrFail();
             $lockedPackage = StudentPackage::query()->whereKey($package->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged' || (int) $lockedPackage->student_id !== (int) $lockedStudent->id) {
                 throw new InvalidArgumentException('This package is no longer assigned to an active student.');
             }
 
+            $allocation = $this->entitlements->lockAllocation($lockedPackage, $allocationId);
             $existing = SessionLedgerEntry::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
                 if ($existing->entry_type !== 'courtesy_adjustment'
                     || (int) $existing->student_package_id !== (int) $lockedPackage->id
-                    || (int) $existing->credit_change !== $creditChange) {
+                    || (int) $existing->credit_change !== $creditChange
+                    || (int) $existing->student_package_entitlement_id !== (int) $allocation->id
+                    || $existing->description !== trim($description)) {
                     throw new InvalidArgumentException('Idempotency key was already used.');
                 }
 
                 return $existing;
             }
 
-            $entries = SessionLedgerEntry::query()
-                ->where('student_package_id', $lockedPackage->id)
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->get(['id', 'credit_change']);
-            if ((int) $entries->sum('credit_change') + $creditChange < 0) {
-                throw new InvalidArgumentException('An adjustment cannot reduce the package below zero remaining credits.');
+            if ($this->entitlements->lockedBalance($allocation) + $creditChange < 0) {
+                throw new InvalidArgumentException('An adjustment cannot reduce the allocation below zero remaining entitlements.');
             }
 
             return SessionLedgerEntry::create([
                 'student_id' => $lockedStudent->id,
                 'student_package_id' => $lockedPackage->id,
                 'idempotency_key' => $idempotencyKey,
+                'student_package_entitlement_id' => $allocation->id,
+                'entitlement_type_id' => $allocation->entitlement_type_id,
                 'entry_type' => 'courtesy_adjustment',
                 'credit_change' => $creditChange,
                 'description' => trim($description),
@@ -544,8 +546,8 @@ class StudentLedgerService
         }, 5);
     }
 
-    /** @return array{gross_paid: string, gross_refunded: string, net_paid: string, balance_due: string, overpaid: string, remaining_credits: int} */
-    public function summary(StudentPackage $package, bool $useLoadedSnapshot = false): array
+    /** @return array<string, mixed> */
+    public function summary(StudentPackage $package, bool $useLoadedSnapshot = false, ?string $businessTimezone = null): array
     {
         $paid = $this->toCents((string) ($useLoadedSnapshot && $package->relationLoaded('payments') ? $package->payments->sum('amount_paid') : PaymentRecord::query()->where('student_package_id', $package->id)->sum('amount_paid')));
         $refunded = $this->toCents((string) ($useLoadedSnapshot && $package->relationLoaded('refunds') ? $package->refunds->sum('amount_refunded') : PaymentRefund::query()->where('student_package_id', $package->id)->sum('amount_refunded')));
@@ -553,7 +555,24 @@ class StudentLedgerService
 
         $entries = $useLoadedSnapshot && $package->relationLoaded('ledgerEntries') ? $package->ledgerEntries : SessionLedgerEntry::query()->where('student_package_id', $package->id)->get();
 
+        $projectionPackage = clone $package;
+        $projectionPackage->setRelation('ledgerEntries', $entries);
+        $typed = $this->entitlements->projection($projectionPackage, $businessTimezone);
+        $state = ucfirst($package->status);
+        if ($package->identity_state === 'legacy_unclassified') {
+            $state = 'Review required';
+        } elseif ($package->status === 'active' && $package->expiration_date === null && $package->validity_days !== null) {
+            $state = 'Awaiting settlement';
+        } elseif ($package->status === 'active' && ! $this->entitlements->eligible($package, $businessTimezone)) {
+            $state = 'Expired';
+        } elseif ($package->status === 'active' && array_sum(array_column($typed, 'available')) <= 0) {
+            $state = 'Unavailable';
+        }
+
         return [
+            'entitlements' => $typed,
+            'entitlement_status' => $state,
+            'balance_text' => implode('; ', array_map(fn (array $row): string => $row['label'].': '.$row['remaining'], $typed)) ?: 'No entitlements',
             'allocated_credits' => (int) $entries->where('entry_type', 'package_grant')->sum('credit_change'),
             'courtesy_credits' => (int) $entries->where('entry_type', 'courtesy_adjustment')->sum('credit_change'),
             'consumed_credits' => -(int) $entries->where('entry_type', 'session_consumed')->sum('credit_change'),
@@ -563,38 +582,8 @@ class StudentLedgerService
             'net_paid' => $this->fromCents($netPaid),
             'balance_due' => $this->fromCents(max(0, $this->toCents($package->final_price) - $netPaid)),
             'overpaid' => $this->fromCents(max(0, $netPaid - $this->toCents($package->final_price))),
-            'remaining_credits' => $this->isEligible($package)
-                ? (int) $entries->sum('credit_change') : 0,
+            'remaining_credits' => array_sum(array_column($typed, 'available')),
         ];
-    }
-
-    private function isEligible(StudentPackage $package): bool
-    {
-        if ($package->status !== 'active') {
-            return false;
-        }
-        if (! $package->expiration_date) {
-            return $this->presetForPackage($package) === null;
-        }
-
-        $expiresAtUtc = CarbonImmutable::parse($package->expiration_date->toDateString(), $this->timezones->getBusinessTimezone())
-            ->endOfDay()->setTimezone('UTC');
-
-        return now('UTC')->lessThanOrEqualTo($expiresAtUtc);
-    }
-
-    /** @return array<string, int|string>|null */
-    private function presetForPackage(StudentPackage $package): ?array
-    {
-        foreach (self::PRESETS as $preset) {
-            if ($package->package_name === $preset['name']
-                && (int) $package->total_sessions_allocated === $preset['sessions']
-                && $package->currency === 'USD') {
-                return $preset;
-            }
-        }
-
-        return null;
     }
 
     private function toCents(string $amount): int

@@ -4,7 +4,7 @@
 @if(auth('web')->user()?->isAdmin())
 <form method="POST" action="{{ route('admin.students.meeting-preference', $student->id) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
     @csrf
-    <label class="flex-1 text-sm">Preferred meeting provider<select name="preferred_meeting_provider_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">Use default provider</option>@foreach(\App\Domains\Booking\Models\MeetingProvider::query()->where('active', true)->orderBy('sort_order')->get() as $provider)<option value="{{ $provider->id }}" @selected($student->preferred_meeting_provider_id === $provider->id)>{{ $provider->name }}</option>@endforeach</select></label>
+    <label class="flex-1 text-sm">Preferred meeting provider<select name="preferred_meeting_provider_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">Use default provider</option>@foreach($meetingProviders as $provider)<option value="{{ $provider->id }}" @selected($student->preferred_meeting_provider_id === $provider->id)>{{ $provider->name }}</option>@endforeach</select></label>
     <button class="rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save meeting preference</button>
 </form>
 @endif
@@ -43,26 +43,26 @@
     @if(! $isAssistant)
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div class="mb-5">
-                <h2 class="font-serif text-xl font-bold text-slate-900">Identity details <x-copy-button :all="true" label="Copy Student Details" /></h2>
+                <h2 class="flex flex-wrap items-center gap-x-3 font-serif text-xl font-bold text-slate-900">Identity details <x-copy-button :all="true" label="Copy Student Details" /></h2>
                 <p class="mt-1 text-sm text-slate-500">Only authorized administrators can change identity and verification information.</p>
             </div>
             <form method="POST" action="{{ route('admin.students.update', $student->id) }}" data-student-identity class="grid gap-4 sm:grid-cols-2">
                 @csrf
                 @method('PATCH')
                 <div>
-                    <label for="first_name" class="mb-1 block text-sm font-semibold text-slate-700">First name <x-copy-button field="first_name" label="Copy First name" /></label>
+                    <label for="first_name" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">First name <x-copy-button field="first_name" label="Copy First name" /></label>
                     <input id="first_name" name="first_name" required value="{{ old('first_name', $student->first_name) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="last_name" class="mb-1 block text-sm font-semibold text-slate-700">Last name <x-copy-button field="last_name" label="Copy Last name" /></label>
+                    <label for="last_name" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Last name <x-copy-button field="last_name" label="Copy Last name" /></label>
                     <input id="last_name" name="last_name" required value="{{ old('last_name', $student->last_name) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="email" class="mb-1 block text-sm font-semibold text-slate-700">Email <x-copy-button field="email" label="Copy Email" /></label>
+                    <label for="email" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Email <x-copy-button field="email" label="Copy Email" /></label>
                     <input id="email" name="email" type="email" value="{{ old('email', $student->email) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="phone" class="mb-1 block text-sm font-semibold text-slate-700">Phone (E.164 after save) <x-copy-button field="phone" label="Copy Phone (E.164 after save)" /></label>
+                    <label for="phone" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Phone (E.164 after save) <x-copy-button field="phone" label="Copy Phone (E.164 after save)" /></label>
                     <div class="grid grid-cols-[5rem_1fr] gap-2">
                         <input name="phone_country" aria-label="Phone country code" value="{{ old('phone_country') }}" maxlength="2" placeholder="EG" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm uppercase focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                         <input id="phone" name="phone" type="tel" value="{{ old('phone', $student->phone) }}" class="min-w-0 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
@@ -70,22 +70,22 @@
                     <p class="mt-1 text-xs text-slate-500">Enter a country code only for national-format numbers; international numbers should start with +.</p>
                 </div>
                 <div>
-                    <label for="date_of_birth" class="mb-1 block text-sm font-semibold text-slate-700">Date of birth <x-copy-button field="date_of_birth" label="Copy Date of birth" /></label>
+                    <label for="date_of_birth" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Date of birth <x-copy-button field="date_of_birth" label="Copy Date of birth" /></label>
                     <input id="date_of_birth" name="date_of_birth" type="date" value="{{ old('date_of_birth', $student->date_of_birth?->format('Y-m-d')) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="identity_status" class="mb-1 block text-sm font-semibold text-slate-700">Identity status <x-copy-button field="identity_status" label="Copy Identity status" /></label>
+                    <label for="identity_status" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Identity status <x-copy-button field="identity_status" label="Copy Identity status" /></label>
                     <select id="identity_status" name="identity_status" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                         <option value="legacy_unverified" @selected(old('identity_status', $student->identity_status) === 'legacy_unverified')>Legacy — unverified</option>
                         <option value="verified" @selected(old('identity_status', $student->identity_status) === 'verified')>Verified</option>
                     </select>
                 </div>
                 <div>
-                    <label for="preferred_timezone" class="mb-1 block text-sm font-semibold text-slate-700">Preferred timezone (IANA) <x-copy-button field="preferred_timezone" label="Copy Preferred timezone (IANA)" /></label>
+                    <label for="preferred_timezone" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Preferred timezone (IANA) <x-copy-button field="preferred_timezone" label="Copy Preferred timezone (IANA)" /></label>
                     <input id="preferred_timezone" name="preferred_timezone" value="{{ old('preferred_timezone', $student->preferred_timezone) }}" placeholder="Africa/Cairo" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="internal_notes" class="mb-1 block text-sm font-semibold text-slate-700">Internal staff notes <x-copy-button field="internal_notes" label="Copy Internal staff notes" /></label>
+                    <label for="internal_notes" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Internal staff notes <x-copy-button field="internal_notes" label="Copy Internal staff notes" /></label>
                     <textarea id="internal_notes" name="internal_notes" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">{{ old('internal_notes', $student->internal_notes) }}</textarea>
                 </div>
                 <div class="sm:col-span-2 flex justify-end">
@@ -95,7 +95,7 @@
         </section>
     @endif
 
-    @if(! $isAssistant)<x-credit-expiry-table :packages="$creditPackages" />@endif
+
     <a href="{{ route('admin.student-bins.index', $student->id) }}" class="inline-flex rounded-xl bg-white px-4 py-3 text-sm font-semibold text-amber-800">Educational Notes →</a>
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div class="mb-4 flex items-end justify-between gap-4">
@@ -110,7 +110,7 @@
                 <thead class="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><tr><th class="py-3 pr-4">Session</th><th class="py-3 pr-4">Business time</th><th class="py-3 pr-4">Status</th><th class="py-3">Admin follow-up</th></tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($bookings as $booking)
-                        <tr><td class="py-3 pr-4 font-medium text-slate-900">{{ $booking->sessionType?->name ?? 'Tutoring session' }}</td><td class="py-3 pr-4 text-slate-600">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($booking->business_start) }} <span class="text-xs text-slate-400">{{ $businessTz }}</span></td><td class="py-3 pr-4"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ str_replace('_', ' ', $booking->status) }}</span></td><td class="py-3 text-slate-600">{{ $booking->admin_reconfirmation_needed ? 'Reconfirmation needed' : '—' }}</td></tr>
+                        <tr><td class="py-3 pr-4 font-medium text-slate-900">{{ $booking->sessionType?->name ?? 'Tutoring session' }} @can('manageLessonWorkspace', $booking)<a href="{{ route('admin.lessons.show', $booking) }}" class="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-amber-700 underline">Lesson Workspace</a>@endcan</td><td class="py-3 pr-4 text-slate-600">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($booking->business_start) }} <span class="text-xs text-slate-400">{{ $businessTz }}</span></td><td class="py-3 pr-4"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ str_replace('_', ' ', $booking->status) }}</span></td><td class="py-3 text-slate-600">{{ $booking->admin_reconfirmation_needed ? 'Reconfirmation needed' : '—' }}</td></tr>
                     @empty
                         <tr><td colspan="4" class="py-8 text-center text-slate-500">No bookings are linked to this student.</td></tr>
                     @endforelse
@@ -154,10 +154,14 @@
                 <p class="mt-1 text-sm text-slate-500">Balances are derived from the append-only payment and credit ledgers. Refunds do not restore credits.</p>
             </div>
 
+            @include('admin.students.package-management')
+            <details class="mt-5 rounded-xl border border-slate-200 p-4">
+                <summary class="cursor-pointer text-sm font-semibold text-slate-700">Create a package</summary>
             <form method="POST" action="{{ route('admin.students.packages.store', $student->id) }}" class="grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
                 @csrf
                 <h3 class="font-semibold text-slate-900 sm:col-span-2 lg:col-span-4">Create a package</h3>
                 <input name="package_name" required maxlength="160" placeholder="Package name" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                <label class="text-sm">Entitlement type<select name="entitlement_code" required class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">Choose a type</option>@foreach($entitlementTypes as $type)<option value="{{ $type->code }}">{{ $type->label }}</option>@endforeach</select></label>
                 <input name="total_sessions_allocated" required type="number" min="1" max="500" placeholder="Sessions" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                 <input name="original_price" required inputmode="decimal" placeholder="Original price" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                 <input name="discount_amount" required inputmode="decimal" value="0.00" placeholder="Discount" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
@@ -167,105 +171,7 @@
                 <button class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800">Create package</button>
             </form>
 
-            <div class="mt-5 space-y-4">
-                @forelse($financialPackages as $financial)
-                    @php($package = $financial['package'])
-                    <article class="overflow-hidden rounded-xl border border-slate-200">
-                        <div class="flex flex-wrap items-start justify-between gap-4 bg-slate-50 p-4">
-                            <div><h3 class="font-semibold text-slate-900">{{ $package->package_name }}</h3><p class="mt-1 text-xs text-slate-500">{{ $package->total_sessions_allocated }} purchased · {{ $package->currency }} {{ $package->final_price }} · {{ $package->expiration_date?->format('M j, Y') ?? 'No expiration' }}</p></div>
-                            <div class="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-xs text-slate-600 sm:grid-cols-4 sm:text-left">
-                                <span>Paid <strong class="block text-slate-900">{{ $package->currency }} {{ $financial['summary']['gross_paid'] }}</strong></span>
-                                <span>Refunded <strong class="block text-slate-900">{{ $package->currency }} {{ $financial['summary']['gross_refunded'] }}</strong></span>
-                                <span>Due <strong class="block text-slate-900">{{ $package->currency }} {{ $financial['summary']['balance_due'] }}</strong></span>
-                                <span>Credits <strong class="block text-slate-900">{{ $financial['summary']['remaining_credits'] }}</strong></span>
-                            </div>
-                        </div>
-                        <div class="grid gap-4 p-4 lg:grid-cols-2">
-                            <form method="POST" action="{{ route('admin.students.payments.store', [$student->id, $package->id]) }}" class="grid gap-2 sm:grid-cols-2">
-                                @csrf
-                                <h4 class="font-semibold text-slate-800 sm:col-span-2">Record payment</h4>
-                                <input name="amount_paid" required inputmode="decimal" placeholder="Amount" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <select name="payment_method" required aria-label="Payment method" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">@foreach($paymentMethods as $method)<option value="{{ $method->id }}" @selected($method->is_default)>{{ $method->name }}</option>@endforeach</select>
-                                <input name="transaction_reference" maxlength="255" placeholder="Transaction reference (staff only)" class="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2">
-                                <textarea name="notes" rows="2" maxlength="4000" placeholder="Private staff notes" class="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"></textarea>
-                                <input type="hidden" name="payment_idempotency_key_{{ $package->id }}" value="{{ \Illuminate\Support\Str::uuid() }}">
-                                <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:col-span-2">Save payment</button>
-                            </form>
-                            <form method="POST" action="{{ route('admin.students.credits.adjust', [$student->id, $package->id]) }}" class="grid gap-2 sm:grid-cols-2">
-                                @csrf
-                                <h4 class="font-semibold text-slate-800 sm:col-span-2">Adjust credits</h4>
-                                <input name="credit_change" required type="number" min="-500" max="500" placeholder="+ / − credits" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <input name="description" required maxlength="255" placeholder="Reason" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <input type="hidden" name="credit_idempotency_key_{{ $package->id }}" value="{{ \Illuminate\Support\Str::uuid() }}">
-                                <button class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:col-span-2">Record adjustment</button>
-                            </form>
-                        </div>
-                        <form method="POST" action="{{ route('admin.students.packages.validity', [$student->id, $package->id]) }}" class="flex flex-wrap items-end gap-3 border-t border-slate-200 p-4">
-                            @csrf
-                            <input type="hidden" name="previous_expiration_date" value="{{ $package->expiration_date?->toDateString() }}">
-                            <label class="text-sm">Extend expiration<input type="date" name="expiration_date" required min="{{ $package->expiration_date?->copy()->addDay()->toDateString() }}" class="mt-1 block rounded-lg border border-slate-300 px-3 py-2"></label>
-                            <label class="flex-1 text-sm">Reason<input name="reason" required maxlength="1000" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2"></label>
-                            <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Extend validity</button>
-                        </form>
-                        @if($financial['payments']->isNotEmpty())
-                            <div class="border-t border-slate-200 p-4">
-                                <h4 class="mb-3 text-sm font-semibold text-slate-800">Payment history</h4>
-                                <div class="space-y-3">
-                                    @foreach($financial['payments'] as $payment)
-                                        <div class="flex flex-col gap-3 rounded-lg border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                            @php($refundable = app(\App\Domains\Students\Services\StudentLedgerService::class)->refundableAmount($payment, $package))
-                                            <span class="mb-1 block text-xs font-semibold text-slate-600">{{ bccomp($refundable, $payment->amount_paid, 2) === 0 ? 'Not refunded' : (bccomp($refundable, '0.00', 2) === 0 ? 'Fully refunded' : 'Partially refunded') }} · Refundable {{ $payment->currency }} {{ $refundable }} · Payment #{{ $payment->id }}</span>
-                                            <div class="text-sm"><span class="font-semibold">{{ $payment->currency }} {{ $payment->amount_paid }}</span><span class="text-slate-500"> · {{ $payment->payment_method }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($payment->paid_at) }}</span>@if($payment->transaction_reference)<span class="mt-1 block text-xs text-slate-500">Reference: {{ $payment->transaction_reference }}</span>@endif</div>
-                                            @if(bccomp($refundable, '0.00', 2) > 0)
-                                            <form method="POST" action="{{ route('admin.students.refunds.store', [$student->id, $payment->id]) }}" class="flex flex-wrap gap-2">
-                                                @csrf
-                                                <input name="amount_refunded" required inputmode="decimal" placeholder="Refund amount" class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                                <input name="reason" maxlength="4000" placeholder="Reason" class="min-w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                                <input type="hidden" name="refund_idempotency_key_{{ $payment->id }}" value="{{ \Illuminate\Support\Str::uuid() }}">
-                                                <button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100">Record refund</button>
-                                            </form>
-                                            @endif
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endif
-                        @foreach($financial['validityHistory'] as $change)
-                            <p class="px-4 py-2 text-xs text-slate-600">Validity extended: {{ $change->previous_data['expiration_date'] ?? 'None' }} → {{ $change->new_data['expiration_date'] ?? 'None' }} · {{ $change->new_data['reason'] ?? '' }} · Staff #{{ $change->administrator_id }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($change->created_at) }}</p>
-                        @endforeach
-                        <div class="grid gap-4 border-t border-slate-200 bg-white p-4 lg:grid-cols-2">
-                            <div>
-                                <h4 class="mb-3 text-sm font-semibold text-slate-800">Refund history</h4>
-                                @forelse($financial['refunds'] as $refund)
-                                    <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 py-2 text-sm last:border-0">
-                                        @php($originalPayment = $financial['payments']->firstWhere('id', $refund->payment_record_id))
-                                        <span class="font-medium text-slate-900">Refund #{{ $refund->id }}: {{ $refund->currency }} {{ $refund->amount_refunded }} <span class="font-normal text-slate-500">· payment #{{ $refund->payment_record_id }}</span></span>
-                                        <span class="text-slate-500">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($refund->refunded_at) }}</span>
-                                        <p class="w-full text-xs text-slate-600">Original payment: {{ $originalPayment?->currency }} {{ $originalPayment?->amount_paid }} via {{ $originalPayment?->payment_method }} @if($originalPayment?->transaction_reference) · Reference: {{ $originalPayment->transaction_reference }} @endif</p>
-                                        @if($refund->reason)<p class="w-full break-words text-xs text-slate-600">{{ $refund->reason }}</p>@endif
-                                    </div>
-                                @empty
-                                    <p class="text-sm text-slate-500">No refunds recorded.</p>
-                                @endforelse
-                            </div>
-                            <div>
-                                <h4 class="mb-3 text-sm font-semibold text-slate-800">Credit ledger</h4>
-                                @forelse($financial['entries'] as $entry)
-                                    <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 py-2 text-sm last:border-0">
-                                        <span class="font-medium text-slate-900">{{ $entry->credit_change > 0 ? '+' : '' }}{{ $entry->credit_change }} credits <span class="font-normal text-slate-500">· {{ str_replace('_', ' ', $entry->entry_type) }}</span></span>
-                                        <span class="text-slate-500">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($entry->created_at) }}</span>
-                                        <p class="w-full break-words text-xs text-slate-600">{{ $entry->description }}@if($entry->booking_id) · booking #{{ $entry->booking_id }}@endif</p>
-                                    </div>
-                                @empty
-                                    <p class="text-sm text-slate-500">No credit entries recorded.</p>
-                                @endforelse
-                            </div>
-                        </div>
-                    </article>
-                @empty
-                    <p class="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No packages yet. Create one to record purchased sessions and payments.</p>
-                @endforelse
-            </div>
+            </details>
         </section>
 
         @if(auth()->user()->role === 'super_admin')

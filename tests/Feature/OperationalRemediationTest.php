@@ -30,7 +30,7 @@ class OperationalRemediationTest extends TestCase
     {
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Foundation Coaching Track', 8, '280.00', '25.00', 'USD', null, 'discounted-preset', presetKey: 'foundation_track');
+        $package = $ledger->createPackage($student, 'Foundation Coaching Track', 8, '280.00', '25.00', 'USD', null, 'discounted-preset', presetKey: 'foundation_track', entitlementCode: 'one_hour');
         $this->assertSame('255.00', $package->final_price);
         $ledger->recordPayment($package, '255.00', 'first-payment', null);
         $this->assertSame('0.00', $ledger->summary($package)['balance_due']);

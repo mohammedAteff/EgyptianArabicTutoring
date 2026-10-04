@@ -8,7 +8,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-black text-slate-900 tracking-tight">Operational Reports & Exports</h1>
-            <p class="text-sm text-slate-500 mt-1">Five authoritative operational datasets with period comparison and formula-safe CSV/XLSX export.</p>
+            <p class="text-sm text-slate-500 mt-1">Six authoritative operational datasets with period comparison and formula-safe CSV/XLSX export.</p>
         </div>
 
         <!-- Export Buttons -->
@@ -36,48 +36,34 @@
 
     <!-- 5 Fixed Reports Navigation Tabs -->
     <div class="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-px text-xs font-semibold">
-        <a href="{{ route('admin.reports.index', ['type' => 'traffic', 'range' => $range]) }}"
+        <a href="{{ route('admin.reports.index', array_merge(request()->only(['range', 'start_date', 'end_date']), ['type' => 'traffic'])) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'traffic' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             1. Traffic & Visitors
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'bookings', 'range' => $range]) }}"
+        <a href="{{ route('admin.reports.index', array_merge(request()->only(['range', 'start_date', 'end_date']), ['type' => 'bookings'])) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'bookings' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             2. Bookings Ledger
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'resources', 'range' => $range]) }}"
+        <a href="{{ route('admin.reports.index', array_merge(request()->only(['range', 'start_date', 'end_date']), ['type' => 'resources'])) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'resources' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             3. Resource Downloads & Conversion
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'social', 'range' => $range]) }}"
+        <a href="{{ route('admin.reports.index', array_merge(request()->only(['range', 'start_date', 'end_date']), ['type' => 'social'])) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'social' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             4. Social & Messaging Clicks
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'events', 'range' => $range]) }}"
+        <a href="{{ route('admin.reports.index', array_merge(request()->only(['range', 'start_date', 'end_date']), ['type' => 'events'])) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'events' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             5. Raw Events Log
         </a>
-        <a href="{{ route('admin.reports.index', ['type' => 'campaigns', 'range' => $range]) }}"
+        <a href="{{ route('admin.reports.index', array_merge(request()->only(['range', 'start_date', 'end_date']), ['type' => 'campaigns'])) }}"
            class="px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap {{ $reportType === 'campaigns' ? 'border-amber-600 text-amber-900 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300' }}">
             6. Campaign & Content Attribution
         </a>
     </div>
 
-    <!-- Date Range & Period Filter Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
-        <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Date Period:</span>
-            <div class="inline-flex bg-slate-100 p-0.5 rounded-xl text-xs font-medium text-slate-600">
-                <a href="{{ route('admin.reports.index', array_merge(request()->query(), ['range' => '7d'])) }}" class="px-2.5 py-1 rounded-lg {{ $range === '7d' ? 'bg-white shadow-xs font-bold text-slate-900' : 'hover:text-slate-900' }}">7 Days</a>
-                <a href="{{ route('admin.reports.index', array_merge(request()->query(), ['range' => '30d'])) }}" class="px-2.5 py-1 rounded-lg {{ $range === '30d' ? 'bg-white shadow-xs font-bold text-slate-900' : 'hover:text-slate-900' }}">30 Days</a>
-                <a href="{{ route('admin.reports.index', array_merge(request()->query(), ['range' => 'this_month'])) }}" class="px-2.5 py-1 rounded-lg {{ $range === 'this_month' ? 'bg-white shadow-xs font-bold text-slate-900' : 'hover:text-slate-900' }}">This Month</a>
-                <a href="{{ route('admin.reports.index', array_merge(request()->query(), ['range' => 'last_month'])) }}" class="px-2.5 py-1 rounded-lg {{ $range === 'last_month' ? 'bg-white shadow-xs font-bold text-slate-900' : 'hover:text-slate-900' }}">Last Month</a>
-            </div>
-        </div>
-
-        <div class="text-xs text-slate-500">
-            Active Scope: <span class="font-bold text-slate-700">{{ $start->format('M d, Y') }} — {{ $end->format('M d, Y') }}</span>
-        </div>
-    </div>
+    <x-report-filters :filters="$filters" :fields="$filterFields" :action="route('admin.reports.index')" export-route="admin.reports.export" :fixed="['type' => $reportType]" />
+    <p class="text-xs text-slate-500">Active scope: {{ $start->format('Y-m-d') }} — {{ $end->format('Y-m-d') }} ({{ $start->timezoneName }}).</p>
 
     <!-- REPORT CONTENT BASED ON TYPE -->
 
@@ -288,9 +274,11 @@
     <!-- REPORT 4: SOCIAL & MESSAGING -->
     @elseif($reportType === 'social')
         <div class="space-y-6">
+            <p class="text-xs text-slate-500">Placement separates WhatsApp — Footer (footer_social) from WhatsApp — Floating CTA (floating_cta). Row visitor counts are daily distinct within each dimension group; they must not be added to produce period distinct visitors. Period distinct visitors are unavailable when raw identities were pruned. Historical dimensions missing before this fix remain unknown.</p>
             <div class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-xs">
-                <span>Total Social &amp; Messaging Clicks: <strong>{{ number_format($reportData['total_clicks']) }}</strong></span>
-                <span>Unique visitors: <strong>{{ number_format($reportData['unique_visitors']) }}</strong></span>
+                <span>Social &amp; Messaging Clicks: <strong>{{ number_format($reportData['total_clicks']) }}</strong></span>
+                <span>Unique visitors: <strong>{{ $reportData['unique_visitors'] === null ? 'Unavailable after pruning' : number_format($reportData['unique_visitors']) }}</strong></span>
+                <span>Generic outbound clicks: <strong>{{ number_format($reportData['outbound_clicks']) }}</strong></span>
                 @foreach($reportData['platform_totals'] as $platform => $count)
                     <span>{{ $platform }}: <strong class="text-amber-700">{{ number_format($count) }}</strong></span>
                 @endforeach
@@ -304,7 +292,7 @@
                                 <th class="py-3 px-4">Placement</th><th class="py-3 px-4">Event</th>
                                 <th class="py-3 px-4">Originating Page</th>
                                 <th class="py-3 px-4">Date</th>
-                                <th class="py-3 px-4 text-right">Click Count</th><th class="py-3 px-4">Unique Visitors</th><th class="py-3 px-4">Language / Country</th><th class="py-3 px-4">Source / Medium / Campaign</th>
+                                <th class="py-3 px-4 text-right">Click Count</th><th class="py-3 px-4">Daily Unique Visitors (group)</th><th class="py-3 px-4">Language / Context / Country</th><th class="py-3 px-4">Source / Medium / Campaign</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -314,7 +302,7 @@
                                     <td class="py-3 px-4">{{ $s['placement'] }}</td><td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $s['event_name'] }}</td>
                                     <td class="py-3 px-4 font-mono text-[11px] text-slate-600 truncate max-w-xs">{{ $s['page'] }}</td>
                                     <td class="py-3 px-4 font-mono text-slate-800">{{ $s['date'] }}</td>
-                                    <td class="py-3 px-4 text-right font-black text-amber-700">{{ number_format($s['clicks']) }}</td><td class="py-3 px-4">{{ $s['unique_visitors'] }}</td><td class="py-3 px-4">{{ $s['language'] }} / {{ $s['country'] }}</td><td class="py-3 px-4">{{ $s['source'] ?: 'Direct / unknown' }} / {{ $s['medium'] ?: '—' }} / {{ $s['campaign'] ?: '—' }}</td>
+                                    <td class="py-3 px-4 text-right font-black text-amber-700">{{ number_format($s['clicks']) }}</td><td class="py-3 px-4">{{ $s['unique_visitors'] }}</td><td class="py-3 px-4">{{ $s['language'] }} / {{ $s['context'] }} / {{ $s['country'] }}</td><td class="py-3 px-4">{{ $s['source'] ?: 'Direct / unknown' }} / {{ $s['medium'] ?: '—' }} / {{ $s['campaign'] ?: '—' }}</td>
                                 </tr>
                             @empty
                                 <tr>

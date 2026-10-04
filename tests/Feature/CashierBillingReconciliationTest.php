@@ -6,6 +6,7 @@ use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
@@ -91,7 +92,7 @@ class CashierBillingReconciliationTest extends TestCase
 
     public function test_reconciliation_uses_student_booking_audit_evidence_instead_of_marketing_source(): void
     {
-        $this->ledger->createPackage($this->student, 'One lesson', 1, '48.00', '0.00', 'USD', null, 'reconciliation-evidence');
+        $this->ledger->createPackage($this->student, 'One lesson', 1, '48.00', '0.00', 'USD', null, 'reconciliation-evidence', entitlementCode: 'one_hour');
         $type = SessionType::create(['title' => 'Evidence lesson', 'slug' => 'evidence-lesson', 'duration_minutes' => 60, 'price' => 48, 'currency' => 'USD', 'active' => true]);
         $contact = Contact::create(['name' => 'Evidence learner', 'email' => 'evidence@example.test']);
         $start = CarbonImmutable::now('UTC')->subDays(2);
@@ -123,8 +124,7 @@ class CashierBillingReconciliationTest extends TestCase
             'USD',
             now()->addDays(14)->toDateString(),
             'idem_diag_pkg_1',
-            $this->admin->id
-        );
+            $this->admin->id, entitlementCode: 'one_hour', presetKey: 'diagnostic_roadmap');
 
         $this->ledger->recordPayment(
             $diagPkg,
@@ -152,8 +152,7 @@ class CashierBillingReconciliationTest extends TestCase
             'USD',
             $this->ledger->calculateExpirationDate(now('UTC'), 75),
             'idem_found_pkg_1',
-            $this->admin->id
-        );
+            $this->admin->id, entitlementCode: 'one_hour', presetKey: 'foundation_track');
 
         $this->assertEquals('280.00', $foundationPkg->original_price);
         $this->assertEquals('25.00', $foundationPkg->discount_amount);
@@ -199,22 +198,25 @@ class CashierBillingReconciliationTest extends TestCase
         $this->assertSame('0.00', $package->discount_amount);
         $this->assertSame('USD', $package->currency);
         $this->assertNull($package->expiration_date);
-        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id)));
+        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $this->oneHourPackageLesson())));
         $this->get(route('admin.billing.cashier', ['student_id' => $this->student->id]))
-            ->assertOk()->assertSeeText('Available Credits: 0');
+            ->assertOk()->assertSeeText('2-hour sessions')->assertSeeText('0 available');
 
         $this->ledger->recordPayment($package, '140.00', 'partial-payment-foundation', $this->admin->id);
         $this->assertNull($package->fresh()->expiration_date);
-        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id)));
+        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $this->oneHourPackageLesson())));
 
         $this->ledger->recordPayment($package, '140.00', 'settlement-foundation', $this->admin->id);
         $this->assertSame(
             $this->ledger->calculateExpirationDate(now('UTC'), 75),
             $package->fresh()->expiration_date->toDateString(),
         );
-        $this->assertSame($package->id, DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id))?->id);
+        $twoHourLesson = $this->oneHourPackageLesson();
+        $twoHourLesson->update(['required_entitlement_type_id' => EntitlementType::query()->where('code', 'two_hour')->value('id')]);
+        $twoHourLesson->unsetRelation('requiredEntitlementType');
+        $this->assertSame($package->id, DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $twoHourLesson))?->id);
         $this->get(route('admin.billing.cashier', ['student_id' => $this->student->id]))
-            ->assertOk()->assertSeeText('Available Credits: 8');
+            ->assertOk()->assertSeeText('2-hour sessions')->assertSeeText('8 remaining');
     }
 
     public function test_diagnostic_credit_requires_a_completed_and_fully_settled_diagnostic(): void
@@ -222,7 +224,7 @@ class CashierBillingReconciliationTest extends TestCase
         $diagnostic = $this->ledger->createPackage(
             $this->student, 'Diagnostic & Roadmap', 1, '25.00', '0.00', 'USD',
             now('Africa/Cairo')->addDays(14)->toDateString(), 'diagnostic-completion-gate', $this->admin->id,
-        );
+            entitlementCode: 'one_hour', presetKey: 'diagnostic_roadmap');
         $this->ledger->recordPayment($diagnostic, '10.00', 'diagnostic-partial', $this->admin->id);
         $this->assertNull($this->ledger->checkDiagnosticCreditEligibility($this->student->id));
 
@@ -238,7 +240,7 @@ class CashierBillingReconciliationTest extends TestCase
         $diagnostic = $this->ledger->createPackage(
             $this->student, 'Diagnostic & Roadmap', 1, '25.00', '0.00', 'USD',
             now('Africa/Cairo')->addDays(14)->toDateString(), 'diagnostic-auto-credit', $this->admin->id,
-        );
+            entitlementCode: 'one_hour', presetKey: 'diagnostic_roadmap');
         $this->ledger->recordPayment($diagnostic, '25.00', 'diagnostic-auto-payment', $this->admin->id);
         $this->completeDiagnosticBooking();
 
@@ -266,6 +268,9 @@ class CashierBillingReconciliationTest extends TestCase
         $sessionType = SessionType::create([
             'title' => 'Diagnostic & Roadmap',
             'slug' => 'diagnostic-credit-test',
+            'funding_mode' => 'package',
+            'required_entitlement_type_id' => EntitlementType::query()->where('code', 'one_hour')->value('id'),
+            'required_entitlement_units' => 1,
             'duration_minutes' => 60,
             'price' => 25,
             'currency' => 'USD',
@@ -304,8 +309,7 @@ class CashierBillingReconciliationTest extends TestCase
             'USD',
             now()->addDays(75)->toDateString(),
             'idem_bal_pkg_1',
-            $this->admin->id
-        );
+            $this->admin->id, entitlementCode: 'one_hour');
 
         $this->assertEquals('280.00', $this->ledger->calculateRemainingBalance($pkg));
 
@@ -341,8 +345,7 @@ class CashierBillingReconciliationTest extends TestCase
             'USD',
             now()->addDays(30)->toDateString(),
             'idem_ref_pkg_1',
-            $this->admin->id
-        );
+            $this->admin->id, entitlementCode: 'one_hour');
 
         $payment = $this->ledger->recordPayment(
             $pkg,
@@ -367,8 +370,7 @@ class CashierBillingReconciliationTest extends TestCase
             'USD',
             now()->addDays(30)->toDateString(),
             'idem_ref_pkg_2',
-            $this->admin->id
-        );
+            $this->admin->id, entitlementCode: 'one_hour');
 
         $payment = $this->ledger->recordPayment(
             $pkg,
@@ -383,7 +385,7 @@ class CashierBillingReconciliationTest extends TestCase
             'idem_ref_ok_1',
             $this->admin->id,
             'Customer cancellation',
-            1 // forfeit 1 credit
+            1, allocationId: $pkg->entitlements()->value('id')
         );
 
         $this->assertDatabaseHas('payment_refunds', [
@@ -400,14 +402,14 @@ class CashierBillingReconciliationTest extends TestCase
 
     public function test_refund_cannot_forfeit_more_credits_than_remain(): void
     {
-        $package = $this->ledger->createPackage($this->student, 'One lesson', 1, '48.00', '0.00', 'USD', null, 'grant-forfeit-bound');
+        $package = $this->ledger->createPackage($this->student, 'One lesson', 1, '48.00', '0.00', 'USD', null, 'grant-forfeit-bound', entitlementCode: 'one_hour');
         $payment = $this->ledger->recordPayment($package, '48.00', 'payment-forfeit-bound', $this->admin->id);
 
         try {
-            $this->ledger->refund($payment, '48.00', 'refund-forfeit-bound', $this->admin->id, null, 2);
+            $this->ledger->refund($payment, '48.00', 'refund-forfeit-bound', $this->admin->id, null, 2, $package->entitlements()->value('id'));
             $this->fail('The refund must reject forfeiture beyond the available package balance.');
         } catch (\InvalidArgumentException $exception) {
-            $this->assertSame('Cannot forfeit more than the package remaining credits.', $exception->getMessage());
+            $this->assertSame('Cannot forfeit more than the allocation remaining entitlements.', $exception->getMessage());
         }
 
         $this->assertDatabaseCount('payment_refunds', 0);
@@ -418,6 +420,7 @@ class CashierBillingReconciliationTest extends TestCase
     {
         $key = (string) Str::uuid();
         $payload = [
+            'entitlement_code' => 'one_hour',
             'package_name' => 'Custom package',
             'total_sessions_allocated' => 2,
             'original_price' => '80.00',
@@ -449,6 +452,7 @@ class CashierBillingReconciliationTest extends TestCase
 
         $creditKey = (string) Str::uuid();
         $creditPayload = [
+            'allocation_id' => StudentPackage::findOrFail($packageId)->entitlements()->value('id'),
             'credit_change' => 1,
             'description' => 'Tutor makeup lesson',
             'credit_idempotency_key' => $creditKey,

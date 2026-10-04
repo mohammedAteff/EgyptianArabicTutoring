@@ -27,11 +27,11 @@ class StudentLedgerTest extends TestCase
     {
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Eight lessons', 8, '240.00', '20.00', 'USD', null, 'package-1');
+        $package = $ledger->createPackage($student, 'Eight lessons', 8, '240.00', '20.00', 'USD', null, 'package-1', entitlementCode: 'one_hour');
 
         $this->assertSame('220.00', $package->final_price);
         $this->assertSame(8, $ledger->summary($package)['remaining_credits']);
-        $this->assertSame($package->id, $ledger->createPackage($student, 'Ignored duplicate', 8, '240.00', '20.00', 'USD', null, 'package-1')->id);
+        $this->assertSame($package->id, $ledger->createPackage($student, 'Eight lessons', 8, '240.00', '20.00', 'USD', null, 'package-1', entitlementCode: 'one_hour')->id);
         $this->assertDatabaseCount('student_packages', 1);
         $this->assertDatabaseCount('session_ledger_entries', 1);
         $this->expectException(\RuntimeException::class);
@@ -44,16 +44,16 @@ class StudentLedgerTest extends TestCase
         Setting::set('business_timezone', 'Africa/Cairo', 'booking', true);
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $earlier = $ledger->createPackage($student, 'Expires today', 1, '30.00', '0.00', 'USD', '2026-10-01', 'package-expiring');
-        $later = $ledger->createPackage($student, 'Later', 1, '30.00', '0.00', 'USD', '2026-11-01', 'package-later');
+        $earlier = $ledger->createPackage($student, 'Expires today', 1, '30.00', '0.00', 'USD', '2026-10-01', 'package-expiring', entitlementCode: 'one_hour');
+        $later = $ledger->createPackage($student, 'Later', 1, '30.00', '0.00', 'USD', '2026-11-01', 'package-later', entitlementCode: 'one_hour');
 
         DB::transaction(function () use ($ledger, $student, $earlier): void {
-            $this->assertSame($earlier->id, $ledger->selectAndLockEligiblePackageForBooking($student->id)?->id);
+            $this->assertSame($earlier->id, $ledger->selectAndLockEligiblePackageForBooking($student->id, $this->oneHourPackageLesson())?->id);
         });
 
         CarbonImmutable::setTestNow('2026-10-01 21:00:00 UTC');
         DB::transaction(function () use ($ledger, $student, $later): void {
-            $this->assertSame($later->id, $ledger->selectAndLockEligiblePackageForBooking($student->id)?->id);
+            $this->assertSame($later->id, $ledger->selectAndLockEligiblePackageForBooking($student->id, $this->oneHourPackageLesson())?->id);
         });
         $this->assertSame(0, $ledger->summary($earlier)['remaining_credits']);
     }
@@ -113,7 +113,7 @@ class StudentLedgerTest extends TestCase
     {
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Eight lessons', 8, '240.00', '0.00', 'USD', null, 'package-refund');
+        $package = $ledger->createPackage($student, 'Eight lessons', 8, '240.00', '0.00', 'USD', null, 'package-refund', entitlementCode: 'one_hour');
         $first = $ledger->recordPayment($package, '100.00', 'payment-1', null);
         $second = $ledger->recordPayment($package, '100.00', 'payment-2', null);
         $refund = $ledger->refund($first, '75.00', 'refund-1', null);

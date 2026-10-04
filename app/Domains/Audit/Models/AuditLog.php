@@ -52,6 +52,7 @@ class AuditLog extends Model
     protected static function booted(): void
     {
         static::creating(function (self $audit): void {
+            $audit->ip_address = null;
             $audit->event_uuid ??= (string) Str::uuid();
             $audit->actor_user_id ??= $audit->administrator_id;
             $audit->actor_type ??= $audit->actor_student_id ? 'student' : ($audit->actor_user_id ? 'admin' : 'system');
@@ -83,6 +84,11 @@ class AuditLog extends Model
                 foreach ($value as $childKey => $childValue) {
                     $keyString = is_string($childKey) ? $childKey : null;
                     $normalizedKey = $keyString === null ? '' : strtolower(trim((string) preg_replace('/[^a-z0-9]+/i', '_', $keyString), '_'));
+                    if (in_array($normalizedKey, ['ip', 'ip_address', 'client_ip', 'request_ip', 'remote_addr', 'remote_address'], true)) {
+                        $result[$childKey] = '[redacted]';
+
+                        continue;
+                    }
                     if ($normalizedKey !== '' && preg_match('/(?:^|_)(?:email|phone|birth|dob|date_of_birth|password|remember_token|session_id|[a-z0-9]*token|first_name|last_name|full_name|name|note|notes|transaction_reference|bank_account|card_number)(?:_|$)/i', $normalizedKey)) {
                         $result[$childKey] = self::blind((string) json_encode($childValue, JSON_UNESCAPED_UNICODE), $secret);
                     } else {
@@ -95,6 +101,12 @@ class AuditLog extends Model
             if (! is_string($value)) {
                 return $value;
             }
+
+            if (filter_var(trim($value), FILTER_VALIDATE_IP)) {
+                return '[redacted]';
+            }
+            $value = preg_replace_callback('/(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])/', fn (array $match): string => filter_var($match[0], FILTER_VALIDATE_IP) ? '[redacted]' : $match[0], $value) ?? $value;
+            $value = preg_replace_callback('/(?<![\w:])(?:[a-f0-9]{0,4}:){2,}[a-f0-9:.]+(?![\w:])/i', fn (array $match): string => filter_var($match[0], FILTER_VALIDATE_IP) ? '[redacted]' : $match[0], $value) ?? $value;
 
             if ($key === 'expiration_date' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
                 return $value;

@@ -99,7 +99,7 @@ class FollowupRemediationTest extends TestCase
         $admin = AdministratorFactory::new()->create();
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Synthetic refund fixture', 2, '100.00', '0.00', 'USD', null, 'followup-package');
+        $package = $ledger->createPackage($student, 'Synthetic refund fixture', 2, '100.00', '0.00', 'USD', null, 'followup-package', entitlementCode: 'one_hour');
         $this->actingAs($admin, 'web')->post(route('admin.students.payments.store', ['student' => $student->id, 'package' => $package->id]), ['amount_paid' => '120.00', 'payment_method' => 'PayPal - Manual', 'transaction_reference' => 'SYNTHETIC-NO-TRANSFER', 'payment_idempotency_key' => (string) Str::uuid()])->assertRedirect()->assertSessionHasNoErrors();
         $payment = PaymentRecord::sole();
         $refundUrl = route('admin.students.refunds.store', ['student' => $student->id, 'payment' => $payment->id]);

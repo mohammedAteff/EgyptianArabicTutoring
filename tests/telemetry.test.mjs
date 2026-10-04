@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../resources/js/analytics-telemetry.js', import.meta.url), 'utf8');
-function harness(contact = null, socials = []) {
+function harness(contact = null, socials = [], failures = {}) {
     const batches = [], handlers = {}, timers = [];
     let now = 0;
     const tall = {id: 'resource-preview', dataset: {}, getBoundingClientRect: () => ({top: 0, bottom: 3000, height: 3000, left: 0, right: 800, width: 800})};
@@ -12,8 +12,8 @@ function harness(contact = null, socials = []) {
         querySelectorAll: (selector) => selector === '[data-social-platform]' ? socials : selector === '[data-whatsapp-cta]' ? (contact ? [contact] : []) : selector === '[data-analytics-event]' ? [gate] : selector.includes('#hero') ? [tall] : [],
         addEventListener: (name, callback) => handlers[name] = callback};
     const context = vm.createContext({document, window: {location: {pathname: '/resources/guide', href: 'http://app.test/resources/guide'}, addEventListener: (name, callback) => handlers[name] = callback},
-        performance: {now: () => now}, innerHeight: 600, innerWidth: 800, crypto: {}, navigator: {sendBeacon: () => false}, Blob,
-        fetch: async (url, options) => {batches.push(JSON.parse(options.body)); return {ok: true};}, setInterval: (callback) => timers.push(callback)});
+        performance: {now: () => now}, innerHeight: 600, innerWidth: 800, crypto: failures.crypto, navigator: {sendBeacon: () => { if (failures.beacon) throw new Error('Beacon failed'); return false; }}, Blob,
+        fetch: async (url, options) => {batches.push(JSON.parse(options.body)); if (failures.fetch) throw new Error('Network failed'); return {ok: !failures.endpoint, status: failures.endpoint ? 503 : 200};}, setInterval: (callback) => timers.push(callback)});
     vm.runInContext(source, context);
     return {context, document, handlers, timers, setTime: value => now = value, events: () => batches.flatMap(batch => batch.events)};
 }
@@ -59,3 +59,24 @@ test('all configured footer platforms emit exactly one event with authoritative 
     assert.equal(events.length, 5);
     for (const event of events) { assert.equal(event.metadata.placement, 'footer_social'); assert.equal(event.metadata.context, 'public'); assert.ok(['youtube','tiktok','instagram','telegram','whatsapp'].includes(event.metadata.platform)); }
 });
+
+for (const [label, failures] of Object.entries({endpoint: {endpoint: true}, beacon: {beacon: true}, fetch: {fetch: true}, javascript: {crypto: {randomUUID() { throw new Error('Crypto unavailable'); }}}})) {
+    test(`${label} failure keeps footer and floating links native and retries reuse event UUIDs`, async () => {
+        const clicks = [];
+        const makeLink = (dataset) => ({href: 'https://wa.me/201022222222', dataset, addEventListener: (name, handler) => clicks.push(handler)});
+        const contact = makeLink({context: 'public', language: 'en'});
+        const footer = makeLink({socialPlatform: 'whatsapp'});
+        const h = harness(contact, [footer], failures);
+        await Promise.resolve(); await Promise.resolve();
+        let prevented = false;
+        for (const click of clicks) {
+            assert.doesNotThrow(() => click({preventDefault() { prevented = true; }}));
+            await Promise.resolve(); await Promise.resolve();
+        }
+        assert.equal(prevented, false);
+        assert.equal(contact.href, 'https://wa.me/201022222222');
+        const uniqueEvents = [...new Map(h.events().filter(event => event.event_name === 'whatsapp_clicked').map(event => [event.event_uuid, event])).values()];
+        assert.equal(uniqueEvents.length, 2);
+        assert.deepEqual(uniqueEvents.map(event => event.metadata.placement).sort(), ['floating_cta', 'footer_social']);
+    });
+}

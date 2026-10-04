@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<p class="mb-4 rounded-xl bg-white p-4 text-sm">Funding: {{ ucfirst($booking->funding_mode) }}@if($booking->consumed_ledger_entry_id) · {{ $booking->entitlement_units }} {{ $booking->entitlement_code }} · Purchase #{{ $booking->student_package_id }} · Allocation #{{ $booking->student_package_entitlement_id }} · Debit #{{ $booking->consumed_ledger_entry_id }}@endif</p>
 <div class="max-w-6xl mx-auto space-y-8" x-data="{ rescheduleModalOpen: false, cancelModalOpen: false }">
 
     <!-- Top Breadcrumb & Status -->
@@ -22,6 +23,10 @@
                 </span>
             </h1>
         </div>
+
+        @can('manageLessonWorkspace', $booking)
+            <a href="{{ route('admin.lessons.show', $booking) }}" class="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Lesson Workspace</a>
+        @endcan
 
         <!-- Quick Status Actions -->
         @if($booking->status === 'confirmed')
@@ -205,6 +210,7 @@
 
             <form action="{{ route('admin.bookings.reschedule', $booking->id) }}" method="POST" class="space-y-4">
                 @csrf
+<label class="block text-sm">Lesson type (entitlement must match original debit)<select name="session_type_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3">@foreach($sessionTypes as $type)<option value="{{ $type->id }}" @selected($type->id === $booking->session_type_id)>{{ $type->title }} · {{ $type->requiredEntitlementType?->label ?? $type->funding_mode }}</option>@endforeach</select></label>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">New Date (YYYY-MM-DD)</label>
                     <input type="date" name="new_date" required min="{{ date('Y-m-d') }}"

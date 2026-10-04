@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\BillingReconciliationService;
 use App\Domains\Students\Services\CashierReportService;
+use App\Domains\Students\Services\ReconciliationReport;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
@@ -41,7 +43,7 @@ class StudentBillingController extends Controller
         $studentsQuery = Student::query()
             ->where(fn ($q) => $q->where('identity_status', '!=', 'merged')->orWhereNull('identity_status'))
             ->with([
-                'packages' => fn ($q) => $q->with(['payments', 'refunds', 'ledgerEntries'])->orderByDesc('id'),
+                'packages' => fn ($q) => $q->with(['payments', 'refunds', 'ledgerEntries.type', 'entitlements.type'])->orderByDesc('id'),
             ]);
 
         if ($search !== '') {
@@ -88,7 +90,7 @@ class StudentBillingController extends Controller
         });
 
         $selectedStudent = $selectedStudentId > 0
-            ? Student::with(['packages.payments', 'packages.refunds', 'packages.ledgerEntries'])->find($selectedStudentId)
+            ? Student::with(['packages.payments', 'packages.refunds', 'packages.ledgerEntries.type', 'packages.entitlements.type'])->find($selectedStudentId)
             : null;
 
         $diagnosticEligibility = null;
@@ -113,7 +115,8 @@ class StudentBillingController extends Controller
             'transactionRows' => LazyCollection::make(fn () => $report->rows($filters))->take(100)->collect(),
             'filters' => $filters,
             'studentOptions' => Student::query()->where('identity_status', '!=', 'merged')->orderBy('name_normalized')->limit(500)->get(['id', 'first_name', 'last_name'])->mapWithKeys(fn ($student) => [$student->id => $student->first_name.' '.$student->last_name])->all(),
-            'packageOptions' => StudentPackage::query()->when($selectedStudentId > 0, fn ($query) => $query->where('student_id', $selectedStudentId))->orderBy('package_name')->limit(500)->get(['id', 'package_name'])->mapWithKeys(fn ($package) => [$package->id => $package->package_name.' #'.$package->id])->all(),
+            'packageOptions' => collect(StudentLedgerService::PRESETS)->mapWithKeys(fn (array $preset): array => [$preset['key'] => $preset['name']])->all() + ['custom_unclassified' => 'Custom / Unclassified'],
+            'entitlementTypes' => EntitlementType::query()->where('active', true)->get(),
             'methodOptions' => PaymentRecord::query()->whereNotNull('payment_method')->distinct()->orderBy('payment_method')->limit(100)->pluck('payment_method', 'payment_method')->all(),
             'businessTz' => app(TimezoneService::class)->getBusinessTimezone(),
             'creditPackages' => $selectedStudent?->packages->map(fn ($package) => ['package' => $package, 'summary' => $ledger->summary($package, true)]) ?? collect(),
@@ -147,6 +150,7 @@ class StudentBillingController extends Controller
             : null;
 
         $validated = $request->validate([
+            'entitlement_code' => ['required_without:preset_key', 'nullable', 'exists:entitlement_types,code'],
             'preset_key' => ['nullable', Rule::in(array_keys(StudentLedgerService::PRESETS))],
             'package_name' => ['required', 'string', 'max:160'],
             'total_sessions_allocated' => ['required', 'integer', 'min:1', 'max:500'],
@@ -162,7 +166,7 @@ class StudentBillingController extends Controller
 
         // Auto-calculate expiration date using Cairo midnight if not provided but preset is known
         $expirationDate = $validated['expiration_date'] ?? null;
-        if (! $expirationDate && $preset && isset($preset['validity_days'])) {
+        if (! $expirationDate && $preset) {
             $expirationDate = $ledger->calculateExpirationDate(CarbonImmutable::now('UTC'), $preset['validity_days']);
         }
 
@@ -179,6 +183,7 @@ class StudentBillingController extends Controller
                 $request->user('web')?->id,
                 $validated['preset_key'] ?? null,
                 $validated['override_notes'] ?? null,
+                $validated['entitlement_code'] ?? null,
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['package' => $exception->getMessage()]);
@@ -268,6 +273,7 @@ class StudentBillingController extends Controller
         $validated = $request->validate([
             'amount_refunded' => ['required', 'regex:/^\d{1,8}(?:\.\d{1,2})?$/'],
             'reason' => ['nullable', 'string', 'max:4000'],
+            'allocation_id' => ['required_if:forfeit_credits,1', 'nullable', 'integer'],
             'forfeit_credits' => ['nullable', 'integer', 'min:0', 'max:500'],
             $idempotencyField => ['required', 'uuid'],
         ]);
@@ -281,6 +287,7 @@ class StudentBillingController extends Controller
                 $request->user('web')?->id,
                 $validated['reason'] ?? null,
                 (int) ($validated['forfeit_credits'] ?? 0),
+                isset($validated['allocation_id']) ? (int) $validated['allocation_id'] : null,
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['refund' => $exception->getMessage()]);
@@ -334,13 +341,13 @@ class StudentBillingController extends Controller
             $idempotencyField = 'credit_idempotency_key';
         }
 
+        $packageRecord = StudentPackage::query()->where('student_id', $student)->findOrFail($package);
         $validated = $request->validate([
+            'allocation_id' => ['required', 'integer'],
             'credit_change' => ['required', 'integer', 'between:-500,500', 'not_in:0'],
             'description' => ['required', 'string', 'max:255'],
             $idempotencyField => ['required', 'uuid'],
         ]);
-        $packageRecord = StudentPackage::query()->where('student_id', $student)->findOrFail($package);
-
         try {
             $entry = $ledger->adjustCredits(
                 $packageRecord,
@@ -348,6 +355,7 @@ class StudentBillingController extends Controller
                 $validated['description'],
                 $validated[$idempotencyField],
                 $request->user('web')?->id,
+                (int) $validated['allocation_id'],
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['credit_change' => $exception->getMessage()]);
@@ -370,17 +378,20 @@ class StudentBillingController extends Controller
     /**
      * Read-Only Reconciliation Diagnostic View.
      */
-    public function reconcile(BillingReconciliationService $reconciliation): View
+    public function reconcile(Request $request, BillingReconciliationService $reconciliation): View
     {
         $report = $reconciliation->reconcile();
+        $scope = app(ReconciliationReport::class);
+        $filters = $scope->filters($request);
+        $rows = $scope->rows($report, $filters);
 
         return view('admin.billing.reconcile', [
-            'report' => $report,
+            'report' => $report, 'filters' => $filters, 'rows' => $rows, 'headers' => $scope->headers(),
         ]);
     }
 
     /**
-     * Dual-format streaming financial ledger export (CSV & XLSX).
+     * Filtered financial ledger export: streamed CSV or a bounded in-memory XLSX workbook.
      */
     public function exportFinancials(Request $request, ExportService $exportService): StreamedResponse|BinaryFileResponse
     {
@@ -394,67 +405,13 @@ class StudentBillingController extends Controller
     }
 
     /**
-     * Dual-format streaming export for reconciliation diagnostics.
+     * Filtered reconciliation export: streamed CSV or a bounded in-memory XLSX workbook.
      */
     public function exportReconciliation(Request $request, BillingReconciliationService $reconciliation, ExportService $exportService): StreamedResponse|BinaryFileResponse
     {
-        $format = $request->query('format', 'csv');
-        $report = $reconciliation->reconcile();
+        $scope = app(ReconciliationReport::class);
+        $filters = $scope->filters($request);
 
-        $headers = ['Discrepancy Category', 'Record ID', 'Student ID', 'Student Name', 'Details', 'Issue Description'];
-
-        $rowsGenerator = function () use ($report) {
-            foreach ($report['negative_balances'] as $item) {
-                yield [
-                    'Negative Derived Balance',
-                    (string) $item['package_id'],
-                    (string) $item['student_id'],
-                    $item['student_name'],
-                    "Package: {$item['package_name']} | Final: {$item['final_price']} | Net Paid: {$item['net_paid']} | Remaining: {$item['remaining_balance']}",
-                    $item['issue'],
-                ];
-            }
-
-            foreach ($report['excess_refunds'] as $item) {
-                yield [
-                    'Excess Refund',
-                    (string) $item['payment_id'],
-                    (string) $item['student_id'],
-                    $item['student_name'],
-                    "Paid: {$item['amount_paid']} | Total Refunded: {$item['total_refunded']} | Excess: {$item['excess_amount']}",
-                    $item['issue'],
-                ];
-            }
-
-            foreach ($report['credit_mismatches'] as $item) {
-                yield [
-                    'Credit Allocation Mismatch',
-                    (string) $item['package_id'],
-                    (string) $item['student_id'],
-                    $item['student_name'],
-                    "Package: {$item['package_name']} | Allocated: {$item['allocated_sessions']} | Grants Sum: {$item['granted_credits']}",
-                    $item['issue'],
-                ];
-            }
-
-            foreach ($report['ownership_inconsistencies'] as $item) {
-                yield [
-                    'Ownership Inconsistency',
-                    (string) $item['record_id'],
-                    'N/A',
-                    'N/A',
-                    $item['details'],
-                    $item['type'],
-                ];
-            }
-        };
-
-        return $exportService->export(
-            'billing_reconciliation_'.now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(),
-            $headers,
-            $rowsGenerator(),
-            $format,
-            'Reconciliation Report'
-        );
+        return $exportService->export('billing_reconciliation_'.now()->toDateString(), $scope->headers(), $scope->rows($reconciliation->reconcile(), $filters), $filters['format'] ?? 'csv', 'Reconciliation Report');
     }
 }

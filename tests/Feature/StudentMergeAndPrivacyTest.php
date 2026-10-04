@@ -43,11 +43,11 @@ class StudentMergeAndPrivacyTest extends TestCase
         $primaryBooking = $this->createBooking($primary, $sessionType, $this->uniqueEmail('primary'));
         $secondaryBooking = $this->createBooking($secondary, $sessionType, $this->uniqueEmail('secondary'), 22);
         $ledger = app(StudentLedgerService::class);
-        $primaryPackage = $ledger->createPackage($primary, 'Primary package', 4, '160.00', '10.00', 'USD', null, 'merge-primary-grant');
-        $secondaryPackage = $ledger->createPackage($secondary, 'Secondary package', 6, '240.00', '20.00', 'USD', null, 'merge-secondary-grant');
+        $primaryPackage = $ledger->createPackage($primary, 'Primary package', 4, '160.00', '10.00', 'USD', null, 'merge-primary-grant', entitlementCode: 'one_hour');
+        $secondaryPackage = $ledger->createPackage($secondary, 'Secondary package', 6, '240.00', '20.00', 'USD', null, 'merge-secondary-grant', entitlementCode: 'one_hour');
         $payment = $ledger->recordPayment($secondaryPackage, '120.00', 'merge-secondary-payment', $owner->id, reference: 'MERGE-REF-42', notes: 'Keep payment facts');
         $refund = $ledger->refund($payment, '20.00', 'merge-secondary-refund', $owner->id, 'Partial refund');
-        $adjustment = $ledger->adjustCredits($secondaryPackage, 1, 'Courtesy lesson', 'merge-secondary-adjustment', $owner->id);
+        $adjustment = $ledger->adjustCredits($secondaryPackage, 1, 'Courtesy lesson', 'merge-secondary-adjustment', $owner->id, allocationId: $secondaryPackage->entitlements()->value('id'));
 
         $form = Form::query()->create([
             'title' => 'Merge history form',
@@ -136,7 +136,7 @@ class StudentMergeAndPrivacyTest extends TestCase
         $sessionType = $this->createSessionType();
         $this->createBooking($secondary, $sessionType, $this->uniqueEmail('lock-tier-booking'));
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($secondary, 'Lock-tier package', 3, '120.00', '0.00', 'USD', null, 'lock-tier-package-grant');
+        $package = $ledger->createPackage($secondary, 'Lock-tier package', 3, '120.00', '0.00', 'USD', null, 'lock-tier-package-grant', entitlementCode: 'one_hour');
         $payment = $ledger->recordPayment($package, '100.00', 'lock-tier-payment', null);
         $ledger->refund($payment, '10.00', 'lock-tier-refund', null);
 
@@ -221,7 +221,7 @@ class StudentMergeAndPrivacyTest extends TestCase
         $sessionType = $this->createSessionType();
         $this->createBooking($student, $sessionType, $this->uniqueEmail('assistant-view'));
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Private package', 5, '999.00', '0.00', 'USD', null, 'assistant-private-grant');
+        $package = $ledger->createPackage($student, 'Private package', 5, '999.00', '0.00', 'USD', null, 'assistant-private-grant', entitlementCode: 'one_hour');
         $ledger->recordPayment($package, '999.00', 'assistant-private-payment', $owner->id, reference: 'PRIVATE-TRANSACTION-REF', notes: 'PRIVATE-PAYMENT-NOTE');
 
         $form = Form::query()->create([
@@ -319,7 +319,7 @@ class StudentMergeAndPrivacyTest extends TestCase
         $otherBooking = $this->createBooking($otherStudent, $sessionType, 'other-student@example.com', 29, $sharedContact);
 
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Erasure retention package', 4, '160.00', '10.00', 'USD', null, 'erasure-package-grant');
+        $package = $ledger->createPackage($student, 'Erasure retention package', 4, '160.00', '10.00', 'USD', null, 'erasure-package-grant', entitlementCode: 'one_hour');
         $payment = $ledger->recordPayment($package, '100.00', 'erasure-payment', null, reference: 'RETAIN-REFERENCE-77', notes: 'RETAIN-FINANCIAL-NOTE');
         $refund = $ledger->refund($payment, '10.00', 'erasure-refund', null, 'RETAIN-REFUND-REASON');
         $entryCount = SessionLedgerEntry::query()->where('student_package_id', $package->id)->count();

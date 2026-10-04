@@ -21,9 +21,11 @@ class TimezoneDisplayService
         return Carbon::instance($instant)->setTimezone($timezone ?? app(TimezoneService::class)->getBusinessTimezone())->format(auth('web')->user()?->time_format === '12' ? 'g:i A' : 'H:i');
     }
 
-    public function administratorDateTime(DateTimeInterface $instant): string
+    public function administratorDateTime(DateTimeInterface $instant, ?string $timezone = null): string
     {
-        return Carbon::instance($instant)->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('M j, Y').' '.$this->administratorTime($instant);
+        $businessTimezone = $timezone ?? app(TimezoneService::class)->getBusinessTimezone();
+
+        return Carbon::instance($instant)->setTimezone($businessTimezone)->format('M j, Y').' '.$this->administratorTime($instant, $businessTimezone);
     }
 
     /**

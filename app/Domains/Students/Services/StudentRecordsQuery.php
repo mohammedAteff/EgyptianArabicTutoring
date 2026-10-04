@@ -29,7 +29,7 @@ class StudentRecordsQuery
     /** @return Builder<Student> */
     public function query(array $filters): Builder
     {
-        $query = Student::tutoringRoster()->withCount('bookings')->with(['packages.ledgerEntries', 'packages.payments', 'packages.refunds']);
+        $query = Student::tutoringRoster()->withCount('bookings')->with(['packages.ledgerEntries', 'packages.payments', 'packages.refunds', 'packages.entitlements.type']);
         if (! empty($filters['q'])) {
             $identity = app(StudentIdentityService::class);
             $raw = trim($filters['q']);
@@ -79,14 +79,9 @@ class StudentRecordsQuery
             });
         }
         if (! empty($filters['credits'])) {
-            $available = fn (Builder $packages) => $packages->where('status', 'active')->where(function (Builder $packages): void {
-                $packages->where(function (Builder $unlimited): void {
-                    $unlimited->whereNull('expiration_date');
-                    foreach (StudentLedgerService::PRESETS as $preset) {
-                        $unlimited->where(fn (Builder $custom) => $custom->where('package_name', '!=', $preset['name'])->orWhere('total_sessions_allocated', '!=', $preset['sessions'])->orWhere('currency', '!=', 'USD'));
-                    }
-                })->orWhereDate('expiration_date', '>=', now(app(TimezoneService::class)->getBusinessTimezone())->toDateString());
-            })->whereRaw('(select coalesce(sum(credit_change),0) from session_ledger_entries where student_package_id = student_packages.id) > 0');
+            $available = function (Builder $packages): void {
+                app(EntitlementService::class)->scopeAvailablePackages($packages);
+            };
             $filters['credits'] === 'available' ? $query->whereHas('packages', $available) : $query->whereDoesntHave('packages', $available);
         }
 

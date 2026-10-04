@@ -496,6 +496,7 @@ class BookingService
                         'visitor_token' => $analyticsVisitorToken ?? $visitorToken,
                         'detected_country_code' => $detectedCountry,
                         'session_type_id' => $sessionType->id,
+                        'funding_mode' => 'direct',
                         'status' => 'confirmed',
                         'idempotency_key' => $idempotencyKey,
                         'confirmation_token' => $confirmationToken,
@@ -572,6 +573,7 @@ class BookingService
                     'performed_by' => 'customer',
                     'previous_data' => null,
                     'new_data' => [
+                        'funding_mode' => 'direct',
                         'status' => 'confirmed',
                         'start_at_utc' => $startUtc->toDateTimeString(),
                         'end_at_utc' => $endUtc->toDateTimeString(),
@@ -781,6 +783,7 @@ class BookingService
                     // analytics session; do not accept a caller-supplied
                     // country claim.
                     'detected_country_code' => null,
+                    'funding_mode' => 'direct',
                     'status' => 'confirmed',
                     'idempotency_key' => $idempotencyKey,
                     'confirmation_token' => $confirmationToken,
@@ -815,6 +818,7 @@ class BookingService
                 'performed_by' => $adminId ? "admin_{$adminId}" : 'admin',
                 'previous_data' => null,
                 'new_data' => [
+                    'funding_mode' => 'direct',
                     'status' => 'confirmed',
                     'start_at_utc' => $startUtc->toDateTimeString(),
                     'end_at_utc' => $endUtc->toDateTimeString(),

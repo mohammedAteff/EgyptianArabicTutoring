@@ -2,22 +2,20 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\MeetingProvider;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
-use App\Domains\Students\Models\PaymentRecord;
-use App\Domains\Students\Models\PaymentRefund;
-use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentEmail;
-use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentIdentityService;
-use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
+use App\Domains\Students\Services\StudentPackagePresentation;
 use App\Domains\Students\Services\StudentPrivacyService;
 use App\Domains\Students\Services\StudentRecordsQuery;
 use App\Domains\Timezone\Services\TimezoneService;
@@ -43,27 +41,26 @@ class StudentController extends Controller
         return view('admin.students.index', ['students' => $students, 'search' => $filters['q'] ?? '', 'filters' => $filters, 'totalStudents' => Student::tutoringRoster()->count()]);
     }
 
-    public function export(Request $request, StudentRecordsQuery $records, ExportService $exports, StudentLedgerService $ledger, TimezoneService $timezones): StreamedResponse|BinaryFileResponse
+    public function export(Request $request, StudentRecordsQuery $records, ExportService $exports, TimezoneService $timezones): StreamedResponse|BinaryFileResponse
     {
         $filters = $records->filters($request);
-        $rows = function () use ($records, $filters, $ledger, $timezones): \Generator {
+        $rows = function () use ($records, $filters, $timezones): \Generator {
             foreach ($records->query($filters)->lazy(100) as $student) {
-                $remaining = $student->packages->sum(fn ($package) => $ledger->summary($package, true)['remaining_credits']);
-                yield [$student->name, $student->email ?? '', $student->phone ?? '', $student->suspended_at ? 'Suspended' : $student->identity_status, $student->preferred_timezone ?? '', (int) $student->bookings_count, (int) $remaining, $student->packages->pluck('package_name')->implode('; '), $student->packages->map(fn ($package) => $package->package_name.': '.($package->expiration_date?->toDateString() ?? 'No expiry'))->implode('; '), $student->created_at->setTimezone($timezones->getBusinessTimezone())->format('Y-m-d H:i'), $timezones->getBusinessTimezone()];
+                $remaining = $student->packages->map(fn ($package): string => $package->package_name.' #'.$package->id.' · '.app(EntitlementService::class)->balanceText($package))->implode('; ');
+                yield [$student->name, $student->email ?? '', $student->phone ?? '', $student->suspended_at ? 'Suspended' : $student->identity_status, $student->preferred_timezone ?? '', (int) $student->bookings_count, $remaining, $student->packages->pluck('package_name')->implode('; '), $student->packages->map(fn ($package) => $package->package_name.': '.($package->expiration_date?->toDateString() ?? 'No expiry'))->implode('; '), $student->created_at->setTimezone($timezones->getBusinessTimezone())->format('Y-m-d H:i'), $timezones->getBusinessTimezone()];
             }
         };
 
-        return $exports->export('student_records', ['Student', 'Email', 'Phone', 'Status', 'Timezone', 'Sessions', 'Remaining Credits', 'Packages', 'Effective Expiry', 'Joined', 'Business Timezone'], $rows(), $filters['format'] ?? 'csv', 'Student Records');
+        return $exports->export('student_records', ['Student', 'Email', 'Phone', 'Status', 'Timezone', 'Sessions', 'Remaining Entitlements', 'Packages', 'Effective Expiry', 'Joined', 'Business Timezone'], $rows(), $filters['format'] ?? 'csv', 'Student Records');
     }
 
-    public function show(Request $request, int $student, StudentLedgerService $ledger, TimezoneService $timezones): View
+    public function show(Request $request, int $student, StudentPackagePresentation $presentation, TimezoneService $timezones): View
     {
         $isAssistant = $request->user('web')?->role === 'assistant';
         $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id'];
         if (! $isAssistant) {
             array_push($columns, 'name_normalized', 'email_normalized', 'phone_normalized', 'date_of_birth', 'identity_status', 'possible_duplicate_of_student_id', 'internal_notes');
         }
-
         $studentRecord = Student::query()->select($columns)->findOrFail($student);
         $bookings = Booking::query()
             ->where('student_id', $studentRecord->id)
@@ -81,28 +78,31 @@ class StudentController extends Controller
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
             ->get(['id', 'form_version_id', 'student_id', 'status', 'submitted_at', 'submission_revision']);
-
-        $financialPackages = collect();
+        $financial = ['packages' => collect(), 'selected' => null, 'history' => collect()];
+        $billingTab = 'overview';
+        $historyType = 'all';
         if (! $isAssistant) {
-            $packages = StudentPackage::query()->where('student_id', $studentRecord->id)->orderByDesc('created_at')->orderByDesc('id')->get();
-            $financialPackages = $packages->map(function (StudentPackage $package) use ($ledger): array {
-                return [
-                    'package' => $package,
-                    'summary' => $ledger->summary($package, true),
-                    'payments' => PaymentRecord::query()->where('student_package_id', $package->id)->orderByDesc('paid_at')->get(),
-                    'refunds' => PaymentRefund::query()->where('student_package_id', $package->id)->orderByDesc('refunded_at')->get(),
-                    'validityHistory' => AuditLog::query()->where('entity_type', StudentPackage::class)->where('entity_id', $package->id)->where('action', 'package_validity_extended')->orderByDesc('id')->get(),
-                    'entries' => SessionLedgerEntry::query()->where('student_package_id', $package->id)->orderByDesc('id')->get(),
-                ];
-            });
+            $filters = $request->validate([
+                'package_id' => ['nullable', 'integer', 'min:1'],
+                'billing_tab' => ['nullable', Rule::in(['overview', 'payments', 'credits', 'expiration', 'history'])],
+                'history_type' => ['nullable', Rule::in(['all', 'payments', 'refunds', 'credits', 'expiry'])],
+            ]);
+            $billingTab = $filters['billing_tab'] ?? 'overview';
+            $historyType = $filters['history_type'] ?? 'all';
+            $financial = $presentation->forStudent($studentRecord->id, isset($filters['package_id']) ? (int) $filters['package_id'] : null, $historyType);
         }
 
         return view('admin.students.show', [
             'student' => $studentRecord,
             'bookings' => $bookings,
             'formSubmissions' => $formSubmissions,
-            'financialPackages' => $financialPackages,
-            'creditPackages' => $financialPackages,
+            'financialPackages' => $financial['packages'],
+            'selectedFinancial' => $financial['selected'],
+            'packageHistory' => $financial['history'],
+            'billingTab' => $billingTab,
+            'historyType' => $historyType,
+            'meetingProviders' => $isAssistant ? collect() : MeetingProvider::query()->where('active', true)->orderBy('sort_order')->get(),
+            'entitlementTypes' => EntitlementType::query()->where('active', true)->get(),
             'paymentMethods' => $isAssistant ? collect() : PaymentMethod::available()->get(),
             'isAssistant' => $isAssistant,
             'businessTz' => $timezones->getBusinessTimezone(),
@@ -128,18 +128,15 @@ class StudentController extends Controller
             'identity_status' => ['required', Rule::in(['verified', 'legacy_unverified'])],
             'internal_notes' => ['nullable', 'string', 'max:5000'],
         ]);
-
         $email = $identity->normalizeEmail($validated['email'] ?? null);
         try {
             $phone = $identity->normalizePhone($validated['phone'] ?? null, $validated['phone_country'] ?? null);
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['phone' => $exception->getMessage()]);
         }
-
         if ($validated['identity_status'] === 'verified' && (empty($validated['date_of_birth']) || ($email === null && $phone === null))) {
             throw ValidationException::withMessages(['identity_status' => 'A verified student requires a date of birth and at least one email address or phone number.']);
         }
-
         $timezone = null;
         if (! empty($validated['preferred_timezone'])) {
             try {
@@ -148,7 +145,6 @@ class StudentController extends Controller
                 throw ValidationException::withMessages(['preferred_timezone' => 'Choose a valid IANA timezone.']);
             }
         }
-
         $database->transaction(function () use ($student, $validated, $identity, $email, $phone, $timezone, $auditLogs, $request): void {
             $record = Student::query()->whereKey($student)->lockForUpdate()->firstOrFail();
             if ($email && StudentEmail::query()->where('email_normalized', $email)->where('student_id', '!=', $record->id)->lockForUpdate()->exists()) {

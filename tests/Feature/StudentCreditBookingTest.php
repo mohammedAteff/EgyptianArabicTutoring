@@ -11,6 +11,7 @@ use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentBookingService;
@@ -33,6 +34,9 @@ class StudentCreditBookingTest extends TestCase
     {
         parent::setUp();
         $this->sessionType = SessionType::query()->create([
+            'funding_mode' => 'package',
+            'required_entitlement_type_id' => EntitlementType::query()->where('code', 'one_hour')->value('id'),
+            'required_entitlement_units' => 1,
             'title' => 'Student Arabic Lesson',
             'slug' => 'student-arabic-lesson',
             'duration_minutes' => 60,
@@ -57,8 +61,8 @@ class StudentCreditBookingTest extends TestCase
     {
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $earlierPackage = $ledger->createPackage($student, 'Soonest expiry', 2, '80.00', '0.00', 'USD', now('Africa/Cairo')->addDays(3)->toDateString(), 'grant-earlier');
-        $laterPackage = $ledger->createPackage($student, 'Later expiry', 5, '200.00', '0.00', 'USD', now('Africa/Cairo')->addDays(10)->toDateString(), 'grant-later');
+        $earlierPackage = $ledger->createPackage($student, 'Soonest expiry', 2, '80.00', '0.00', 'USD', now('Africa/Cairo')->addDays(3)->toDateString(), 'grant-earlier', entitlementCode: 'one_hour');
+        $laterPackage = $ledger->createPackage($student, 'Later expiry', 5, '200.00', '0.00', 'USD', now('Africa/Cairo')->addDays(10)->toDateString(), 'grant-later', entitlementCode: 'one_hour');
         [$slotId, $slot, $ownerToken] = $this->slotForStudent($student);
 
         $service = app(StudentBookingService::class);
@@ -71,7 +75,7 @@ class StudentCreditBookingTest extends TestCase
         $this->assertSame(1, (int) $ledger->summary($earlierPackage->fresh())['remaining_credits']);
         $this->assertSame(5, (int) $ledger->summary($laterPackage->fresh())['remaining_credits']);
 
-        $replay = $service->create($student, 'expired-or-different-token-is-ignored-on-replay', $this->sessionType->id, 'Africa/Cairo', 'student-booking-key-000000000000000000000001', $ownerToken);
+        $replay = $service->create($student, $slotId, $this->sessionType->id, 'Africa/Cairo', 'student-booking-key-000000000000000000000001', $ownerToken);
         $this->assertSame($booking->id, $replay->id);
         $this->assertSame(1, SessionLedgerEntry::query()->where('booking_id', $booking->id)->where('entry_type', 'session_consumed')->count());
         $this->assertSame(1, Booking::query()->where('idempotency_key', 'student-booking-key-000000000000000000000001')->count());
@@ -84,7 +88,7 @@ class StudentCreditBookingTest extends TestCase
             'name' => 'Student lock order',
             'email' => $student->email_normalized,
         ]);
-        app(StudentLedgerService::class)->createPackage($student, 'Lock-order package', 2, '80.00', '0.00', 'USD', null, 'lock-order-booking-grant');
+        app(StudentLedgerService::class)->createPackage($student, 'Lock-order package', 2, '80.00', '0.00', 'USD', null, 'lock-order-booking-grant', entitlementCode: 'one_hour');
         [$slotId, , $ownerToken] = $this->slotForStudent($student);
         $lockedTiers = [];
         $tierTables = ['booking_calendar_locks', 'contacts', 'students', 'bookings', 'student_packages', 'session_ledger_entries'];
@@ -125,7 +129,7 @@ class StudentCreditBookingTest extends TestCase
             app(StudentBookingService::class)->create($student, $slotId, $this->sessionType->id, 'Africa/Cairo', 'student-booking-key-000000000000000000000002', $ownerToken);
             $this->fail('A student without credits must not receive a confirmed booking.');
         } catch (\InvalidArgumentException $exception) {
-            $this->assertSame('No available session credits.', $exception->getMessage());
+            $this->assertSame('No available compatible session credits.', $exception->getMessage());
         }
 
         $this->assertDatabaseMissing('bookings', ['idempotency_key' => 'student-booking-key-000000000000000000000002']);
@@ -138,7 +142,7 @@ class StudentCreditBookingTest extends TestCase
     {
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'Cancellation package', 2, '80.00', '0.00', 'USD', null, 'grant-cancel-once');
+        $package = $ledger->createPackage($student, 'Cancellation package', 2, '80.00', '0.00', 'USD', null, 'grant-cancel-once', entitlementCode: 'one_hour');
         [$slotId, , $ownerToken] = $this->slotForStudent($student);
         $booking = app(StudentBookingService::class)->create(
             $student,
@@ -166,7 +170,7 @@ class StudentCreditBookingTest extends TestCase
     public function test_tampered_encrypted_slot_identity_is_rejected_before_booking_or_credit_mutation(): void
     {
         $student = Student::factory()->verified()->create();
-        app(StudentLedgerService::class)->createPackage($student, 'Eight lessons', 8, '320.00', '0.00', 'USD', null, 'grant-tamper');
+        app(StudentLedgerService::class)->createPackage($student, 'Eight lessons', 8, '320.00', '0.00', 'USD', null, 'grant-tamper', entitlementCode: 'one_hour');
         [$slotId, , $ownerToken] = $this->slotForStudent($student);
 
         try {
@@ -178,6 +182,24 @@ class StudentCreditBookingTest extends TestCase
 
         $this->assertSame(0, Booking::query()->count());
         $this->assertSame(0, SessionLedgerEntry::query()->where('entry_type', 'session_consumed')->count());
+    }
+
+    public function test_booking_key_cannot_be_reused_for_another_session_type_or_slot(): void
+    {
+        $student = Student::factory()->verified()->create();
+        app(StudentLedgerService::class)->createPackage($student, 'Replay test', 2, '40.00', '0.00', 'USD', null, 'replay-grant', entitlementCode: 'one_hour');
+        [$slotId, , $owner] = $this->slotForStudent($student);
+        $service = app(StudentBookingService::class);
+        $booking = $service->create($student, $slotId, $this->sessionType->id, 'Africa/Cairo', 'reused-booking-key', $owner);
+        foreach ([[$slotId, $this->sessionType->id + 100], ['different-slot', $this->sessionType->id]] as [$slot, $type]) {
+            try {
+                $service->create($student, $slot, $type, 'Africa/Cairo', 'reused-booking-key', $owner);
+                $this->fail('A mismatched replay must fail.');
+            } catch (\InvalidArgumentException $exception) {
+                $this->assertSame('Idempotency payload or session type changed.', $exception->getMessage());
+            }
+        }
+        $this->assertSame(1, SessionLedgerEntry::query()->where('booking_id', $booking->id)->count());
     }
 
     /** @return array{string, array<string, mixed>, string} */

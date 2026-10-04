@@ -32,7 +32,7 @@ class BusinessOperationsControlsTest extends TestCase
         $method = PaymentMethod::where('name', 'Revolut')->firstOrFail();
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'QA package', 3, '30.00', '0.00', 'USD', null, 'method-qa');
+        $package = $ledger->createPackage($student, 'QA package', 3, '30.00', '0.00', 'USD', null, 'method-qa', entitlementCode: 'one_hour');
         $payment = $ledger->recordPayment($package, '30.00', (string) Str::uuid(), $admin->id, paymentMethodId: $method->id);
         $this->actingAs($admin, 'web')->put(route('admin.payment-methods.update', $method), ['name' => 'Revolut transfer', 'active' => 0, 'is_default' => 0, 'sort_order' => 10])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('Revolut', $payment->fresh()->payment_method);
@@ -48,8 +48,8 @@ class BusinessOperationsControlsTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $package = $ledger->createPackage($student, 'QA validity', 3, '30.00', '0.00', 'USD', CarbonImmutable::now()->addDays(10)->toDateString(), 'validity-qa');
-        $ledger->adjustCredits($package, 2, 'Service recovery', (string) Str::uuid(), $admin->id);
+        $package = $ledger->createPackage($student, 'QA validity', 3, '30.00', '0.00', 'USD', CarbonImmutable::now()->addDays(10)->toDateString(), 'validity-qa', entitlementCode: 'one_hour');
+        $ledger->adjustCredits($package, 2, 'Service recovery', (string) Str::uuid(), $admin->id, allocationId: $package->entitlements()->value('id'));
         $before = $package->ledgerEntries()->get()->toArray();
         $this->actingAs($admin, 'web')->post(route('admin.students.packages.validity', [$student->id, $package->id]), ['previous_expiration_date' => $package->expiration_date->toDateString(), 'expiration_date' => $package->expiration_date->copy()->addDays(30)->toDateString(), 'reason' => 'Travel accommodation'])->assertSessionHasNoErrors();
         $this->assertSame($before, $package->ledgerEntries()->get()->toArray());

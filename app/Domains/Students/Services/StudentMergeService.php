@@ -91,16 +91,19 @@ class StudentMergeService
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get(['id']);
+            DB::table('student_package_entitlements')->whereIn('student_id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
             DB::table('payment_records')->whereIn('student_id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
             DB::table('payment_refunds')->whereIn('student_id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
             DB::table('session_ledger_entries')->whereIn('student_id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
             DB::table('form_submissions')->whereIn('student_id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
             DB::table('session_reschedules')->where('actor_type', 'student')->whereIn('actor_id', $studentIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            // Materials inherit canonical ownership through the unchanged Booking IDs.
+            DB::table('lesson_materials')->whereIn('booking_id', $lockedIds)->orderBy('id')->lockForUpdate()->get(['id']);
 
             // Reassign only ownership/reference fields; amounts and historical event facts stay untouched.
             foreach ([
-                'bookings',
                 'student_packages',
+                'bookings',
                 'payment_records',
                 'payment_refunds',
                 'session_ledger_entries',

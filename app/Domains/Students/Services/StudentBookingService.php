@@ -38,9 +38,10 @@ class StudentBookingService
         string $idempotencyKey,
         string $slotOwnerToken,
     ): Booking {
+        $fingerprint = hash('sha256', json_encode([$slotId, $sessionTypeId, $customerTimezone, $slotOwnerToken], JSON_THROW_ON_ERROR));
         $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existing) {
-            return $this->assertOwnedReplay($existing, $student);
+            return $this->assertOwnedReplay($existing, $student, $fingerprint);
         }
 
         $sessionType = SessionType::query()->whereKey($sessionTypeId)->where('active', true)->firstOrFail();
@@ -52,7 +53,7 @@ class StudentBookingService
         $bookingCreated = false;
 
         try {
-            $booking = $this->database->transaction(function () use ($student, $slotId, $sessionType, $customerTimezone, $idempotencyKey, $slotOwnerToken, $startUtc, $endUtc, $bufferMinutes, &$bookingCreated): Booking {
+            $booking = $this->database->transaction(function () use ($student, $slotId, $sessionType, $customerTimezone, $idempotencyKey, $slotOwnerToken, $startUtc, $endUtc, $bufferMinutes, $fingerprint, &$bookingCreated): Booking {
                 // Lock the canonical scheduling resource before contact, student, and booking rows.
                 $this->availability->acquireCalendarDateLocks($startUtc, $endUtc, $bufferMinutes);
 
@@ -86,9 +87,11 @@ class StudentBookingService
 
                 $replay = Booking::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
                 if ($replay) {
-                    return $this->assertOwnedReplay($replay, $lockedStudent);
+                    return $this->assertOwnedReplay($replay, $lockedStudent, $fingerprint);
                 }
 
+                $sessionType = SessionType::query()->whereKey($sessionType->id)->where('active', true)->lockForUpdate()->firstOrFail();
+                app(EntitlementService::class)->requirement($sessionType);
                 // Re-resolve only after the mutex is held; the client never supplies booking timestamps.
                 $slot = $this->slots->resolve($slotId, $sessionType, $customerTimezone, $slotOwnerToken);
                 $authoritativeStart = CarbonImmutable::parse($slot['slot_start_utc'], 'UTC');
@@ -111,6 +114,7 @@ class StudentBookingService
                     'idempotency_key' => $idempotencyKey,
                     'confirmation_token' => Str::random(64),
                     'source' => 'student_portal',
+                    'request_fingerprint' => $fingerprint,
                     'notes' => null,
                 ]));
                 $booking = app(MeetingLinkService::class)->assign($booking);
@@ -139,7 +143,7 @@ class StudentBookingService
         } catch (QueryException $exception) {
             $replay = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($replay) {
-                return $this->assertOwnedReplay($replay, $student);
+                return $this->assertOwnedReplay($replay, $student, $fingerprint);
             }
 
             throw $exception;
@@ -156,10 +160,14 @@ class StudentBookingService
         return $booking;
     }
 
-    private function assertOwnedReplay(Booking $booking, Student $student): Booking
+    private function assertOwnedReplay(Booking $booking, Student $student, string $fingerprint): Booking
     {
         if ((int) $booking->student_id !== (int) $student->id) {
             throw new InvalidArgumentException('This idempotency key belongs to another student.');
+        }
+
+        if ($booking->request_fingerprint !== $fingerprint) {
+            throw new InvalidArgumentException('Idempotency payload or session type changed.');
         }
 
         return $booking;

@@ -62,7 +62,9 @@ class TelegramDeliveryService
         }
         $lock = Cache::lock('telegram-send-bot:'.$delivery->telegram_bot_id, 30);
         if (! $lock->get()) {
-            $this->defer($delivery, 5);
+            if (config('queue.default') !== 'sync') {
+                DeliverTelegramMessage::dispatch($delivery->id)->delay(now('UTC')->addSeconds(5));
+            }
 
             return;
         }

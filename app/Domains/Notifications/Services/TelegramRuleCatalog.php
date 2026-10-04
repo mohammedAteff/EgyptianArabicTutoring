@@ -8,7 +8,7 @@ class TelegramRuleCatalog
     public function all(): array
     {
         $booking = ['booking_id', 'student_name', 'email', 'phone', 'session_title', 'tutor_time', 'student_time', 'booking_context', 'remaining_credits', 'session_number', 'total_sessions', 'admin_url', 'meeting_url', 'meeting_provider'];
-        $package = ['student_name', 'email', 'phone', 'package_name', 'remaining_credits', 'expiry_date', 'admin_url'];
+        $package = ['student_name', 'email', 'phone', 'package_name', 'offering_key', 'purchase_id', 'entitlement_code', 'entitlement_label', 'allocation_id', 'available_units', 'remaining_credits', 'expiry_date', 'admin_url'];
         $definitions = [
             'booking_created' => ['Booking created', 'Bookings', $booking], 'booking_rescheduled' => ['Booking rescheduled', 'Bookings', $booking], 'booking_cancelled' => ['Booking cancelled', 'Bookings', $booking],
             'low_credits' => ['Low session credits', 'Students', $package], 'package_expiring' => ['Unused package approaching expiry', 'Students', $package],

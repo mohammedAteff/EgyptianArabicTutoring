@@ -6,6 +6,7 @@ use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormAnswer;
@@ -22,6 +23,7 @@ class StudentPrivacyService
         private AvailabilityService $availability,
         private AuditLogService $auditLogs,
         private DatabaseCapability $database,
+        private LessonMaterialService $lessonMaterials,
     ) {}
 
     public function anonymize(int $studentId, ?int $administratorId = null): Student
@@ -118,6 +120,7 @@ class StudentPrivacyService
             }
 
             DB::table('student_bins')->where('student_id', $studentId)->update(['title' => 'Redacted educational note', 'body' => '[redacted]', 'student_visible' => false]);
+            $this->lessonMaterials->eraseForBookings($lockedIds, $administratorId);
             DB::table('bookings')->where('student_id', $studentId)->update([
                 'notes' => null,
                 'cancellation_reason' => null,

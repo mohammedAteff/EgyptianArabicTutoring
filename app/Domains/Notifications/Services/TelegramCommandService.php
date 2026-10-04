@@ -102,7 +102,7 @@ class TelegramCommandService
         $lines = [$student->name];
         foreach (StudentPackage::where('student_id', $student->id)->where('status', 'active')->get() as $package) {
             $data = $this->read->package($package);
-            $lines[] = $data['package_name'].': '.$data['remaining_credits'].' credits; expiry '.$data['expiry_date'];
+            $lines[] = $data['package_name'].': '.$data['remaining_credits'].'; expiry '.$data['expiry_date'];
         }
         $lines[] = 'Admin: '.route('admin.students.show', $student->id);
 

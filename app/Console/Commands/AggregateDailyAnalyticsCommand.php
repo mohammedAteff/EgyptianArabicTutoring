@@ -9,6 +9,7 @@ use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Analytics\Services\FunnelProgressionService;
+use App\Domains\Analytics\Services\SocialAnalyticsRollup;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ReportService;
 use App\Domains\Timezone\Services\TimezoneService;
@@ -348,6 +349,8 @@ class AggregateDailyAnalyticsCommand extends Command
             return self::FAILURE;
         }
 
+        app(SocialAnalyticsRollup::class)->aggregateDay(CarbonImmutable::parse($targetDate, app(TimezoneService::class)->getBusinessTimezone()));
+
         // Optional Rebuilding of visitor_funnel_progressions (Section 14)
         if ($this->option('rebuild-funnel')) {
             $this->info('Rebuilding visitor_funnel_progressions...');
@@ -409,10 +412,10 @@ class AggregateDailyAnalyticsCommand extends Command
                     $dayEndUtc = $currDay->addDay()->setTimezone('UTC');
 
                     // Confirm durable rollup exists for this whole Cairo day before deleting raw data
-                    $hasRollup = DailyMetric::where('metric_date', $dayStr)
+                    $hasRollup = DailyMetric::where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())->where('metric_date', $dayStr)
                         ->where('metric_name', 'unique_visitors')
                         ->exists();
-                    $hasCountryRollup = DailyCountryMetric::where('metric_date', $dayStr)->exists();
+                    $hasCountryRollup = DailyCountryMetric::where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())->where('metric_date', $dayStr)->exists();
 
                     if (! $hasRollup || ! $hasCountryRollup) {
                         $this->warn("Skipping retention pruning for business date {$dayStr}: durable daily or country rollup is missing.");
@@ -421,6 +424,7 @@ class AggregateDailyAnalyticsCommand extends Command
                         continue;
                     }
 
+                    app(SocialAnalyticsRollup::class)->aggregateDay($currDay);
                     $deletedEvents = AnalyticsEvent::where('created_at', '>=', $dayStartUtc)
                         ->where('created_at', '<', $dayEndUtc)
                         ->delete();
@@ -479,6 +483,7 @@ class AggregateDailyAnalyticsCommand extends Command
                         ->exists();
 
                     if ($hasRollup && $hasCountryRollup) {
+                        app(SocialAnalyticsRollup::class)->aggregateDay($pruneDay);
                         do {
                             $deletedChunk = DB::table('analytics_events')
                                 ->where('created_at', '>=', $dayStartUtc)

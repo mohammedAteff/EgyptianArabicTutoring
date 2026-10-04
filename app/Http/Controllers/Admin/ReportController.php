@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Reporting\Services\ReportPeriod;
 use App\Domains\Reporting\Services\ReportService;
+use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -21,10 +25,10 @@ class ReportController extends Controller
 
     public function index(Request $request): View
     {
-        $reportType = $request->query('type', 'traffic');
-        $range = $request->query('range', '30d');
-
-        [$start, $end] = $this->resolveDateRange($range, $request);
+        $filters = $this->filters($request);
+        $reportType = $filters['type'];
+        $range = $filters['range'];
+        [$start, $end] = app(ReportPeriod::class)->bounds($filters);
         $cutoverDate = Setting::get('analytics_authoritative_cutover_date');
         $cutoverDate = is_string($cutoverDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $cutoverDate)
             ? $cutoverDate
@@ -33,17 +37,17 @@ class ReportController extends Controller
             && $start->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->toDateString() < $cutoverDate;
 
         $data = match ($reportType) {
-            'bookings' => $this->reportService->getBookingsReport($start, $end, $request->query('status')),
-            'resources' => $this->reportService->getResourcesReport($start, $end),
-            'social' => $this->reportService->getSocialReport($start, $end),
-            'events' => $this->reportService->getEventsReport($start, $end, $request->query('event_name')),
-            'campaigns' => $this->reportService->getCampaignContentReport($start, $end, $request->query('campaign')),
-            default => $this->reportService->getTrafficReport($start, $end, $request->query('source')),
+            'bookings' => $this->reportService->getBookingsReport($start, $end, $filters['status'] ?? null, $filters),
+            'resources' => $this->reportService->getResourcesReport($start, $end, $filters),
+            'social' => $this->reportService->getSocialReport($start, $end, $filters),
+            'events' => $this->reportService->getEventsReport($start, $end, $filters['event_name'] ?? null, $filters),
+            'campaigns' => $this->reportService->getCampaignContentReport($start, $end, $filters['campaign'] ?? null, $filters),
+            default => $this->reportService->getTrafficReport($start, $end, $filters['source'] ?? null),
         };
 
         return view('admin.reports.index', [
             'title' => 'Operational Reports & Data Exports',
-            'reportType' => $reportType,
+            'reportType' => $reportType, 'filters' => $filters, 'filterFields' => $this->fields($reportType),
             'range' => $range,
             'start' => $start->setTimezone(app(TimezoneService::class)->getBusinessTimezone()),
             'end' => $end->setTimezone(app(TimezoneService::class)->getBusinessTimezone()),
@@ -55,21 +59,21 @@ class ReportController extends Controller
 
     public function export(Request $request): Response
     {
-        $reportType = $request->query('type', 'traffic');
-        $format = $request->query('format', 'csv');
-        $range = $request->query('range', '30d');
+        $filters = $this->filters($request);
+        $reportType = $filters['type'];
+        $format = $filters['format'] ?? 'csv';
 
-        [$start, $end] = $this->resolveDateRange($range, $request);
+        [$start, $end] = app(ReportPeriod::class)->bounds($filters);
 
         $timestamp = now()->format('Ymd_His');
 
         return match ($reportType) {
-            'bookings' => $this->exportBookings($start, $end, $format, $timestamp, $request->query('status')),
-            'resources' => $this->exportResources($start, $end, $format, $timestamp),
-            'social' => $this->exportSocial($start, $end, $format, $timestamp),
-            'events' => $this->exportEvents($start, $end, $format, $timestamp, $request->query('event_name')),
-            'campaigns' => $this->exportCampaigns($start, $end, $format, $timestamp, $request->query('campaign')),
-            default => $this->exportTraffic($start, $end, $format, $timestamp, $request->query('source')),
+            'bookings' => $this->exportBookings($start, $end, $format, $timestamp, $filters['status'] ?? null, $filters),
+            'resources' => $this->exportResources($start, $end, $format, $timestamp, $filters),
+            'social' => $this->exportSocial($start, $end, $format, $timestamp, $filters),
+            'events' => $this->exportEvents($start, $end, $format, $timestamp, $filters['event_name'] ?? null, $filters),
+            'campaigns' => $this->exportCampaigns($start, $end, $format, $timestamp, $filters['campaign'] ?? null, $filters),
+            default => $this->exportTraffic($start, $end, $format, $timestamp, $filters['source'] ?? null),
         };
     }
 
@@ -94,9 +98,9 @@ class ReportController extends Controller
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
-    protected function exportBookings(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $status): Response
+    protected function exportBookings(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $status, array $filters): Response
     {
-        $report = $this->reportService->getBookingsReport($start, $end, $status);
+        $report = $this->reportService->getBookingsReport($start, $end, $status, $filters);
         $headers = [
             'Booking Code',
             'Customer Name',
@@ -137,9 +141,9 @@ class ReportController extends Controller
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
-    protected function exportCampaigns(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $campaign): Response
+    protected function exportCampaigns(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $campaign, array $filters): Response
     {
-        $report = $this->reportService->getCampaignContentReport($start, $end, $campaign);
+        $report = $this->reportService->getCampaignContentReport($start, $end, $campaign, $filters);
         $headers = ['Campaign', 'Content (Ad / Post)', 'Source', 'Unique Visitors', 'Total Bookings', 'Confirmed / Completed', 'Conversion Rate (%)'];
         $rows = $report['rows']->map(fn ($r) => [
             $r['campaign'],
@@ -158,9 +162,9 @@ class ReportController extends Controller
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
-    protected function exportResources(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts): Response
+    protected function exportResources(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, array $filters): Response
     {
-        $report = $this->reportService->getResourcesReport($start, $end);
+        $report = $this->reportService->getResourcesReport($start, $end, $filters);
         $headers = ['Resource Title', 'Slug', 'File Type', 'Status', 'Lead Requests', 'Downloads', 'Conversion Rate'];
         $rows = $report['rows']->map(fn ($r) => [
             $r['title'],
@@ -179,13 +183,13 @@ class ReportController extends Controller
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
-    protected function exportSocial(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts): Response
+    protected function exportSocial(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, array $filters): Response
     {
-        $report = $this->reportService->getSocialReport($start, $end);
-        $headers = ['Platform', 'Placement', 'Event Name', 'Page', 'Date', 'Total Clicks', 'Unique Visitors', 'Language', 'Country', 'Source', 'Medium', 'Campaign'];
+        $report = $this->reportService->getSocialReport($start, $end, $filters);
+        $headers = ['Platform', 'Placement', 'Event Name', 'Page', 'Date', 'Total Clicks', 'Daily Unique Visitors (dimension group)', 'Language', 'Country', 'Source', 'Medium', 'Campaign', 'Context'];
         $rows = $report['rows']->map(fn ($s) => [
             $s['platform'], $s['placement'], $s['event_name'], $s['page'], $s['date'], $s['clicks'],
-            $s['unique_visitors'], $s['language'], $s['country'], $s['source'], $s['medium'], $s['campaign'],
+            $s['unique_visitors'], $s['language'], $s['country'], $s['source'], $s['medium'], $s['campaign'], $s['context'],
         ]);
 
         $filename = "social_clicks_report_{$ts}.{$format}";
@@ -195,9 +199,9 @@ class ReportController extends Controller
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
-    protected function exportEvents(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $eventName): Response
+    protected function exportEvents(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $eventName, array $filters): Response
     {
-        $report = $this->reportService->getEventsReport($start, $end, $eventName);
+        $report = $this->reportService->getEventsReport($start, $end, $eventName, $filters);
         $headers = ['Event Name', 'Page', 'Source', 'Date', 'Occurrences'];
         $rows = $report['rows']->map(fn ($e) => [
             $e->event_name,
@@ -214,45 +218,49 @@ class ReportController extends Controller
             : $this->exportService->exportCsv($filename, $headers, $rows);
     }
 
-    /**
-     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
-     */
-    protected function resolveDateRange(string $range, Request $request): array
+    /** @return array<string, mixed> */
+    private function filters(Request $request): array
     {
-        $cairoTz = app(TimezoneService::class)->getBusinessTimezone();
-        $now = CarbonImmutable::now($cairoTz);
-
-        if ($range === 'custom' && $request->filled('start_date') && $request->filled('end_date')) {
-            $startCairo = CarbonImmutable::parse($request->query('start_date'), $cairoTz)->startOfDay();
-            $endCairo = CarbonImmutable::parse($request->query('end_date'), $cairoTz)->endOfDay();
-
-            if ($startCairo->gt($endCairo)) {
-                $endCairo = $startCairo->endOfDay();
+        $type = $request->validate(['type' => ['nullable', Rule::in(['traffic', 'bookings', 'resources', 'social', 'events', 'campaigns'])]])['type'] ?? 'traffic';
+        $rules = [];
+        foreach ($this->fields($type) as $key => $definition) {
+            if (! in_array($key, ['range', 'start_date', 'end_date'], true)) {
+                $rules[$key] = ['nullable', 'string', 'max:500'];
+                if (is_array($definition[1])) {
+                    $rules[$key][] = Rule::in(array_keys($definition[1]));
+                }
             }
-
-            // Cap custom range to 5 years (1825 days) to ensure bounded query horizons
-            if ($startCairo->diffInDays($endCairo) > 1825) {
-                $endCairo = $startCairo->addDays(1825)->endOfDay();
-            }
-
-            return [
-                $startCairo->setTimezone('UTC'),
-                $endCairo->setTimezone('UTC'),
-            ];
         }
+        if ($type === 'resources') {
+            $rules['resource_id'] = ['nullable', 'integer', 'exists:resources,id'];
+            $rules['category_id'] = ['nullable', 'integer', 'exists:resource_categories,id'];
+        }
+        $filters = app(ReportPeriod::class)->filters($request, $rules);
+        if ($type === 'social') {
+            if (! empty($filters['platform'])) {
+                $filters['platform'] = strtolower(trim($filters['platform']));
+            }
+            if (! empty($filters['country'])) {
+                $filters['country'] = strtoupper(trim($filters['country']));
+            }
+        }
+        $filters['type'] = $type;
 
-        [$startCairo, $endCairo] = match ($range) {
-            'today' => [$now->startOfDay(), $now->endOfDay()],
-            '7d' => [$now->subDays(6)->startOfDay(), $now->endOfDay()],
-            '90d' => [$now->subDays(89)->startOfDay(), $now->endOfDay()],
-            'this_month' => [$now->startOfMonth(), $now->endOfMonth()],
-            'last_month' => [$now->subMonth()->startOfMonth(), $now->subMonth()->endOfMonth()],
-            default => [$now->subDays(29)->startOfDay(), $now->endOfDay()],
+        return $filters;
+    }
+
+    /** @return array<string, array<mixed>> */
+    private function fields(string $type): array
+    {
+        $dimensions = match ($type) {
+            'bookings' => ['status' => ['Status', ['confirmed' => 'Confirmed', 'completed' => 'Completed', 'cancelled' => 'Cancelled', 'no_show' => 'No show', 'pending' => 'Pending']], 'source' => ['Source', 'text'], 'campaign' => ['Campaign', 'text']],
+            'resources' => ['resource_id' => ['Resource', \App\Domains\Resources\Models\Resource::query()->orderBy('title')->pluck('title', 'id')->all()], 'category_id' => ['Category', ResourceCategory::query()->orderBy('name')->pluck('name', 'id')->all()]],
+            'social' => ['platform' => ['Platform (e.g. whatsapp)', 'text'], 'placement' => ['Placement', ['footer_social' => 'Footer Social', 'floating_cta' => 'Floating CTA', 'unknown' => 'Unknown']], 'page_url' => ['Page (exact URL)', 'text'], 'country' => ['Country code', 'text'], 'source' => ['Source', 'text'], 'medium' => ['Medium', 'text'], 'campaign' => ['Campaign', 'text'], 'language' => ['Language', 'text'], 'context' => ['Context', ['public' => 'Public', 'portal' => 'Student portal', 'unknown' => 'Unknown']]],
+            'events' => ['event_name' => ['Event', array_combine(AnalyticsService::ALLOWED_EVENTS, AnalyticsService::ALLOWED_EVENTS)], 'page_url' => ['Page (exact URL)', 'text'], 'source' => ['Source', 'text']],
+            'campaigns' => ['campaign' => ['Campaign', 'text'], 'source' => ['Source', 'text'], 'content' => ['Content', 'text']],
+            default => ['source' => ['Source', 'text']],
         };
 
-        return [
-            $startCairo->setTimezone('UTC'),
-            $endCairo->setTimezone('UTC'),
-        ];
+        return array_merge(app(ReportPeriod::class)->fields(), $dimensions);
     }
 }

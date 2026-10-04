@@ -1,6 +1,7 @@
 <?php
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Administration\Services\AdministratorTwoFactorService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
@@ -77,6 +78,10 @@ try {
     } elseif ($action === 'assign_meeting_room') {
         app(MeetingLinkService::class)->assign(Booking::findOrFail((int) $data['booking_id']), roomId: (int) $data['room_id']);
         echo "RESULT:SUCCESS:assigned\n";
+        exit(0);
+    } elseif ($action === 'two_factor_recovery') {
+        app(AdministratorTwoFactorService::class)->authenticate((int) $data['administrator_id'], null, (string) $data['recovery_code']);
+        echo "RESULT:SUCCESS:factor verified\n";
         exit(0);
     } elseif ($action === 'suspend_staff') {
         $actor = Administrator::findOrFail((int) $data['actor_id']);

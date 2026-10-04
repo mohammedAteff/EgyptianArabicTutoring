@@ -32,6 +32,8 @@ class Administrator extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_pending_secret',
+        'two_factor_pending_session', 'two_factor_version', 'two_factor_last_used_step',
     ];
 
     protected function casts(): array
@@ -39,6 +41,12 @@ class Administrator extends Authenticatable
         return [
             'password' => 'hashed',
             'suspended_at' => 'datetime',
+            'two_factor_secret' => 'encrypted',
+            'two_factor_pending_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
+            'two_factor_confirmed_at' => 'datetime',
+            'two_factor_pending_at' => 'datetime',
+            'two_factor_last_used_step' => 'integer',
         ];
     }
 
@@ -50,6 +58,11 @@ class Administrator extends Authenticatable
     public function isAdmin(): bool
     {
         return in_array($this->role, ['admin', 'super_admin'], true);
+    }
+
+    public function requiresTwoFactor(): bool
+    {
+        return $this->isSuperAdmin() && ($this->two_factor_confirmed_at !== null || $this->two_factor_secret !== null);
     }
 
     public function isAssistant(): bool

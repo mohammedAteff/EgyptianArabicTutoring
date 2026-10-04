@@ -6,16 +6,18 @@ use App\Domains\Administration\Models\Administrator;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormQuestion;
-use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormBuilderService;
+use App\Domains\Forms\Services\FormSubmissionQuery;
+use App\Domains\Reporting\Services\ExportService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FormController extends Controller
@@ -101,64 +103,45 @@ class FormController extends Controller
     {
         $isAssistant = Auth::guard('web')->user()?->role === 'assistant';
         $versions = $form->versions()->orderByDesc('version_number')->get(['id', 'form_id', 'version_number']);
-        $versionId = (int) $request->query('version_id', $form->published_version_id ?? $form->active_version_id);
-        abort_unless($versions->contains('id', $versionId), 404);
-        $submissions = FormSubmission::query()
-            ->select(['id', 'form_version_id', 'student_id', 'status', 'submitted_at', 'submission_revision'])
-            ->where('form_version_id', $versionId)
-            ->with(['student:id,first_name,last_name,email,phone', 'version:id,form_id,version_number'])
-            ->with(['answers' => function ($query) use ($isAssistant): void {
-                $query->select(['form_answers.id', 'form_answers.form_submission_id', 'form_answers.form_question_id', 'form_answers.value_text'])
-                    ->when($isAssistant, fn ($answers) => $answers->whereHas('question', fn ($questions) => $questions->where('assistant_visible', true)))
-                    ->with(['question:id,question_key,label,question_type,assistant_visible']);
-            }])
-            ->orderByDesc('id')
-            ->paginate(50);
+        $scope = app(FormSubmissionQuery::class);
+        $filters = $scope->filters($request, $form);
+        $versionId = $filters['version_id'];
+        $submissions = $scope->query($filters, $isAssistant)->reorder('id', 'desc')->paginate(50)->withQueryString();
+        $filterFields = [
+            'version_id' => ['Form version', $versions->pluck('version_number', 'id')->map(fn ($number) => 'Version '.$number)->all()],
+            'status' => ['Submission status', ['draft' => 'Draft', 'submitted' => 'Submitted']],
+            'q' => ['Student name / email', 'search'],
+            'date_from' => ['Created from (business time)', 'date'], 'date_to' => ['Created through (business time)', 'date'],
+        ];
 
-        return view('admin.forms.submissions', compact('form', 'versions', 'versionId', 'submissions', 'isAssistant'));
+        $businessTimezone = app(TimezoneService::class)->getBusinessTimezone();
+
+        return view('admin.forms.submissions', compact('form', 'versions', 'versionId', 'submissions', 'isAssistant', 'filters', 'filterFields', 'businessTimezone'));
     }
 
-    public function export(Request $request, Form $form): StreamedResponse
+    public function export(Request $request, Form $form): StreamedResponse|BinaryFileResponse
     {
         $isAssistant = Auth::guard('web')->user()?->role === 'assistant';
-        $versions = $form->versions()->pluck('id')->all();
-        $versionId = (int) $request->query('version_id', $form->published_version_id ?? $form->active_version_id);
-        abort_unless(in_array($versionId, array_map('intval', $versions), true), 404);
-        $questions = FormQuestion::query()
-            ->select(['id', 'form_version_id', 'question_key', 'label', 'question_type', 'assistant_visible', 'sort_order'])
-            ->where('form_version_id', $versionId)
+        $scope = app(FormSubmissionQuery::class);
+        $filters = $scope->filters($request, $form);
+        $questions = FormQuestion::query()->where('form_version_id', $filters['version_id'])
             ->where('question_type', '!=', 'info_block')
             ->when($isAssistant, fn (Builder $query) => $query->where('assistant_visible', true))
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
-        $columns = $questions->pluck('label')->all();
+            ->orderBy('sort_order')->orderBy('id')->get(['id', 'label']);
+        $headers = array_merge(['Submission ID', 'Student ID', 'Submitted At', 'Status', 'Created At (Business Time)'], $questions->pluck('label')->all());
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+        $rows = function () use ($scope, $filters, $isAssistant, $questions, $timezone): \Generator {
+            foreach ($scope->query($filters, $isAssistant, false)->without(['student', 'version'])->lazyById(200) as $submission) {
+                $answerMap = $submission->answers->keyBy('form_question_id');
+                $row = [(string) $submission->id, (string) $submission->student_id, $submission->submitted_at?->toIso8601String(), $submission->status, $submission->created_at?->timezone($timezone)->toIso8601String()];
+                foreach ($questions as $question) {
+                    $row[] = (string) ($answerMap->get($question->id)?->value_text ?? '');
+                }
+                yield $row;
+            }
+        };
 
-        return Response::streamDownload(function () use ($versionId, $questions, $columns, $isAssistant): void {
-            $handle = fopen('php://output', 'w');
-            fputcsv($handle, array_merge(['Submission ID', 'Student ID', 'Submitted At'], $columns));
-            FormSubmission::query()
-                ->select(['id', 'form_version_id', 'student_id', 'status', 'submitted_at'])
-                ->where('form_version_id', $versionId)
-                ->with(['answers' => function ($query) use ($questions, $isAssistant): void {
-                    $query->select(['id', 'form_submission_id', 'form_question_id', 'value_text'])
-                        ->whereIn('form_question_id', $questions->pluck('id'))
-                        ->when($isAssistant, fn ($answers) => $answers->whereHas('question', fn ($question) => $question->where('assistant_visible', true)));
-                }])
-                ->orderBy('id')
-                ->chunkById(200, function ($submissions) use ($handle, $questions): void {
-                    foreach ($submissions as $submission) {
-                        $answerMap = $submission->answers->keyBy('form_question_id');
-                        $row = [$submission->id, $submission->student_id, $submission->submitted_at?->toIso8601String()];
-                        foreach ($questions as $question) {
-                            $value = (string) ($answerMap->get($question->id)?->value_text ?? '');
-                            $row[] = preg_match('/^[=+\-@\t\r]/u', $value) ? "'{$value}" : $value;
-                        }
-                        fputcsv($handle, $row);
-                    }
-                });
-            fclose($handle);
-        }, "form-{$form->id}-submissions.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return app(ExportService::class)->export("form-{$form->id}-submissions", $headers, $rows(), $filters['format'] ?? 'csv', 'Form Responses');
     }
 
     private function validatedMetadata(Request $request, ?Form $form = null): array

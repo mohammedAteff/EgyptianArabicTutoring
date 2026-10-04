@@ -30,7 +30,7 @@ class AuditLogService
             'entity_id' => $entityId,
             'previous_data' => $previousData,
             'new_data' => $newData,
-            'ip_address' => request()?->ip(),
+            'ip_address' => null,
             'created_at' => now(),
         ]);
     }
@@ -59,7 +59,7 @@ class AuditLogService
             'target_id' => $targetId === null ? null : (string) $targetId,
             'old_values' => $previousData,
             'new_values' => $newData,
-            'ip_address' => request()?->ip(),
+            'ip_address' => null,
             'created_at' => now('UTC'),
         ]);
     }

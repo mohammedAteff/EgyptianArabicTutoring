@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
 use App\Http\Middleware\EnsureAccountActive;
+use App\Http\Middleware\EnsureAdministratorSecondFactor;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
 use App\Http\Middleware\EnsureAdminRole;
 use App\Http\Middleware\EnsureNotUnderMaintenance;
@@ -9,11 +10,16 @@ use App\Http\Middleware\EnsureStudentAuthenticated;
 use App\Http\Middleware\NormalizeTrailingSlash;
 use App\Http\Middleware\SetRequestLocale;
 use App\Http\Middleware\TrackVisitorSession;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 ini_set('unserialize_callback_func', 'spl_autoload_call');
 
@@ -40,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             NormalizeTrailingSlash::class,
             SetRequestLocale::class,
+            EnsureAdministratorSecondFactor::class,
             TrackVisitorSession::class,
             EnsureNotUnderMaintenance::class,
         ]);
@@ -48,12 +55,41 @@ return Application::configure(basePath: dirname(__DIR__))
             TrackVisitorSession::class,
         );
         $middleware->prependToPriorityList(
+            TrackVisitorSession::class,
+            EnsureAdministratorSecondFactor::class,
+        );
+        $middleware->prependToPriorityList(
             SubstituteBindings::class,
             EnsureNotUnderMaintenance::class,
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['token', 'telegram_bot_token']);
+        $exceptions->dontFlash(['token', 'telegram_bot_token', 'code', 'recovery_code', 'two_factor_secret', 'two_factor_pending_secret']);
+        $exceptions->report(function (Throwable $exception): ?bool {
+            if (request()->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit')) {
+                Log::error('Staff two-factor security check failed.', ['exception_type' => $exception::class]);
+
+                return false;
+            }
+
+            return null;
+        });
+        $exceptions->render(function (Throwable $exception, Request $request): ?Response {
+            if (! $request->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit')
+                || $exception instanceof ValidationException
+                || $exception instanceof AuthenticationException) {
+                return null;
+            }
+
+            $message = 'Unable to complete this security check. Please try again.';
+            $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
+            $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
+            $response = $request->expectsJson() ? response()->json(['message' => $message], $status, $headers) : response($message, $status, $headers);
+            $response->headers->set('Cache-Control', 'no-store, private');
+            $response->headers->set('Referrer-Policy', 'no-referrer');
+
+            return $response;
+        });
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

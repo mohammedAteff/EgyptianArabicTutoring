@@ -2,6 +2,7 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
@@ -23,6 +24,7 @@ class CashierReportService
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'transaction_type' => ['nullable', Rule::in(['payment', 'refund', 'credit'])],
+            'offering_key' => ['nullable', Rule::in([...array_keys(StudentLedgerService::PRESETS), 'custom_unclassified'])],
             'package_id' => ['nullable', 'integer', 'exists:student_packages,id'],
             'payment_method' => ['nullable', 'string', 'max:80'],
             'package_status' => ['nullable', Rule::in(['active', 'expired', 'completed', 'cancelled'])],
@@ -32,7 +34,7 @@ class CashierReportService
 
     public function headers(): array
     {
-        return ['Date', 'Student Name', 'Student Email', 'Transaction Type', 'Package Name', 'Amount', 'Currency', 'Credit Change', 'Payment Method', 'Internal Reference', 'Original Payment Reference', 'External Reference', 'Business Timezone'];
+        return ['Date', 'Student Name', 'Student Email', 'Transaction Type', 'Package Name', 'Amount', 'Currency', 'Credit Change', 'Payment Method', 'Internal Reference', 'Original Payment Reference', 'External Reference', 'Business Timezone', 'Offering Key', 'Purchase ID', 'Entitlement Type', 'Allocation ID'];
     }
 
     public function rows(array $filters): \Generator
@@ -46,7 +48,10 @@ class CashierReportService
             if (! empty($filters['transaction_type']) && $filters['transaction_type'] !== $type) {
                 continue;
             }
-            $query = $model::query()->with(['student', 'package']);
+            $query = $model::query()->with(['student', 'package.entitlements.type', 'package.ledgerEntries']);
+            if ($type === 'credit') {
+                $query->with('type');
+            }
             if ($type === 'refund') {
                 $query->with('payment');
             }
@@ -76,6 +81,9 @@ class CashierReportService
                     $type === 'refund' ? 'PAY-'.$record->payment_record_id : '',
                     $type === 'payment' ? $record->transaction_reference ?? '' : ($type === 'refund' ? $record->payment->transaction_reference ?? '' : ''),
                     $this->timezones->getBusinessTimezone(),
+                    $record->package->offering_key ?? 'legacy_unclassified', $record->student_package_id,
+                    $type === 'credit' ? ($record->getRelation('type') instanceof EntitlementType ? $record->getRelation('type')->code : 'legacy_unclassified') : app(EntitlementService::class)->balanceText($record->package),
+                    $type === 'credit' ? ($record->student_package_entitlement_id ?? '') : $record->package->entitlements->pluck('id')->implode('; '),
                 ];
             }
         }
@@ -83,6 +91,11 @@ class CashierReportService
 
     private function apply(Builder $query, string $dateColumn, string $type, array $filters): void
     {
+        if (! empty($filters['offering_key'])) {
+            $query->whereHas('package', function (Builder $packages) use ($filters): void {
+                $filters['offering_key'] === 'custom_unclassified' ? $packages->where(fn (Builder $q) => $q->whereNull('offering_key')->orWhere('offering_key', 'custom')) : $packages->where('offering_key', $filters['offering_key']);
+            });
+        }
         foreach (['student_id' => 'student_id', 'package_id' => 'student_package_id'] as $filter => $column) {
             if (! empty($filters[$filter])) {
                 $query->where($column, $filters[$filter]);

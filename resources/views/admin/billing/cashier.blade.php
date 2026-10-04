@@ -9,6 +9,7 @@
     applyDiagnosticCredit: {{ $diagnosticEligibility && $diagnosticEligibility['eligible'] ? 'true' : 'false' }},
     selectedPreset: null,
     packageName: '',
+    entitlementCode: '',
     sessionCount: 1,
     originalPrice: '0.00',
     discountAmount: '0.00',
@@ -51,6 +52,7 @@
     selectPreset(preset) {
         this.selectedPreset = preset.key;
         this.packageName = preset.name;
+        this.entitlementCode = preset.entitlement_code;
         this.sessionCount = preset.sessions;
         this.originalPrice = preset.price;
         this.validityDays = preset.validity_days;
@@ -108,11 +110,12 @@
     </div>
 
     <x-report-filters :filters="$filters" :action="route('admin.billing.cashier')" export-route="admin.billing.export" :fields="[
-        'student_id'=>['Student',$studentOptions], 'date_from'=>['Date from','date'], 'date_to'=>['Date through','date'], 'transaction_type'=>['Transaction type',['payment'=>'Payment','refund'=>'Refund','credit'=>'Courtesy credit / adjustment']], 'package_id'=>['Package',$packageOptions], 'payment_method'=>['Payment method',$methodOptions], 'package_status'=>['Package status',['active'=>'Active','expired'=>'Expired','completed'=>'Completed','cancelled'=>'Cancelled']]
+        'student_id'=>['Student',$studentOptions], 'date_from'=>['Date from','date'], 'date_to'=>['Date through','date'], 'transaction_type'=>['Transaction type',['payment'=>'Payment','refund'=>'Refund','credit'=>'Courtesy credit / adjustment']], 'offering_key'=>['Offering',$packageOptions], 'payment_method'=>['Payment method',$methodOptions], 'package_status'=>['Package status',['active'=>'Active','expired'=>'Expired','completed'=>'Completed','cancelled'=>'Cancelled']]
     ]" />
     <section class="rounded-2xl border border-slate-200 bg-white p-5"><h2 class="text-xl font-semibold">Filtered Transactions</h2><p class="mt-1 text-sm text-slate-500">{{ $businessTz }} · First 100 matching transactions. Exports include every matching row.</p>
         <div class="mt-4 overflow-x-auto"><table class="min-w-[70rem] w-full text-left text-xs"><thead><tr>@foreach($transactionHeaders as $header)<th class="border-b border-slate-200 p-3">{{ $header }}</th>@endforeach</tr></thead><tbody>@forelse($transactionRows as $row)<tr>@foreach($row as $value)<td class="border-b border-slate-100 p-3">{{ $value }}</td>@endforeach</tr>@empty<tr><td colspan="13" class="p-6 text-slate-500">No transactions match these filters.</td></tr>@endforelse</tbody></table></div>
     </section>
+    <a href="{{ route('admin.session-types.index') }}" class="inline-flex min-h-11 items-center font-semibold text-amber-800">Configure lesson funding →</a>
     @if($selectedStudent)<x-credit-expiry-table :packages="$creditPackages" />@endif
 
     <!-- Student Selector & Search Filter -->
@@ -202,6 +205,7 @@
             <!-- Enrollment Form for Selected Student -->
             <form action="{{ route('admin.students.packages.store', ['student' => $selectedStudent->id]) }}" method="POST" class="pt-6 border-t border-slate-100 space-y-4">
                 @csrf
+                <label class="block text-sm">Entitlement type (custom purchases)<select name="entitlement_code" x-model="entitlementCode" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">Choose a type or preset</option>@foreach($entitlementTypes as $entitlement)<option value="{{ $entitlement->code }}">{{ $entitlement->label }}</option>@endforeach</select></label>
                 <input type="hidden" name="preset_key" :value="selectedPreset">
                 <input type="hidden" name="package_idempotency_key" :value="idempotencyKey">
 
@@ -314,10 +318,7 @@
                                     <div>Final Price: <span class="font-bold text-slate-800">${{ $pkg->final_price }}</span></div>
                                     @if(bccomp($pkg->overpaid, '0.00', 2) > 0)<div>Overpaid: <span class="font-bold text-amber-700">${{ $pkg->overpaid }}</span></div>@else
                                     <div>Remaining Due: <span class="font-bold {{ bccomp($pkg->remaining_balance, '0.00', 2) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">${{ $pkg->remaining_balance }}</span></div>@endif
-                                    <div>Allocated: <strong>{{ $pkg->credit_summary['allocated_credits'] }}</strong></div>
-                                    <div>Consumed: <strong>{{ $pkg->credit_summary['consumed_credits'] }}</strong></div>
-                                    <div>Courtesy / adjustments: <strong>{{ $pkg->credit_summary['courtesy_credits'] }}</strong></div>
-                                    <div>Available Credits: <span class="font-bold text-slate-800">{{ $pkg->available_credits }}</span></div>
+                                    <div class="col-span-full"><x-entitlement-balances :rows="$pkg->credit_summary['entitlements']" /></div>
                                 </div>
                             </div>
 
@@ -399,7 +400,7 @@
                             <details class="rounded-xl border border-slate-200 bg-white p-4">
                                 <summary class="cursor-pointer font-semibold text-slate-800">Credit ledger and courtesy history</summary>
                                 @forelse($pkg->ledgerEntries->sortByDesc('id') as $entry)
-                                    <div class="mt-3 border-t border-slate-100 pt-3 text-sm"><strong>{{ $entry->credit_change > 0 ? '+' : '' }}{{ $entry->credit_change }}</strong> · {{ str_replace('_', ' ', $entry->entry_type) }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($entry->created_at) }} · Staff #{{ $entry->created_by ?? 'System' }}<p class="mt-1 text-slate-500">{{ $entry->description }}</p></div>
+                                    <div class="mt-3 border-t border-slate-100 pt-3 text-sm"><strong>{{ $entry->credit_change > 0 ? '+' : '' }}{{ $entry->credit_change }}</strong> {{ $entry->type?->label ?? 'Unclassified historical units' }} · {{ str_replace('_', ' ', $entry->entry_type) }} · {{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($entry->created_at) }} · Staff #{{ $entry->created_by ?? 'System' }}<p class="mt-1 text-slate-500">{{ $entry->description }}</p></div>
                                 @empty <p class="mt-3 text-slate-500">No credit entries.</p> @endforelse
                             </details>
                             <div x-show="refundPackageId === {{ $pkg->id }}" class="p-4 bg-rose-50 rounded-xl border border-rose-200 space-y-3">
@@ -416,6 +417,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-[10px] uppercase font-bold text-rose-800 mb-1">Forfeit Unused Credits</label>
+                                        <x-entitlement-allocation-select :package="$pkg" :required="false" />
                                         <input type="number" name="forfeit_credits" x-model="forfeitCredits" min="0" max="50"
                                                class="w-full px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs font-mono focus:outline-none">
                                     </div>
@@ -436,6 +438,7 @@
                                 <div class="text-xs font-bold text-amber-900">Grant Courtesy or Makeup Credit</div>
                                 <form action="{{ route('admin.students.credits.adjust', ['student' => $selectedStudent->id, 'package' => $pkg->id]) }}" method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                                     @csrf
+                                    <x-entitlement-allocation-select :package="$pkg" />
                                     <input type="hidden" name="credit_idempotency_key_{{ $pkg->id }}" :value="courtesyIdempotency">
                                     <div>
                                         <label class="block text-[10px] uppercase font-bold text-amber-800 mb-1">Credit Change</label>

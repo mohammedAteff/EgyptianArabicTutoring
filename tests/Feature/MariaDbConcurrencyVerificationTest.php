@@ -18,6 +18,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Notifications\Models\TelegramDelivery;
+use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
@@ -29,7 +30,9 @@ use Database\Factories\TelegramBotFactory;
 use Database\Factories\TelegramDestinationFactory;
 use Database\Factories\TelegramRuleFactory;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use PragmaRX\Google2FA\Google2FA;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\HasPublishedShortForm;
 use Tests\TestCase;
@@ -69,9 +72,12 @@ class MariaDbConcurrencyVerificationTest extends TestCase
         $this->availabilityService = app(AvailabilityService::class);
         $this->bookingService = app(BookingService::class);
 
-        $this->sessionType = SessionType::firstOrCreate(
+        $this->sessionType = SessionType::updateOrCreate(
             ['slug' => 'conversational-arabic'],
             [
+                'funding_mode' => 'package',
+                'required_entitlement_type_id' => EntitlementType::query()->where('code', 'one_hour')->value('id'),
+                'required_entitlement_units' => 1,
                 'title' => 'Conversational Arabic',
                 'duration_minutes' => 60,
                 'price' => 40.00,
@@ -160,6 +166,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             DB::table('session_ledger_entries')->whereIn('student_id', $this->raceStudentIds)->delete();
             DB::table('payment_refunds')->whereIn('student_id', $this->raceStudentIds)->delete();
             DB::table('payment_records')->whereIn('student_id', $this->raceStudentIds)->delete();
+            DB::table('student_package_entitlements')->whereIn('student_id', $this->raceStudentIds)->delete();
             DB::table('student_packages')->whereIn('student_id', $this->raceStudentIds)->delete();
             DB::table('session_reschedules')->where('actor_type', 'student')->whereIn('actor_id', $this->raceStudentIds)->delete();
         }
@@ -357,7 +364,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             'USD',
             null,
             'concurrent-refund-package-'.Str::uuid(),
-        );
+            entitlementCode: 'one_hour');
         $firstPayment = $ledger->recordPayment($package, '100.00', 'concurrent-payment-a-'.Str::uuid(), null);
         $secondPayment = $ledger->recordPayment($package, '100.00', 'concurrent-payment-b-'.Str::uuid(), null);
 
@@ -422,7 +429,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             'USD',
             null,
             'lock-order-race-package-'.Str::uuid(),
-        );
+            entitlementCode: 'one_hour');
 
         $slotOwnerToken = Str::random(64);
         $slots = app(AvailabilityService::class)->getAvailableSlotsGroupedByDate(
@@ -553,7 +560,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             'USD',
             null,
             'contact-merge-race-package-'.Str::uuid(),
-        );
+            entitlementCode: 'one_hour');
 
         $slotOwnerToken = Str::random(64);
         $slots = $this->availabilityService->getAvailableSlotsGroupedByDate(
@@ -830,6 +837,71 @@ class MariaDbConcurrencyVerificationTest extends TestCase
         sort($codes);
         $this->assertSame([0, 2], $codes);
         $this->assertSame(1, Administrator::whereIn('id', [$first->id, $second->id])->whereNull('suspended_at')->count());
+    }
+
+    public function test_two_parallel_bookings_competing_for_last_one_hour_entitlement_have_one_winner(): void
+    {
+        $this->assertLastEntitlementRace('one_hour');
+    }
+
+    public function test_two_parallel_uses_of_one_recovery_code_have_one_winner(): void
+    {
+        $administrator = AdministratorFactory::new()->create(['role' => 'super_admin']);
+        $this->raceAdministratorIds[] = $administrator->id;
+        $recoveryCode = Str::random(10).'-'.Str::random(10);
+        $administrator->forceFill([
+            'two_factor_secret' => app(Google2FA::class)->generateSecretKey(),
+            'two_factor_confirmed_at' => now('UTC'),
+            'two_factor_version' => (string) Str::uuid(),
+            'two_factor_recovery_codes' => [Hash::make($recoveryCode)],
+        ])->save();
+        $payload = ['action' => 'two_factor_recovery', 'administrator_id' => $administrator->id, 'recovery_code' => $recoveryCode];
+        try {
+            $results = $this->runConcurrentWorkers([$payload, $payload]);
+            $codes = array_column($results, 'exit_code');
+            sort($codes);
+            $this->assertSame([0, 2], $codes, json_encode($results, JSON_THROW_ON_ERROR));
+            $this->assertSame([], $administrator->fresh()->two_factor_recovery_codes);
+            $this->assertSame(1, DB::table('audit_logs')->where('administrator_id', $administrator->id)->where('action', 'two_factor_recovery_code_used')->count());
+        } finally {
+            DB::table('audit_logs')->where('administrator_id', $administrator->id)->delete();
+        }
+    }
+
+    public function test_two_parallel_bookings_competing_for_last_two_hour_entitlement_have_one_winner(): void
+    {
+        $this->assertLastEntitlementRace('two_hour');
+    }
+
+    private function assertLastEntitlementRace(string $code): void
+    {
+        $this->sessionType->update(['funding_mode' => 'package', 'required_entitlement_type_id' => EntitlementType::query()->where('code', $code)->value('id'), 'required_entitlement_units' => 1, 'duration_minutes' => $code === 'two_hour' ? 120 : 60]);
+        $student = Student::factory()->verified()->create();
+        $this->raceStudentIds[] = $student->id;
+        $this->raceContactEmails[] = $student->email_normalized;
+        $package = app(StudentLedgerService::class)->createPackage($student, 'Last '.$code.' entitlement race', 1, '40.00', '0.00', 'USD', null, 'last-right-'.Str::uuid(), entitlementCode: $code);
+        $payloads = [];
+        foreach ([25, 26] as $days) {
+            $date = CarbonImmutable::now('Africa/Cairo')->addDays($days)->startOfDay();
+            $this->raceCalendarDates[] = $date->toDateString();
+            $owner = Str::random(64);
+            $slots = $this->availabilityService->getAvailableSlotsGroupedByDate($this->sessionType, 'Africa/Cairo', $date, $date, $owner);
+            $slot = collect($slots)->flatten(1)->first();
+            $this->assertNotNull($slot);
+            $key = 'last-entitlement-race-'.Str::uuid();
+            $this->raceBookingKeys[] = $key;
+            $payloads[] = ['action' => 'book_student', 'student_id' => $student->id, 'slot_id' => app(SlotResolver::class)->issue($this->sessionType, $slot, 'Africa/Cairo', $owner), 'session_type_id' => $this->sessionType->id, 'customer_timezone' => 'Africa/Cairo', 'idempotency_key' => $key, 'slot_owner_token' => $owner];
+        }
+        $results = $this->runConcurrentWorkers($payloads);
+        $codes = array_column($results, 'exit_code');
+        sort($codes);
+        $this->assertSame([0, 2], $codes, json_encode($results, JSON_THROW_ON_ERROR));
+        $this->assertSame(1, Booking::query()->whereIn('idempotency_key', $this->raceBookingKeys)->count());
+        $debits = DB::table('session_ledger_entries')->where('student_package_id', $package->id)->where('entry_type', 'session_consumed')->get();
+        $this->assertCount(1, $debits);
+        $this->assertSame(-1, $debits->first()->credit_change);
+        $this->assertSame($package->entitlements->first()->id, $debits->first()->student_package_entitlement_id);
+        $this->assertSame(0, app(StudentLedgerService::class)->summary($package->fresh())['remaining_credits']);
     }
 
     private function runConcurrentWorkers(array $payloads): array

@@ -16,23 +16,15 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
-            <!-- Range Pills -->
-            <div class="inline-flex bg-slate-200/80 p-1 rounded-xl text-xs font-semibold text-slate-700">
-                <a href="{{ route('admin.analytics.sections', ['range' => 'today']) }}" class="px-3 py-1.5 rounded-lg {{ $range === 'today' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">Today</a>
-                <a href="{{ route('admin.analytics.sections', ['range' => '7d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '7d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">7 Days</a>
-                <a href="{{ route('admin.analytics.sections', ['range' => '30d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '30d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">30 Days</a>
-                <a href="{{ route('admin.analytics.sections', ['range' => 'month']) }}" class="px-3 py-1.5 rounded-lg {{ $range === 'month' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">This Month</a>
-                <a href="{{ route('admin.analytics.sections', ['range' => '90d']) }}" class="px-3 py-1.5 rounded-lg {{ $range === '90d' ? 'bg-white shadow-xs font-bold text-amber-700' : 'hover:text-slate-900' }}">90 Days</a>
-            </div>
 
             <!-- Dual-Format Export Buttons -->
             <div class="inline-flex items-center gap-1.5">
-                <a href="{{ route('admin.analytics.sections.export', ['range' => $range, 'format' => 'csv']) }}"
+                <a href="{{ route('admin.analytics.sections.export', array_merge($filters, ['format' => 'csv'])) }}"
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-xs transition-colors">
                     <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span>CSV</span>
                 </a>
-                <a href="{{ route('admin.analytics.sections.export', ['range' => $range, 'format' => 'xlsx']) }}"
+                <a href="{{ route('admin.analytics.sections.export', array_merge($filters, ['format' => 'xlsx'])) }}"
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-xs font-semibold text-emerald-800 shadow-xs transition-colors">
                     <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span>Excel (.xlsx)</span>
@@ -42,6 +34,7 @@
     </div>
 
     <!-- Section Attention Table -->
+<x-report-filters :filters="$filters" :fields="array_merge(app(\App\Domains\Reporting\Services\ReportPeriod::class)->fields(), ['section'=>['Section ID contains','search']])" :action="route('admin.analytics.sections')" export-route="admin.analytics.sections.export" />
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
         <div class="mb-6">
             <h2 class="text-base font-bold text-slate-900">Tracked Sections & Dwell Metrics</h2>

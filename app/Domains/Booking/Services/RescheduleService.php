@@ -12,9 +12,11 @@ use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SessionReschedule;
+use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -51,8 +53,13 @@ class RescheduleService
         ?string $customerTimezone = null,
         ?string $slotId = null,
         ?string $slotOwnerToken = null,
+        ?int $newSessionTypeId = null,
     ): Booking {
         $startUtc = $this->timezoneService->toUtc($newStartUtc);
+        $targetType = $newSessionTypeId !== null ? SessionType::query()->whereKey($newSessionTypeId)->where('active', true)->firstOrFail() : $booking->sessionType;
+        if ($performedBy === 'student' && $newSessionTypeId !== null && $newSessionTypeId !== $booking->session_type_id) {
+            throw new BookingPolicyViolationException('Contact your tutor to change lesson type.');
+        }
         $nowUtc = CarbonImmutable::now('UTC');
 
         if ($startUtc <= $nowUtc) {
@@ -71,9 +78,9 @@ class RescheduleService
             $newEndUtc = $issuedSlot['slot_end_utc'];
         }
 
-        return $this->databaseCapability->transaction(function () use ($booking, $startUtc, $newEndUtc, $performedBy, $performedById, $reason, $idempotencyKey, $customerTimezone, $slotId, $slotOwnerToken) {
+        return $this->databaseCapability->transaction(function () use ($booking, $startUtc, $newEndUtc, $performedBy, $performedById, $reason, $idempotencyKey, $customerTimezone, $slotId, $slotOwnerToken, $targetType, $newSessionTypeId) {
             $candidateConfig = $this->availabilityService->resolveSlotConfiguration(
-                sessionType: $booking->sessionType,
+                sessionType: $targetType,
                 startUtc: $startUtc,
                 endUtc: $newEndUtc ? $this->timezoneService->toUtc($newEndUtc) : null
             );
@@ -108,6 +115,24 @@ class RescheduleService
                 throw new BookingPolicyViolationException('This booking is not available to the student.');
             }
 
+            $freshTarget = SessionType::query()->whereKey($targetType->id)->lockForUpdate()->firstOrFail();
+            if ($newSessionTypeId !== null && ! $freshTarget->active) {
+                throw new BookingPolicyViolationException('This lesson type is no longer available.');
+            }
+            if ($freshTarget->duration_minutes !== $targetType->duration_minutes) {
+                throw new SlotUnavailableException('Lesson configuration changed. Select the time again.');
+            }
+            $targetType = $freshTarget;
+
+            if ($newSessionTypeId !== null && $newSessionTypeId !== $lockedBooking->session_type_id && $lockedBooking->consumed_ledger_entry_id !== null) {
+                $required = app(EntitlementService::class)->requirement($targetType);
+                if ($required['type']->code !== $lockedBooking->entitlement_code || $required['units'] !== (int) $lockedBooking->entitlement_units) {
+                    throw new BookingPolicyViolationException('A lesson change requires the same entitlement type and units as the original debit.');
+                }
+            }
+            if ($newSessionTypeId !== null && $newSessionTypeId !== $lockedBooking->session_type_id && $lockedBooking->funding_mode === 'legacy') {
+                throw new BookingPolicyViolationException('Review historical funding before changing lesson type.');
+            }
             if ($performedBy === 'student' && $idempotencyKey) {
                 $existing = SessionReschedule::where('idempotency_key', $idempotencyKey)->first();
                 if ($existing) {
@@ -156,7 +181,7 @@ class RescheduleService
 
             // 3. Authoritative slot validation excluding this booking
             $this->availabilityService->validateSlotForBooking(
-                sessionType: $lockedBooking->sessionType,
+                sessionType: $targetType,
                 startUtc: $startUtc,
                 endUtc: $endUtc,
                 excludeBookingId: $lockedBooking->id,
@@ -187,6 +212,7 @@ class RescheduleService
 
             // 6. Update booking
             $lockedBooking->update(array_merge($newSnapshot, [
+                'session_type_id' => $targetType->id,
                 'status' => 'confirmed',
                 'admin_reconfirmation_needed' => true,
             ]));
@@ -203,7 +229,7 @@ class RescheduleService
                     'old_timezone' => $oldTimezone,
                     'new_timezone' => $customerTimezone ?: $oldTimezone,
                     'idempotency_key' => $idempotencyKey ?: (string) Str::uuid(),
-                    'ip_address' => app()->runningInConsole() ? null : request()->ip(),
+                    'ip_address' => null,
                     'created_at' => now('UTC'),
                 ]);
             }

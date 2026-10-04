@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class FormsEngineTest extends TestCase
@@ -212,6 +213,23 @@ class FormsEngineTest extends TestCase
         $this->assertStringNotContainsString('private medical detail', $csv);
         $this->assertStringContainsString("'=HYPERLINK", $csv);
         $this->assertStringNotContainsString('transaction_reference', $csv);
+        $xlsx = $this->get(route('admin.forms.export', [$form, 'format' => 'xlsx']))->assertOk();
+        $file = $xlsx->baseResponse->getFile()->getPathname();
+        $book = IOFactory::load($file);
+        try {
+            $values = json_encode($book->getActiveSheet()->toArray(), JSON_THROW_ON_ERROR);
+            $this->assertStringNotContainsString('Staff-only response', $values);
+            $this->assertStringNotContainsString('private medical detail', $values);
+            $this->assertStringContainsString("'=HYPERLINK", $values);
+            $this->assertSame('s', $book->getActiveSheet()->getCell('A2')->getDataType());
+        } finally {
+            $book->disconnectWorksheets();
+            unlink($file);
+        }
+        $foreignForm = $this->publishedForm($admin, [['question_key' => 'other', 'label' => 'Other', 'question_type' => 'short_text']]);
+        foreach (['csv', 'xlsx'] as $format) {
+            $this->get(route('admin.forms.export', [$form, 'version_id' => $foreignForm->active_version_id, 'format' => $format]))->assertNotFound();
+        }
     }
 
     public function test_conditional_logic_rejects_cycles_and_depth_greater_than_three(): void

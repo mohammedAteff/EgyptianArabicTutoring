@@ -4,19 +4,27 @@ namespace App\Providers;
 
 use App\Domains\Administration\Models\StaffBin;
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Audit\Services\PrivacyDatabaseSessionHandler;
+use App\Domains\Audit\Services\TransientRateLimitKey;
+use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\LessonMaterial;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Policies\LessonMaterialPolicy;
+use App\Policies\LessonWorkspacePolicy;
 use App\Policies\StaffBinPolicy;
 use App\Policies\StudentBinPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -45,12 +53,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Session::extend('database', fn ($app) => new PrivacyDatabaseSessionHandler(
+            DB::connection(config('session.connection')), config('session.table'), (int) config('session.lifetime'), $app,
+        ));
         if ($this->app->environment('testing')) {
             @ini_set('memory_limit', '512M');
         }
 
         Gate::policy(StaffBin::class, StaffBinPolicy::class);
         Gate::policy(StudentBin::class, StudentBinPolicy::class);
+        Gate::policy(Booking::class, LessonWorkspacePolicy::class);
+        Gate::policy(LessonMaterial::class, LessonMaterialPolicy::class);
         class_exists(Student::class);
         app(TelegramBusinessEvents::class)->register();
 
@@ -75,6 +88,20 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $limits;
+        });
+
+        RateLimiter::for('staff-two-factor-challenge', function (Request $request): array {
+            return [
+                Limit::perMinute(5)->by(TransientRateLimitKey::make('staff-2fa-session', $request->session()->getId())),
+                Limit::perMinute(10)->by(TransientRateLimitKey::make('staff-2fa-account', (string) $request->session()->get('admin.two_factor_pending.id', 'none'))),
+                Limit::perMinute(30)->by(TransientRateLimitKey::make('staff-2fa-connection', (string) $request->ip())),
+            ];
+        });
+        RateLimiter::for('staff-two-factor-security', function (Request $request): array {
+            return [
+                Limit::perMinute(10)->by(TransientRateLimitKey::make('staff-2fa-settings', (string) $request->user('web')?->getAuthIdentifier())),
+                Limit::perMinute(30)->by(TransientRateLimitKey::make('staff-2fa-settings-connection', (string) $request->ip())),
+            ];
         });
 
         RateLimiter::for('student-form-save', function (Request $request) {

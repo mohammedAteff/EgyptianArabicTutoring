@@ -52,7 +52,7 @@ class BillingReconciliationService
 
         $negativeBalances = $this->checkNegativeBalances();
         $excessRefunds = $this->checkExcessRefunds();
-        $creditMismatches = $this->checkCreditMismatches();
+        $creditMismatches = array_merge($this->checkCreditMismatches(), $this->checkTypedEntitlements());
         $ownershipInconsistencies = $this->checkOwnershipInconsistencies();
         $unreconciledBookings = $this->checkUnreconciledBookings();
         $negativeCreditBalanceBookings = $this->checkNegativeCreditBalanceBookings();
@@ -81,6 +81,35 @@ class BillingReconciliationService
         ];
     }
 
+    /** @return list<array<string, mixed>> */
+    public function checkTypedEntitlements(): array
+    {
+        $issues = [];
+        foreach (StudentPackage::query()->with(['entitlements.type', 'ledgerEntries.booking', 'student'])->lazy(200) as $package) {
+            foreach (app(EntitlementService::class)->projection($package) as $row) {
+                if ($row['id'] === null) {
+                    continue;
+                }
+                $allocation = $package->entitlements->firstWhere('id', $row['id']);
+                if ($row['remaining'] < 0 || $row['allocated'] !== (int) $allocation->granted_quantity) {
+                    $issues[] = ['package_id' => $package->id, 'package_name' => $package->package_name, 'student_id' => $package->student_id, 'entitlement_code' => $row['code'], 'allocation_id' => $row['id'], 'issue' => 'Typed allocation grant or balance mismatch: '.$row['label']];
+                }
+            }
+            foreach ($package->ledgerEntries->where('entry_type', 'session_consumed') as $entry) {
+                if ($entry->student_package_entitlement_id === null) {
+                    continue;
+                }
+                $booking = $entry->booking;
+                $restored = $package->ledgerEntries->where('booking_id', $entry->booking_id)->where('entry_type', 'cancellation_restore')->first();
+                if (! $booking || (int) $booking->consumed_ledger_entry_id !== (int) $entry->id || (int) $booking->student_package_entitlement_id !== (int) $entry->student_package_entitlement_id || (int) $booking->entitlement_type_id !== (int) $entry->entitlement_type_id || (int) $booking->entitlement_units !== -$entry->credit_change || ($restored && ((int) $restored->student_package_entitlement_id !== (int) $entry->student_package_entitlement_id || $restored->credit_change !== -$entry->credit_change))) {
+                    $issues[] = ['package_id' => $package->id, 'package_name' => $package->package_name, 'student_id' => $package->student_id, 'booking_id' => $entry->booking_id, 'issue' => 'Typed booking debit/restoration provenance mismatch.'];
+                }
+            }
+        }
+
+        return $issues;
+    }
+
     /**
      * Check 1: Negative derived package balances (where net paid > final price).
      *
@@ -92,7 +121,7 @@ class BillingReconciliationService
 
         $packages = StudentPackage::query()
             ->with(['student', 'payments', 'refunds'])
-            ->cursor();
+            ->lazy(200);
 
         foreach ($packages as $pkg) {
             $grossPaid = '0.00';
@@ -138,13 +167,13 @@ class BillingReconciliationService
         $discrepancies = [];
 
         $payments = PaymentRecord::query()
+            ->select('payment_records.*')
+            ->selectSub(PaymentRefund::query()->selectRaw('COALESCE(SUM(amount_refunded), 0)')->whereColumn('payment_record_id', 'payment_records.id'), 'refund_total')
             ->with('student')
-            ->cursor();
+            ->lazy(200);
 
         foreach ($payments as $pmt) {
-            $totalRefunded = (string) (PaymentRefund::query()
-                ->where('payment_record_id', $pmt->id)
-                ->sum('amount_refunded') ?: '0.00');
+            $totalRefunded = (string) $pmt->getAttribute('refund_total');
 
             if (bccomp($totalRefunded, (string) $pmt->amount_paid, 2) > 0) {
                 $discrepancies[] = [
@@ -174,14 +203,13 @@ class BillingReconciliationService
         $discrepancies = [];
 
         $packages = StudentPackage::query()
+            ->select('student_packages.*')
+            ->selectSub(SessionLedgerEntry::query()->selectRaw('COALESCE(SUM(credit_change), 0)')->whereColumn('student_package_id', 'student_packages.id')->where('entry_type', 'package_grant'), 'grant_total')
             ->with('student')
-            ->cursor();
+            ->lazy(200);
 
         foreach ($packages as $pkg) {
-            $grantSum = (int) SessionLedgerEntry::query()
-                ->where('student_package_id', $pkg->id)
-                ->where('entry_type', 'package_grant')
-                ->sum('credit_change');
+            $grantSum = (int) $pkg->getAttribute('grant_total');
 
             if ($grantSum !== (int) $pkg->total_sessions_allocated) {
                 $discrepancies[] = [
@@ -223,7 +251,7 @@ class BillingReconciliationService
 
         foreach ($mismatchedPayments as $mp) {
             $discrepancies[] = [
-                'type' => 'PaymentRecord Mismatch',
+                'type' => 'PaymentRecord Mismatch', 'related_student_ids' => [$mp->payment_student_id, $mp->package_student_id],
                 'record_id' => $mp->payment_id,
                 'details' => "Payment #{$mp->payment_id} belongs to student #{$mp->payment_student_id} but package #{$mp->package_id} belongs to student #{$mp->package_student_id}.",
             ];
@@ -246,7 +274,7 @@ class BillingReconciliationService
 
         foreach ($mismatchedRefunds as $mr) {
             $discrepancies[] = [
-                'type' => 'PaymentRefund Mismatch',
+                'type' => 'PaymentRefund Mismatch', 'related_student_ids' => [$mr->refund_student_id, $mr->payment_student_id],
                 'record_id' => $mr->refund_id,
                 'details' => "Refund #{$mr->refund_id} student/package does not match payment #{$mr->payment_id}.",
             ];
@@ -266,7 +294,7 @@ class BillingReconciliationService
 
         foreach ($mismatchedLedger as $ml) {
             $discrepancies[] = [
-                'type' => 'SessionLedgerEntry Mismatch',
+                'type' => 'SessionLedgerEntry Mismatch', 'related_student_ids' => [$ml->entry_student_id, $ml->package_student_id],
                 'record_id' => $ml->entry_id,
                 'details' => "Ledger entry #{$ml->entry_id} student #{$ml->entry_student_id} does not match package #{$ml->package_id} student #{$ml->package_student_id}.",
             ];
@@ -288,23 +316,17 @@ class BillingReconciliationService
             ->where('status', 'completed')
             ->whereHas('events', fn ($query) => $query->where('event_type', 'created')->where('performed_by', 'student')
                 ->where('new_data->source', 'student_portal'))
-            ->cursor();
+            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('session_ledger_entries')->whereColumn('booking_id', 'bookings.id')->where('entry_type', 'session_consumed'))
+            ->lazy(200);
 
         foreach ($studentPortalBookings as $booking) {
-            $hasConsumedEntry = SessionLedgerEntry::query()
-                ->where('booking_id', $booking->id)
-                ->where('entry_type', 'session_consumed')
-                ->exists();
-
-            if (! $hasConsumedEntry) {
-                $discrepancies[] = [
-                    'booking_id' => $booking->id,
-                    'student_id' => $booking->student_id,
-                    'status' => $booking->status,
-                    'source' => $booking->source,
-                    'issue' => "Booking #{$booking->id} was created via student portal package linkage but lacks a session_consumed ledger entry.",
-                ];
-            }
+            $discrepancies[] = [
+                'booking_id' => $booking->id,
+                'student_id' => $booking->student_id,
+                'status' => $booking->status,
+                'source' => $booking->source,
+                'issue' => "Booking #{$booking->id} was created via student portal package linkage but lacks a session_consumed ledger entry.",
+            ];
         }
 
         return $discrepancies;
@@ -330,22 +352,16 @@ class BillingReconciliationService
             $studentIds = array_keys($studentsWithNegativeBalance);
             $bookings = Booking::query()
                 ->whereIn('student_id', $studentIds)
-                ->cursor();
+                ->whereExists(fn ($query) => $query->selectRaw('1')->from('session_ledger_entries')->whereColumn('booking_id', 'bookings.id')->whereNotNull('student_package_id'))
+                ->lazy(200);
 
             foreach ($bookings as $booking) {
-                $hasPackageLink = SessionLedgerEntry::query()
-                    ->where('booking_id', $booking->id)
-                    ->whereNotNull('student_package_id')
-                    ->exists();
-
-                if ($hasPackageLink) {
-                    $discrepancies[] = [
-                        'booking_id' => $booking->id,
-                        'student_id' => $booking->student_id,
-                        'derived_credit_balance' => (int) ($studentsWithNegativeBalance[$booking->student_id] ?? 0),
-                        'issue' => "Booking #{$booking->id} is linked to a package for student #{$booking->student_id} who has a negative derived credit balance ({$studentsWithNegativeBalance[$booking->student_id]}).",
-                    ];
-                }
+                $discrepancies[] = [
+                    'booking_id' => $booking->id,
+                    'student_id' => $booking->student_id,
+                    'derived_credit_balance' => (int) ($studentsWithNegativeBalance[$booking->student_id] ?? 0),
+                    'issue' => "Booking #{$booking->id} is linked to a package for student #{$booking->student_id} who has a negative derived credit balance ({$studentsWithNegativeBalance[$booking->student_id]}).",
+                ];
             }
         }
 

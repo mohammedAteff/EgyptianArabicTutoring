@@ -7,6 +7,7 @@ use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\MarketingTouch;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\Analytics\Services\SocialAnalyticsRollup;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Timezone\Services\TimezoneService;
@@ -251,11 +252,13 @@ class ReportService
         ];
     }
 
-    public function getBookingsReport(CarbonInterface $start, CarbonInterface $end, ?string $status = null): array
+    public function getBookingsReport(CarbonInterface $start, CarbonInterface $end, ?string $status = null, array $filters = []): array
     {
         $query = Booking::query()
             ->with(['contact', 'sessionType'])
-            ->whereBetween('start_at_utc', [$start, $end]);
+            ->whereBetween('start_at_utc', [$start, $end])
+            ->when($filters['source'] ?? null, fn ($q, $source) => $q->where('source', $source))
+            ->when($filters['campaign'] ?? null, fn ($q, $campaign) => $q->where('campaign', $campaign));
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
@@ -298,9 +301,11 @@ class ReportService
         ];
     }
 
-    public function getResourcesReport(CarbonInterface $start, CarbonInterface $end): array
+    public function getResourcesReport(CarbonInterface $start, CarbonInterface $end, array $filters = []): array
     {
         $resources = Resource::query()
+            ->when($filters['resource_id'] ?? null, fn ($q, $id) => $q->whereKey($id))
+            ->when($filters['category_id'] ?? null, fn ($q, $id) => $q->where('category_id', $id))
             ->withCount([
                 'requests' => fn ($q) => $q->whereBetween('created_at', [$start, $end]),
                 'downloads' => fn ($q) => $q->whereBetween('created_at', [$start, $end]),
@@ -331,56 +336,17 @@ class ReportService
         ];
     }
 
-    public function getSocialReport(CarbonInterface $start, CarbonInterface $end): array
+    public function getSocialReport(CarbonInterface $start, CarbonInterface $end, array $filters = []): array
     {
-        $socialEvents = [
-            'whatsapp_clicked',
-            'telegram_clicked',
-            'social_link_clicked',
-            'outbound_link_clicked',
-        ];
-
-        $dateExpr = $this->getBusinessDateExpression('created_at', $start, $end);
-
-        $platformExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.platform')), ''), CASE event_name WHEN 'whatsapp_clicked' THEN 'whatsapp' WHEN 'telegram_clicked' THEN 'telegram' WHEN 'social_link_clicked' THEN 'social channel' ELSE 'outbound link' END)";
-        $placementExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.placement')), ''), 'unknown')";
-        $languageExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.language')), ''), 'unknown')";
-        $countryExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.detected_country_code')), ''), 'ZZ')";
-        $query = $this->nonBotEventQuery()->whereBetween('created_at', [$start, $end])->whereIn('event_name', $socialEvents);
-        $rows = (clone $query)
-            ->select('event_name', 'page', 'utm_source', 'utm_medium', 'utm_campaign')
-            ->selectRaw("{$dateExpr} as report_date, LOWER({$platformExpr}) as platform, {$placementExpr} as placement, {$languageExpr} as language, {$countryExpr} as country")
-            ->selectRaw("COUNT(*) as clicks, COUNT(DISTINCT NULLIF(visitor_token, '')) as unique_visitors")
-            ->groupBy('event_name', 'page', 'utm_source', 'utm_medium', 'utm_campaign', 'report_date', 'platform', 'placement', 'language', 'country')
-            ->orderByDesc('report_date')->orderBy('platform')->toBase()->get()
-            ->map(function ($row): array {
-                $platform = match ($row->platform) {
-                    'whatsapp' => 'WhatsApp', 'youtube' => 'YouTube', 'tiktok' => 'TikTok', default => ucwords($row->platform),
-                };
-
-                return [
-                    'platform' => $platform, 'placement' => $row->placement,
-                    'event_name' => $row->event_name, 'page' => $row->page ?: '/',
-                    'date' => $row->report_date, 'clicks' => (int) $row->clicks,
-                    'unique_visitors' => (int) $row->unique_visitors,
-                    'language' => $row->language, 'country' => $row->country,
-                    'source' => $row->utm_source, 'medium' => $row->utm_medium, 'campaign' => $row->utm_campaign,
-                ];
-            });
-
-        return [
-            'rows' => $rows, 'total_clicks' => $rows->sum('clicks'),
-            'unique_visitors' => (clone $query)->where('visitor_token', '!=', '')->distinct()->count('visitor_token'),
-            'platform_totals' => $rows->groupBy('platform')->map(fn ($group): int => $group->sum('clicks')),
-            'whatsapp_clicks' => $rows->where('platform', 'WhatsApp')->sum('clicks'),
-            'telegram_clicks' => $rows->where('platform', 'Telegram')->sum('clicks'),
-        ];
+        return app(SocialAnalyticsRollup::class)->report($start, $end, $filters);
     }
 
-    public function getEventsReport(CarbonInterface $start, CarbonInterface $end, ?string $eventName = null): array
+    public function getEventsReport(CarbonInterface $start, CarbonInterface $end, ?string $eventName = null, array $filters = []): array
     {
         $query = $this->nonBotEventQuery()
-            ->whereBetween('created_at', [$start, $end]);
+            ->whereBetween('created_at', [$start, $end])
+            ->when($filters['page_url'] ?? null, fn ($q, $page) => $q->where('page', $page))
+            ->when($filters['source'] ?? null, fn ($q, $source) => $q->where('utm_source', $source));
 
         if ($eventName && $eventName !== 'all') {
             $query->where('event_name', $eventName);
@@ -415,12 +381,15 @@ class ReportService
      * and counts subsequent attributed bookings for those same visitors within the 30-day attribution window.
      * Booking-date creation activity in the period is labeled separately.
      */
-    public function getCampaignContentReport(CarbonInterface $start, CarbonInterface $end, ?string $campaign = null): array
+    public function getCampaignContentReport(CarbonInterface $start, CarbonInterface $end, ?string $campaign = null, array $filters = []): array
     {
         // 1. Discover visitor campaign touches in [$start, $end] via AnalyticsEvent
         $eventsQuery = $this->nonBotEventQuery()
             ->whereBetween('created_at', [$start, $end])
             ->whereNotNull('utm_campaign');
+
+        $eventsQuery->when($filters['source'] ?? null, fn ($q, $source) => $q->where('utm_source', $source))
+            ->when($filters['content'] ?? null, fn ($q, $content) => $q->where('utm_content', $content));
 
         if ($campaign) {
             $eventsQuery->where('utm_campaign', $campaign);
@@ -443,6 +412,9 @@ class ReportService
                 $query->where('is_bot', false);
             })
             ->whereNotNull('utm_campaign');
+
+        $touchesQuery->when($filters['source'] ?? null, fn ($q, $source) => $q->where('utm_source', $source))
+            ->when($filters['content'] ?? null, fn ($q, $content) => $q->where('utm_content', $content));
 
         if ($campaign) {
             $touchesQuery->where('utm_campaign', $campaign);
@@ -507,6 +479,9 @@ class ReportService
         $bookingsInPeriodQuery = $this->nonBotBookingQuery()
             ->whereBetween('created_at', [$start, $end])
             ->whereNotNull('campaign');
+
+        $bookingsInPeriodQuery->when($filters['source'] ?? null, fn ($q, $source) => $q->where('source', $source))
+            ->when($filters['content'] ?? null, fn ($q, $content) => $q->where('content', $content));
 
         if ($campaign) {
             $bookingsInPeriodQuery->where('campaign', $campaign);

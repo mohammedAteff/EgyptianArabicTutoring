@@ -192,6 +192,7 @@ class BookingController extends Controller
             'title' => "Booking #{$booking->id} — ".($booking->contact->name ?? 'Student'),
             'booking' => $booking,
             'businessTz' => $businessTz,
+            'sessionTypes' => SessionType::query()->where('active', true)->with('requiredEntitlementType')->get(),
         ]);
     }
 
@@ -311,6 +312,7 @@ class BookingController extends Controller
     public function reschedule(Request $request, Booking $booking): RedirectResponse
     {
         $validated = $request->validate([
+            'session_type_id' => ['nullable', 'integer', 'exists:session_types,id'],
             'new_date' => ['required', 'date_format:Y-m-d'],
             'new_time' => ['required', 'date_format:H:i'],
             'reason' => ['nullable', 'string', 'max:255'],
@@ -322,7 +324,7 @@ class BookingController extends Controller
             $newStartUtc = $this->timezoneService->toUtc($dateTimeString, $businessTz);
 
             $slotConfig = $this->availabilityService->resolveSlotConfiguration(
-                sessionType: $booking->sessionType,
+                sessionType: isset($validated['session_type_id']) ? SessionType::findOrFail($validated['session_type_id']) : $booking->sessionType,
                 startUtc: $newStartUtc,
                 endUtc: null
             );
@@ -334,6 +336,7 @@ class BookingController extends Controller
                 newEndUtc: $newEndUtc,
                 performedBy: 'admin',
                 performedById: Auth::id(),
+                newSessionTypeId: isset($validated['session_type_id']) ? (int) $validated['session_type_id'] : null,
                 reason: $validated['reason'] ?? 'Rescheduled by tutor'
             );
 
