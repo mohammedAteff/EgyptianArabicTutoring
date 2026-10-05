@@ -2,7 +2,7 @@
 
 ## Stage
 
-Stage 1 — Admin Shell, Communication, Analytics UX & Public Polish is complete and pushed (`c61e35a`). Stage 2 — Student Portal, Lesson Workspace & Teaching Experience implementation, required verification and browser QA are complete; normal push evidence is recorded below. Stages 3 Staff Operations, 4 Scheduling/Financial Lifecycle/Data Quality and 5 Development/Launch Data Management remain unstarted. The original Stage 1 evidence is retained below, followed by Stage 2.
+Stage 1 — Admin Shell, Communication, Analytics UX & Public Polish is complete and pushed (`c61e35a`). Stage 2 — Student Portal, Lesson Workspace & Teaching Experience is complete and its implementation is pushed (`b5d09a4`); required verification and browser QA passed. Ready for Stage 3. Stages 3 Staff Operations, 4 Scheduling/Financial Lifecycle/Data Quality and 5 Development/Launch Data Management remain unstarted. The original Stage 1 evidence is retained below, followed by Stage 2.
 
 ## Feature / Existing foundation reused / Files and classes touched
 
@@ -82,4 +82,4 @@ Focused Stage 2 tests: 44 passed / 273 assertions; existing reschedule focus: 6 
 
 Existing static debt, Assistant dashboard landing mismatch and the separate admin dashboard student-time line are deferred to the appropriate later audit. Notifications synchronize current eligible events when a student visits; no instant/background notification infrastructure added. No automatic seed data, dependency changes, public feedback publication, hosting, scheduler/workers or Telegram inbound work. Stages 3–5 remain future dependencies, not implemented work.
 
-Git main normal push is authorized after all gates; final response records the pushed SHA/remote confirmation. Existing unrelated untracked user documents are excluded. One owner-authorized final outbound Telegram status resolution follows the push through the existing service. Local preflight: zero enabled verified destinations, category `verified_destination_unavailable`; no tokens/destination identifiers/configuration changes are stored here.
+Implementation/report commit `b5d09a4` was pushed normally to main after all gates; this checkpoint records its push evidence, and the final response records the final pushed HEAD/remote confirmation. Existing unrelated untracked user documents are excluded. One owner-authorized final outbound Telegram status resolution follows the final push through the existing service, with a safe receipt outside Git referenced by the stage report. Local preflight: zero enabled verified destinations, category `verified_destination_unavailable`; no tokens/destination identifiers/configuration changes are stored here. Stage 2 is complete; no deployment or future-stage work performed.
