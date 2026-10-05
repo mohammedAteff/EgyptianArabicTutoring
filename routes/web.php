@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\MaintenanceAnalyticsController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\MeetingLinkController;
 use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\Admin\OperationsController;
 use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\PaymentMethodController;
 use App\Http\Controllers\Admin\PromotionController;
@@ -23,8 +24,11 @@ use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SessionTypeController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StaffBinController;
+use App\Http\Controllers\Admin\StaffSavedViewController;
+use App\Http\Controllers\Admin\StaffTaskController;
 use App\Http\Controllers\Admin\StudentBillingController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\StudentOperationalAlertController;
 use App\Http\Controllers\Admin\StudentTeachingController;
 use App\Http\Controllers\Admin\SystemHealthController;
 use App\Http\Controllers\Admin\TelegramController;
@@ -242,6 +246,19 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     |--------------------------------------------------------------------------
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
+        Route::middleware('role:super_admin,admin,assistant')->group(function (): void {
+            Route::get('/today', [OperationsController::class, 'index'])->name('operations.index');
+            Route::get('/tasks', [StaffTaskController::class, 'index'])->name('tasks.index');
+            Route::post('/tasks', [StaffTaskController::class, 'store'])->name('tasks.store');
+            Route::patch('/tasks/{task}', [StaffTaskController::class, 'update'])->whereNumber('task')->name('tasks.update');
+            Route::post('/saved-views', [StaffSavedViewController::class, 'store'])->name('saved-views.store');
+            Route::get('/saved-views/{savedView}', [StaffSavedViewController::class, 'apply'])->whereNumber('savedView')->name('saved-views.apply');
+            Route::delete('/saved-views/{savedView}', [StaffSavedViewController::class, 'destroy'])->whereNumber('savedView')->name('saved-views.destroy');
+            Route::patch('/staff-bins/{bin}/shared-pin', [StaffBinController::class, 'sharedPin'])->name('staff-bins.shared-pin');
+            Route::patch('/staff-bins/{bin}/personal', [StaffBinController::class, 'personalize'])->name('staff-bins.personal');
+            Route::post('/students/{student}/alerts', [StudentOperationalAlertController::class, 'store'])->name('student-alerts.store');
+            Route::patch('/students/{student}/alerts/{alert}', [StudentOperationalAlertController::class, 'update'])->name('student-alerts.update');
+        });
         Route::prefix('security')->name('security.')->middleware('role:super_admin')->group(function (): void {
             Route::get('/', [TwoFactorSecurityController::class, 'show'])->name('show');
             Route::middleware('throttle:staff-two-factor-security')->group(function (): void {

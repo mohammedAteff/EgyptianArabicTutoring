@@ -21,7 +21,7 @@ class AuthController extends Controller
     public function showLogin(): View|RedirectResponse
     {
         if (Auth::guard('web')->check()) {
-            return redirect()->route('admin.dashboard');
+            return redirect()->route(Auth::guard('web')->user()?->isAssistant() ? 'admin.operations.index' : 'admin.dashboard');
         }
 
         return view('admin.auth.login', [

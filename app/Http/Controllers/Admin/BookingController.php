@@ -11,6 +11,7 @@ use App\Domains\Booking\Services\BookingService;
 use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Services\ContactService;
+use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -366,13 +367,17 @@ class BookingController extends Controller
         }
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
         $sessionTypes = SessionType::where('active', true)->orderBy('title')->get();
         $businessTz = $this->timezoneService->getBusinessTimezone();
 
+        $filters = $request->validate(['student_id' => ['nullable', 'integer', 'min:1']]);
+        $selectedStudent = empty($filters['student_id']) ? null : Student::query()->where('identity_status', '!=', 'merged')->findOrFail($filters['student_id']);
+
         return view('admin.bookings.create', [
             'title' => 'Create Student Booking',
+            'selectedStudent' => $selectedStudent,
             'sessionTypes' => $sessionTypes,
             'businessTz' => $businessTz,
         ]);

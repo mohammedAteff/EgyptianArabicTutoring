@@ -304,7 +304,7 @@ class AdministratorTwoFactorTest extends TestCase
     public function test_password_only_login_remains_available_when_two_factor_is_disabled(string $role): void
     {
         $administrator = $this->administrator($role);
-        $this->post(route('admin.login.submit'), ['email' => $administrator->email, 'password' => 'Password123!', 'remember' => '1'])->assertRedirect(route('admin.dashboard'));
+        $this->post(route('admin.login.submit'), ['email' => $administrator->email, 'password' => 'Password123!', 'remember' => '1'])->assertRedirect(route($role === 'assistant' ? 'admin.operations.index' : 'admin.dashboard'));
         $this->assertAuthenticatedAs($administrator, 'web');
         $this->assertNull(session('admin.two_factor_pending'));
         $this->assertNull(session('admin.two_factor_verified'));

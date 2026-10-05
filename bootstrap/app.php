@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureNotUnderMaintenance;
 use App\Http\Middleware\EnsureStudentAuthenticated;
 use App\Http\Middleware\NormalizeTrailingSlash;
 use App\Http\Middleware\SetRequestLocale;
+use App\Http\Middleware\TrackStaffRecentView;
 use App\Http\Middleware\TrackVisitorSession;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -47,6 +48,7 @@ return Application::configure(basePath: dirname(__DIR__))
             NormalizeTrailingSlash::class,
             SetRequestLocale::class,
             EnsureAdministratorSecondFactor::class,
+            TrackStaffRecentView::class,
             TrackVisitorSession::class,
             EnsureNotUnderMaintenance::class,
         ]);

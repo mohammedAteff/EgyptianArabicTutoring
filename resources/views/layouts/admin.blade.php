@@ -56,7 +56,8 @@
 </head>
 <body class="h-full font-sans antialiased bg-slate-100" 
       x-data="adminMobileNav()" 
-      @keydown.window="handleKeydown($event)">
+      @keydown.window="handleKeydown($event)"
+      @staff-quick-actions-open.window="if (mobileSidebarOpen) closeSidebar()">
 
     <!-- Mobile Sidebar Backdrop (Section 32) -->
     <div id="admin-sidebar-backdrop"
@@ -84,7 +85,7 @@
             
             <!-- Brand / Logo -->
             <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
-                <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3">
+                <a href="{{ route(auth('web')->user()?->isAssistant() ? 'admin.operations.index' : 'admin.dashboard') }}" class="flex items-center gap-3">
                     <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-bold font-serif shadow-md">
                         <span aria-hidden="true">A</span>
                     </div>
@@ -132,6 +133,8 @@
                             @endif
                         </a>
                 @if(in_array(auth('web')->user()?->role, ['super_admin','admin','assistant'],true))
+                <a href="{{ route('admin.operations.index') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.operations.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}">Today & Operations</a>
+                <a href="{{ route('admin.tasks.index') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.tasks.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}">Staff Tasks</a>
                 <a href="{{ route('admin.staff-bins.index') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.staff-bins.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.6" d="M5 3h14v18H5zM8 7h8M8 11h8M8 15h5"/></svg>Staff Notes</a>
                 @endif
                     </div>
@@ -146,6 +149,7 @@
                                 <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                 Student Records
                             </a>
+                            @if(auth('web')->user()?->isAdmin())
                             <a href="{{ route('admin.billing.cashier') }}"
                                class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.billing.cashier') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                                 <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
@@ -156,6 +160,7 @@
                                 <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 Billing Reconcile
                             </a>
+                            @endif
                         @endif
                         <a href="{{ route('admin.bookings.index') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.bookings.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
@@ -381,7 +386,7 @@
                         <svg aria-hidden="true" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path :d="desktopCollapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'"/></svg>
                     </button>
 
-                    <form action="{{ route('admin.search') }}" method="GET" class="min-w-0 w-full">
+                    <form action="{{ route(auth('web')->user()?->isAssistant() ? 'admin.students.index' : 'admin.search') }}" method="GET" class="hidden min-w-0 w-full sm:block">
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -394,6 +399,7 @@
 
                 <!-- Right: Cairo Live Clock, Notification Bell & Public Website Link -->
                 <div class="flex items-center gap-2 sm:gap-4 text-sm font-medium">
+                    <x-staff-quick-actions />
                     <div class="hidden xl:flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-full text-xs font-semibold">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay(app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone(), now('UTC')); @endphp

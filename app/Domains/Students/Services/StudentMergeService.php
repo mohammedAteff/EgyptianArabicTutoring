@@ -119,6 +119,8 @@ class StudentMergeService
                 'teaching_tags',
                 'lesson_feedback',
                 'student_notifications',
+                'staff_tasks',
+                'student_operational_alerts',
             ] as $table) {
                 $changes = ['student_id' => $primaryId];
                 if (in_array($table, ['payment_records', 'payment_refunds', 'session_ledger_entries'], true)) {

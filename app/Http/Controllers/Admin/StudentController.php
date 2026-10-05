@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Administration\Services\StaffSavedViewService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\MeetingProvider;
@@ -12,6 +13,7 @@ use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentEmail;
+use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentMergeService;
@@ -33,12 +35,12 @@ use Throwable;
 
 class StudentController extends Controller
 {
-    public function index(Request $request, StudentRecordsQuery $records): View
+    public function index(Request $request, StudentRecordsQuery $records, StaffSavedViewService $views): View
     {
         $filters = $records->filters($request);
         $students = $records->query($filters)->paginate(25)->withQueryString();
 
-        return view('admin.students.index', ['students' => $students, 'search' => $filters['q'] ?? '', 'filters' => $filters, 'totalStudents' => Student::tutoringRoster()->count()]);
+        return view('admin.students.index', ['students' => $students, 'search' => $filters['q'] ?? '', 'filters' => $filters, 'savedViews' => $views->forSection($request->user('web'), 'students'), 'totalStudents' => Student::tutoringRoster()->count()]);
     }
 
     public function export(Request $request, StudentRecordsQuery $records, ExportService $exports, TimezoneService $timezones): StreamedResponse|BinaryFileResponse
@@ -93,6 +95,7 @@ class StudentController extends Controller
         }
 
         return view('admin.students.show', [
+            'operationalAlerts' => StudentOperationalAlert::query()->where('student_id', $studentRecord->id)->with('author')->orderByRaw("status = 'active' desc")->orderByDesc('updated_at')->get(),
             'student' => $studentRecord,
             'bookings' => $bookings,
             'formSubmissions' => $formSubmissions,

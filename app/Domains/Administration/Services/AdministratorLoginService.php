@@ -48,13 +48,13 @@ class AdministratorLoginService
 
     private function safeDestination(Request $request): string
     {
-        $fallback = route('admin.dashboard');
+        $fallback = route($request->user('web')?->isAssistant() ? 'admin.operations.index' : 'admin.dashboard');
         $intended = $request->session()->pull('url.intended');
         if (! is_string($intended) || preg_match('/[\x00-\x20\\\\]/', $intended)) {
             return $fallback;
         }
         $parts = parse_url($intended);
-        $base = parse_url($fallback);
+        $base = parse_url(route('admin.dashboard'));
         if ($parts === false || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
             || (isset($parts['host']) && (strtolower($parts['host']) !== strtolower($base['host']) || ($parts['scheme'] ?? '') !== $base['scheme'] || ($parts['port'] ?? null) !== ($base['port'] ?? null)))
             || (! isset($parts['host']) && (! str_starts_with($intended, '/') || str_starts_with($intended, '//')))) {
@@ -62,6 +62,9 @@ class AdministratorLoginService
         }
         $path = rawurldecode($parts['path'] ?? '');
         $prefix = rtrim($base['path'], '/');
+        if ($request->user('web')?->isAssistant() && in_array($path, [$prefix, $prefix.'/dashboard'], true)) {
+            return $fallback;
+        }
         if (($path !== $prefix && ! str_starts_with($path, $prefix.'/')) || str_contains($path, '..') || str_contains($path, '//') || preg_match('/[\x00-\x20\\\\%]/', $path)
             || in_array($path, [$prefix.'/login', $prefix.'/logout', $prefix.'/two-factor-challenge'], true)) {
             return $fallback;

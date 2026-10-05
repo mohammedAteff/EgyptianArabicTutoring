@@ -1,6 +1,8 @@
 @extends('layouts.admin')
 
 @section('content')
+<x-student-quick-actions :student="$student" />
+<x-student-operational-alerts :student="$student" :alerts="$operationalAlerts" />
 @if(auth('web')->user()?->isAdmin())
 <form method="POST" action="{{ route('admin.students.meeting-preference', $student->id) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
     @csrf

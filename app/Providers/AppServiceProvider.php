@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domains\Administration\Models\StaffBin;
+use App\Domains\Administration\Models\StaffTask;
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Audit\Services\PrivacyDatabaseSessionHandler;
 use App\Domains\Audit\Services\TransientRateLimitKey;
@@ -12,11 +13,14 @@ use App\Domains\CMS\Services\AnnouncementService;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
+use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Policies\LessonMaterialPolicy;
 use App\Policies\LessonWorkspacePolicy;
 use App\Policies\StaffBinPolicy;
+use App\Policies\StaffTaskPolicy;
 use App\Policies\StudentBinPolicy;
+use App\Policies\StudentOperationalAlertPolicy;
 use App\Policies\StudentTeachingPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -67,6 +71,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Gate::policy(StaffBin::class, StaffBinPolicy::class);
+        Gate::policy(StaffTask::class, StaffTaskPolicy::class);
+        Gate::policy(StudentOperationalAlert::class, StudentOperationalAlertPolicy::class);
         Gate::policy(StudentBin::class, StudentBinPolicy::class);
         Gate::policy(Booking::class, LessonWorkspacePolicy::class);
         Gate::policy(LessonMaterial::class, LessonMaterialPolicy::class);

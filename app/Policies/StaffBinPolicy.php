@@ -26,4 +26,14 @@ class StaffBinPolicy
     {
         return $user->isSuperAdmin();
     }
+
+    public function sharedPin(Administrator $user, StaffBin $bin): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    public function personalize(Administrator $user, StaffBin $bin): bool
+    {
+        return $this->viewAny($user);
+    }
 }

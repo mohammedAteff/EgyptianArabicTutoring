@@ -2,7 +2,7 @@
 
 ## Stage
 
-Stage 1 — Admin Shell, Communication, Analytics UX & Public Polish is complete and pushed (`c61e35a`). Stage 2 — Student Portal, Lesson Workspace & Teaching Experience is complete and its implementation is pushed (`b5d09a4`); required verification and browser QA passed. Ready for Stage 3. Stages 3 Staff Operations, 4 Scheduling/Financial Lifecycle/Data Quality and 5 Development/Launch Data Management remain unstarted. The original Stage 1 evidence is retained below, followed by Stage 2.
+Stage 1 — Admin Shell, Communication, Analytics UX & Public Polish is complete and pushed (`c61e35a`). Stage 2 — Student Portal, Lesson Workspace & Teaching Experience is complete and pushed (`b5d09a4`, completion checkpoint `7b4702c`). Stage 3 — Staff Operations, Notes & Daily Productivity implementation and required verification are complete; its Git completion checkpoint is recorded below after the normal push. Ready for Stage 4. Stages 4 Scheduling/Financial Lifecycle/Data Quality and 5 Development/Launch Data Management remain unstarted. Original Stage 1 and Stage 2 evidence is retained below, followed by Stage 3.
 
 ## Feature / Existing foundation reused / Files and classes touched
 
@@ -83,3 +83,36 @@ Focused Stage 2 tests: 44 passed / 273 assertions; existing reschedule focus: 6 
 Existing static debt, Assistant dashboard landing mismatch and the separate admin dashboard student-time line are deferred to the appropriate later audit. Notifications synchronize current eligible events when a student visits; no instant/background notification infrastructure added. No automatic seed data, dependency changes, public feedback publication, hosting, scheduler/workers or Telegram inbound work. Stages 3–5 remain future dependencies, not implemented work.
 
 Implementation/report commit `b5d09a4` was pushed normally to main after all gates; this checkpoint records its push evidence, and the final response records the final pushed HEAD/remote confirmation. Existing unrelated untracked user documents are excluded. One owner-authorized final outbound Telegram status resolution follows the final push through the existing service, with a safe receipt outside Git referenced by the stage report. Local preflight: zero enabled verified destinations, category `verified_destination_unavailable`; no tokens/destination identifiers/configuration changes are stored here. Stage 2 is complete; no deployment or future-stage work performed.
+
+## Stage 3 — Staff Operations, Notes & Daily Productivity
+
+Detailed evidence: [STAGE_3_STAFF_OPERATIONS_PRODUCTIVITY_REPORT.md](STAGE_3_STAFF_OPERATIONS_PRODUCTIVITY_REPORT.md).
+
+| Requirement | Status / foundation reused | Important files/classes | Authorization / verification |
+|---|---|---|---|
+| 1. Shared pins | Implemented on existing StaffBin; actor/time, prominent sorting and Today | StaffBin/Controller/Policy; staff-bins | Super Admin manages, authorized staff read; permission/actor/order tests and actual global-pin save |
+| 2. My Pin | Implemented as separate per-staff relational preference | StaffNotePreference; personalize action | Unique staff/note, authenticated ownership, independent flag update; personal isolation tests/browser |
+| 3. Favorites | Implemented; All/Shared Pins/My Pins/My Favorites retain existing owner/search/sort | StaffBinController; noteFilters; staff-bins | Favorite isolation/filter/tombstone tests; Assistant does not inherit Admin preferences |
+| 4. Student alerts | Implemented separately from Educational Notes; active/resolved/archived | StudentOperationalAlert/Controller/Policy; student alert component | Admin manages, Assistant reads; parent/escaping/lifecycle tests and browser resolve/reactivate |
+| 5. Staff Tasks | Implemented lightweight task lifecycle, assignee/date/priority/student/filter UI | StaffTask/Controller/Policy/Query; tasks/task-fields | Admin manages; Assistant self-create/assigned status only; forgery/ownership tests and assigned completion |
+| 6. Today | Implemented from authoritative bookings/tasks/alerts/notes/typed credit/payment/refund/form domains | OperationsReadModel/Controller; operations/card | Exact business-day counts, 12-row section bounds, no financial/form data for Assistant, query-growth regression |
+| 7. Student actions | Implemented using copy/notes/Cashier/manual booking/lesson/resource/contact paths | student-quick-actions; BookingController; student/booking/teaching views | Existing permissions retained; current-student prefill and mobile context navigation verified |
+| 8. Saved views | Implemented initially for Student Records, Staff Notes, Tasks | StaffSavedView/Service/Controller; saved-views component | Per staff, allowlisted filters, maximum 20/section, foreign 404, save/upsert/apply/remove tests |
+| 9. Recent entities | Implemented Student/Booking/Contact IDs and viewed_at only | StaffRecentView/Service; TrackStaffRecentView | Authorized successful GET only; unique personal entity, retain 30/display 12; current labels bulk resolved |
+| 10. Quick launcher | Implemented native dialog, destination filtering and existing student search | staff-quick-actions JS/component; admin layout | Role-aware links; Ctrl/Meta K, Tab/Escape and mobile menu focus tested |
+
+### Stage 3 schema, privacy and performance
+
+One additive local migration extends staff_bins and creates staff_note_preferences, student_operational_alerts, staff_tasks, staff_saved_views and staff_recent_views with the required unique keys, references and retrieval indexes. Existing administrator preferences were inspected first. No duplicate notification/task concept or new dependency was introduced. Merge transfers tasks/alerts; anonymization redacts/cancels/detaches operations and removes direct student recent history. Audit stores IDs/status, not task/alert bodies. No personal preference or staff alert content is exposed to students/public pages.
+
+Today renders exact full counts with 12-row section limits; Tasks paginate at 20; existing Student Records pagination is retained. Payments reuse net/refund-adjusted ledger summaries; low credit aggregates eligible packages by entitlement type and excludes expired/unclassified units. Eager-loaded query growth from one to twelve lesson/payment rows has the same query count. Existing notifications and reporting remain authoritative; no new worker, scheduler, rollup or search index.
+
+### Stage 3 verification, browser QA and remaining dependencies
+
+Full current-schema suite: **956 passed / 8,436 assertions**. Final Stage 3/presentation focus: **36 passed / 316 assertions**, including the late-added performance regression. Dedicated MariaDB concurrency: **16 passed / 76 assertions**. JavaScript: **18 passed**. Final production build, Blade cache, Pint and whitespace checks passed. PHPStan: **257→257**, exact diagnostic multiset unchanged with zero additions/removals; no baseline/ignore/level changes. Historical intermediate migration tests are excluded from the current-schema suite, and concurrency runs separately with its required configuration.
+
+Browser QA passed for Super Admin/Admin/Assistant, shared/private note preferences, saved favorite-view isolation, student alert lifecycle, assigned task completion and Today counts, financial/teaching role boundaries, student context booking prefill/resource navigation, recent Student/Booking entries, quick navigation/student search and keyboard focus. Desktop 1440×1000 and mobile 390×844 fit without horizontal overflow. Fresh final tabs showed no warnings/errors. Synthetic note/alert/completed task remain locally for review; no real booking/payment or production changes.
+
+Assistant's previously deferred login/dashboard mismatch is resolved by landing on its authorized Today page; main-dashboard authorization is retained. Existing static debt and the separate main-dashboard customer-time display remain deferred. Initial saved views cover three useful sections; Contacts/Cashier are optional future extensions. Stage 4 and Stage 5 remain unstarted, and no Hostinger operations, environment changes, owner security setup or inbound Telegram work was performed.
+
+The Stage 3 report/tracker are ready for the verified normal main push. One final owner-authorized outbound Telegram status resolution follows the final push through the existing service. Preflight: zero enabled verified destinations, safe category `verified_destination_unavailable`. Safe final delivery metadata is in the outside-Git receipt referenced by the Stage 3 report; no credentials or destination identifiers are recorded.

@@ -7,7 +7,7 @@
     @if($errors->any())<div role="alert" class="rounded-xl bg-red-50 p-4 text-red-800"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <p class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Share selected teaching records with the student. Tutor preparation stays staff-only. Educational Notes remain in their existing area.</p>
     @foreach(['homework' => 'Homework', 'plan' => 'Learning plans', 'preparation' => 'Tutor preparation · Staff only', 'resource' => 'Assigned resources', 'error' => 'Pronunciation and error log', 'tag' => 'Student and lesson tags'] as $kind => $heading)
-    <section aria-label="{{ $heading }}" class="space-y-3">
+    <section id="teaching-{{ $kind }}" aria-label="{{ $heading }}" class="space-y-3">
         <h2 class="text-xl font-bold text-slate-900">{{ $heading }}</h2>
         <details class="rounded-2xl border border-slate-200 bg-white p-5" @if($kind === 'homework' && $records[$kind]->isEmpty()) open @endif>
             <summary class="cursor-pointer font-semibold text-amber-700">Add {{ strtolower($heading) }}</summary>

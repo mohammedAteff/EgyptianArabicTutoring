@@ -50,21 +50,21 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                     <label for="student_name" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Student Full Name</label>
-                    <input type="text" id="student_name" name="student_name" value="{{ old('student_name') }}" required
+                    <input type="text" id="student_name" name="student_name" value="{{ old('student_name', $selectedStudent?->name) }}" required
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                            placeholder="e.g. David Miller">
                 </div>
 
                 <div>
                     <label for="student_email" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Student Email</label>
-                    <input type="email" id="student_email" name="student_email" value="{{ old('student_email') }}" required
+                    <input type="email" id="student_email" name="student_email" value="{{ old('student_email', $selectedStudent?->email) }}" required
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono"
                            placeholder="david@example.com">
                 </div>
 
                 <div>
                     <label for="student_phone" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Phone / WhatsApp</label>
-                    <input type="text" id="student_phone" name="student_phone" value="{{ old('student_phone') }}"
+                    <input type="text" id="student_phone" name="student_phone" value="{{ old('student_phone', $selectedStudent?->phone) }}"
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono"
                            placeholder="+1 555 123 4567">
                 </div>
@@ -87,7 +87,7 @@
 
                 <div>
                     <label for="customer_timezone" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Student Timezone</label>
-                    <input type="text" id="customer_timezone" name="customer_timezone" value="{{ old('customer_timezone', $businessTz) }}"
+                    <input type="text" id="customer_timezone" name="customer_timezone" value="{{ old('customer_timezone', $selectedStudent?->preferred_timezone ?? $businessTz) }}"
                            placeholder="America/New_York or Africa/Cairo"
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                 </div>
