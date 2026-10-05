@@ -103,7 +103,7 @@ class AdminUiBillingPresentationTest extends TestCase
             $this->assertSame($section === $tab ? 1 : 0, $xpath->query('//form[@action="'.route($action, [$student->id, $first->id]).'"]')->length);
             $this->assertSame(0, $xpath->query('//form[@action="'.route($action, [$student->id, $second->id]).'"]')->length);
         }
-        $this->assertSame(8, $xpath->query('//label[contains(@class,"items-center")]/button[@data-copy-field]')->length);
+        $this->assertSame(8, $xpath->query('//div[@data-copy-section]/button[@data-copy-field]')->length);
     }
 
     public function test_empty_single_default_and_foreign_package_selection(): void

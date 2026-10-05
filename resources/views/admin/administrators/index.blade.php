@@ -59,7 +59,7 @@
                             </td>
                             <td class="py-4 px-6">
                                 <span class="px-2.5 py-1 rounded-full text-xs font-bold {{ $admin->isSuperAdmin() ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700' }}">
-                                    {{ match($admin->role) { 'super_admin' => 'Super Admin', 'assistant' => 'Assistant', default => 'Admin' } }}
+                                    {{ $admin->roleLabel() }}
                                 </span>
                             </td>
                             <td class="py-4 px-6 text-xs text-slate-500">

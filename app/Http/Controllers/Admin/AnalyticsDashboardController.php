@@ -248,8 +248,7 @@ class AnalyticsDashboardController extends Controller
         $timezoneService = app(TimezoneDisplayService::class);
 
         $countries = $rawRows->map(function ($row) use ($timezoneService) {
-            $code = strtoupper((string) $row->country_code);
-            $countryName = $timezoneService->resolveCountryName($code === 'ZZ' ? null : $code);
+            $country = $timezoneService->countryDisplay($row->country_code);
             $sessions = (int) $row->sessions;
             $bounces = (int) $row->bounced_sessions_count;
             $completed = (int) $row->bookings_completed;
@@ -257,14 +256,8 @@ class AnalyticsDashboardController extends Controller
             $bounceRate = $sessions > 0 ? round(($bounces / $sessions) * 100, 1) : 0.0;
             $conversionRate = $sessions > 0 ? round(($completed / $sessions) * 100, 1) : 0.0;
 
-            $flagPath = $code !== 'ZZ' && is_file(public_path('assets/flags/4x3/'.strtolower($code).'.svg'))
-                ? asset('assets/flags/4x3/'.strtolower($code).'.svg')
-                : asset('assets/flags/4x3/globe.svg');
-
             return [
-                'country_code' => $code,
-                'country_name' => $countryName,
-                'flag_url' => $flagPath,
+                ...$country,
                 'unique_visitors' => (int) $row->unique_visitors,
                 'sessions' => $sessions,
                 'page_views' => (int) $row->page_views,

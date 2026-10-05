@@ -102,6 +102,8 @@ class AdministratorTwoFactorTest extends TestCase
         $confirmed = $this->post(route('admin.security.confirm'), ['code' => $this->otp($setup['secret'])])->assertOk()->assertSeeText('Enabled');
         $codes = $confirmed->viewData('recoveryCodes');
         $this->assertCount(10, $codes);
+        $confirmed->assertSee('data-copy-recovery', false)->assertSee('Copy all recovery codes')->assertSee('data-administrator-name="'.$administrator->name.'"', false);
+        $this->assertSame(10, substr_count($confirmed->getContent(), 'data-recovery-code '));
         $fresh = $administrator->fresh();
         $this->assertTrue($fresh->requiresTwoFactor());
         $this->assertNull($fresh->two_factor_pending_secret);
@@ -111,7 +113,7 @@ class AdministratorTwoFactorTest extends TestCase
             $this->assertStringNotContainsString($code, $raw->two_factor_recovery_codes);
         }
         $this->assertTrue(Hash::check($codes[0], $fresh->two_factor_recovery_codes[0]));
-        $this->get(route('admin.security.show'))->assertDontSee($setup['secret'])->assertDontSee($codes[0])->assertDontSeeText('Manual setup key');
+        $this->get(route('admin.security.show'))->assertDontSee($setup['secret'])->assertDontSee($codes[0])->assertDontSeeText('Manual setup key')->assertDontSee('data-copy-recovery', false);
         $this->assertStringNotContainsString($setup['secret'], json_encode(session()->all()));
         $this->assertStringNotContainsString($codes[0], json_encode(session()->all()));
         foreach (['two_factor_secret', 'two_factor_recovery_codes', 'two_factor_pending_secret', 'two_factor_version', 'two_factor_last_used_step'] as $field) {
@@ -228,7 +230,7 @@ class AdministratorTwoFactorTest extends TestCase
         $this->post(route('admin.security.regenerate'), ['password' => 'Password123!'])->assertSessionHasErrors();
         $this->post(route('admin.security.regenerate'), ['password' => 'wrong', 'recovery_code' => $codes[0]])->assertSessionHasErrors('password');
         $this->assertCount(2, $administrator->fresh()->two_factor_recovery_codes);
-        $response = $this->post(route('admin.security.regenerate'), ['password' => 'Password123!', 'recovery_code' => $codes[0]])->assertOk();
+        $response = $this->post(route('admin.security.regenerate'), ['password' => 'Password123!', 'recovery_code' => $codes[0]])->assertOk()->assertSee('data-copy-recovery', false);
         $this->assertCount(10, $response->viewData('recoveryCodes'));
         $this->get(route('admin.security.show'))->assertDontSee($response->viewData('recoveryCodes')[0]);
         $this->post(route('admin.logout'));

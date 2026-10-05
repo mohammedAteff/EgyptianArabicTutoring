@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FormController;
+use App\Http\Controllers\Admin\MaintenanceAnalyticsController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\MeetingLinkController;
 use App\Http\Controllers\Admin\NotificationController;
@@ -253,6 +254,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         });
         Route::post('/preferences/time', [SettingController::class, 'timePreference'])->middleware('role:super_admin,admin,assistant')->name('preferences.time');
         Route::post('/settings/operations', [SettingController::class, 'operational'])->middleware('role:super_admin,admin')->name('settings.operations');
+        Route::post('/settings/announcement', [SettingController::class, 'announcement'])->middleware('role:super_admin,admin')->name('settings.announcement');
         Route::get('/', [DashboardController::class, 'index'])->middleware('role:super_admin,admin')->name('dashboard');
         Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('role:super_admin,admin');
 
@@ -434,6 +436,11 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/reports', [ReportController::class, 'index'])->middleware('role:super_admin,admin')->name('reports.index');
         Route::get('/reports/export', [ReportController::class, 'export'])->middleware('role:super_admin,admin')->name('reports.export');
 
+        Route::middleware('role:super_admin')->group(function (): void {
+            Route::get('/analytics/maintenance', [MaintenanceAnalyticsController::class, 'index'])->name('analytics.maintenance');
+            Route::get('/analytics/maintenance/export', [MaintenanceAnalyticsController::class, 'export'])->name('analytics.maintenance.export');
+        });
+
         // Everyday operational settings are available to both administrator roles.
         Route::middleware('role:super_admin,admin')->group(function () {
             Route::prefix('telegram')->name('telegram.')->group(function (): void {
@@ -458,7 +465,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
             // System, Backups & Audit
             Route::get('/health', [SystemHealthController::class, 'index'])->name('health');
-            Route::get('/health/maintenance-visitors/export', [SystemHealthController::class, 'exportMaintenanceTraffic'])->name('health.maintenance-visitors.export');
+            Route::get('/health/maintenance-visitors/export', [MaintenanceAnalyticsController::class, 'export'])->name('health.maintenance-visitors.export');
             Route::get('/audit-logs', [SystemHealthController::class, 'auditLogs'])->name('audit-logs');
             Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
             Route::post('/backups', [BackupController::class, 'create'])->name('backups.create');

@@ -261,5 +261,11 @@
   "Your booking is confirmed. Your calendar invitation and meeting details are below.": "Ihre Buchung ist bestätigt. Die Kalendereinladung und Verbindungsdetails finden Sie unten.",
   "Your booking is awaiting confirmation.": "Ihre Buchung wartet auf Bestätigung.",
   "This time is reserved temporarily. Complete your booking to confirm it.": "Dieser Termin ist vorübergehend reserviert. Schließen Sie die Buchung ab, um ihn zu bestätigen.",
-  "We could not determine the status of this booking. Please contact your tutor.": "Der Status dieser Buchung konnte nicht festgestellt werden. Bitte kontaktieren Sie Ihren Tutor."
+  "We could not determine the status of this booking. Please contact your tutor.": "Der Status dieser Buchung konnte nicht festgestellt werden. Bitte kontaktieren Sie Ihren Tutor.",
+  "Dismiss announcement": "Mitteilung schließen",
+  "Information": "Information",
+  "Site announcement": "Website-Mitteilung",
+  "Urgent": "Dringend",
+  "Visit our :platform page": "Besuchen Sie unsere :platform-Seite",
+  "Warning": "Warnung"
 }

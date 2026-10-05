@@ -106,71 +106,7 @@
         </div>
     </div>
 
-    <!-- Maintenance Mode Traffic Diagnostics (Phase 5) -->
-    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-            <div>
-                <h2 class="text-lg font-bold font-serif text-slate-900">Maintenance Mode Traffic Diagnostics</h2>
-                <p class="text-xs text-slate-500 mt-0.5">Captures and reports all inbound visitor traffic intercepted while maintenance mode was active.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <a href="{{ route('admin.health.maintenance-visitors.export', array_merge($filters, ['format' => 'csv'])) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 transition-colors">
-                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>Export CSV</span>
-                </a>
-                <a href="{{ route('admin.health.maintenance-visitors.export', array_merge($filters, ['format' => 'xlsx'])) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold border border-emerald-200 transition-colors">
-                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>Export XLSX</span>
-                </a>
-            </div>
-        </div>
-
-        <x-report-filters :filters="$filters" :fields="array_merge(app(\App\Domains\Reporting\Services\ReportPeriod::class)->fields(), ['country'=>['Country code','text'],'path'=>['Page / path contains','search']])" :action="route('admin.health')" export-route="admin.health.maintenance-visitors.export" />
-        <div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-left text-xs"><thead class="bg-slate-50"><tr><th class="p-3">Timestamp (UTC)</th><th class="p-3">Visitor ID</th><th class="p-3">Country</th><th class="p-3">Requested URL</th><th class="p-3">Referrer</th></tr></thead><tbody>@foreach($maintenanceRows as $visit)<tr><td class="p-3">{{ $visit->created_at }}</td><td class="p-3">{{ $visit->visitor_id }}</td><td class="p-3">{{ $visit->country_code }}</td><td class="p-3">{{ $visit->url }}</td><td class="p-3">{{ $visit->referrer ?: 'Direct / None' }}</td></tr>@endforeach</tbody></table></div>
-        {{ $maintenanceRows->links() }}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
-                <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Total Intercepted Hits</span>
-                <span class="font-mono text-2xl font-bold text-slate-900 block mt-1">{{ number_format($maintenanceHitsCount) }}</span>
-            </div>
-            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
-                <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Unique Visitors</span>
-                <span class="font-mono text-2xl font-bold text-slate-900 block mt-1">{{ number_format($maintenanceUniqueVisitors) }}</span>
-            </div>
-            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
-                <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Maintenance Bounce Rate</span>
-                <span class="font-mono text-2xl font-bold text-amber-600 block mt-1">{{ number_format($maintenanceBounceRate, 1) }}%</span>
-            </div>
-        </div>
-
-        @if($maintenanceCountries->isNotEmpty())
-            <div>
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Country Segmentation (Top 10)</h3>
-                <div class="overflow-x-auto border border-slate-200 rounded-2xl">
-                    <table class="w-full text-left text-xs text-slate-600">
-                        <thead class="bg-slate-50 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px] text-slate-500">
-                            <tr>
-                                <th class="px-4 py-2.5">Country Code</th>
-                                <th class="px-4 py-2.5">Hits</th>
-                                <th class="px-4 py-2.5">Unique Visitors</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @foreach($maintenanceCountries as $mc)
-                                <tr>
-                                    <td class="px-4 py-2 font-mono font-bold text-slate-800">{{ $mc->country_code }}</td>
-                                    <td class="px-4 py-2 font-mono">{{ number_format($mc->hits) }}</td>
-                                    <td class="px-4 py-2 font-mono">{{ number_format($mc->visitors) }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        @endif
-    </div>
+    <a href="{{ route('admin.analytics.maintenance') }}" class="block rounded-2xl border border-slate-200 bg-white p-5 font-semibold text-amber-800 hover:bg-amber-50">Maintenance Mode Traffic Diagnostics → Insights &amp; Telemetry</a>
 
     <!-- Server Environment Info -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-4">

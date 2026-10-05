@@ -4,26 +4,19 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
-use App\Domains\Reporting\Services\ExportService;
-use App\Domains\Reporting\Services\ReportPeriod;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SystemHealthController extends Controller
 {
     public function index(Request $request): View
     {
-        $filters = $this->maintenanceFilters($request);
-        $maintenanceQuery = $this->maintenanceQuery($filters);
         // 1. Database Check
         $dbStatus = 'healthy';
         $dbMessage = 'Active database connection';
@@ -198,24 +191,6 @@ class SystemHealthController extends Controller
             }
         }
 
-        // 8. Maintenance Mode Traffic Diagnostics
-        $maintenanceHitsCount = 0;
-        $maintenanceUniqueVisitors = 0;
-        $maintenanceBounceRate = 100.0;
-        $maintenanceCountries = collect();
-        try {
-            $maintenanceHitsCount = (clone $maintenanceQuery)->count();
-            $maintenanceUniqueVisitors = (clone $maintenanceQuery)->distinct('visitor_id')->count('visitor_id');
-            $maintenanceCountries = (clone $maintenanceQuery)
-                ->select('country_code', DB::raw('count(*) as hits'), DB::raw('count(distinct visitor_id) as visitors'))
-                ->groupBy('country_code')
-                ->orderByDesc('hits')
-                ->limit(10)
-                ->get();
-        } catch (\Throwable) {
-            // Table not ready or empty
-        }
-
         return view('admin.system.health', [
             'title' => 'System Health & Diagnostics',
             'dbStatus' => $dbStatus,
@@ -247,66 +222,7 @@ class SystemHealthController extends Controller
             'cairoTime' => now(app(TimezoneService::class)->getBusinessTimezone())->toDateTimeString(),
             'environment' => app()->environment(),
             'debugMode' => config('app.debug'),
-            'maintenanceHitsCount' => $maintenanceHitsCount,
-            'maintenanceUniqueVisitors' => $maintenanceUniqueVisitors,
-            'maintenanceBounceRate' => $maintenanceBounceRate,
-            'maintenanceCountries' => $maintenanceCountries, 'filters' => $filters, 'maintenanceRows' => (clone $maintenanceQuery)->orderByDesc('id')->paginate(30)->withQueryString(),
         ]);
-    }
-
-    public function exportMaintenanceTraffic(Request $request): StreamedResponse|BinaryFileResponse
-    {
-        $filters = $this->maintenanceFilters($request);
-        $format = $filters['format'] ?? 'csv';
-        $headers = [
-            'Timestamp (UTC)',
-            'Visitor ID',
-            'Country Code',
-            'Requested URL',
-            'Referrer',
-            'Bounced (Intercepted)',
-        ];
-
-        $rowsGenerator = function () use ($filters) {
-            $cursor = $this->maintenanceQuery($filters)
-                ->orderByDesc('id')
-                ->cursor();
-
-            foreach ($cursor as $row) {
-                yield [
-                    $row->created_at,
-                    $row->visitor_id,
-                    $row->country_code,
-                    $row->url,
-                    $row->referrer ?? 'Direct / None',
-                    $row->is_bounced ? 'Yes' : 'No',
-                ];
-            }
-        };
-
-        $baseFilename = 'maintenance_traffic_'.now()->format('Ymd_His');
-
-        return app(ExportService::class)->export(
-            $baseFilename,
-            $headers,
-            $rowsGenerator(),
-            $format,
-            'Maintenance Traffic'
-        );
-    }
-
-    private function maintenanceFilters(Request $request): array
-    {
-        return app(ReportPeriod::class)->filters($request, ['country' => ['nullable', 'string', 'size:2'], 'path' => ['nullable', 'string', 'max:500']]);
-    }
-
-    private function maintenanceQuery(array $filters): Builder
-    {
-        [$start, $end] = app(ReportPeriod::class)->bounds($filters);
-
-        return DB::table('maintenance_visits')->whereBetween('created_at', [$start, $end])
-            ->when($filters['country'] ?? null, fn ($q, $country) => $q->where('country_code', strtoupper($country)))
-            ->when($filters['path'] ?? null, fn ($q, $path) => $q->where('url', 'like', '%'.str_replace(['%', '_'], ['\\%', '\\_'], $path).'%'));
     }
 
     public function auditLogs(): View

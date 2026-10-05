@@ -61,6 +61,8 @@
         </div>
     @endif
 
+    <x-announcement-banner :announcement="$siteAnnouncement" />
+
     <!-- Top Announcement Bar (Subtle & Informative) -->
     <div class="bg-nile-900 text-stone-200 text-xs py-2 px-4 text-center">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
@@ -286,13 +288,13 @@
                     <h3 class="text-xs font-semibold text-stone-200 uppercase tracking-wider mb-4">{{ __('Connect Directly') }}</h3>
                     <ul class="space-y-3 text-sm">
                         @php
-                            $socialLinks = \App\Domains\CMS\Models\SocialLink::enabled()->get();
+                            $socialLinks = \App\Domains\CMS\Models\SocialLink::enabled()->get()->filter(fn ($social) => $social->getFormattedUrl() !== '#');
                         @endphp
                         @forelse($socialLinks as $social)
                             @php
                                 $platform = strtolower($social->platform);
-                                $label = $social->label ?: ucfirst($platform);
-                                $accessibleLabel = "Visit our {$label} page";
+                                $label = __($social->label ?: ucfirst($platform));
+                                $accessibleLabel = __('Visit our :platform page', ['platform' => $label]);
                             @endphp
                             <li>
                                 <a href="{{ $social->getFormattedUrl() }}"
@@ -314,6 +316,10 @@
                                     @elseif($platform === 'youtube')
                                         <svg class="w-4 h-4 shrink-0 text-red-500 group-hover:text-red-400 transition-colors" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                        </svg>
+                                    @elseif($platform === 'reddit')
+                                        <svg class="w-4 h-4 shrink-0 text-orange-400 group-hover:text-orange-300 transition-colors" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                            <ellipse cx="12" cy="15" rx="9" ry="6"/><path d="m13 9 1.5-6L19 4M3.5 11A2.5 2.5 0 0 0 1 15m19.5-4A2.5 2.5 0 0 1 23 15M8 17c2 2 6 2 8 0"/><circle cx="20" cy="4" r="2"/><circle cx="8" cy="13" r="1" fill="currentColor"/><circle cx="16" cy="13" r="1" fill="currentColor"/>
                                         </svg>
                                     @elseif($platform === 'telegram')
                                         <svg class="w-4 h-4 shrink-0 text-sky-400 group-hover:text-sky-300 transition-colors" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">

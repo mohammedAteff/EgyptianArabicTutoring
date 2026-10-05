@@ -33,6 +33,7 @@ class StudentReschedulingTest extends TestCase
 
     public function test_student_dashboard_lists_future_held_bookings_as_upcoming(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-01 08:00:00 UTC'));
         [$student, $booking] = $this->prepareBooking();
         $booking->update(['status' => 'held']);
 
@@ -180,6 +181,7 @@ class StudentReschedulingTest extends TestCase
 
     public function test_student_dashboard_shows_tutor_and_only_an_assigned_https_meeting_link_in_the_reveal_window(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-01 08:00:00 UTC'));
         [$student, $booking] = $this->prepareBooking();
         $provider = MeetingProvider::where('is_default', true)->firstOrFail();
         $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'QA meeting', 'url' => 'https://meet.example.test/arabic-room', 'url_hash' => hash('sha256', 'https://meet.example.test/arabic-room')]);

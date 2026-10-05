@@ -12,6 +12,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-full bg-[#FAF8F5] text-stone-900 antialiased">
+    <x-announcement-banner :announcement="$siteAnnouncement" />
     <header class="border-b border-stone-200 bg-white">
         <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
             <a href="{{ route('home') }}" class="font-semibold tracking-tight text-nile-900">Egyptian Arabic Tutoring</a>

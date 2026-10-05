@@ -243,7 +243,7 @@
             <div class="grid grid-cols-1 gap-4">
                 <label class="block text-xs font-semibold text-slate-700">Platform
                     <select name="platform" x-model="platform" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        @foreach(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'] as $platform)
+                        @foreach(\App\Domains\CMS\Models\SocialLink::PLATFORMS as $platform)
                             <option value="{{ $platform }}">{{ ucfirst($platform) }}</option>
                         @endforeach
                     </select>

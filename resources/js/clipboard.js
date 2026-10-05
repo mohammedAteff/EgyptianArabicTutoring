@@ -33,11 +33,16 @@ async function copyText(value) {
     if (!copied) throw new Error('Clipboard unavailable');
 }
 
+export function recoveryCodesText(panel) {
+    const codes = Array.from(panel.querySelectorAll('[data-recovery-code]'), element => element.textContent.trim());
+    return `${panel.dataset.administratorName} Admin — Two-Factor Authentication Recovery Codes\n\nKeep these recovery codes somewhere secure.\nEach recovery code can only be used once.\n\n${codes.join('\n')}`;
+}
+
 if (typeof document !== 'undefined') document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-copy-field], [data-copy-student], [data-copy-bin]');
+    const button = event.target.closest('[data-copy-field], [data-copy-student], [data-copy-bin], [data-copy-recovery]');
     if (!button) return;
     const form = document.querySelector('[data-student-identity]');
-    const value = button.hasAttribute('data-copy-bin')
+    const value = button.hasAttribute('data-copy-recovery') ? recoveryCodesText(button.closest('[data-recovery-panel]')) : button.hasAttribute('data-copy-bin')
         ? button.closest('[data-bin]')?.querySelector('[data-bin-body]')?.textContent.trim() || ''
         : button.hasAttribute('data-copy-student') ? studentDetails(form) : studentDetailValue(form, button.dataset.copyField);
     const status = button.querySelector('[data-copy-status]');

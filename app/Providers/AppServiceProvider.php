@@ -8,6 +8,7 @@ use App\Domains\Audit\Services\PrivacyDatabaseSessionHandler;
 use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
+use App\Domains\CMS\Services\AnnouncementService;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -53,6 +55,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        View::composer(['layouts.public', 'layouts.student'], function (\Illuminate\View\View $view): void {
+            $view->with('siteAnnouncement', app(AnnouncementService::class)->visible($view->name() === 'layouts.student' ? 'student' : 'public'));
+        });
         Session::extend('database', fn ($app) => new PrivacyDatabaseSessionHandler(
             DB::connection(config('session.connection')), config('session.table'), (int) config('session.lifetime'), $app,
         ));

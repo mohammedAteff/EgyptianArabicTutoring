@@ -151,8 +151,9 @@ class CairoDailyAnalyticsRollupTest extends TestCase
         ]));
 
         $response->assertOk();
-        $response->assertSee('Non-Comparable Historical Data');
-        $response->assertSee('2026-09-21 Africa/Cairo');
+        $response->assertDontSee('Non-Comparable Historical Data');
+        $response->assertViewHas('isBeforeAuthoritativeCutover', true);
+        $response->assertViewHas('authoritativeCutoverDate', '2026-09-21');
     }
 
     public function test_events_near_cairo_day_boundaries_are_attributed_strictly_to_respective_cairo_dates(): void

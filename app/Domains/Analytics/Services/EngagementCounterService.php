@@ -63,7 +63,6 @@ class EngagementCounterService
     public function getCollectiveLearningActivity(int $windowDays = 7): array
     {
         $cairoNow = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone());
-        $cairoDate = $cairoNow->toDateString();
         $cairoWindowStart = $cairoNow->startOfDay()->subDays(max(1, min(90, $windowDays)) - 1);
         $utcWindowStart = $cairoWindowStart->setTimezone('UTC');
         $utcWindowEnd = $cairoNow->setTimezone('UTC');
@@ -89,13 +88,7 @@ class EngagementCounterService
         $hours = intdiv($totalMinutes % 1440, 60);
         $minutes = $totalMinutes % 60;
 
-        $parts = [];
-        if ($days > 0) {
-            $parts[] = "{$days} ".($days === 1 ? 'day' : 'days');
-        }
-        $parts[] = "{$hours} ".($hours === 1 ? 'hour' : 'hours');
-        $parts[] = "{$minutes} ".($minutes === 1 ? 'minute' : 'minutes');
-        $formattedTime = implode(', ', $parts);
+        $formattedTime = HumanDurationFormatter::minutes($totalMinutes);
 
         return [
             'lesson_hours' => round($lessonHours, 2),
@@ -176,8 +169,6 @@ class EngagementCounterService
 
     public function getCachedPublicPayload(): array
     {
-        $cairoDate = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->toDateString();
-
         $payload = Cache::remember(self::cacheKey(), self::CACHE_TTL, function () {
             return $this->getPublicCountersPayload();
         });

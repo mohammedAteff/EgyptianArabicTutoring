@@ -49,15 +49,16 @@ test('floating WhatsApp click has its own placement and only one listener after 
 
 test('all configured footer platforms emit exactly one event with authoritative placement and metadata', async () => {
     const clickHandlers = [];
-    const socials = ['youtube','tiktok','instagram','telegram','whatsapp'].map(platform => ({dataset: {socialPlatform: platform}, href: `https://example.org/${platform}`, addEventListener: (name, handler) => clickHandlers.push({platform, handler})}));
+    const socials = ['youtube','tiktok','instagram','telegram','whatsapp','reddit'].map(platform => ({dataset: {socialPlatform: platform}, href: `https://example.org/${platform}`, addEventListener: (name, handler) => clickHandlers.push({platform, handler})}));
     const h = harness(null, socials);
     vm.runInContext(source, h.context);
     await Promise.resolve();
-    assert.equal(clickHandlers.length, 5);
+    assert.equal(clickHandlers.length, 6);
     for (const {handler} of clickHandlers) { handler(); await Promise.resolve(); }
     const events = h.events().filter(event => ['social_link_clicked','telegram_clicked','whatsapp_clicked'].includes(event.event_name));
-    assert.equal(events.length, 5);
-    for (const event of events) { assert.equal(event.metadata.placement, 'footer_social'); assert.equal(event.metadata.context, 'public'); assert.ok(['youtube','tiktok','instagram','telegram','whatsapp'].includes(event.metadata.platform)); }
+    assert.equal(events.length, 6);
+    for (const event of events) { assert.equal(event.metadata.placement, 'footer_social'); assert.equal(event.metadata.context, 'public'); assert.ok(['youtube','tiktok','instagram','telegram','whatsapp','reddit'].includes(event.metadata.platform)); }
+    assert.equal(events.filter(event => event.metadata.platform === 'reddit')[0].event_name, 'social_link_clicked');
 });
 
 for (const [label, failures] of Object.entries({endpoint: {endpoint: true}, beacon: {beacon: true}, fetch: {fetch: true}, javascript: {crypto: {randomUUID() { throw new Error('Crypto unavailable'); }}}})) {

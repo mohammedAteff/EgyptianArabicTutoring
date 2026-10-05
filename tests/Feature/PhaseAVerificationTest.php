@@ -79,7 +79,7 @@ class PhaseAVerificationTest extends TestCase
 
         $rendered = (string) $view;
 
-        $this->assertStringContainsString('sidebarOpen: false', $rendered);
+        $this->assertStringContainsString('mobileSidebarOpen: false', $rendered);
         $this->assertStringContainsString('role="dialog"', $rendered);
         $this->assertStringContainsString('aria-modal="true"', $rendered);
         $this->assertStringContainsString('x-cloak', $rendered);

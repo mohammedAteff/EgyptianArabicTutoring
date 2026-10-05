@@ -238,7 +238,7 @@ class ContentController extends Controller
     public function storeSocial(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'platform' => ['required', 'string', Rule::in(['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'custom', 'whatsapp', 'telegram'])],
+            'platform' => ['required', 'string', Rule::in(SocialLink::PLATFORMS)],
             'label' => ['required', 'string', 'max:100'],
             'url_or_phone' => ['required', 'string', 'max:2048'],
             'default_message' => ['nullable', 'string', 'max:1000'],

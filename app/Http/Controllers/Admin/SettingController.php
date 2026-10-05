@@ -6,9 +6,11 @@ use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Analytics\Services\EngagementCounterService;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Services\AnnouncementService;
 use App\Domains\Notifications\Services\TelegramNotificationService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
+use App\Rules\SafeLessonUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +22,27 @@ use Illuminate\View\View;
 
 class SettingController extends Controller
 {
+    public function announcement(Request $request, AnnouncementService $announcements): RedirectResponse
+    {
+        $rules = [
+            'enabled' => ['required', 'boolean'],
+            'audience' => ['required', Rule::in(['public', 'public_student'])],
+            'severity' => ['required', Rule::in(['information', 'warning', 'urgent'])],
+            'dismissible' => ['required', 'boolean'],
+            'start_at' => ['nullable', 'date_format:Y-m-d\\TH:i'],
+            'end_at' => ['nullable', 'date_format:Y-m-d\\TH:i', Rule::when($request->filled('start_at'), 'after:start_at')],
+            'cta_url' => ['nullable', 'string', 'max:2048', new SafeLessonUrl, 'required_with:cta_label_en,cta_label_fr,cta_label_de'],
+        ];
+        foreach (['en', 'fr', 'de'] as $locale) {
+            $rules['message_'.$locale] = ['nullable', $locale === 'en' ? 'required_if:enabled,1' : 'sometimes', 'string', 'max:2000'];
+            $rules['cta_label_'.$locale] = ['nullable', 'string', 'max:100'];
+        }
+        $rules['cta_label_en'][] = 'required_with:cta_url';
+        $announcements->save($request->validate($rules));
+
+        return back()->with('success', 'Site announcement saved.');
+    }
+
     public function timePreference(Request $request): RedirectResponse
     {
         $validated = $request->validate(['time_format' => ['required', Rule::in(['12', '24'])]]);
@@ -86,6 +109,8 @@ class SettingController extends Controller
             'settings' => $settings,
             'timezones' => $timezones,
             'canManageMaintenance' => $request->user('web')?->role === 'super_admin',
+            'announcement' => app(AnnouncementService::class)->settings(),
+            'businessTimezone' => $this->timezoneService->getBusinessTimezone(),
         ]);
     }
 

@@ -450,5 +450,6 @@
             <button type="submit" name="action" value="publish" class="rounded-xl bg-amber-600 px-6 py-3 text-sm font-bold text-white hover:bg-amber-700">Publish All Settings</button>
         </div>
     </form>
+    @include('admin.settings.announcement')
 </div>
 @endsection

@@ -317,10 +317,10 @@ class EngagementCountersTest extends TestCase
         Setting::set('counters.monthly_traffic.template_sessions', 'QA {count} sessions last month');
         Setting::set('counters.live_users.template', 'QA {count} online now');
         $payload = $this->counterService->getCachedPublicPayload();
-        $this->assertSame('3 hours, 0 minutes', $payload['learning_hours']['formatted_time']);
+        $this->assertSame('3 hours', $payload['learning_hours']['formatted_time']);
         $this->assertSame(2, $payload['monthly_traffic']['count']);
         $this->assertSame(1, $payload['live_users']['count']);
-        $this->withHeaders(['X-Analytics-Synthetic' => '1'])->get('/')->assertOk()->assertSee('3 hours, 0 minutes')->assertSee('QA 2 sessions last month')->assertSee('QA 1 online now');
+        $this->withHeaders(['X-Analytics-Synthetic' => '1'])->get('/')->assertOk()->assertSee('3 hours')->assertSee('QA 2 sessions last month')->assertSee('QA 1 online now');
         Setting::set('counters.monthly_traffic.source', 'unique_visitors');
         $this->assertSame(1, $this->counterService->getCachedPublicPayload()['monthly_traffic']['count']);
     }

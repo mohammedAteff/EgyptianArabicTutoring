@@ -131,9 +131,9 @@ class MaintenanceModeResilienceTest extends TestCase
 
         // Health page
         $this->actingAs($admin, 'web')
-            ->get('/admin/health')
+            ->get(route('admin.analytics.maintenance'))
             ->assertOk()
-            ->assertSee('Maintenance Mode Traffic Diagnostics')
+            ->assertSee('Maintenance Mode Analytics')
             ->assertSee('Total Intercepted Hits');
 
         // CSV export

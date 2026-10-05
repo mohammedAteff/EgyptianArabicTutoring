@@ -159,7 +159,7 @@ class FilterAwareExportsTest extends TestCase
                 DB::table('maintenance_visits')->insert(['visitor_id' => $name, 'ip_address' => null, 'country_code' => $i === 0 ? 'EG' : 'DE', 'url' => '/'.$name, 'created_at' => $days[$i], 'is_bounced' => true]);
             }
 
-            return ['admin.health', 'admin.health.maintenance-visitors.export', [], ['country' => 'EG'], 'Needle', 'Other', 'maintenanceRows'];
+            return ['admin.analytics.maintenance', 'admin.analytics.maintenance.export', [], ['country' => 'EG'], 'Needle', 'Other', 'maintenanceRows'];
         }
         foreach ($names as $i => $name) {
             $token = Str::uuid()->toString();

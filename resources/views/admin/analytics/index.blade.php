@@ -85,7 +85,6 @@
                     <span class="text-4xl font-black tracking-tight text-white">{{ $activeVisitorsCount }}</span>
                     <span class="text-sm text-slate-400 font-medium">Estimated active visitors</span>
                 </div>
-                <p class="text-xs text-slate-500 mt-1">Based on non-bot HTTP interactions within the rolling active window.</p>
             </div>
             <div class="text-right">
                 <a href="{{ route('admin.reports.index', ['type' => 'traffic']) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-200 transition-colors">

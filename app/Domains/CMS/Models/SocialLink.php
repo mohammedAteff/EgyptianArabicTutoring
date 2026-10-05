@@ -10,10 +10,12 @@ class SocialLink extends Model
 {
     use HasFactory;
 
+    public const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'reddit', 'custom', 'whatsapp', 'telegram'];
+
     protected $table = 'social_links';
 
     protected $fillable = [
-        'platform', // 'instagram', 'tiktok', 'youtube', 'telegram', 'whatsapp'
+        'platform',
         'url_or_phone',
         'label',
         'default_message',

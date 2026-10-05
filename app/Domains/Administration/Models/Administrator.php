@@ -55,6 +55,16 @@ class Administrator extends Authenticatable
         return $this->role === 'super_admin';
     }
 
+    public function roleLabel(): string
+    {
+        return match ($this->role) {
+            'super_admin' => 'Super Admin',
+            'admin' => 'Admin',
+            'assistant' => 'Assistant',
+            default => str($this->role)->replace('_', ' ')->title()->toString(),
+        };
+    }
+
     public function isAdmin(): bool
     {
         return in_array($this->role, ['admin', 'super_admin'], true);

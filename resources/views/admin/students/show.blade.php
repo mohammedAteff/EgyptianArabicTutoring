@@ -42,27 +42,28 @@
 
     @if(! $isAssistant)
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <div class="mb-5">
-                <h2 class="flex flex-wrap items-center gap-x-3 font-serif text-xl font-bold text-slate-900">Identity details <x-copy-button :all="true" label="Copy Student Details" /></h2>
-                <p class="mt-1 text-sm text-slate-500">Only authorized administrators can change identity and verification information.</p>
+            <div class="mb-5 flex items-start justify-between gap-3" data-copy-section>
+                <div><h2 class="font-serif text-xl font-bold text-slate-900">Identity details</h2>
+                <p class="mt-1 text-sm text-slate-500">Only authorized administrators can change identity and verification information.</p></div>
+                <x-copy-button :all="true" label="Copy Student Details" />
             </div>
             <form method="POST" action="{{ route('admin.students.update', $student->id) }}" data-student-identity class="grid gap-4 sm:grid-cols-2">
                 @csrf
                 @method('PATCH')
                 <div>
-                    <label for="first_name" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">First name <x-copy-button field="first_name" label="Copy First name" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="first_name" class="py-3 text-sm font-semibold text-slate-700">First name</label><x-copy-button field="first_name" label="Copy First name" /></div>
                     <input id="first_name" name="first_name" required value="{{ old('first_name', $student->first_name) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="last_name" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Last name <x-copy-button field="last_name" label="Copy Last name" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="last_name" class="py-3 text-sm font-semibold text-slate-700">Last name</label><x-copy-button field="last_name" label="Copy Last name" /></div>
                     <input id="last_name" name="last_name" required value="{{ old('last_name', $student->last_name) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="email" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Email <x-copy-button field="email" label="Copy Email" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="email" class="py-3 text-sm font-semibold text-slate-700">Email</label><x-copy-button field="email" label="Copy Email" /></div>
                     <input id="email" name="email" type="email" value="{{ old('email', $student->email) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="phone" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Phone (E.164 after save) <x-copy-button field="phone" label="Copy Phone (E.164 after save)" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="phone" class="py-3 text-sm font-semibold text-slate-700">Phone (E.164 after save)</label><x-copy-button field="phone" label="Copy Phone (E.164 after save)" /></div>
                     <div class="grid grid-cols-[5rem_1fr] gap-2">
                         <input name="phone_country" aria-label="Phone country code" value="{{ old('phone_country') }}" maxlength="2" placeholder="EG" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm uppercase focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                         <input id="phone" name="phone" type="tel" value="{{ old('phone', $student->phone) }}" class="min-w-0 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
@@ -70,22 +71,22 @@
                     <p class="mt-1 text-xs text-slate-500">Enter a country code only for national-format numbers; international numbers should start with +.</p>
                 </div>
                 <div>
-                    <label for="date_of_birth" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Date of birth <x-copy-button field="date_of_birth" label="Copy Date of birth" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="date_of_birth" class="py-3 text-sm font-semibold text-slate-700">Date of birth</label><x-copy-button field="date_of_birth" label="Copy Date of birth" /></div>
                     <input id="date_of_birth" name="date_of_birth" type="date" value="{{ old('date_of_birth', $student->date_of_birth?->format('Y-m-d')) }}" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div>
-                    <label for="identity_status" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Identity status <x-copy-button field="identity_status" label="Copy Identity status" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="identity_status" class="py-3 text-sm font-semibold text-slate-700">Identity status</label><x-copy-button field="identity_status" label="Copy Identity status" /></div>
                     <select id="identity_status" name="identity_status" required class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                         <option value="legacy_unverified" @selected(old('identity_status', $student->identity_status) === 'legacy_unverified')>Legacy — unverified</option>
                         <option value="verified" @selected(old('identity_status', $student->identity_status) === 'verified')>Verified</option>
                     </select>
                 </div>
                 <div>
-                    <label for="preferred_timezone" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Preferred timezone (IANA) <x-copy-button field="preferred_timezone" label="Copy Preferred timezone (IANA)" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="preferred_timezone" class="py-3 text-sm font-semibold text-slate-700">Preferred timezone (IANA)</label><x-copy-button field="preferred_timezone" label="Copy Preferred timezone (IANA)" /></div>
                     <input id="preferred_timezone" name="preferred_timezone" value="{{ old('preferred_timezone', $student->preferred_timezone) }}" placeholder="Africa/Cairo" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="internal_notes" class="mb-1 flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-slate-700">Internal staff notes <x-copy-button field="internal_notes" label="Copy Internal staff notes" /></label>
+                    <div class="flex items-start justify-between gap-2" data-copy-section><label for="internal_notes" class="py-3 text-sm font-semibold text-slate-700">Internal staff notes</label><x-copy-button field="internal_notes" label="Copy Internal staff notes" /></div>
                     <textarea id="internal_notes" name="internal_notes" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200">{{ old('internal_notes', $student->internal_notes) }}</textarea>
                 </div>
                 <div class="sm:col-span-2 flex justify-end">

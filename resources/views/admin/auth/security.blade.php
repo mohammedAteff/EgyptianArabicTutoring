@@ -12,10 +12,10 @@
         </div>
         <p class="mt-3 text-sm text-slate-600">Use a standards-compatible authenticator such as Aegis, 2FAS or FreeOTP. When enabled, every new sign-in requires a second factor. Keep me signed in does not bypass this check.</p>
         @if(isset($recoveryCodes))
-            <div class="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
-                <h3 class="font-semibold text-amber-950">Save your recovery codes now</h3>
+            <div data-recovery-panel data-administrator-name="{{ auth('web')->user()->name }}" class="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
+                <div class="flex items-start justify-between gap-3"><h3 class="py-3 font-semibold text-amber-950">Save your recovery codes now</h3><x-copy-button :recovery="true" label="Copy all recovery codes" /></div>
                 <p class="mt-2 text-sm text-amber-900">These codes are shown only once. Store them somewhere private. Each code works once; a new set replaces all previous codes.</p>
-                <ul class="mt-4 grid gap-2 font-mono text-sm text-slate-900 sm:grid-cols-2">@foreach($recoveryCodes as $recoveryCode)<li class="break-all rounded-lg bg-white px-3 py-2">{{ $recoveryCode }}</li>@endforeach</ul>
+                <ul class="mt-4 grid gap-2 font-mono text-sm text-slate-900 sm:grid-cols-2">@foreach($recoveryCodes as $recoveryCode)<li data-recovery-code class="break-all rounded-lg bg-white px-3 py-2">{{ $recoveryCode }}</li>@endforeach</ul>
                 <a href="{{ route('admin.security.show') }}" class="mt-5 inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white">I have saved my codes</a>
             </div>
         @endif

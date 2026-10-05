@@ -11,6 +11,22 @@ use Throwable;
 
 class TimezoneDisplayService
 {
+    /** @return array{country_code: string, country_name: string, flag_url: string} */
+    public function countryDisplay(?string $countryCode): array
+    {
+        $code = strtoupper($countryCode ?? 'ZZ');
+        if (! preg_match('/^[A-Z]{2}$/', $code) || $code === 'XX') {
+            $code = 'ZZ';
+        }
+        $flag = 'assets/flags/4x3/'.strtolower($code).'.svg';
+
+        return [
+            'country_code' => $code,
+            'country_name' => $this->resolveCountryName($code === 'ZZ' ? null : $code),
+            'flag_url' => asset($code !== 'ZZ' && is_file(public_path($flag)) ? $flag : 'assets/flags/4x3/globe.svg'),
+        ];
+    }
+
     public function studentTime(DateTimeInterface $instant): string
     {
         return $instant->format('g:i A');
