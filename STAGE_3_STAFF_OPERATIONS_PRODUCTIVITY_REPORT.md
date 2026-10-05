@@ -4,7 +4,7 @@
 
 Implementation and required verification are complete on the local Herd application. All ten Stage 3 features are implemented. Stage 4 and Stage 5 work remains unstarted. No production deployment or Hostinger operations were performed.
 
-Starting checkout: `main`, `7b4702c16e41ee543fb35886c1842ce1039b9b44`, matching `origin/main`. The Git completion checkpoint below records the implementation push after verification. Unrelated untracked Hostinger/proposal documents remain excluded.
+Starting checkout: `main`, `7b4702c16e41ee543fb35886c1842ce1039b9b44`, matching `origin/main`. Implementation/report commit `f735228938fdd48869735b5e0e4ffa6085ab3ae7` was pushed normally to `origin/main` after verification; the remote SHA was confirmed. Unrelated untracked Hostinger/proposal documents remain excluded.
 
 ## Existing foundations inspected and reused
 
@@ -112,7 +112,7 @@ Screenshot evidence is outside Git at `C:/Users/e/.codex/visualizations/2026/10/
 
 ## Git and Telegram completion status
 
-Implementation, tests, build/static checks, browser QA and this report/tracker are complete. A normal push to `origin/main` is the final Git gate; the completion checkpoint records its concrete evidence after it succeeds. Unrelated user documents, screenshots, build output, temp test logs and credentials are excluded.
+**Stage 3 complete. Implementation/report commit `f735228` was pushed normally to `origin/main` after all acceptance gates passed, and the remote SHA was confirmed.** This documentation checkpoint records the implementation push; the final response records the checkpoint's own pushed HEAD/remote confirmation. Ready for Stage 4. Unrelated user documents, screenshots, build output, temp test logs and credentials are excluded. No deployment was performed.
 
 Existing outbound path discovered and reused: `TelegramDeliveryService::direct`, with the application's configured bot/destination and delivery deduplication. Preflight found **zero enabled verified destinations**, safe category `verified_destination_unavailable`. No bot token, credential or destination identifier is stored here, and no disabled QA destination will be enabled or repurposed.
 
