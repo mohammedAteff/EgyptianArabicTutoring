@@ -24,6 +24,7 @@ class StudentPrivacyService
         private AuditLogService $auditLogs,
         private DatabaseCapability $database,
         private LessonMaterialService $lessonMaterials,
+        private TeachingRecordService $teaching,
     ) {}
 
     public function anonymize(int $studentId, ?int $administratorId = null): Student
@@ -121,6 +122,7 @@ class StudentPrivacyService
 
             DB::table('student_bins')->where('student_id', $studentId)->update(['title' => 'Redacted educational note', 'body' => '[redacted]', 'student_visible' => false]);
             $this->lessonMaterials->eraseForBookings($lockedIds, $administratorId);
+            $this->teaching->erase($studentId);
             DB::table('bookings')->where('student_id', $studentId)->update([
                 'notes' => null,
                 'cancellation_reason' => null,

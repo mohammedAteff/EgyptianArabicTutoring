@@ -111,6 +111,14 @@ class StudentMergeService
                 'resource_requests',
                 'student_emails',
                 'student_bins',
+                'homeworks',
+                'learning_plans',
+                'tutor_preparations',
+                'resource_assignments',
+                'student_error_logs',
+                'teaching_tags',
+                'lesson_feedback',
+                'student_notifications',
             ] as $table) {
                 $changes = ['student_id' => $primaryId];
                 if (in_array($table, ['payment_records', 'payment_refunds', 'session_ledger_entries'], true)) {

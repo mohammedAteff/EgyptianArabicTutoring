@@ -162,11 +162,22 @@ class LessonMaterialService
         $file = is_string($path) ? $this->privatePath($path, $directory) : null;
         abort_if($file === null, 404);
 
-        return response()->download($file, (Str::slug($material->title) ?: 'lesson-material').'.'.$extension, [
+        $response = response()->download($file, (Str::slug($material->title) ?: 'lesson-material').'.'.$extension, [
             'Content-Type' => $extension === 'pdf' ? 'application/pdf' : 'application/octet-stream',
             'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store',
             'Referrer-Policy' => 'no-referrer',
         ]);
+        $response->setPrivate();
+
+        return $response;
+    }
+
+    public function openResource(Resource $resource): BinaryFileResponse|RedirectResponse
+    {
+        $reference = new LessonMaterial(['kind' => 'resource', 'title' => $resource->title]);
+        $reference->setRelation('resource', $resource);
+
+        return $this->open($reference);
     }
 
     private function external(?string $url): RedirectResponse

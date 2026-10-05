@@ -3,6 +3,9 @@
 <div class="mx-auto max-w-6xl space-y-6">
     <a href="{{ route('admin.bookings.show', $booking) }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">&larr; Booking #{{ $booking->id }}</a>
     <div><h1 class="font-serif text-3xl font-bold text-slate-900">Lesson Workspace</h1><p class="mt-2 text-slate-500">Prepare and share learning materials for this lesson.</p></div>
+    @if($booking->student)
+        <a href="{{ route('admin.students.teaching', ['student' => $booking->student, 'booking' => $booking->id]) }}" class="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white">Homework, learning plan and tutor preparation</a>
+    @endif
     @foreach(['success' => 'bg-emerald-50 text-emerald-800', 'warning' => 'bg-amber-50 text-amber-900'] as $key => $style)
         @if(session($key))<p role="status" class="rounded-xl p-4 {{ $style }}">{{ session($key) }}</p>@endif
     @endforeach

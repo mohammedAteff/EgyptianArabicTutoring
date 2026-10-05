@@ -98,6 +98,7 @@
 
 
     <a href="{{ route('admin.student-bins.index', $student->id) }}" class="inline-flex rounded-xl bg-white px-4 py-3 text-sm font-semibold text-amber-800">Educational Notes →</a>
+    @can('manageTeaching', $student)<a href="{{ route('admin.students.teaching', $student) }}" class="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Teaching workspace →</a>@endcan
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div class="mb-4 flex items-end justify-between gap-4">
             <div>

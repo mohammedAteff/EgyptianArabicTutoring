@@ -14,10 +14,15 @@
 <body class="min-h-full bg-[#FAF8F5] text-stone-900 antialiased">
     <x-announcement-banner :announcement="$siteAnnouncement" />
     <header class="border-b border-stone-200 bg-white">
-        <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
+        <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6">
             <a href="{{ route('home') }}" class="font-semibold tracking-tight text-nile-900">Egyptian Arabic Tutoring</a>
             @if(session()->has('student_id'))
+                <nav class="flex flex-wrap gap-4 text-sm font-semibold text-nile-800" aria-label="Student navigation">
+                    <a href="{{ route('student.dashboard') }}">Sessions</a>
+                    <a href="{{ route('student.teaching.index') }}">My learning</a>
+                    <a href="{{ route('student.notifications.index') }}">Notifications</a>
                 <a href="{{ route('student.bins.index') }}" class="text-sm font-semibold text-nile-800">Educational Notes</a>
+                </nav>
                 <form method="POST" action="{{ route('student.logout') }}">@csrf<button type="submit" class="text-sm font-medium text-nile-800 hover:underline">Sign out</button></form>
             @endif
         </div>

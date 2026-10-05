@@ -7,10 +7,10 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class DashboardController extends Controller
+class TeachingController extends Controller
 {
     public function index(Request $request, StudentPortalService $portal): Response
     {
-        return response()->view('student.dashboard', $portal->data($request))->header('Cache-Control', 'private, no-store');
+        return response()->view('student.teaching', $portal->data($request))->header('Cache-Control', 'private, no-store');
     }
 }

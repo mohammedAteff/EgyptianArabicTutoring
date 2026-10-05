@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Student;
 
-use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\Availability\Services\BookingSlotPresenter;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
@@ -22,7 +22,7 @@ use Throwable;
 
 class RescheduleController extends Controller
 {
-    public function show(Request $request, int $booking, AvailabilityService $availability, SlotResolver $resolver, TimezoneService $timezones): View|RedirectResponse
+    public function show(Request $request, int $booking, TimezoneService $timezones): View|RedirectResponse
     {
         $student = $request->attributes->get('student');
         $ownedBooking = Booking::query()->whereKey($booking)->where('student_id', $student->id)->with('sessionType')->firstOrFail();
@@ -33,9 +33,13 @@ class RescheduleController extends Controller
         $timezone = $this->displayTimezone($student, $ownedBooking, $timezones, $request->input('timezone'));
         $from = $request->query('date');
         $today = CarbonImmutable::now($timezone)->startOfDay();
-        $fromDate = is_string($from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
-            ? CarbonImmutable::createFromFormat('!Y-m-d', $from, $timezone)
-            : null;
+        try {
+            $fromDate = is_string($from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
+                ? CarbonImmutable::createFromFormat('!Y-m-d', $from, $timezone)
+                : null;
+        } catch (Throwable) {
+            $fromDate = null;
+        }
         if (! $fromDate || $fromDate->lessThan($today) || $fromDate->greaterThan($today->addDays(60))) {
             $fromDate = $today;
         }
@@ -46,22 +50,9 @@ class RescheduleController extends Controller
             $request->session()->put('student_reschedule_visitor_token', $visitorToken);
         }
 
-        $available = $availability->getAvailableSlotsGroupedByDate(
-            sessionType: $ownedBooking->sessionType,
-            customerTimezone: $timezone,
-            fromDate: $fromDate,
-            toDate: $fromDate->endOfMonth()->min($today->addDays(60)),
-            currentVisitorToken: $visitorToken,
+        $slots = app(BookingSlotPresenter::class)->forMonth(
+            $ownedBooking->sessionType, $timezone, $fromDate, $fromDate->endOfMonth()->min($today->addDays(60)), $visitorToken,
         );
-        $slots = [];
-        foreach ($available as $date => $dailySlots) {
-            foreach ($dailySlots as $slot) {
-                $slots[$date][] = [
-                    'id' => $resolver->issue($ownedBooking->sessionType, $slot, $timezone, $visitorToken),
-                    'label' => CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')->setTimezone($timezone)->format('g:i A'),
-                ];
-            }
-        }
 
         return view('student.reschedule', [
             'booking' => $ownedBooking,
@@ -112,9 +103,12 @@ class RescheduleController extends Controller
         return redirect()->route('student.dashboard')->with('success', 'Your session change was recorded.');
     }
 
-    private function displayTimezone(Student $student, Booking $booking, TimezoneService $timezones, ?string $requested = null): string
+    private function displayTimezone(Student $student, Booking $booking, TimezoneService $timezones, mixed $requested = null): string
     {
         foreach ([$requested, $student->preferred_timezone, $booking->customer_timezone, $timezones->getBusinessTimezone()] as $candidate) {
+            if (! is_string($candidate)) {
+                continue;
+            }
             try {
                 return $timezones->validate($candidate);
             } catch (Throwable) {

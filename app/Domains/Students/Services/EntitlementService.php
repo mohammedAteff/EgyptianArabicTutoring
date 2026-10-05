@@ -10,6 +10,7 @@ use App\Domains\Students\Models\StudentPackageEntitlement;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -152,8 +153,16 @@ class EntitlementService
     /** @return array<string, array{label: string, remaining: int, available: int}> */
     public function forStudent(int $studentId): array
     {
+        return $this->forPackages(StudentPackage::query()->where('student_id', $studentId)->with(['entitlements.type', 'ledgerEntries'])->get());
+    }
+
+    /** @param Collection<int, StudentPackage> $packages
+     * @return array<string, array{label: string, remaining: int, available: int}>
+     */
+    public function forPackages(Collection $packages): array
+    {
         $totals = [];
-        foreach (StudentPackage::query()->where('student_id', $studentId)->with(['entitlements.type', 'ledgerEntries'])->get() as $package) {
+        foreach ($packages as $package) {
             foreach ($this->projection($package) as $row) {
                 $code = $row['code'];
                 $totals[$code] ??= ['label' => $row['label'], 'remaining' => 0, 'available' => 0];

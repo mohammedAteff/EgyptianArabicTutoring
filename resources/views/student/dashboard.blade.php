@@ -7,6 +7,14 @@
 <p class="mt-2 text-stone-600">Welcome, {{ $student->first_name }}.</p>
 @if(session('success'))<p role="status" class="mt-5 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{{ session('success') }}</p>@endif
 @if(session('info'))<p role="status" class="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{{ session('info') }}</p>@endif
+<section aria-label="Your next action" class="mt-6 rounded-2xl border border-nile-200 bg-nile-50 p-5">
+    <p class="text-sm font-semibold text-nile-700">Your next step</p>
+    <h2 class="mt-1 text-xl font-semibold text-nile-900">{{ $nextAction['label'] }}</h2>
+    <p class="mt-2 text-sm text-stone-600">{{ $nextAction['detail'] }}</p>
+    <a href="{{ $nextAction['url'] }}" class="mt-4 inline-flex min-h-11 items-center rounded-xl bg-nile-800 px-5 py-2 text-sm font-semibold text-white">{{ $nextAction['label'] }}</a>
+    <a href="{{ route('student.notifications.index') }}" class="ml-3 inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">{{ $unreadNotifications }} unread notifications</a>
+</section>
+<x-student-progress :progress="$progress" />
 <section class="mt-8" aria-labelledby="forms-title">
     <h2 id="forms-title" class="text-xl font-semibold">Questionnaires</h2>
     <div class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -25,7 +33,8 @@
 </section>
 <section class="mt-8" aria-labelledby="credits-title">
     <h2 id="credits-title" class="text-xl font-semibold">Sessions and credits</h2>
-    @if($availableCredits > 0)<a href="{{ route('student.bookings.create') }}" class="mt-3 inline-block rounded-lg bg-nile-800 px-4 py-2 text-sm font-semibold text-white hover:bg-nile-900">Book with a package credit</a>@endif
+    @foreach($entitlementNotices as $notice)<p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{{ $notice }}</p>@endforeach
+    @if($canBookWithPackage)<a href="{{ route('student.bookings.create') }}" class="mt-3 inline-block rounded-lg bg-nile-800 px-4 py-2 text-sm font-semibold text-white hover:bg-nile-900">Book with a package credit</a>@endif
     <div class="mt-4 grid gap-4 sm:grid-cols-3">
         <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Remaining entitlements</p><p class="mt-1 text-2xl font-semibold text-nile-900">@foreach($entitlementBalances as $balance)<span class="block text-base">{{ $balance['label'] }}: {{ $balance['remaining'] }}</span>@endforeach</p></div>
         <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Completed sessions</p><p class="mt-1 text-2xl font-semibold text-nile-900">{{ $completedCount }}</p></div>
@@ -67,6 +76,18 @@
             <p class="font-semibold">{{ $customerStart->format('D, M j, Y · g:i A') }} <span class="text-sm font-normal text-stone-500">{{ $customerStart->timezoneName }}</span></p>
             <p class="mt-1 text-sm text-stone-600">{{ $booking->sessionType?->name ?? 'Private lesson' }} · {{ $booking->studentStatusLabel() }}</p>
             <x-lesson-materials :booking="$booking" />
+            @if($booking->status === 'completed')
+                @php $savedFeedback = $lessonFeedback->get($booking->id); @endphp
+                <details class="mt-4 border-t border-stone-100 pt-4"><summary class="cursor-pointer text-sm font-semibold text-nile-800">Optional private lesson feedback</summary>
+                    <p class="mt-2 text-xs text-stone-500">Only you and authorized teaching staff can see this feedback.</p>
+                    <form method="POST" action="{{ route('student.lessons.feedback', $booking->id) }}" class="mt-3 grid gap-3">
+                        @csrf
+                        <label class="text-sm">Rating<select name="rating" required class="mt-1 min-h-11 w-full rounded-xl border border-stone-300 p-2"><option value="">Choose a rating</option>@foreach([5 => '5 · Very helpful', 4 => '4 · Helpful', 3 => '3 · Okay', 2 => '2 · Could improve', 1 => '1 · Needs attention'] as $rating => $label)<option value="{{ $rating }}" @selected($savedFeedback?->rating === $rating)>{{ $label }}</option>@endforeach</select></label>
+                        <label class="text-sm">Comment (optional)<textarea name="comment" rows="2" maxlength="2000" class="mt-1 w-full rounded-xl border border-stone-300 p-2">{{ $savedFeedback?->comment }}</textarea></label>
+                        <button class="min-h-11 justify-self-start rounded-xl bg-nile-800 px-4 py-2 text-sm font-semibold text-white">Save private feedback</button>
+                    </form>
+                </details>
+            @endif
         </article>
     @endforeach
 </section>

@@ -25,38 +25,7 @@
         </div>
     @endif
 
-    <!-- Timezone Bar -->
-    <div class="mb-8 bg-white border border-stone-200/80 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-nile-50 text-nile-700 flex items-center justify-center shrink-0">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </div>
-            @php
-                $tzDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, now());
-            @endphp
-            <div>
-                <div class="text-xs text-stone-500 font-medium">{{ __('Showing times in your timezone:') }}</div>
-                <div class="text-sm font-bold text-stone-900 flex items-center gap-2 mt-0.5">
-                    <span class="inline-block w-5 h-3.5 shrink-0 shadow-xs border border-stone-200 rounded-xs overflow-hidden" aria-hidden="true">
-                        <x-timezone-flag :display="$tzDisplay" class="w-full h-full object-cover" />
-                    </span>
-                    <span class="sr-only">{{ __('Timezone Country: :country. Timezone:', ['country' => $tzDisplay['timezone_country_name']]) }}</span>
-                    <span class="font-medium text-stone-900">{{ $tzDisplay['city'] }}</span>
-                    <span class="text-xs text-stone-500 font-normal">({{ $customerTimezone }}, {{ $tzDisplay['utc_offset'] }})</span>
-                </div>
-            </div>
-        </div>
-        <button type="button"
-                wire:click="$toggle('showTimezoneModal')"
-                class="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-terracotta-600 hover:text-terracotta-700 bg-terracotta-50 hover:bg-terracotta-100 border border-terracotta-200/60 px-3.5 py-2 rounded-xl transition-colors">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>{{ __('Change Timezone') }}</span>
-        </button>
-    </div>
+    <x-timezone-selector :timezone="$customerTimezone" :livewire="true" />
 
     <!-- Multi-Step Progress Tracker -->
     <div class="mb-10">
@@ -176,38 +145,8 @@
                     @if($selectedDate && !empty($availableSlotsByDate[$selectedDate]))
                         <div class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                             @foreach($availableSlotsByDate[$selectedDate] as $slot)
-                                @php
-                                    $slotInstant = \Carbon\CarbonImmutable::parse($slot['slot_start_utc'], 'UTC');
-                                    $slotCustomerDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($customerTimezone, $slotInstant);
-                                    $businessTimezone = $slot['business_timezone'] ?? 'Africa/Cairo';
-                                    $businessSlotStart = $slotInstant->setTimezone($businessTimezone);
-                                    $businessSlotEnd = \Carbon\CarbonImmutable::parse($slot['slot_end_utc'], 'UTC')->setTimezone($businessTimezone);
-                                @endphp
-                                <button type="button"
-                                        wire:key="booking-slot-{{ $slot['slot_start_utc'] }}"
-                                        wire:click="selectSlot('{{ $slot['slot_id'] }}')"
-                                        wire:loading.attr="disabled"
-                                        class="w-full text-left p-3.5 rounded-xl border border-stone-200 hover:border-terracotta-500 hover:bg-terracotta-50/50 hover:shadow-sm transition-all flex items-center justify-between group">
-                                    <div>
-                                        <div class="font-bold text-sm text-stone-900 group-hover:text-terracotta-600">
-                                            {{ $slot['customer_formatted'] }} - {{ $slot['customer_formatted_end'] }}
-                                        </div>
-                                        <div class="text-xs text-stone-600 mt-1">
-                                            <span class="inline-flex items-center gap-1.5">
-                                                <x-timezone-flag :display="$slotCustomerDisplay" :alt="__('Flag for :country', ['country' => $slotCustomerDisplay['timezone_country_name']])" />
-                                                {{ $slotCustomerDisplay['city'] }} · {{ $customerTimezone }} · {{ $slotCustomerDisplay['utc_offset'] }}
-                                            </span>
-                                        </div>
-                                        <div class="text-xs text-stone-500 mt-0.5">
-                                            {{ __('Tutor equivalent: :start – :end', ['start' => $businessSlotStart->format('g:i A'), 'end' => $businessSlotEnd->format('g:i A')]) }} · {{ $businessTimezone }}
-                                        </div>
-                                    </div>
-                                    <div class="text-xs font-semibold text-terracotta-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
-                                        <span>{{ __('Select') }}</span>
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                        </svg>
-                                    </div>
+                                <button type="button" wire:key="booking-slot-{{ $slot['slot_start_utc'] }}" wire:click="selectSlot('{{ $slot['slot_id'] }}')" wire:loading.attr="disabled" class="w-full text-left p-3.5 rounded-xl border border-stone-200 hover:border-terracotta-500 hover:bg-terracotta-50/50 transition-all">
+                                    <x-booking-slot :appointment="$slot" :timezone="$customerTimezone" />
                                 </button>
                             @endforeach
                         </div>
@@ -522,56 +461,5 @@
         </div>
     @endif
 
-    <!-- Timezone Selector Modal -->
-    @if($showTimezoneModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div role="dialog" aria-modal="true" aria-labelledby="timezone-selector-title" class="bg-white rounded-3xl border border-stone-200 max-w-lg w-full p-6 shadow-2xl space-y-4"
-                 @keydown.escape.window="$wire.set('showTimezoneModal', false)"
-                 @click.away="$wire.set('showTimezoneModal', false)">
-                <div class="flex items-center justify-between border-b border-stone-100 pb-3">
-                    <h3 id="timezone-selector-title" class="text-lg font-bold text-stone-900">{{ __('Select Your Timezone') }}</h3>
-                    <button type="button"
-                            wire:click="$set('showTimezoneModal', false)"
-                            class="text-stone-400 hover:text-stone-600 p-1 rounded-lg">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <!-- Search Input -->
-                <div>
-                    <input type="text"
-                           wire:model.live.debounce.150ms="timezoneSearch"
-                           placeholder="{{ __('Type a city or region (e.g. Cairo, Berlin, London, New York)...') }}"
-                           class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none">
-                </div>
-
-                <!-- Timezone List -->
-                <div class="max-h-72 overflow-y-auto space-y-1 divide-y divide-stone-50">
-                    @forelse($curatedTimezones as $tz)
-                        @php
-                            $selectorDisplay = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay($tz['id'], now('UTC'));
-                        @endphp
-                        <button type="button"
-                                wire:key="timezone-option-{{ $tz['id'] }}"
-                                aria-pressed="{{ $customerTimezone === $tz['id'] ? 'true' : 'false' }}"
-                                wire:click="selectTimezone('{{ $tz['id'] }}')"
-                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between hover:bg-stone-50 transition-colors {{ $customerTimezone === $tz['id'] ? 'bg-terracotta-50 font-bold text-terracotta-700' : 'text-stone-700' }}">
-                            <span class="inline-flex items-center gap-2">
-                                <x-timezone-flag :display="$selectorDisplay" :alt="__('Flag for :country', ['country' => $selectorDisplay['timezone_country_name']])" />
-                                <span>{{ $selectorDisplay['label'] }}</span>
-                            </span>
-                            <span class="text-xs text-stone-400 font-mono">{{ $selectorDisplay['utc_offset'] }}</span>
-                        </button>
-                    @empty
-                        <div class="text-center py-6 text-xs text-stone-400">
-                            {{ __('No matching timezones found. Try searching for a major capital or city.') }}
-                        </div>
-                    @endforelse
-                </div>
-            </div>
-        </div>
-    @endif
 </div>
 </div>

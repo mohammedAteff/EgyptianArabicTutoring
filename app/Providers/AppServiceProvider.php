@@ -17,6 +17,7 @@ use App\Policies\LessonMaterialPolicy;
 use App\Policies\LessonWorkspacePolicy;
 use App\Policies\StaffBinPolicy;
 use App\Policies\StudentBinPolicy;
+use App\Policies\StudentTeachingPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
@@ -69,6 +70,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(StudentBin::class, StudentBinPolicy::class);
         Gate::policy(Booking::class, LessonWorkspacePolicy::class);
         Gate::policy(LessonMaterial::class, LessonMaterialPolicy::class);
+        Gate::policy(Student::class, StudentTeachingPolicy::class);
         class_exists(Student::class);
         app(TelegramBusinessEvents::class)->register();
 

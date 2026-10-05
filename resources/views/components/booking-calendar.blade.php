@@ -25,7 +25,7 @@
                 $available = !empty($slots[$date]) && $date >= $today;
             @endphp
             <button type="button" @disabled(!$available) aria-label="{{ $calendar->setDay($day)->format('l, F j, Y') }}"
-                @if($livewire && $available) wire:click="selectDate('{{ $date }}')" @elseif($available) x-on:click="selectedDate = '{{ $date }}'" @endif
+                @if($livewire && $available) wire:click="selectDate('{{ $date }}')" @elseif($available) x-on:click="selectedDate = '{{ $date }}'; $dispatch('date-selected')" @endif
                 @if(!$livewire) x-bind:class="selectedDate === '{{ $date }}' ? 'bg-terracotta-600 text-white' : 'bg-stone-50 text-stone-900'" @endif
                 class="aspect-square rounded-2xl border text-sm font-semibold transition-colors {{ !$available ? 'cursor-not-allowed border-transparent text-stone-300' : ($livewire && $selectedDate === $date ? 'border-terracotta-600 bg-terracotta-600 text-white' : 'border-stone-200 hover:border-terracotta-500') }}">
                 {{ $day }}@if($available)<span class="mx-auto mt-1 block h-1 w-1 rounded-full bg-terracotta-400"></span>@endif

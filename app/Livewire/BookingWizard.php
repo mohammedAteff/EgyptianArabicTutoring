@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\Availability\Services\BookingSlotPresenter;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
@@ -108,10 +109,6 @@ class BookingWizard extends Component
     public string $visitorToken = '';
 
     public ?string $errorMessage = null;
-
-    public bool $showTimezoneModal = false;
-
-    public string $timezoneSearch = '';
 
     protected function rules(): array
     {
@@ -270,8 +267,6 @@ class BookingWizard extends Component
             $this->customerTimezone = $timezone;
             $this->manualTimezoneSelected = true;
             $this->timezoneCountryCode = app(TimezoneDisplayService::class)->resolveCountryCode($timezone);
-            $this->showTimezoneModal = false;
-            $this->timezoneSearch = '';
 
             if ($this->holdId) {
                 if ($this->selectedSlotStartUtc) {
@@ -834,29 +829,11 @@ class BookingWizard extends Component
 
         $availableSlotsByDate = [];
         if ($sessionType) {
-            $availabilityService = app(AvailabilityService::class);
-
-            $monthStart = CarbonImmutable::createFromFormat('Y-m', $this->calendarMonth, $this->customerTimezone)->startOfMonth();
-            $monthEnd = $monthStart->endOfMonth();
-
-            $availableSlotsByDate = $availabilityService->getAvailableSlotsGroupedByDate(
-                sessionType: $sessionType,
-                customerTimezone: $this->customerTimezone,
-                fromDate: $monthStart,
-                toDate: $monthEnd,
-                currentVisitorToken: $this->visitorToken
+            $monthStart = CarbonImmutable::createFromFormat('!Y-m', $this->calendarMonth, $this->customerTimezone)->startOfMonth();
+            $availableSlotsByDate = app(BookingSlotPresenter::class)->forMonth(
+                $sessionType, $this->customerTimezone, $monthStart, $monthStart->endOfMonth(), $this->visitorToken,
             );
-
-            $slotResolver = app(SlotResolver::class);
-            foreach ($availableSlotsByDate as &$slots) {
-                foreach ($slots as &$slot) {
-                    $slot['slot_id'] = $slotResolver->issue($sessionType, $slot, $this->customerTimezone, $this->visitorToken);
-                }
-                unset($slot);
-            }
-            unset($slots);
         }
-
         $preBookingQuestions = collect();
         if ($this->preBookingFormId && $this->initialPublishedVersionId) {
             $version = FormVersion::with('questions.options')
@@ -869,22 +846,10 @@ class BookingWizard extends Component
                 ->visibleQuestions($version?->questions->all() ?? [], $answers));
         }
 
-        // Filter timezones for modal
-        $timezoneService = app(TimezoneService::class);
-        $curatedTimezones = $timezoneService->getCuratedList();
-        if (! empty($this->timezoneSearch)) {
-            $search = strtolower(trim($this->timezoneSearch));
-            $curatedTimezones = array_filter($curatedTimezones, function ($tz) use ($search) {
-                return str_contains(strtolower($tz['id']), $search) ||
-                       str_contains(strtolower($tz['label']), $search);
-            });
-        }
-
         return view('livewire.booking-wizard', [
             'sessionType' => $sessionType,
             'activeSessionTypes' => $activeSessionTypes,
             'availableSlotsByDate' => $availableSlotsByDate,
-            'curatedTimezones' => $curatedTimezones,
             'preBookingQuestions' => $preBookingQuestions,
         ]);
     }
