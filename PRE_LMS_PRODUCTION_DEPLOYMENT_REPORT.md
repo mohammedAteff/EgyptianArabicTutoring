@@ -10,7 +10,7 @@ The confirmed active owner, `bolt@admin.com` / Administrator 1, was corrected fr
 
 Stage 5 is **COMPATIBLE_WITH_TOOLS_DISABLED**. Effective environment and cached destructive-tool flags both remain false; the navigation is absent and the direct route returns 404. Existing financial data is empty: reconciliation has zero discrepancies but reports **UNINITIALIZED_DATASET**, not a populated financial-history certification. Populated Student/rescheduling flows and Stage 5 ZIP browser completion remain later acceptance scope. No capability inventory, large QA cohort, adversarial acceptance, LMS or Hostinger operations handoff was started.
 
-All completed local gates below were reused against the unchanged candidate; no redundant full rerun, new application change or further dependency change occurred. Safe final Telegram delivery follows the completed report/tracker push, using the existing verified service and a distinct retry identity. Its actual result is recorded in the Telegram section and protected receipt.
+All completed local gates below were reused against the unchanged candidate; no redundant full rerun, new application change or further dependency change occurred. The single final Telegram notification succeeded after the completed report/tracker push through the existing verified service and a distinct retry identity. Actual safe metadata is recorded in the Telegram section and protected receipt.
 
 ## Git delivery and pinned source
 
@@ -142,7 +142,7 @@ The original blocked attempt failed before reaching Telegram, safe category `pro
 
 Fresh production inspection found exactly one enabled destination with enabled bot and matching prior successful delivery. Existing **TelegramDeliveryService::direct** is reused with identity `pre-lms-retry-20261006-0940:7cb9a236b60350cfa134c2d6c94e14df1eb20c6b:start/final` and existing stage_completion trigger. The one permitted start notification succeeded: delivery **4**, Telegram message **8**, transport attempted true. No token, chat destination, commands, polling, rules, credentials or background configuration changed.
 
-**Final retry notification: pending the completed report/tracker push.** Exactly one final invocation will follow all completed gates and documentation delivery. Safe receipt: `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/retry-20261006-0940/telegram-final-receipt.json`. Only actual safe delivery metadata will be appended afterward; no repeated send or aggressive retry. Notification failure, if any, preserves the successful release and must be reported explicitly.
+**Final retry notification: SENT SUCCESSFULLY.** After all gates and the report/tracker commit `f1b34519d03f1b4faa80c0b484f6a923f2bc3740` were pushed and remotely confirmed, exactly one final completion invocation ran at **2026-10-06 10:22:34 UTC**. Notification attempted true; transport attempted true; success true; delivery **5**; Telegram message **9**; safe error category null; execution exit 0 / zero stderr bytes. Safe receipt: `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/retry-20261006-0940/telegram-final-receipt.json`. This follow-up documentation commit records the actual receipt only; no additional send, retry or production source change occurs. No token or destination identifier is stored in the report.
 
 ## Historical attempts and stop boundary
 
