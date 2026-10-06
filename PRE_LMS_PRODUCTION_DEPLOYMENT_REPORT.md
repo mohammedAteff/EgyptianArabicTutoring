@@ -2,7 +2,13 @@
 
 ## Verdict
 
-**Release delivery completed; production deployment stopped before changes.**
+**Resume stopped before production changes — Hostinger SSH remains unavailable.**
+
+The owner-authorized resume on 2026-10-06 repeated ordinary SSH access checks against the unchanged existing endpoint. Three read-only attempts timed out before authentication; no remote command ran. Fresh fetch and remote advertisement both confirmed `origin/main` at the documentation checkpoint `14ad8055444778a31e62fd45f0fca6fe7a19df29`. The application candidate remains exactly `7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`. Its existing local acceptance evidence is reused, as requested; no complete gate rerun or application source change occurred. The verified manifest and both lockfile hashes still match the recorded candidate artifacts.
+
+The owner confirmed that the SSH endpoint, enabled status and access restrictions have not changed. DNS resolves the production hostname to the expected existing IP. A bounded HTTPS connection check from this computer also timed out; it does not establish that the application is globally unavailable. GitHub remained reachable. No network, SSH, authentication, Hostinger, Telegram or application configuration was changed to work around the failure.
+
+The resume could not freshly verify production SHA/status, database/migrations/duplicate exception dates, storage/session/Telegram state or owner profile. No fresh backup, maintenance entry, deployment, dependency installation, migration, cache rebuild, asset publication or production data write was performed by this run. Production's current state is **unverified**; the last observed SHA below is historical, not a new inspection. No rollback is required for this run. Production acceptance and Stage 5 compatibility remain incomplete, and no tool was enabled. The separate final resume notification result will be resolved after this documentation checkpoint, using the existing service and a distinct one-off identity; its safe receipt is `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/resume-20261006-0934/telegram-final-receipt.json`. The historical failed receipt remains untouched.
 
 The five-stage implementation is present on GitHub. Candidate source SHA: `7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`. Stage 5 delivery and the owner-approved build dependency patch are pushed. All integrated local release gates passed against that candidate. Hostinger SSH repeatedly times out, preventing authoritative database/configuration preflight and a protected deployment backup. No production maintenance, migration, checkout, dependency installation, asset publication, data reset or deployment occurred.
 
@@ -20,7 +26,7 @@ The first successful read-only SSH inspection found production at `18ac92c27f968
 | Stage 5 push | Normal fast-forward `36ab454..fa91e84`; subsequent fetch verified local/remote equality |
 | Approved security patch | `7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`; normal push and fetch verified remote equality |
 | Five-stage production candidate | **`7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`** |
-| Final report checkpoint | Documentation-only successor; resolve its SHA from Git history/final response. It does not silently replace the pinned application candidate. |
+| Prior report checkpoint / fresh resume remote | `14ad8055444778a31e62fd45f0fca6fe7a19df29`; verified by fresh fetch and remote advertisement. Resume documentation is a successor, not the pinned application candidate. |
 
 The initial push and some remote refreshes failed with GitHub TCP connectivity unavailable; later ordinary retries succeeded. No force push, merge/rebase, remote/authentication/proxy/security setting change or history rewrite occurred. The Stage 5 and later patch commits were inspected before delivery. Three pre-existing user documents remain untracked and unchanged: HOSTINGER_FIVE_PASS_DEPLOYMENT_REPORT.md, HOSTINGER_FIVE_PASS_PRODUCTION_PREFLIGHT.md and PRODUCTION_TYPED_ENTITLEMENT_MAPPING_PROPOSAL.md. No credential, dump, archive, generated build, screenshot, QA environment or temporary inspection program is staged.
 
@@ -116,6 +122,8 @@ All requested public, Student and Super Admin smoke checks remain **unperformed 
 **Production ZIP export/download: deferred to Prompt 4.** The Stage 5 tools are not deployed/enabled and no safe minimal production scope is established. Do not enable destructive tools to manufacture a pass or export unrelated sensitive production history. ZIP browser completion remains distinct from the passing endpoint/archive tests.
 
 ## Telegram start/final status
+
+The original attempt below is historical. The new resume explicitly authorizes a distinct final status invocation; no start was sent because production preflight did not pass and deployment did not begin. No prior Stage 5 or Pre-LMS notification identity is reused. The current run's safe receipt path is recorded in the verdict above; actual delivery is not inferred from the previous failure.
 
 The existing production pathway is TelegramDeliveryService::direct, with an enabled destination, enabled bot and matching prior successful delivery. Historical production completion delivery #3/message #7 is evidence of that previous pathway; it does not replace current destination verification. No token/destination/rule change or secret transfer to fixtures/Git occurs.
 
