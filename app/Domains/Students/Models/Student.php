@@ -21,6 +21,7 @@ class Student extends Authenticatable
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
+        'operational_status', 'operational_status_changed_at', 'operational_reason_code',
         'preferred_meeting_provider_id', 'suspended_at', 'suspended_by', 'suspension_reason',
         'first_name',
         'last_name',

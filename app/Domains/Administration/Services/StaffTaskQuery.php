@@ -30,6 +30,9 @@ class StaffTaskQuery
     public function query(Administrator $administrator, array $filters = []): Builder
     {
         $query = StaffTask::query()->with(['student', 'assignee']);
+        if (empty($filters['student_id'])) {
+            $query->where(fn (Builder $tasks) => $tasks->whereNull('student_id')->orWhereHas('student', fn (Builder $students) => $students->where('operational_status', 'active')));
+        }
         if (! $administrator->isAdmin() || ($filters['owner'] ?? '') === 'mine') {
             $query->where('assignee_id', $administrator->id);
         }

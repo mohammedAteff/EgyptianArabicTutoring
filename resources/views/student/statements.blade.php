@@ -1,0 +1,4 @@
+@extends('layouts.student')
+@section('content')
+<div class="space-y-5"><h1 class="font-serif text-3xl font-bold">My statements & receipts</h1><p class="text-sm text-slate-600">Review actual payments, refunds and expected installments for each purchase.</p>@forelse($packages as $package)<a class="block rounded-2xl border border-stone-200 bg-white p-5" href="{{ route('student.statements.show', $package) }}"><span class="font-semibold">{{ $package->package_name }} · Purchase #{{ $package->id }}</span><span class="mt-2 block text-sm text-slate-600">{{ $package->final_price }} {{ $package->currency }} · Open statement →</span></a>@empty<p class="rounded-xl border border-dashed border-stone-300 p-6 text-sm text-slate-500">No package purchases yet.</p>@endforelse{{ $packages->links() }}</div>
+@endsection

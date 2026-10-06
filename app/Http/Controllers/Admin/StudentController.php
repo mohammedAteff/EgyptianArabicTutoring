@@ -59,7 +59,7 @@ class StudentController extends Controller
     public function show(Request $request, int $student, StudentPackagePresentation $presentation, TimezoneService $timezones): View
     {
         $isAssistant = $request->user('web')?->role === 'assistant';
-        $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id'];
+        $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id', 'operational_status'];
         if (! $isAssistant) {
             array_push($columns, 'name_normalized', 'email_normalized', 'phone_normalized', 'date_of_birth', 'identity_status', 'possible_duplicate_of_student_id', 'internal_notes');
         }

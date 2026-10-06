@@ -20,6 +20,8 @@
                 <nav class="flex flex-wrap gap-4 text-sm font-semibold text-nile-800" aria-label="Student navigation">
                     <a href="{{ route('student.dashboard') }}">Sessions</a>
                     <a href="{{ route('student.teaching.index') }}">My learning</a>
+                    <a href="{{ route('student.scheduling.index') }}">Planning</a>
+                    <a href="{{ route('student.statements.index') }}">Statements</a>
                     <a href="{{ route('student.notifications.index') }}">Notifications</a>
                 <a href="{{ route('student.bins.index') }}" class="text-sm font-semibold text-nile-800">Educational Notes</a>
                 </nav>

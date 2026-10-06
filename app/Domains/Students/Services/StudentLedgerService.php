@@ -305,7 +305,7 @@ class StudentLedgerService
         return $entry;
     }
 
-    public function restoreCancellation(Booking $booking, string $idempotencyKey): ?SessionLedgerEntry
+    public function restoreCancellation(Booking $booking, string $idempotencyKey, string $description = 'Original entitlement restored after cancellation'): ?SessionLedgerEntry
     {
         if (! $booking->student_id || DB::transactionLevel() < 1) {
             return null;
@@ -337,7 +337,7 @@ class StudentLedgerService
             'student_package_entitlement_id' => $consumed->student_package_entitlement_id,
             'entitlement_type_id' => $consumed->entitlement_type_id,
             'credit_change' => -$consumed->credit_change,
-            'description' => 'Original entitlement restored after cancellation',
+            'description' => $description,
             'created_at' => now('UTC'),
         ]);
     }

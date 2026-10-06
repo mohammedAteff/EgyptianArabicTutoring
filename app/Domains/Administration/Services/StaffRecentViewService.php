@@ -22,7 +22,7 @@ class StaffRecentViewService
     public function forAdministrator(Administrator $administrator): array
     {
         $recent = StaffRecentView::query()->where('administrator_id', $administrator->id)->orderByDesc('viewed_at')->orderByDesc('id')->limit(12)->get();
-        $students = Student::query()->where('identity_status', '!=', 'merged')->whereIn('id', $recent->where('entity_type', 'student')->pluck('entity_id'))->get()->keyBy('id');
+        $students = Student::query()->where('identity_status', '!=', 'merged')->where('operational_status', 'active')->whereIn('id', $recent->where('entity_type', 'student')->pluck('entity_id'))->get()->keyBy('id');
         $bookings = Booking::query()->whereIn('id', $recent->where('entity_type', 'booking')->pluck('entity_id'))->get(['id'])->keyBy('id');
         $contacts = Contact::query()->whereIn('id', $recent->where('entity_type', 'contact')->pluck('entity_id'))->get(['id', 'name'])->keyBy('id');
         $items = [];

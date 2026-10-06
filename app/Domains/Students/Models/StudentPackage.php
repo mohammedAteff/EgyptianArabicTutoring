@@ -20,6 +20,18 @@ class StudentPackage extends Model
         return ['expiration_date' => 'date', 'original_price' => 'decimal:2', 'discount_amount' => 'decimal:2', 'final_price' => 'decimal:2'];
     }
 
+    /** @return HasMany<PackageInstallment, $this> */
+    public function installments(): HasMany
+    {
+        return $this->hasMany(PackageInstallment::class)->orderBy('due_date')->orderBy('sequence');
+    }
+
+    /** @return HasMany<PackageRenewal, $this> */
+    public function renewals(): HasMany
+    {
+        return $this->hasMany(PackageRenewal::class, 'previous_package_id');
+    }
+
     protected static function booted(): void
     {
         static::updating(function (self $package): void {

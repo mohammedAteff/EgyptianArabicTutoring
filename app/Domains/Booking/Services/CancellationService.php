@@ -10,10 +10,8 @@ use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
-use App\Domains\CMS\Models\Setting;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\Student;
-use App\Domains\Students\Services\StudentLedgerService;
 use Carbon\CarbonImmutable;
 
 class CancellationService
@@ -22,7 +20,6 @@ class CancellationService
         protected AuditLogService $auditLogService,
         protected AnalyticsService $analyticsService,
         protected AvailabilityService $availabilityService,
-        protected StudentLedgerService $studentLedgerService,
         protected DatabaseCapability $databaseCapability,
     ) {}
 
@@ -36,11 +33,12 @@ class CancellationService
         Booking $booking,
         string $performedBy = 'customer',
         ?int $performedById = null,
-        ?string $reason = null
+        ?string $reason = null,
+        ?string $reasonCode = null,
     ): Booking {
         $snapshot = Booking::query()->whereKey($booking->id)->firstOrFail();
 
-        return $this->databaseCapability->transaction(function () use ($snapshot, $performedBy, $performedById, $reason) {
+        return $this->databaseCapability->transaction(function () use ($snapshot, $performedBy, $performedById, $reason, $reasonCode) {
             if ($snapshot->start_at_utc && $snapshot->end_at_utc) {
                 $this->availabilityService->acquireCalendarDateLocks(
                     CarbonImmutable::instance($snapshot->start_at_utc),
@@ -76,16 +74,8 @@ class CancellationService
                 throw new InvalidBookingStatusTransitionException("Only confirmed bookings can be cancelled; current status is '{$lockedBooking->status}'.");
             }
 
-            if ($performedBy === 'customer') {
-                if ($lockedBooking->start_at_utc <= now('UTC')) {
-                    throw new BookingPolicyViolationException('Past appointments cannot be cancelled.');
-                }
-
-                $cutoffHours = (int) Setting::get('booking_cancellation_cutoff_hours', 4);
-                if ($lockedBooking->start_at_utc < now('UTC')->addHours($cutoffHours)) {
-                    throw new BookingPolicyViolationException("Appointments cannot be cancelled within {$cutoffHours} hours of the scheduled start time.");
-                }
-            }
+            $policy = app(BookingPolicyService::class);
+            $outcome = $policy->cancellationOutcome($lockedBooking, $performedBy);
 
             $previousStatus = $lockedBooking->status;
 
@@ -95,10 +85,7 @@ class CancellationService
                 'cancellation_reason' => $reason,
             ]);
 
-            $this->studentLedgerService->restoreCancellation(
-                booking: $lockedBooking,
-                idempotencyKey: 'booking-cancellation-restore:'.$lockedBooking->id,
-            );
+            $policy->record($lockedBooking, 'cancellation', $outcome, $performedBy, $performedById, $reasonCode);
 
             // Record BookingEvent
             BookingEvent::create([
@@ -113,6 +100,8 @@ class CancellationService
                     'status' => 'cancelled',
                     'cancelled_at' => $lockedBooking->cancelled_at?->toDateTimeString(),
                     'reason' => $reason,
+                    'reason_code' => $reasonCode,
+                    'outcome' => $outcome,
                 ],
                 'created_at' => now(),
             ]);

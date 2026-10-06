@@ -4,6 +4,12 @@
 <x-student-quick-actions :student="$student" />
 <x-student-operational-alerts :student="$student" :alerts="$operationalAlerts" />
 @if(auth('web')->user()?->isAdmin())
+<form method="POST" action="{{ route('admin.students.operational-status', $student) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    @csrf @method('PATCH')
+    <label class="flex-1 text-sm font-semibold">Operational status<select name="status" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white p-3">@foreach(['active', 'inactive', 'archived'] as $status)<option @selected($student->operational_status === $status)>{{ $status }}</option>@endforeach</select></label>
+    <x-operational-reason-select /><button class="min-h-11 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save operational status</button>
+    <p class="w-full text-xs text-slate-500">Inactive / archived students leave default roster and follow-ups. Existing lessons stay visible; financial history and account suspension are separate.</p>
+</form>
 <form method="POST" action="{{ route('admin.students.meeting-preference', $student->id) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
     @csrf
     <label class="flex-1 text-sm">Preferred meeting provider<select name="preferred_meeting_provider_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">Use default provider</option>@foreach($meetingProviders as $provider)<option value="{{ $provider->id }}" @selected($student->preferred_meeting_provider_id === $provider->id)>{{ $provider->name }}</option>@endforeach</select></label>

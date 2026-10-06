@@ -23,6 +23,7 @@ use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\Students\Services\StudentSchedulingService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -403,6 +404,8 @@ class BookingService
                 if (! $effectiveFormVersionId && ! Booking::where('student_id', $studentId)->exists()) {
                     throw ValidationException::withMessages(['intakeForm' => 'First-time booking requires the published Short Form. Please contact your tutor if it is unavailable.']);
                 }
+
+                app(StudentSchedulingService::class)->assertAvailable($studentId, $startUtc, $endUtc);
 
                 // Lock and verify the hold only after contact and student rows, keeping one global lock order.
                 $hold = BookingHold::query()

@@ -15,7 +15,7 @@ class StaffSavedViewService
     public const ROUTES = ['students' => 'admin.students.index', 'staff_notes' => 'admin.staff-bins.index', 'tasks' => 'admin.tasks.index'];
 
     public const KEYS = [
-        'students' => ['q', 'status', 'package', 'credits', 'expiry_from', 'expiry_to', 'timezone', 'session_status', 'joined_from', 'joined_to'],
+        'students' => ['q', 'status', 'operational_status', 'package', 'credits', 'expiry_from', 'expiry_to', 'timezone', 'session_status', 'joined_from', 'joined_to'],
         'staff_notes' => ['q', 'sort', 'owner', 'collection'],
         'tasks' => ['q', 'status', 'priority', 'owner', 'due', 'student_id'],
     ];

@@ -11,6 +11,12 @@
         </div>
     </div>
 
+    <x-report-filters :filters="$filters" :action="route('admin.audit-logs')" :fields="[
+        'actor' => ['Actor type', ['admin' => 'Administrator', 'student' => 'Student', 'system' => 'System']], 'actor_id' => ['Actor ID', 'number'],
+        'action' => ['Exact action', 'text'], 'entity' => ['Entity', $entities], 'date_from' => ['From (business date)', 'date'], 'date_to' => ['Through (business date)', 'date'],
+        'domain' => ['Action category', ['booking' => 'Booking', 'finance' => 'Finance', 'student' => 'Student', 'security' => 'Security', 'configuration' => 'Configuration']]
+    ]" />
+    <p class="text-xs text-slate-500">Categories group known action prefixes. Diffs display approved operational fields only; private payloads and request identifiers are hidden.</p>
     <!-- Audit Log Table -->
     <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
         <div class="overflow-x-auto">
@@ -18,9 +24,9 @@
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
                     <tr>
                         <th class="px-4 py-3.5 font-semibold">Action</th>
-                        <th class="px-4 py-3.5 font-semibold">Administrator</th>
+                        <th class="px-4 py-3.5 font-semibold">Actor</th>
                         <th class="px-4 py-3.5 font-semibold">Entity Type / ID</th>
-                        <th class="px-4 py-3.5 font-semibold">IP & Client</th>
+                        <th class="px-4 py-3.5 font-semibold">Safe changes</th>
                         <th class="px-4 py-3.5 font-semibold text-right">Timestamp</th>
                     </tr>
                 </thead>
@@ -33,7 +39,7 @@
                                 </span>
                             </td>
                             <td class="px-4 py-4 text-xs font-semibold text-slate-700">
-                                {{ $log->administrator->name ?? 'System / Anonymous' }}
+                                {{ $log->actor_type === 'student' ? 'Student #'.$log->actor_student_id : ($log->administrator->name ?? 'System / Anonymous') }}
                             </td>
                             <td class="px-4 py-4 text-xs font-mono text-slate-600">
                                 @if($log->entity_type)
@@ -43,7 +49,7 @@
                                 @endif
                             </td>
                             <td class="px-4 py-4 text-xs font-mono text-slate-500">
-                                {{ $log->ip_address ?? '—' }}
+                                @forelse($diffs[$log->id] as $diff)<p class="mb-1"><strong>{{ $diff['field'] }}</strong>: {{ $diff['before'] }} → {{ $diff['after'] }}</p>@empty<span>No public operational fields changed.</span>@endforelse
                             </td>
                             <td class="px-4 py-4 text-right text-xs text-slate-500">
                                 {{ $log->created_at ? app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($log->created_at) : '—' }}

@@ -123,6 +123,10 @@ class StudentPrivacyService
             DB::table('student_bins')->where('student_id', $studentId)->update(['title' => 'Redacted educational note', 'body' => '[redacted]', 'student_visible' => false]);
             $this->lessonMaterials->eraseForBookings($lockedIds, $administratorId);
             $this->teaching->erase($studentId);
+            DB::table('recurring_lesson_plans')->where('student_id', $studentId)->update(['status' => 'paused']);
+            DB::table('booking_waitlists')->where('student_id', $studentId)->update(['status' => 'withdrawn', 'notes' => null]);
+            DB::table('student_unavailabilities')->where('student_id', $studentId)->update(['status' => 'cancelled', 'notes' => null]);
+            DB::table('package_renewals')->where('student_id', $studentId)->update(['notes' => null]);
             DB::table('staff_tasks')->where('student_id', $studentId)->update(['title' => 'Redacted student follow-up', 'description' => null, 'student_id' => null, 'status' => 'cancelled', 'completed_at' => null]);
             DB::table('student_operational_alerts')->where('student_id', $studentId)->update(['title' => 'Redacted operational alert', 'body' => '[redacted]', 'status' => 'archived']);
             DB::table('staff_recent_views')->where('entity_type', 'student')->where('entity_id', $studentId)->delete();

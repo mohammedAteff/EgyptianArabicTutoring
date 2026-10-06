@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Availability\Models\AvailabilityException;
 use App\Domains\Availability\Models\AvailabilityRule;
+use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class AvailabilityController extends Controller
@@ -29,7 +29,7 @@ class AvailabilityController extends Controller
 
         $exceptions = AvailabilityException::query()
             ->orderBy('date')
-            ->get();
+            ->paginate(25);
 
         $weekdays = [
             0 => 'Sunday',
@@ -78,8 +78,6 @@ class AvailabilityController extends Controller
             'created_at' => now(),
         ]);
 
-        Cache::flush();
-
         return back()->with('success', 'Weekly availability window added.');
     }
 
@@ -95,8 +93,6 @@ class AvailabilityController extends Controller
             'new_data' => ['enabled' => $rule->enabled],
             'created_at' => now(),
         ]);
-
-        Cache::flush();
 
         return back()->with('success', 'Availability rule status updated.');
     }
@@ -115,8 +111,6 @@ class AvailabilityController extends Controller
             'created_at' => now(),
         ]);
 
-        Cache::flush();
-
         return back()->with('success', 'Availability window removed.');
     }
 
@@ -130,49 +124,15 @@ class AvailabilityController extends Controller
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $isBlocked = (bool) $validated['is_blocked'];
-        $type = $isBlocked ? 'blocked' : 'special_hours';
+        $result = app(AvailabilityService::class)->saveException($validated, Auth::id());
 
-        $exception = AvailabilityException::updateOrCreate(
-            ['date' => $validated['date']],
-            [
-                'type' => $type,
-                'start_time' => ! $isBlocked && ! empty($validated['start_time']) ? $validated['start_time'].':00' : null,
-                'end_time' => ! $isBlocked && ! empty($validated['end_time']) ? $validated['end_time'].':00' : null,
-                'notes' => $validated['reason'] ?? null,
-            ]
-        );
-
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'availability_exception_saved',
-            'entity_type' => AvailabilityException::class,
-            'entity_id' => $exception->id,
-            'new_data' => $exception->toArray(),
-            'created_at' => now(),
-        ]);
-
-        Cache::flush();
-
-        return back()->with('success', 'Date exception configured.');
+        return back()->with('success', 'Date exception saved. '.$result['confirmed_bookings'].' existing confirmed appointment(s) remain scheduled; review the calendar before making appointment changes.');
     }
 
     public function destroyException(AvailabilityException $exception): RedirectResponse
     {
-        $exceptionData = $exception->toArray();
-        $exception->delete();
+        app(AvailabilityService::class)->removeException($exception, Auth::id());
 
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'availability_exception_deleted',
-            'entity_type' => AvailabilityException::class,
-            'entity_id' => $exception->id,
-            'previous_data' => $exceptionData,
-            'created_at' => now(),
-        ]);
-
-        Cache::flush();
-
-        return back()->with('success', 'Date exception removed.');
+        return back()->with('success', 'Date exception removed. Existing bookings are preserved.');
     }
 }

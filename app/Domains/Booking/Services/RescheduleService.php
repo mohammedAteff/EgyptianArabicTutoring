@@ -17,6 +17,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\EntitlementService;
+use App\Domains\Students\Services\StudentSchedulingService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -180,6 +181,9 @@ class RescheduleService
             $endUtc = $slotConfig['end_utc'];
 
             // 3. Authoritative slot validation excluding this booking
+            if ($lockedBooking->student_id !== null) {
+                app(StudentSchedulingService::class)->assertAvailable($lockedBooking->student_id, $startUtc, $endUtc);
+            }
             $this->availabilityService->validateSlotForBooking(
                 sessionType: $targetType,
                 startUtc: $startUtc,

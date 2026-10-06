@@ -90,7 +90,7 @@
                         </div>
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-slate-400 font-medium">Student Time:</span>
-                            <span class="font-bold text-amber-300">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentLocal) }} ({{ $nextBooking->customer_timezone }})</span>
+                            <span class="font-bold text-amber-300">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($studentLocal, $nextBooking->customer_timezone) }} ({{ $nextBooking->customer_timezone }})</span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-slate-400 font-medium">Email:</span>
@@ -160,7 +160,7 @@
                                         <div class="text-xs text-slate-500">{{ $b->contact->email }}</div>
                                     </td>
                                     <td class="px-4 py-3.5 text-xs text-slate-600">
-                                        <span class="font-semibold text-slate-900">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStudentLocal) }}</span>
+                                        <span class="font-semibold text-slate-900">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorTime($bStudentLocal, $b->customer_timezone) }}</span>
                                         <span class="text-slate-400">({{ $b->customer_timezone }})</span>
                                     </td>
                                     <td class="px-4 py-3.5">
@@ -233,6 +233,7 @@
     </div>
 
     <!-- Recent Operations & Security Activity -->
+    @if(auth('web')->user()->isSuperAdmin())
     <div class="bg-white rounded-3xl p-6 shadow-xs border border-slate-200">
         <div class="flex items-center justify-between mb-4">
             <div>
@@ -249,8 +250,7 @@
                 <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
                     <tr>
                         <th class="px-4 py-2.5 font-semibold">Action</th>
-                        <th class="px-4 py-2.5 font-semibold">Administrator</th>
-                        <th class="px-4 py-2.5 font-semibold">IP Address</th>
+                        <th class="px-4 py-2.5 font-semibold">Actor</th>
                         <th class="px-4 py-2.5 font-semibold text-right">Timestamp</th>
                     </tr>
                 </thead>
@@ -263,10 +263,7 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-slate-700">
-                                {{ $log->administrator->name ?? 'System / Anonymous' }}
-                            </td>
-                            <td class="px-4 py-3 text-slate-500 font-mono text-[11px]">
-                                {{ $log->ip_address ?? '—' }}
+                                {{ $log->actor_type === 'student' ? 'Student #'.$log->actor_student_id : ($log->administrator->name ?? 'System') }}
                             </td>
                             <td class="px-4 py-3 text-right text-slate-500">
                                 {{ $log->created_at ? $log->created_at->diffForHumans() : '—' }}
@@ -274,7 +271,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-6 text-center text-slate-400">
+                            <td colspan="3" class="px-4 py-6 text-center text-slate-400">
                                 No audit events recorded yet.
                             </td>
                         </tr>
@@ -283,6 +280,7 @@
             </table>
         </div>
     </div>
+    @endif
 
 </div>
 @endsection

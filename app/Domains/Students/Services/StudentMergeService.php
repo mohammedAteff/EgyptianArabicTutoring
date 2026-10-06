@@ -121,6 +121,10 @@ class StudentMergeService
                 'student_notifications',
                 'staff_tasks',
                 'student_operational_alerts',
+                'recurring_lesson_plans',
+                'booking_waitlists',
+                'student_unavailabilities',
+                'package_renewals',
             ] as $table) {
                 $changes = ['student_id' => $primaryId];
                 if (in_array($table, ['payment_records', 'payment_refunds', 'session_ledger_entries'], true)) {

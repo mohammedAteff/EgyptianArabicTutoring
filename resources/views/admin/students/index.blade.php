@@ -13,8 +13,8 @@
 
     <p class="text-sm text-slate-600">Total Students: <strong>{{ $totalStudents }}</strong> · Roster members with allocated credits or confirmed/delivered sessions.</p>
     <x-staff-saved-views section="students" :filters="$filters" :views="$savedViews" />
-    <x-report-filters :filters="$filters" :action="route('admin.students.index')" export-route="admin.students.export" :fields="[
-        'q'=>['Name, email or phone','search'], 'status'=>['Status',['verified'=>'Verified','legacy_unverified'=>'Unverified','suspended'=>'Suspended']], 'package'=>['Package name','text'], 'credits'=>['Credits',['available'=>'Available','none'=>'None available']],
+    <x-report-filters :default-labels="['operational_status' => 'Default (active)']" :filters="$filters" :action="route('admin.students.index')" export-route="admin.students.export" :fields="[
+        'q'=>['Name, email or phone','search'], 'operational_status' => ['Operational status', ['active' => 'Active (default)', 'inactive' => 'Inactive', 'archived' => 'Archived', 'all' => 'All operational states']], 'status'=>['Status',['verified'=>'Verified','legacy_unverified'=>'Unverified','suspended'=>'Suspended']], 'package'=>['Package name','text'], 'credits'=>['Credits',['available'=>'Available','none'=>'None available']],
         'expiry_from'=>['Expiry from','date'], 'expiry_to'=>['Expiry to','date'], 'timezone'=>['Preferred timezone','text'], 'session_status'=>['Session status',['confirmed'=>'Confirmed','completed'=>'Completed','cancelled'=>'Cancelled','no_show'=>'No show']], 'joined_from'=>['Joined from','date'], 'joined_to'=>['Joined through','date']
     ]" />
     @if(session('success'))

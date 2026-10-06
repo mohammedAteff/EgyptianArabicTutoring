@@ -7,11 +7,14 @@ use App\Domains\Booking\Exceptions\BookingPolicyViolationException;
 use App\Domains\Booking\Exceptions\InvalidBookingStatusTransitionException;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\RecurringLessonPlan;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\MeetingLinkService;
+use App\Domains\Booking\Services\NoShowService;
+use App\Domains\Booking\Services\RecurringLessonService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
@@ -21,6 +24,8 @@ use App\Domains\Notifications\Services\TelegramAutomationService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Services\PackageRenewalService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
@@ -64,6 +69,29 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if ($action === 'recurring_generate') {
+        $results = app(RecurringLessonService::class)->generate(
+            RecurringLessonPlan::query()->findOrFail((int) $data['plan_id']),
+            (int) $data['administrator_id'], 1, 1,
+        );
+        echo 'RESULT:SUCCESS:'.implode(',', array_map(fn ($row): string => $row->status, $results))."\n";
+        exit(0);
+    } elseif ($action === 'mark_no_show') {
+        app(NoShowService::class)->mark(Booking::query()->findOrFail((int) $data['booking_id']), (int) $data['administrator_id']);
+        echo "RESULT:SUCCESS:no_show\n";
+        exit(0);
+    } elseif ($action === 'renew_package') {
+        $renewal = app(PackageRenewalService::class)->renew(
+            StudentPackage::query()->findOrFail((int) $data['package_id']),
+            ['renewal_date' => $data['renewal_date'], 'idempotency_key' => $data['idempotency_key']], (int) $data['administrator_id'],
+        );
+        echo 'RESULT:SUCCESS:'.$renewal->new_package_id."\n";
+        exit(0);
+    } elseif ($action === 'record_payment') {
+        $payment = app(StudentLedgerService::class)->recordPayment(StudentPackage::query()->findOrFail((int) $data['package_id']), (string) $data['amount'], (string) $data['idempotency_key'], (int) $data['administrator_id']);
+        echo 'RESULT:SUCCESS:'.$payment->id."\n";
+        exit(0);
+    }
     if (in_array($action, ['telegram_emit', 'telegram_deliver'], true)) {
         Queue::fake();
         Http::preventStrayRequests();
@@ -227,7 +255,7 @@ try {
 } catch (SlotUnavailableException|InvalidBookingStatusTransitionException|BookingPolicyViolationException $e) {
     echo 'RESULT:CONFLICT:'.$e->getMessage()."\n";
     exit(2);
-} catch (InvalidArgumentException $e) {
+} catch (InvalidArgumentException|DomainException $e) {
     echo 'RESULT:CONFLICT:'.$e->getMessage()."\n";
     exit(2);
 } catch (ModelNotFoundException $e) {

@@ -1,4 +1,4 @@
-@props(['filters', 'fields', 'action', 'exportRoute' => null, 'fixed' => [], 'allowExport' => null])
+@props(['filters', 'fields', 'action', 'exportRoute' => null, 'fixed' => [], 'allowExport' => null, 'defaultLabels' => []])
 <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 <h2 class="mb-3 text-sm font-semibold text-slate-900">Filters</h2>
 <form method="GET" action="{{ $action }}" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -6,7 +6,7 @@
     @foreach($fields as $name => $definition)
     <label class="text-xs font-semibold text-slate-600">{{ $definition[0] }}
         @if(is_array($definition[1]))
-        <select name="{{ $name }}" class="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm"><option value="">{{ in_array($name, ['range', 'version_id', 'sort', 'dir', 'owner', 'population'], true) ? 'Default' : 'All' }}</option>@foreach($definition[1] as $value => $label)<option value="{{ $value }}" @selected(($filters[$name] ?? '') == $value)>{{ $label }}</option>@endforeach</select>
+        <select name="{{ $name }}" class="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm"><option value="">{{ $defaultLabels[$name] ?? (in_array($name, ['range', 'version_id', 'sort', 'dir', 'owner', 'population'], true) ? 'Default' : 'All') }}</option>@foreach($definition[1] as $value => $label)<option value="{{ $value }}" @selected(($filters[$name] ?? '') == $value)>{{ $label }}</option>@endforeach</select>
         @else
         <input name="{{ $name }}" type="{{ $definition[1] }}" value="{{ $filters[$name] ?? '' }}" class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm">
         @endif

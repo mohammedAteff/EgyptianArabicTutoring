@@ -15,6 +15,7 @@ class StudentRecordsQuery
     {
         return $request->validate([
             'q' => ['nullable', 'string', 'max:255'],
+            'operational_status' => ['nullable', Rule::in(['active', 'inactive', 'archived', 'all'])],
             'status' => ['nullable', Rule::in(['verified', 'legacy_unverified', 'suspended'])],
             'package' => ['nullable', 'string', 'max:160'],
             'credits' => ['nullable', Rule::in(['available', 'none'])],
@@ -30,6 +31,9 @@ class StudentRecordsQuery
     public function query(array $filters): Builder
     {
         $query = Student::tutoringRoster()->withCount('bookings')->with(['packages.ledgerEntries', 'packages.payments', 'packages.refunds', 'packages.entitlements.type']);
+        if (($filters['operational_status'] ?? 'active') !== 'all') {
+            $query->where('operational_status', $filters['operational_status'] ?? 'active');
+        }
         if (! empty($filters['q'])) {
             $identity = app(StudentIdentityService::class);
             $raw = trim($filters['q']);

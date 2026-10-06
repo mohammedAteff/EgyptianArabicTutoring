@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\Audit\Services\AuditLogPresentation;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
@@ -225,16 +226,51 @@ class SystemHealthController extends Controller
         ]);
     }
 
-    public function auditLogs(): View
+    public function auditLogs(Request $request, AuditLogPresentation $presentation): View
     {
-        $logs = AuditLog::query()
-            ->with('administrator')
-            ->orderByDesc('created_at')
-            ->paginate(30);
+        $filters = $request->validate([
+            'actor' => ['nullable', 'in:admin,student,system'], 'actor_id' => ['nullable', 'integer', 'min:1'],
+            'action' => ['nullable', 'regex:/^[a-z0-9_]+$/', 'max:100'], 'entity' => ['nullable', 'string', 'max:200'],
+            'date_from' => ['nullable', 'date_format:Y-m-d'], 'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'domain' => ['nullable', 'in:booking,finance,student,security,configuration'],
+        ]);
+        $query = AuditLog::query()->with('administrator');
+        if (! empty($filters['actor'])) {
+            $query->where('actor_type', $filters['actor']);
+        }
+        if (! empty($filters['actor_id'])) {
+            $query->where(function ($actors) use ($filters): void {
+                $actors->where('actor_user_id', $filters['actor_id'])->orWhere('actor_student_id', $filters['actor_id']);
+            });
+        }
+        foreach (['action' => 'action', 'entity' => 'entity_type'] as $filter => $column) {
+            if (! empty($filters[$filter])) {
+                $query->where($column, $filters[$filter]);
+            }
+        }
+        $prefixes = ['booking' => ['booking_'], 'finance' => ['finance_', 'payment_', 'package_'], 'student' => ['student_'], 'security' => ['admin_login', 'admin_logout', 'two_factor_', 'account_'], 'configuration' => ['setting_', 'availability_', 'config_']];
+        if (! empty($filters['domain'])) {
+            $query->where(function ($actions) use ($prefixes, $filters): void {
+                foreach ($prefixes[$filters['domain']] as $prefix) {
+                    $actions->orWhere('action', 'like', str_replace('_', '\\_', $prefix).'%');
+                }
+            });
+        }
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+        foreach (['date_from' => '>=', 'date_to' => '<'] as $filter => $operator) {
+            if (! empty($filters[$filter])) {
+                $date = CarbonImmutable::parse($filters[$filter], $timezone)->startOfDay();
+                $query->where('created_at', $operator, ($filter === 'date_to' ? $date->addDay() : $date)->utc());
+            }
+        }
+        $logs = $query->orderByDesc('created_at')->orderByDesc('id')->paginate(30)->withQueryString();
 
         return view('admin.system.audit-logs', [
             'title' => 'Security Audit Logs',
             'logs' => $logs,
+            'filters' => $filters,
+            'diffs' => $logs->getCollection()->mapWithKeys(fn (AuditLog $log): array => [$log->id => $presentation->diff($log)])->all(),
+            'entities' => AuditLog::query()->select('entity_type')->distinct()->limit(100)->pluck('entity_type')->mapWithKeys(fn (string $type): array => [$type => class_basename($type)])->all(),
         ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Domains\Availability\Services;
 
+use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Availability\Models\AvailabilityException;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
@@ -9,6 +10,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -19,6 +21,38 @@ class AvailabilityService
     public function __construct(
         protected TimezoneService $timezoneService
     ) {}
+
+    /** @param array<string, mixed> $values
+     * @return array{exception: AvailabilityException, confirmed_bookings: int} */
+    public function saveException(array $values, ?int $administratorId): array
+    {
+        return app(DatabaseCapability::class)->transaction(function () use ($values, $administratorId): array {
+            $day = CarbonImmutable::parse($values['date'], $this->timezoneService->getBusinessTimezone())->startOfDay();
+            $this->acquireCalendarDateLocks($day->utc(), $day->addDay()->utc(), 0);
+            $blocked = (bool) $values['is_blocked'];
+            $exception = AvailabilityException::query()->updateOrCreate(['date' => $values['date']], [
+                'type' => $blocked ? 'blocked' : 'special_hours',
+                'start_time' => $blocked ? null : $values['start_time'].':00',
+                'end_time' => $blocked ? null : $values['end_time'].':00',
+                'notes' => $values['reason'] ?? null,
+            ]);
+            app(AuditLogService::class)->log('availability_exception_saved', AvailabilityException::class, $exception->id, null, ['date' => $values['date'], 'status' => $blocked ? 'blocked' : 'special_hours'], $administratorId);
+            $count = Booking::query()->where('status', 'confirmed')->where('start_at_utc', '<', $day->addDay()->utc())->where('end_at_utc', '>', $day->utc())->count();
+
+            return ['exception' => $exception, 'confirmed_bookings' => $count];
+        }, 3);
+    }
+
+    public function removeException(AvailabilityException $exception, ?int $administratorId): void
+    {
+        app(DatabaseCapability::class)->transaction(function () use ($exception, $administratorId): void {
+            $day = CarbonImmutable::parse($exception->date, $this->timezoneService->getBusinessTimezone())->startOfDay();
+            $this->acquireCalendarDateLocks($day->utc(), $day->addDay()->utc(), 0);
+            $locked = AvailabilityException::query()->lockForUpdate()->findOrFail($exception->id);
+            $locked->delete();
+            app(AuditLogService::class)->log('availability_exception_deleted', AvailabilityException::class, $exception->id, ['date' => $day->toDateString()], null, $administratorId);
+        }, 3);
+    }
 
     /**
      * Authoritatively compute available booking slots grouped by customer local date.

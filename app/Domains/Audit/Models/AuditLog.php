@@ -89,7 +89,7 @@ class AuditLog extends Model
 
                         continue;
                     }
-                    if ($normalizedKey !== '' && preg_match('/(?:^|_)(?:email|phone|birth|dob|date_of_birth|password|remember_token|session_id|[a-z0-9]*token|first_name|last_name|full_name|name|note|notes|transaction_reference|bank_account|card_number)(?:_|$)/i', $normalizedKey)) {
+                    if ($normalizedKey !== '' && preg_match('/(?:^|_)(?:email|phone|birth|dob|date_of_birth|password|secret|totp|otp|two_factor|recovery_codes|verification_code|remember_token|session_id|[a-z0-9]*token|first_name|last_name|full_name|name|note|notes|transaction_reference|bank_account|card_number)(?:_|$)/i', $normalizedKey)) {
                         $result[$childKey] = self::blind((string) json_encode($childValue, JSON_UNESCAPED_UNICODE), $secret);
                     } else {
                         $result[$childKey] = $scrub($childValue, $keyString);

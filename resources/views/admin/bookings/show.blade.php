@@ -39,6 +39,7 @@
                 </form>
                 <form action="{{ route('admin.bookings.no-show', $booking->id) }}" method="POST">
                     @csrf
+                    <input type="hidden" name="reason_code" value="missed_lesson">
                     <button type="submit" class="px-3.5 py-2 bg-slate-200 hover:bg-red-100 hover:text-red-700 text-slate-700 rounded-xl text-xs font-bold transition-colors">
                         Mark No-Show
                     </button>
@@ -258,6 +259,7 @@
 
             <form action="{{ route('admin.bookings.cancel', $booking->id) }}" method="POST" class="space-y-4">
                 @csrf
+                <x-operational-reason-select />
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation Reason</label>
                     <textarea name="cancellation_reason" rows="3" required

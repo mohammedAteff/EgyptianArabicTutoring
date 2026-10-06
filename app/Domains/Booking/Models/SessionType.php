@@ -3,6 +3,7 @@
 namespace App\Domains\Booking\Models;
 
 use App\Domains\Students\Models\EntitlementType;
+use Database\Factories\SessionTypeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SessionType extends Model
 {
     use HasFactory;
+
+    protected static function newFactory(): SessionTypeFactory
+    {
+        return SessionTypeFactory::new();
+    }
 
     protected $table = 'session_types';
 

@@ -20,6 +20,8 @@
     </div>
 
     <!-- Weekly Recurring Rules by Day -->
+
+    <p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Date exceptions govern new bookings in business time. Saving or deleting an exception preserves existing appointments. Review the Bookings & Calendar page before changing any booked lesson.</p>
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div>
             <h2 class="text-lg font-bold font-serif text-slate-900">Weekly Recurring Schedule</h2>
@@ -144,6 +146,7 @@
                 </tbody>
             </table>
         </div>
+        <div class="p-4">{{ $exceptions->links() }}</div>
     </div>
 
     <!-- Modal: Add Weekly Rule -->

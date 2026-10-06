@@ -160,6 +160,9 @@
                                 <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 Billing Reconcile
                             </a>
+                            @foreach(['admin.receivables.index' => 'Receivables & Statements', 'admin.recurring.index' => 'Recurring Lessons', 'admin.waitlist.index' => 'Lesson Waitlist', 'admin.booking-policy.index' => 'Booking Policy', 'admin.reports.lifecycle' => 'Business Lifecycle', 'admin.data-quality.index' => 'Data Quality Center'] as $lifecycleRoute => $lifecycleLabel)
+                            <a href="{{ route($lifecycleRoute) }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm {{ request()->routeIs($lifecycleRoute) ? 'bg-amber-600 font-semibold text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">{{ $lifecycleLabel }}</a>
+                            @endforeach
                             @endif
                         @endif
                         <a href="{{ route('admin.bookings.index') }}" 

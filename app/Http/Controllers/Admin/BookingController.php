@@ -9,6 +9,7 @@ use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\Booking\Services\CancellationService;
+use App\Domains\Booking\Services\NoShowService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Students\Models\Student;
@@ -268,41 +269,9 @@ class BookingController extends Controller
 
     public function markNoShow(Request $request, Booking $booking): RedirectResponse
     {
+        $values = $request->validate(['reason_code' => ['nullable', 'string', 'max:40']]);
         try {
-            DB::transaction(function () use ($booking) {
-                $locked = Booking::query()->where('id', $booking->id)->lockForUpdate()->firstOrFail();
-
-                if ($locked->status === 'cancelled') {
-                    throw new \DomainException('Cannot mark a cancelled session as no-show.');
-                }
-                if ($locked->status === 'no_show') {
-                    throw new \DomainException('Session is already marked as no-show.');
-                }
-                if ($locked->status === 'completed') {
-                    throw new \DomainException('Cannot mark a completed session as no-show.');
-                }
-
-                $previousStatus = $locked->status;
-                $locked->update(['status' => 'no_show']);
-
-                BookingEvent::create([
-                    'booking_id' => $locked->id,
-                    'event_type' => 'marked_no_show',
-                    'performed_by' => 'admin',
-                    'performed_by_id' => Auth::id(),
-                    'previous_data' => ['status' => $previousStatus],
-                    'new_data' => ['status' => 'no_show'],
-                    'created_at' => now(),
-                ]);
-
-                AuditLog::create([
-                    'administrator_id' => Auth::id(),
-                    'action' => 'booking_marked_no_show',
-                    'entity_type' => Booking::class,
-                    'entity_id' => $locked->id,
-                    'created_at' => now(),
-                ]);
-            });
+            app(NoShowService::class)->mark($booking, Auth::id(), $values['reason_code'] ?? null);
 
             return back()->with('success', 'Booking marked as student no-show.');
         } catch (\Exception $e) {
@@ -351,6 +320,7 @@ class BookingController extends Controller
     {
         $validated = $request->validate([
             'cancellation_reason' => ['required', 'string', 'max:500'],
+            'reason_code' => ['nullable', 'string', 'max:40'],
         ]);
 
         try {
@@ -358,7 +328,8 @@ class BookingController extends Controller
                 booking: $booking,
                 performedBy: 'admin',
                 performedById: Auth::id(),
-                reason: $validated['cancellation_reason']
+                reason: $validated['cancellation_reason'],
+                reasonCode: $validated['reason_code'] ?? null,
             );
 
             return back()->with('success', 'Booking cancelled successfully.');

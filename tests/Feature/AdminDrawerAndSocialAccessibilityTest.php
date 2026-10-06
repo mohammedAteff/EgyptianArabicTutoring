@@ -67,8 +67,11 @@ class AdminDrawerAndSocialAccessibilityTest extends TestCase
         $response->assertSee('class="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-64"', false);
         $response->assertSee('class="ml-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"', false);
 
-        // Data tables wrapped in overflow-x-auto
-        $response->assertSee('overflow-x-auto', false);
+        // The security audit table is restricted to Super Admins and remains scrollable.
+        $this->admin->update(['role' => 'super_admin']);
+        $this->actingAs($this->admin, 'web')->get('/admin/dashboard')
+            ->assertOk()
+            ->assertSee('overflow-x-auto', false);
     }
 
     /**
