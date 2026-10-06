@@ -2,33 +2,29 @@
 
 ## Verdict
 
-**Resume stopped before production changes — Hostinger SSH remains unavailable.**
+**COMPLETED — exact candidate deployed, production reopened, integrity and production browser smoke acceptance passed.**
 
-The owner-authorized resume on 2026-10-06 repeated ordinary SSH access checks against the unchanged existing endpoint. Three read-only attempts timed out before authentication; no remote command ran. Fresh fetch and remote advertisement both confirmed `origin/main` at the documentation checkpoint `14ad8055444778a31e62fd45f0fca6fe7a19df29`. The application candidate remains exactly `7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`. Its existing local acceptance evidence is reused, as requested; no complete gate rerun or application source change occurred. The verified manifest and both lockfile hashes still match the recorded candidate artifacts.
+The owner-authorized RETRY recovered ordinary SSH access without changing access, security or application configuration. Production was freshly confirmed at the expected old source `18ac92c27f96851bbf83d5df68831f76fc22dc76`, with no tracked changes. A new protected native backup and independently verified isolated restore passed before maintenance or deployment writes. Production now runs exactly **`7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`**, reopened at **2026-10-06 09:57:34 UTC / 12:57:34 Africa/Cairo**. No rollback was needed.
 
-The owner confirmed that the SSH endpoint, enabled status and access restrictions have not changed. DNS resolves the production hostname to the expected existing IP. A bounded HTTPS connection check from this computer also timed out; it does not establish that the application is globally unavailable. GitHub remained reachable. No network, SSH, authentication, Hostinger, Telegram or application configuration was changed to work around the failure.
+The confirmed active owner, `bolt@admin.com` / Administrator 1, was corrected from **Bolt Admin** to **Abdallah**. All other raw owner fields, including email, password, role, suspension, remember token and MFA/pending-enrollment state, were preserved. Production initially had zero Students. The owner explicitly authorized one temporary Student for smoke checks and its safe removal; that account and its two test authentication records are now removed, with a protected recovery copy and zero remaining Student sessions or linked business records. No bookings, purchases, money or teaching records were created for the smoke account.
 
-The resume could not freshly verify production SHA/status, database/migrations/duplicate exception dates, storage/session/Telegram state or owner profile. No fresh backup, maintenance entry, deployment, dependency installation, migration, cache rebuild, asset publication or production data write was performed by this run. Production's current state is **unverified**; the last observed SHA below is historical, not a new inspection. No rollback is required for this run. Production acceptance and Stage 5 compatibility remain incomplete, and no tool was enabled. The separate final resume notification result will be resolved after this documentation checkpoint, using the existing service and a distinct one-off identity; its safe receipt is `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/resume-20261006-0934/telegram-final-receipt.json`. The historical failed receipt remains untouched.
+Stage 5 is **COMPATIBLE_WITH_TOOLS_DISABLED**. Effective environment and cached destructive-tool flags both remain false; the navigation is absent and the direct route returns 404. Existing financial data is empty: reconciliation has zero discrepancies but reports **UNINITIALIZED_DATASET**, not a populated financial-history certification. Populated Student/rescheduling flows and Stage 5 ZIP browser completion remain later acceptance scope. No capability inventory, large QA cohort, adversarial acceptance, LMS or Hostinger operations handoff was started.
 
-The five-stage implementation is present on GitHub. Candidate source SHA: `7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`. Stage 5 delivery and the owner-approved build dependency patch are pushed. All integrated local release gates passed against that candidate. Hostinger SSH repeatedly times out, preventing authoritative database/configuration preflight and a protected deployment backup. No production maintenance, migration, checkout, dependency installation, asset publication, data reset or deployment occurred.
+All completed local gates below were reused against the unchanged candidate; no redundant full rerun, new application change or further dependency change occurred. Safe final Telegram delivery follows the completed report/tracker push, using the existing verified service and a distinct retry identity. Its actual result is recorded in the Telegram section and protected receipt.
 
-The first successful read-only SSH inspection found production at `18ac92c27f96851bbf83d5df68831f76fc22dc76`, with no tracked changes, the preserved untracked `.env.backup.before-7123f15`, and PHP 8.4.19. Later SSH connections failed before authentication. The earlier deployment report certifies that old release healthy/reopened; its current application health was not re-certified here. Do not label this candidate deployed or production smoke acceptance passed.
-
-## Git delivery and exact candidate
+## Git delivery and pinned source
 
 | Item | Actual evidence |
 |---|---|
-| Initial branch / local HEAD | `main` / `fa91e840503f2b46adaae63ea6e2b4ab77c70833` |
-| Pre-push remote | Successful fetch: `36ab454277065558d5aae6c15ece36d1dd530858` |
-| Divergence | Zero remote-only commits; exactly two local Stage 5 commits |
-| Stage 5 implementation | `5d71cc1e707a0177d980379564e96f4d565def81` |
-| Stage 5 delivery documentation | `fa91e840503f2b46adaae63ea6e2b4ab77c70833` |
-| Stage 5 push | Normal fast-forward `36ab454..fa91e84`; subsequent fetch verified local/remote equality |
-| Approved security patch | `7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`; normal push and fetch verified remote equality |
-| Five-stage production candidate | **`7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`** |
-| Prior report checkpoint / fresh resume remote | `14ad8055444778a31e62fd45f0fca6fe7a19df29`; verified by fresh fetch and remote advertisement. Resume documentation is a successor, not the pinned application candidate. |
+| Stage 5 implementation / delivery | `5d71cc1e707a0177d980379564e96f4d565def81` / `fa91e840503f2b46adaae63ea6e2b4ab77c70833`, delivered by normal push after connectivity recovered |
+| Owner-approved security patch / production candidate | **`7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`**, pushed and verified |
+| Historical documentation checkpoints | `14ad8055444778a31e62fd45f0fca6fe7a19df29`, then `79869b092262bf24cfc557e65d9c95bd507ebfc7`; neither substituted for the application candidate |
+| Retry local/remote baseline | Fresh fetch confirmed `HEAD = origin/main = 79869b092262bf24cfc557e65d9c95bd507ebfc7` |
+| Production Git update | Fetched the full pinned candidate and fast-forwarded from `18ac92c` to `7cb9a23`; no later documentation commit deployed |
+| Final production source/status | Exact full candidate SHA; tracked clean; existing untracked `.env.backup.before-7123f15` preserved |
+| Current documentation delivery | Only this report and REMAINING_FEATURES_IMPLEMENTATION_TRACKER.md are committed/pushed normally; final pushed documentation SHA is recorded in the final response |
 
-The initial push and some remote refreshes failed with GitHub TCP connectivity unavailable; later ordinary retries succeeded. No force push, merge/rebase, remote/authentication/proxy/security setting change or history rewrite occurred. The Stage 5 and later patch commits were inspected before delivery. Three pre-existing user documents remain untracked and unchanged: HOSTINGER_FIVE_PASS_DEPLOYMENT_REPORT.md, HOSTINGER_FIVE_PASS_PRODUCTION_PREFLIGHT.md and PRODUCTION_TYPED_ENTITLEMENT_MAPPING_PROPOSAL.md. No credential, dump, archive, generated build, screenshot, QA environment or temporary inspection program is staged.
+Three pre-existing user documents remain untracked and untouched: HOSTINGER_FIVE_PASS_DEPLOYMENT_REPORT.md, HOSTINGER_FIVE_PASS_PRODUCTION_PREFLIGHT.md and PRODUCTION_TYPED_ENTITLEMENT_MAPPING_PROPOSAL.md. No secrets, dumps, archives, generated builds, screenshots, QA environments or temporary operational programs are staged. No force push, history rewrite, remote/authentication/proxy workaround or production hot edit occurred.
 
 ## Integrated release gates
 
@@ -62,77 +58,94 @@ The owner explicitly approved the targeted patch after the project dependency-ap
 
 A subsequent Composer refresh temporarily failed to reach Packagist (safe category `advisory_service_connection_unavailable`, exit 100); that failed refresh is not represented as clean. The final live refresh then succeeded with zero advisories and zero abandoned packages. composer.lock and installed PHP packages remained unchanged throughout. **Final Composer and npm security audits both passed.**
 
-The final local build manifest referenced nine existing files, with zero missing references. SHA-256: manifest `2c11346406197eedadb83cc66662f2ceb77a3c4baa2d060ff88dc61876fdd65d`; composer.lock `eb036a82b5edfe7ad0a5998fcf03c43e3d430e608c80a5cdeebe4fc31bf35259`; package-lock.json `8c7b8a31729791007ff1d0f195f3459c2ac9eb9bdce1c7b9600e634c14435236`. No artifact was uploaded. Local database capability verification again passed MariaDB 10.11.18/InnoDB and required booking-to-Student integrity; it is not a production result.
+The final local build manifest referenced nine existing files, with zero missing references. SHA-256: manifest `2c11346406197eedadb83cc66662f2ceb77a3c4baa2d060ff88dc61876fdd65d`; composer.lock `eb036a82b5edfe7ad0a5998fcf03c43e3d430e608c80a5cdeebe4fc31bf35259`; package-lock.json `8c7b8a31729791007ff1d0f195f3459c2ac9eb9bdce1c7b9600e634c14435236`. The exact verified artifacts were subsequently published during the retry below. Local database capability verification again passed MariaDB 10.11.18/InnoDB and required booking-to-Student integrity; it is not a production result.
 
-## Production migration preflight
+## Fresh production and migration preflight
 
-Current code and the following complete candidate migrations were inspected. Stage 1 adds no migration. These four files follow the last previously deployed migration family:
+Ordinary SSH reached the existing verified endpoint; PHP is `/opt/alt/php84/usr/bin/php` 8.4.19. MariaDB is **11.8.9-MariaDB-log**, with all original **88 tables InnoDB**, approximately 8.37 MB. There were **71 historical migration rows**, including the extra historical articles migration, which was preserved. Actual pending files were exactly the four below; no partial DDL was present.
 
-| Exact candidate migration | Compatibility / locking / rollback review |
+| Applied migration | Reviewed production condition / actual result |
 |---|---|
-| `2026_10_05_173212_create_student_teaching_tables.php` | Nine new empty teaching tables; existing unsigned Student/Booking/Resource/LessonMaterial/Administrator parents required. Optional references are nullable, sharing defaults false, unique feedback/notification identities apply only to new rows. CREATE/FK metadata locks expected; actual parent sizes and current orphan state must be refreshed. down drops teaching history and is not a safe automatic populated rollback. |
-| `2026_10_05_184515_add_staff_operations_productivity.php` | staff_bins gets false pin/default plus nullable actor/time and a query index; five new staff operations tables. Existing authors/notes remain; nullable links and FK actions were reviewed. ALTER/index can lock/rebuild populated staff_bins; actual size/duration must be inspected. down discards new personal/task/history state. |
-| `2026_10_05_194113_add_business_lifecycle_and_data_quality.php` | Explicitly refuses duplicate availability_exceptions dates **before any DDL**. Adds unique date, active Student operational default, nullable Booking policy snapshot and seven lifecycle tables. Does not rewrite prior funding/policy snapshots or classify purchases. Existing Student/Booking/exception ALTER/index locks depend on current size; not benchmarked. down refuses populated lifecycle history and otherwise removes added state; reviewed forward recovery is preferred. |
-| `2026_10_06_011325_create_development_data_operations_table.php` | One new empty table with restrictive Administrator FK, unique token hash, nullable completion/archive/summary and owner/expiry indexes. No existing credentials or business records rewritten. CREATE/FK metadata locks; down destroys operation/recovery references. |
+| `2026_10_05_173212_create_student_teaching_tables` | Unsigned-bigint parent keys/FKs checked; nine new teaching tables; applied successfully in batch 19 |
+| `2026_10_05_184515_add_staff_operations_productivity` | One existing staff note; staff_bins 65,536 bytes; original field projection preserved through ALTER; five new tables; applied successfully |
+| `2026_10_05_194113_add_business_lifecycle_and_data_quality` | availability_exceptions had zero rows and zero duplicate dates; students 180,224 bytes / zero rows; bookings 278,528 bytes / zero rows; exceptions 32,768 bytes; key/nullability/constraint checks passed; seven new tables and reviewed ALTERs applied successfully |
+| `2026_10_06_011325_create_development_data_operations_table` | New empty operation table and restrictive owner FK; applied successfully |
 
-These are **expected pending files based on the observed old source SHA**, not a fabricated fresh production migration inventory. SSH failed before the read-only database inspection could run. Actual migration rows, partial-DDL state, duplicate exception dates, parent key types, existing generated columns/triggers, row counts/table sizes, metadata-lock blockers, nullability and FK integrity remain unverified in the current window. Historical migration-count differences must be preserved; never delete the extra historical articles migration to match repository file counts.
+All existing FK component checks had zero orphans; four typed guards and ten generated columns were captured. No routines/events were present; native backup included their required options anyway. Open-table in-use checks found no blockers and jobs/failed_jobs were zero. INNODB_TRX visibility was unavailable to the existing database account, so full transaction-list visibility is not claimed. No access privilege was expanded. Final schema has **75 migration rows and 110 tables**; all 22 new tables remain empty.
 
-**Do not migrate until fresh production inspection passes.** If duplicate exception dates exist, report exact dates/counts for owner review; do not guess a survivor. No data cleanup or migration retry was performed.
+Database cache/queue/sessions and JSON serialization were verified. Two final stored session payloads decode correctly as base64 JSON, with zero invalid payloads. Secure/HttpOnly/Lax cookies and `/arabictutor` session path were preserved. Application timezone is UTC; Business Timezone is Africa/Cairo. Current owner MFA is not enabled; its existing pending enrollment was present in fresh preflight and preserved without enrollment or credential changes.
 
-## Stage 5 production compatibility and disabled tools
+## Protected backup before deployment
 
-**NOT YET COMPATIBLE — current verification is incomplete because production SSH is unavailable.** This verdict is a release gate, not evidence of a discovered destructive-tool defect.
+Fresh host snapshot: `/home/u494520852/domains/mohamedateff.com/arabictutor_app/storage/app/backups/pre-lms-deploy-20261006-7cb9a23`, with sibling `.tar.gz` archive. This is a new snapshot, not the historical controlled-release backup.
 
-Historical Hostinger evidence reports MariaDB 11.8.9/InnoDB, four typed guards, database cache/sessions, JSON session serialization, private local application storage outside the public wrapper and writable framework/storage paths. Those facts require current reinspection. Review all FK components/generated expressions/trigger definitions, JSON session payload validity, configured private Resource/material roots, symlink/realpath boundaries and owner permissions, managed backup proof/hash identification, protected deployment/recovery exclusions, database cache_locks and operation mutex behavior. The new private development-data/recovery paths and operation schema must be verified after installation without executing a reset.
-
-The candidate defaults `DESTRUCTIVE_ADMIN_TOOLS_ENABLED` to false; local effective flag was freshly verified false. **No production flag was enabled or changed.** Stage 5 is absent from the observed old production release, so its new destructive interface is not deployed. Production environment/configuration flag value could not be freshly inspected; future deployment must explicitly retain false and verify both navigation and direct-route denial. Do not infer that a 404 under old code proves the new release's cached flag.
-
-No production reset, portable export/import, managed backup reset, MFA enrollment, command/polling/rule change or scheduler/worker configuration occurred. Portable domain restore is never used as deployment rollback.
-
-## Protected backup and deployment
-
-| Requirement | Current result |
+| Recovery gate | Actual result |
 |---|---|
-| Fresh protected Hostinger deployment snapshot | **Not created**; SSH failure prevents capture/verification |
-| Current independent recovery copy / isolated restore drill | Not performed for this candidate |
-| Maintenance | Not entered by this task |
-| Exact source deployment / locked Composer installation | Not performed |
-| Asset publication to both existing public copies | Not performed |
-| Migrations / production caches / storage links | Not changed |
-| Rollback | Not required; no production deployment writes occurred |
+| Native MariaDB dump | 1,406,129 bytes; completed with empty dump stderr; single transaction, quick/skip-lock-tables, triggers/routines/events/hex blobs |
+| Source/vendor/configuration | Exact old Git source, vendor, locks, effective cached configuration and separately protected environment continuity captured |
+| Files and deployment wrapper | Both old public build trees, wrapper/rewrite files and relevant private/public application storage captured |
+| Permissions | Snapshot directory 0700; protected archive/files 0600; temporary credential file removed without logging credentials |
+| Manifest verification | All 11 manifest hashes passed on host and independent protected local copy |
+| Archive | 23,228,252 bytes; SHA-256 `0454ac9211c980c175e5145b5d4d16b4310e2e512f11de1dda4366102e8b6ea3` |
+| Isolated restore | Separate local `bolt_release_restore_202610060945`; native import exit 0 / zero stderr bytes; 88 restored tables |
+| Restored integrity | All 64 stable full-row digests match; four trigger definitions and ten generated expressions match; zero FK orphans and valid JSON sessions |
+| Independent recovery evidence | Protected local retry directory below; private resource bytes independently preserved and compared |
 
-The established procedure is the protected MariaDB native dump including triggers/routines/events/hex blobs plus exact old source/vendor/locks, wrapper, both build trees, private/public application files, effective configuration and separately protected environment/key continuity. Use mode 0700 snapshot directories and 0600 artifacts, verify manifests/hashes, preserve an independent protected copy and prove an isolated restore before relying on it. Preserve the pre-existing environment backup. No secrets belong in report output or Git.
+Existing managed backup SQL did not contain the typed trigger DDL and was not treated as whole-system rollback certification. The fresh native snapshot covers that requirement. The final host-stat command initially received a trailing Windows carriage return; archive creation and all hashes had already passed. A separate clean stat/manifest/dump-stderr verification passed before deployment continued.
 
-The previous `controlled-release-20261004-18ac92c` snapshot and its independent local copy are historical recovery evidence; they were not modified and are not substituted for a new pre-deployment backup. Hostinger lacks Node/npm: publish the exact verified local candidate build to both application/public/build and wrapper/build, retaining older fingerprinted assets through cache transition. Install only composer.lock, preserve restricted PHP settings with the established process-only Composer workaround if still required, and do not run setup/key generation/update. Current quotas, permissions and consumers must be reviewed first; this task did not execute the operations handoff.
+## Exact deployment and reopening
 
-Rollback before new business writes uses the verified native deployment snapshot and matched source/vendor/assets/configuration/private files under maintenance. After accepted new events, preserve them and prefer reviewed forward recovery. Do not blanket rollback migrations, disable live FKs/triggers or use Stage 5 portable restore as whole-system recovery.
+Only after the protected backup and independent restore proof passed, maintenance was entered and the pinned source fast-forwarded. Composer used the exact lock with no development packages, optimized autoloading and no scripts; no package was installed, updated or removed. The established restricted-host workaround enabled proc_open only for that Composer process; normal PHP restrictions and configuration remained unchanged.
 
-## Production integrity and owner profile
+All four pending migrations succeeded. Package discovery, configuration cache, route cache and Blade cache passed. The exact already-verified local frontend build was published to both application/public/build and public wrapper/build, retaining older fingerprints through the transition. Every one of the nine candidate manifest references matched. Both complete 35-file asset trees match, aggregate SHA-256 `ac7c2ed43dc43b13da3867a185805f61276f4ac21c3c89ced96b52b255f51946`; the candidate manifest and both lock hashes match the gate evidence above.
 
-Post-migration integrity is **not applicable yet — no migrations/deployment occurred**. Current FK/orphan counts, typed entitlement guards/composite provenance, Booking funding snapshots, financial reconciliation and preservation hashes for administrators/students/Resources/settings/Telegram/APP_KEY could not be freshly captured. No production ordinary data or secret was changed by this task. No empty-data financial certification is invented.
+All critical deployment steps and the final installed marker completed. A trailing carriage-return-only line in the shell wrapper then returned 127; fresh source, migration, cache, asset and integrity verification established the completed state before reopening. This wrapper exit is recorded honestly and is not claimed as a successful shell exit. No failed critical migration/install/publication step or rollback occurred. Maintenance was cleared successfully at 09:57:34 UTC.
 
-Owner verification is deferred: match the actual `bolt@admin.com` active Super Admin, verify its profile and correct only that confirmed record to **Abdallah** if required. No production name was read or changed in this attempt; no unrelated administrator was renamed and no global name override exists.
+The environment file and APP_KEY continuity passed; encrypted existing Telegram token continuity passed without displaying the token. Public wrapper/rewrite files and the pre-existing environment backup were preserved. No setup/key generation, broad update, security bypass, scheduler/worker configuration or operations handoff was executed.
 
-## Production browser/runtime acceptance and download
+## Final integrity, owner and Stage 5 compatibility
 
-The supported in-app browser attempted the known production homepage. Navigation timed out and selecting the stalled tab subsequently timed out at browser-control setup; no verified DOM, screenshot, HTTP response or authenticated page resulted. The failure does not establish that production itself is down. The temporary tab was not marked for retention; its explicit cleanup attempt also timed out. Original user/local tabs were not altered, and no viewport override was set.
+Fresh final verification at **2026-10-06 10:17:16 UTC** confirmed maintenance off, exact candidate installed, all migrations current, zero FK orphans and zero financial discrepancies. All 64 original stable table projections match except the four added migration records and the explicitly authorized owner name/updated timestamp. Original staff note fields remain identical. All prior FK components and four typed guard definitions remain intact; original booking funding, financial, resource, contact, administrator and Student data are preserved. Private resource files match the independent recovery copy.
 
-All requested public, Student and Super Admin smoke checks remain **unperformed for the candidate** because it is not deployed. Historical acceptance is not repeated as current evidence. No QA students, accounts, payments, bookings or dataset were created. Actual authenticated acceptance must use an authorized existing account, with honest empty-state limitations if no Student exists.
+Settings have no added or removed keys. Only four existing runtime heartbeat values advanced: last_holds_cleanup_at, last_scheduler_run_at, telegram.last_tick_at and telegram.last_watchdog_run_at. Business configuration, Telegram rules/destination configuration, mail and storage settings were preserved. Existing mail remains Log, and the pre-existing offsite backup warning remains `s3_replication_failed`; repair/configuration was outside this release. Local protected rollback recovery is verified independently of that warning.
 
-**Production ZIP export/download: deferred to Prompt 4.** The Stage 5 tools are not deployed/enabled and no safe minimal production scope is established. Do not enable destructive tools to manufacture a pass or export unrelated sensitive production history. ZIP browser completion remains distinct from the passing endpoint/archive tests.
+Only Administrator 1, confirmed by the owner-supplied email, was renamed to Abdallah through the existing model and audit service. Native pre-deployment owner-field comparison and subsequent protected digest comparison prove every other owner field preserved. No unrelated account or global branding override was changed.
 
-## Telegram start/final status
+Stage 5 compatibility passed with tools disabled: operation table present / zero rows; compatible valid JSON database sessions; private Resource and lesson-material roots outside the public wrapper; recovery directory 0700 with exclusive 0600 write/read/delete sentinel proof; shared database mutex acquired and second contender refused; configured private local backup disk usable; 11 positively identified managed snapshots, with the protected deployment snapshot excluded. No reset, portable restore/export or managed backup reset was executed. Effective environment and cached flags are **false**. The new navigation is absent and authenticated direct-route access returns 404.
 
-The original attempt below is historical. The new resume explicitly authorizes a distinct final status invocation; no start was sent because production preflight did not pass and deployment did not begin. No prior Stage 5 or Pre-LMS notification identity is reused. The current run's safe receipt path is recorded in the verdict above; actual delivery is not inferred from the previous failure.
+## Real production browser acceptance and safe download
 
-The existing production pathway is TelegramDeliveryService::direct, with an enabled destination, enabled bot and matching prior successful delivery. Historical production completion delivery #3/message #7 is evidence of that previous pathway; it does not replace current destination verification. No token/destination/rule change or secret transfer to fixtures/Git occurs.
+The owner signed into the real production Super Admin tab directly. No owner password was supplied in chat or logged. The following actual in-app browser checks passed after deploying the candidate:
 
-Start message was not sent: production deployment never began and the destination could not be freshly inspected. Exactly one final blocker notification resolution uses the same existing production service; actual safe metadata is recorded outside Git at `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/telegram-final-receipt.json`. Do not retry an uncertain or failed send aggressively and do not repeat the historical Stage 5 notification. The final response reports any delivery failure explicitly. No success message is authorized while production gates remain incomplete.
+| Area | Actual smoke result |
+|---|---|
+| Public | Homepage; navigation/footer; Pricing, Resources and gated detail surface without submission, Games and game detail, Blog, About/FAQ; booking entry and searchable timezone selector showing Cairo UTC+3 |
+| Public configuration | Existing social/footer/floating WhatsApp links displayed; destination configuration preserved; Reddit is not configured; announcement is disabled and correctly absent for Public/Student |
+| Responsive | 390×844 public homepage/menu and actual Resources navigation, resource/game details and Student notes; document width 375 ≤ viewport 390; desktop admin/sidebar at 1280 pixels |
+| Super Admin | Dashboard with Abdallah; collapse/expand and mobile menu navigation; Account Security, Student Records, Cashier, Bookings/Calendar, Availability, Staff Notes, Today/Operations, Tasks, analytics, maintenance analytics, Reports/Exports, Resources, Settings, Data Quality and safe audit viewer |
+| Disabled tools | Development & Launch navigation absent and authenticated direct route 404 with flag false |
+| Student | Normal date-of-birth/name/email login, Sessions/dashboard/credits/upcoming/history empty states, My Learning, Planning, Statements/packages, Notifications and Educational Notes; normal sign-out |
+| Rescheduling boundary | Nonexistent booking route returns 404; no eligible booking existed, so a populated reschedule form/history flow is not certified by this smoke run |
+| Browser runtime | Final recent Public/Student and Admin logs have zero errors or warnings; admin still authenticated after Student sign-out/cleanup; temporary Student/public tab closed and all viewport overrides reset |
+| Safe actual download | Empty Student Records CSV downloaded through the production browser before test-account creation; verified header-only 128 bytes, no student or financial history |
+| Stage 5 ZIP download | Deferred to later acceptance; tools were never enabled to manufacture a pass |
 
-**Final result: TELEGRAM NOTIFICATION FAILED — `production_ssh_connection_unavailable`.** One invocation attempted; SSH could not connect, so the existing production service and Telegram transport were not reached. Success false; transport attempted false; no message IDs returned. No retry, bot/destination/rule change or local replacement integration occurred. The safe receipt contains no credentials or destination identifier. Original Stage 5 receipt remains unchanged.
+Existing footer social URLs include generic channel roots and a separate configured footer WhatsApp destination; smoke acceptance verifies their preserved rendering, not ownership or external messaging delivery. Public forms were not submitted and no slot was held/booked. No QA cohort or business/money history was invented to exercise populated views.
 
-## Remaining work and stop boundary
+The owner separately authorized exactly one temporary Student, then safe removal. Student 6 (`pre-lms-smoke-20261006@example.invalid`) was created once for authentication and empty-state smoke checks. Cleanup at **10:15:04 UTC** locked and verified its exact identity, scanned every Student-reference column and checked audit/recent-view history. All dependency counts were zero; normal sign-out left zero Student sessions and visitor links. A private mode-0600 recovery snapshot was written and hash-verified before removing exactly that account and its two HMAC test authentication records. Its independent protected local copy subsequently matched the host hash. Constraints/triggers remained enabled. Final Student/auth counts are zero, matching preflight; no unrelated row or session was removed. This narrowly authorized cleanup did not use the disabled Stage 5 reset service.
 
-Restore ordinary SSH connectivity to the existing Hostinger account, refresh source/status/migrations/data/storage/session/Telegram preflight, verify a protected native backup and independent restore, then deploy **the pinned verified candidate** and perform actual integrity/browser acceptance. If remote source/data changed, inspect it before any update. Preserve owner secrets/accounts and all ordinary production history; retain the destructive flag false.
+Protected retry evidence: `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/retry-20261006-0940/`. Safe proof files include backup-restore-proof.json, production-integrity-proof.json, final-integrity-proof.json, final-runtime-proof.json, student-cleanup-receipt.json and browser-smoke-records.json. Screenshot evidence includes public-mobile.jpg, student-mobile.jpg and admin-dashboard.jpg. The real empty CSV is `C:/Users/e/Downloads/student_records (1).csv`. Recovery dumps/configuration/raw snapshots remain protected outside Git; never paste or commit their contents.
 
-LMS was **not started**. No capability matrix/inventory, QA dataset, new product feature, cron/worker/polling setup, mail/S3 repair or Hostinger operations handoff was executed. Production remains on the last observed old release; no rollback or maintenance recovery action is needed from this task.
+## Telegram retry status
+
+The original blocked attempt failed before reaching Telegram, safe category `production_ssh_connection_unavailable`; its original receipt remains unchanged. The interrupted documentation-only resume at `79869b0` never reached its prepared final invocation and produced no final delivery receipt. Neither identity or historical Stage 5 notification is reused.
+
+Fresh production inspection found exactly one enabled destination with enabled bot and matching prior successful delivery. Existing **TelegramDeliveryService::direct** is reused with identity `pre-lms-retry-20261006-0940:7cb9a236b60350cfa134c2d6c94e14df1eb20c6b:start/final` and existing stage_completion trigger. The one permitted start notification succeeded: delivery **4**, Telegram message **8**, transport attempted true. No token, chat destination, commands, polling, rules, credentials or background configuration changed.
+
+**Final retry notification: pending the completed report/tracker push.** Exactly one final invocation will follow all completed gates and documentation delivery. Safe receipt: `C:/Users/e/AppData/Local/Temp/pre-lms-release-20261006/retry-20261006-0940/telegram-final-receipt.json`. Only actual safe delivery metadata will be appended afterward; no repeated send or aggressive retry. Notification failure, if any, preserves the successful release and must be reported explicitly.
+
+## Historical attempts and stop boundary
+
+Earlier runs stopped because ordinary SSH timed out before authentication. Their blocked verdicts are historical and superseded by this retry's successful fresh preflight, protected backup, pinned deployment and smoke acceptance. Existing report checkpoints remain documentation only. No retrospective success is assigned to those failed access/notification attempts.
+
+This production deployment is complete. Rollback was unnecessary; the fresh native recovery snapshot remains available. Existing 257 static findings, pre-existing offsite backup failure/Log mail and later populated-flow/ZIP/full adversarial acceptance remain explicitly documented limits. **Stop here:** no capability inventory, QA dataset cohort, LMS, new feature, operations handoff or scheduler/worker/polling work is authorized by this completion.
