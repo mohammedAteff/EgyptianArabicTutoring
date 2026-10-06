@@ -30,6 +30,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -376,6 +377,40 @@ class StudentTeachingExperienceTest extends TestCase
         $this->get(route('student.notifications.index'))->assertOk();
         $this->assertSame(2, StudentNotification::where('student_id', $student->id)->where('type', 'lesson')->count());
         $this->assertSame(1, StudentNotification::where('student_id', $student->id)->where('type', 'material')->count());
+    }
+
+    public static function notificationApplicationRoots(): array
+    {
+        return [
+            'root deployment' => ['https://example.test'],
+            'subdirectory deployment' => ['https://example.test/arabictutor'],
+        ];
+    }
+
+    #[DataProvider('notificationApplicationRoots')]
+    public function test_existing_notification_links_use_the_application_root_and_preserve_fragments(string $applicationRoot): void
+    {
+        $student = Student::factory()->verified()->create();
+        $lesson = Booking::factory()->create(['student_id' => $student->id, 'status' => 'completed']);
+        StudentNotification::factory()->create(['student_id' => $student->id, 'link' => '/student/learning#resources']);
+        StudentNotification::factory()->create(['student_id' => $student->id, 'link' => '/student/lessons/'.$lesson->id]);
+        $this->portal($student);
+        URL::forceRootUrl($applicationRoot);
+        URL::forceScheme('https');
+
+        try {
+            $response = $this->view('student.notifications', [
+                'notifications' => StudentNotification::query()->where('student_id', $student->id)->paginate(20),
+            ]);
+
+            $response->assertSee('href="'.$applicationRoot.'/student/learning#resources"', false)
+                ->assertSee('href="'.$applicationRoot.'/student/lessons/'.$lesson->id.'"', false)
+                ->assertDontSee('href="/student/learning#resources"', false);
+            $this->assertDatabaseHas('student_notifications', ['student_id' => $student->id, 'link' => '/student/learning#resources']);
+        } finally {
+            URL::forceRootUrl(null);
+            URL::forceScheme(null);
+        }
     }
 
     public function test_typed_notices_identify_purchase_type_and_expiry_without_generic_totals(): void
