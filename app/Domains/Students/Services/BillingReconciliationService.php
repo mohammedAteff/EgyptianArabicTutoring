@@ -15,6 +15,8 @@ class BillingReconciliationService
      * Run all reconciliation checks without mutating historical data.
      *
      * @return array{
+     *     status?: string,
+     *     status_label?: string,
      *     has_discrepancies: bool,
      *     total_discrepancies_count: int,
      *     negative_balances: array<int, array<string, mixed>>,

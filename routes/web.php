@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
+use App\Http\Controllers\Admin\DevelopmentToolsController;
 use App\Http\Controllers\Admin\FormController;
 use App\Http\Controllers\Admin\MaintenanceAnalyticsController;
 use App\Http\Controllers\Admin\MediaController;
@@ -535,6 +536,15 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         // Super Admin Only Privileges
         Route::middleware('role:super_admin')->group(function () {
+            Route::prefix('development-tools')->name('development-tools.')->group(function (): void {
+                Route::get('/', [DevelopmentToolsController::class, 'index'])->name('index');
+                Route::post('/preview', [DevelopmentToolsController::class, 'preview'])->middleware('throttle:10,1')->name('preview');
+                Route::post('/import', [DevelopmentToolsController::class, 'upload'])->middleware('throttle:5,1')->name('upload');
+                Route::post('/import/selection', [DevelopmentToolsController::class, 'selectImport'])->middleware('throttle:10,1')->name('select-import');
+                Route::post('/confirm', [DevelopmentToolsController::class, 'confirm'])->middleware('throttle:5,1')->name('confirm');
+                Route::get('/operations/{operation}', [DevelopmentToolsController::class, 'show'])->whereNumber('operation')->name('show');
+                Route::get('/operations/{operation}/download', [DevelopmentToolsController::class, 'download'])->whereNumber('operation')->name('download');
+            });
             Route::post('/students/{student}/merge', [StudentController::class, 'merge'])->name('students.merge');
             Route::post('/students/{student}/anonymize', [StudentController::class, 'anonymize'])->name('students.anonymize');
 

@@ -66,7 +66,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['token', 'telegram_bot_token', 'code', 'recovery_code', 'two_factor_secret', 'two_factor_pending_secret']);
+        $exceptions->dontFlash(['token', 'operation_token', 'telegram_bot_token', 'code', 'recovery_code', 'two_factor_secret', 'two_factor_pending_secret']);
         $exceptions->report(function (Throwable $exception): ?bool {
             if (request()->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit')) {
                 Log::error('Staff two-factor security check failed.', ['exception_type' => $exception::class]);

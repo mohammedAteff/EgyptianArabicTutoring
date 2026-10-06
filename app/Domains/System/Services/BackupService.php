@@ -9,10 +9,12 @@ use App\Domains\Notifications\Services\TelegramAutomationService;
 use Carbon\CarbonImmutable;
 use Exception;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Throwable;
 use ZipArchive;
 
@@ -22,7 +24,7 @@ class BackupService
 
     public function __construct()
     {
-        $this->backupDir = storage_path('app/backups');
+        $this->backupDir = Storage::disk('managed_backups')->path('');
         if (! File::isDirectory($this->backupDir)) {
             File::makeDirectory($this->backupDir, 0755, true);
         }
@@ -32,6 +34,19 @@ class BackupService
      * Run full backup: MariaDB database dump and stored assets archive.
      */
     public function createBackup(string $type = 'full'): string
+    {
+        $lock = Cache::lock('development-data-operations', 600);
+        if (! $lock->get()) {
+            throw new Exception('Another protected data operation is running. Try again after it completes.');
+        }
+        try {
+            return $this->createManagedBackup($type);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    protected function createManagedBackup(string $type): string
     {
         // The type is a label supplied by an operator/UI. Normalize it before
         // using it in a filesystem name so it can never introduce path
@@ -64,10 +79,10 @@ class BackupService
             $fileHashes = [];
 
             // Add private files (includes gated resources stored under storage/app/private/resources)
-            $this->addDirectoryToZip($zip, storage_path('app/private'), 'storage/private', $fileHashes);
+            $this->addDirectoryToZip($zip, Storage::disk('local')->path(''), 'storage/private', $fileHashes);
 
             // Add public files (includes public media)
-            $this->addDirectoryToZip($zip, storage_path('app/public'), 'storage/public', $fileHashes);
+            $this->addDirectoryToZip($zip, Storage::disk('public')->path(''), 'storage/public', $fileHashes);
 
             // Legacy path fallbacks if present
             if (File::isDirectory(storage_path('app/resources'))) {
@@ -80,6 +95,7 @@ class BackupService
             // Add metadata manifest
             $manifest = [
                 'type' => $type,
+                'managed_snapshot_id' => (string) Str::uuid(),
                 'created_at_utc' => CarbonImmutable::now('UTC')->toIso8601String(),
                 'laravel_version' => app()->version(),
                 'php_version' => PHP_VERSION,
@@ -585,13 +601,29 @@ class BackupService
      */
     public function cleanOldBackups(): int
     {
+        $lock = Cache::lock('development-data-operations', 600);
+        if (! $lock->get()) {
+            throw new Exception('Another protected data operation is running. Retention was not applied.');
+        }
+        try {
+            return $this->pruneManagedBackups();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    protected function pruneManagedBackups(): int
+    {
+        $managedItems = app(ManagedBackupCatalog::class)->inventory();
+        $managedNames = array_column($managedItems, 'filename');
+        $managedHashes = array_column($managedItems, 'sha256', 'filename');
         $retentionDays = (int) Setting::get('backup_retention_days', 30);
         $threshold = CarbonImmutable::now('UTC')->subDays($retentionDays);
         $deletedCount = 0;
 
         $files = File::files($this->backupDir);
         foreach ($files as $file) {
-            if ($file->getExtension() === 'zip') {
+            if ($file->getExtension() === 'zip' && in_array($file->getFilename(), $managedNames, true)) {
                 $lastModified = CarbonImmutable::createFromTimestamp($file->getMTime(), 'UTC');
                 if ($lastModified->isBefore($threshold)) {
                     File::delete($file->getRealPath());
@@ -606,10 +638,13 @@ class BackupService
             try {
                 $offsiteFiles = Storage::disk($offsiteDisk)->files('backups');
                 foreach ($offsiteFiles as $offsiteFile) {
-                    if (str_ends_with($offsiteFile, '.zip')) {
+                    if (in_array(basename($offsiteFile), $managedNames, true)) {
                         $mtime = Storage::disk($offsiteDisk)->lastModified($offsiteFile);
                         if (CarbonImmutable::createFromTimestamp($mtime, 'UTC')->isBefore($threshold)) {
-                            Storage::disk($offsiteDisk)->delete($offsiteFile);
+                            $contents = Storage::disk($offsiteDisk)->get($offsiteFile);
+                            if (is_string($contents) && hash('sha256', $contents) === $managedHashes[basename($offsiteFile)]) {
+                                Storage::disk($offsiteDisk)->delete($offsiteFile);
+                            }
                         }
                     }
                 }
@@ -631,10 +666,11 @@ class BackupService
         }
 
         $files = File::files($this->backupDir);
+        $managedNames = array_column(app(ManagedBackupCatalog::class)->inventory(), 'filename');
         $backups = [];
 
         foreach ($files as $file) {
-            if ($file->getExtension() === 'zip') {
+            if ($file->getExtension() === 'zip' && in_array($file->getFilename(), $managedNames, true)) {
                 $backups[] = [
                     'filename' => $file->getFilename(),
                     'size_bytes' => $file->getSize(),

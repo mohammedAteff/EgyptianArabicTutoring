@@ -570,10 +570,16 @@ class TelegramAutomationTest extends TestCase
         Setting::set('last_offsite_backup_status', 'failed');
         Setting::set('backup_offsite_disk', 'qa-backup');
         config(['filesystems.backup_disk' => 'qa-backup', 'filesystems.disks.qa-backup' => $outcome === 'unconfigured' ? null : ['driver' => 'local']]);
+        $managed = Storage::fake('managed_backups');
+        $private = Storage::fake('local');
+        $public = Storage::fake('public');
         if ($outcome !== 'unconfigured') {
             $disk = \Mockery::mock(FilesystemAdapter::class);
             $disk->shouldReceive('put')->once()->andReturn($outcome === 'success');
             Storage::shouldReceive('disk')->with('qa-backup')->andReturn($disk);
+            Storage::shouldReceive('disk')->with('managed_backups')->andReturn($managed);
+            Storage::shouldReceive('disk')->with('local')->andReturn($private);
+            Storage::shouldReceive('disk')->with('public')->andReturn($public);
         }
         $service = new class extends BackupService
         {

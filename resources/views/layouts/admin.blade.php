@@ -278,6 +278,9 @@
                             Settings & Policies
                         </a>
                         @if(auth('web')->user()?->role === 'super_admin')
+                        @if(config('development_tools.enabled'))
+                        <a href="{{ route('admin.development-tools.index') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm {{ request()->routeIs('admin.development-tools.*') ? 'bg-red-700 font-semibold text-white' : 'text-red-200 hover:bg-slate-800' }}">Development & Launch Tools</a>
+                        @endif
                         <a href="{{ route('admin.security.show') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.security.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}"><svg class="w-5 h-5 shrink-0 opacity-80" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-5"/></svg><span>Account Security</span></a>
                         <a href="{{ route('admin.health') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.health') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">

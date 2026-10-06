@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Booking\Models\BookingHold;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Setting;
@@ -344,17 +345,29 @@ class BackupAndMaintenanceTest extends TestCase
 
     public function test_retention_policy_prunes_expired_backups(): void
     {
+        Storage::fake('managed_backups');
+        Storage::fake('local');
+        Storage::fake('public');
         $backupService = app(BackupService::class);
-        $backupDir = storage_path('app/backups');
+        $backupDir = Storage::disk('managed_backups')->path('');
 
         // Create 2 "old" dummy backups and 1 "fresh"
         $oldFile1 = $backupDir.'/backup-full-2025-01-01-000000.zip';
         $oldFile2 = $backupDir.'/backup-full-2025-01-02-000000.zip';
         $freshFile = $backupDir.'/backup-full-'.now('UTC')->format('Y-m-d-His').'.zip';
 
-        File::put($oldFile1, 'dummy old 1');
-        File::put($oldFile2, 'dummy old 2');
-        File::put($freshFile, 'dummy fresh');
+        foreach ([$oldFile1, $oldFile2, $freshFile] as $path) {
+            $zip = new ZipArchive;
+            $zip->open($path, ZipArchive::CREATE);
+            $zip->addFromString('database.sql', '-- Synthetic managed dump');
+            $zip->addFromString('manifest.json', json_encode(['type' => 'full', 'database_sha256' => hash('sha256', '-- Synthetic managed dump')]));
+            $zip->close();
+            AuditLog::create(['action' => 'backup_created', 'entity_type' => BackupService::class, 'entity_id' => 0,
+                'new_data' => ['filename' => basename($path)], 'created_at' => now('UTC')]);
+        }
+        $manual = $backupDir.'/manual-emergency.zip';
+        File::put($manual, 'Unmanaged external archive');
+        touch($manual, time() - (45 * 86400));
 
         // Backdate mtime
         touch($oldFile1, time() - (45 * 86400));
@@ -368,6 +381,7 @@ class BackupAndMaintenanceTest extends TestCase
         $this->assertFalse(File::exists($oldFile1));
         $this->assertFalse(File::exists($oldFile2));
         $this->assertTrue(File::exists($freshFile));
+        $this->assertTrue(File::exists($manual));
 
         File::delete($freshFile);
     }

@@ -6,6 +6,7 @@ use App\Domains\Analytics\Models\AnalyticsEvent;
 use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\MarketingTouch;
 use App\Domains\Analytics\Models\VisitorSession;
+use App\Domains\Analytics\Services\AnalyticsLifecycle;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Analytics\Services\SocialAnalyticsRollup;
 use App\Domains\Booking\Models\Booking;
@@ -476,7 +477,7 @@ class ReportService
         }
 
         // 4. Query bookings created within the period to label booking-date activity separately
-        $bookingsInPeriodQuery = $this->nonBotBookingQuery()
+        $bookingsInPeriodQuery = $this->nonBotBookingQuery(true)
             ->whereBetween('created_at', [$start, $end])
             ->whereNotNull('campaign');
 
@@ -527,7 +528,7 @@ class ReportService
             }
 
             // Candidate bookings matching this campaign, content, and source
-            $candidateBookings = $this->nonBotBookingQuery()
+            $candidateBookings = $this->nonBotBookingQuery(true)
                 ->where('campaign', $camp)
                 ->where(function ($q) use ($cnt) {
                     if ($cnt === '(not set)') {
@@ -686,9 +687,10 @@ class ReportService
      * Exclude bookings that can be traced to a visitor flagged as a bot.
      */
     /** @return Builder<Booking> */
-    public function nonBotBookingQuery(): Builder
+    public function nonBotBookingQuery(bool $respectAnalyticsLifecycle = false): Builder
     {
         return Booking::query()
+            ->when($respectAnalyticsLifecycle, fn (Builder $query) => $query->where('id', '>', app(AnalyticsLifecycle::class)->bookingFloor()))
             ->whereNotExists(function ($query): void {
                 $query->selectRaw('1')
                     ->from('visitors')

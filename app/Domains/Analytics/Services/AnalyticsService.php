@@ -129,7 +129,7 @@ class AnalyticsService
                 $identities[$date][$acquisitionCountry][$event->visitor_token] = true;
             }
         }
-        foreach ($reports->nonBotBookingQuery()->whereBetween('created_at', [$startUtc, $endUtc])->whereIn('status', ['confirmed', 'completed', 'no_show'])->get() as $booking) {
+        foreach ($reports->nonBotBookingQuery(true)->whereBetween('created_at', [$startUtc, $endUtc])->whereIn('status', ['confirmed', 'completed', 'no_show'])->get() as $booking) {
             $date = $booking->created_at->copy()->setTimezone($timezone)->toDateString();
             $country = $this->reportCountry($booking->detected_country_code);
             $daily[$date][$country]['bookings_completed'] = ($daily[$date][$country]['bookings_completed'] ?? 0) + 1;
@@ -427,7 +427,7 @@ class AnalyticsService
             if ($sToken && in_array($eventName, self::RAPID_DEDUPLICATED_EVENTS, true)) {
                 $dedupMetadata = $metadata;
                 ksort($dedupMetadata);
-                $dedupKey = 'va_dedup_rapid_'.$eventName.'_'.$sToken.'_'.hash('sha256', (string) json_encode($dedupMetadata));
+                $dedupKey = 'va_dedup_rapid_'.app(AnalyticsLifecycle::class)->generation().'_'.$eventName.'_'.$sToken.'_'.hash('sha256', (string) json_encode($dedupMetadata));
 
                 if (! Cache::add($dedupKey, true, now()->addSeconds(5))) {
                     return null;
@@ -435,7 +435,7 @@ class AnalyticsService
             }
 
             if ($sToken && in_array($eventName, self::SESSION_DEDUPLICATED_EVENTS, true)) {
-                $dedupKey = 'va_dedup_session_'.$eventName.'_'.$sToken;
+                $dedupKey = 'va_dedup_session_'.app(AnalyticsLifecycle::class)->generation().'_'.$eventName.'_'.$sToken;
 
                 if (! Cache::add($dedupKey, true, now()->addMinutes(30))) {
                     return null;

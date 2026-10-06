@@ -29,12 +29,14 @@ use App\Domains\Students\Services\PackageRenewalService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
+use App\Domains\System\Services\DevelopmentToolsService;
 use App\Http\Controllers\Admin\AccountSuspensionController;
 use App\Http\Controllers\Student\FormController;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
@@ -69,7 +71,18 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
-    if ($action === 'recurring_generate') {
+    if ($action === 'development_confirm') {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Development races require the dedicated test database.');
+        }
+        config(['development_tools.enabled' => true, 'development_tools.require_snapshot' => false]);
+        $summary = app(DevelopmentToolsService::class)->confirm(
+            Administrator::query()->findOrFail((int) $data['administrator_id']),
+            (string) $data['session_id'], (string) $data['token'], 'Stage5RacePass!', null, null, (string) $data['phrase'],
+        );
+        echo 'RESULT:SUCCESS:'.$summary['operation_id']."\n";
+        exit(0);
+    } elseif ($action === 'recurring_generate') {
         $results = app(RecurringLessonService::class)->generate(
             RecurringLessonPlan::query()->findOrFail((int) $data['plan_id']),
             (int) $data['administrator_id'], 1, 1,

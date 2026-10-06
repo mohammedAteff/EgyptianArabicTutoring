@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Domains\Administration\Models\StaffBin;
 use App\Domains\Administration\Models\StaffTask;
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Analytics\Services\AnalyticsLifecycle;
 use App\Domains\Audit\Services\PrivacyDatabaseSessionHandler;
 use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Booking\Models\Booking;
@@ -15,6 +16,7 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
 use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\System\Services\DevelopmentDataSchema;
 use App\Policies\LessonMaterialPolicy;
 use App\Policies\LessonWorkspacePolicy;
 use App\Policies\StaffBinPolicy;
@@ -41,6 +43,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->scoped(DevelopmentDataSchema::class);
+        $this->app->scoped(AnalyticsLifecycle::class);
         ini_set('unserialize_callback_func', 'spl_autoload_call');
         $serializable = config('cache.serializable_classes');
         if (is_array($serializable)) {
