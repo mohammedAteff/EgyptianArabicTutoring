@@ -975,3 +975,15 @@ Coverage references can be direct rows or supporting scenario prerequisites; a l
 | SA-097 | READ-ONLY, RESOURCE-DATA, SECURITY/PERMISSION | Yes | H, M | Q02, Q14 | Uncovered | QA owner/foreign actors exist, but no canonical completed/pending archive operation. Completion/history was not fabricated while the feature remains disabled. |
 | SA-098 | READ-ONLY, ENTITLEMENT-DATA, FINANCIAL-DATA, BOOKING-DATA, SECURITY/PERMISSION | Yes | D, E, F, M | Q15 | Uncovered | No unclassified legacy purchase. New purchase workflows mandate explicit type; a narrowly reviewed fixture adapter awaits the earlier user clarification. No ledger fabrication or provenance stripping. |
 | SA-099 | CONFIGURATION-TOGGLE, FINANCIAL-DATA, SECURITY/PERMISSION | Yes | F, L, M | Q03 | Prepared starting fixtures | payment_methods:7, payment_records:13, payment_records:14, payment_records:15, payment_records:16 |
+
+## Delivery completion receipt
+
+Documentation delivery commit **60e368dc7d6507483843b4f0060f3056e6e95c66** was pushed to origin/main before FINAL. Production remained **7cb9a236b60350cfa134c2d6c94e14df1eb20c6b**, tracked source clean; all seven differing repository files are Markdown only. The following receipt-only documentation commit does not alter application deployment or add another notification.
+
+FINAL notification: attempted once at 2026-10-06T18:14:26.000Z; transport attempted true; **successful**; delivery #8; message IDs 12. START was attempted once and succeeded, delivery #7, message IDs 11. Exactly two dataset-task status messages, zero progress notifications; existing verified bot/destination only. No credential/configuration values are recorded. Dataset result remains **partial: 132/139 prepared, seven uncovered**.
+
+This final receipt adds one supporting database object after the 331-row integrity capture: **332 final traceable database rows**, four separately inventoried application payloads. It belongs to Staff operations and status (27 final rows; previously 26). All other domain/table counts remain the captured counts.
+
+| Run | Scenario | Reference | QA label | Owner/parent | Capabilities | Reason | Current state | Dependencies | Temporary settings | Original value | Cleanup |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| QA_ACCEPTANCE_2026_10_06_A | Q13 | telegram_deliveries:8 | QA ACCEPTANCE 20261006 A Owner-authorized FINAL blocked status receipt | Existing verified owner pathway | SA-086 | Exactly one required final status; missing prerequisites reported truthfully | successful; message IDs 12; covered 132; uncovered 7 | Existing enabled verified bot/destination; prior Sent proof; Q13 START | None | Unchanged | Existing safe notification retention; no automatic/manual deletion performed |
