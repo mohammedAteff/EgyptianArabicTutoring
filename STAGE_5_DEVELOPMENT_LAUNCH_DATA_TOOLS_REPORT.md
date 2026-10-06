@@ -91,7 +91,15 @@ Final-source concurrency/schema rerun passed: 26 / 152 assertions. All required 
 
 ## Final Git delivery outcome
 
-Implementation/report/runbook/tracker commit: `5d71cc1e707a0177d980379564e96f4d565def81`, created on the existing main branch only after every local gate passed. The normal `git push origin HEAD:main` failed before reaching GitHub with `github_connection_unavailable` (TCP port 443 connection could not be established). No Stage 5 push was performed, and no remote/auth/proxy/security configuration was changed. The final documentation checkpoint records this outcome and remains local; its HEAD is reported in the final response.
+### Delivery completed during the Pre-LMS release — 2026-10-06
+
+The earlier connectivity failure below is historical. The Pre-LMS release request authorized a fresh remote inspection. A successful fetch confirmed `origin/main` at `36ab454277065558d5aae6c15ece36d1dd530858`, with no remote-only commits and exactly two intended local commits. Normal push delivered `5d71cc1e707a0177d980379564e96f4d565def81` and `fa91e840503f2b46adaae63ea6e2b4ab77c70833`; a subsequent fetch confirmed local HEAD and `origin/main` both at `fa91e840503f2b46adaae63ea6e2b4ab77c70833`. No force push, merge, rebase, remote/authentication change or unrelated document staging occurred.
+
+**Stage 5 Git delivery is complete.** Its original single Telegram resolution remains the historical `verified_destination_unavailable` receipt; it was not repeated. The separate Pre-LMS request authorizes its own production start/final notifications. Integrated release checks, the owner-approved `source-map-js` security patch and the production deployment outcome belong to `PRE_LMS_PRODUCTION_DEPLOYMENT_REPORT.md`; Stage 5 push does not certify deployment.
+
+### Original failed attempt, superseded by the delivery above
+
+Implementation/report/runbook/tracker commit: `5d71cc1e707a0177d980379564e96f4d565def81`, created on the existing main branch only after every local gate passed. The normal `git push origin HEAD:main` failed before reaching GitHub with `github_connection_unavailable` (TCP port 443 connection could not be established). No Stage 5 push was performed at that checkpoint, and no remote/auth/proxy/security configuration was changed. The final documentation checkpoint recorded that outcome and remained local until the Pre-LMS delivery described above.
 
 **Stage 5 is stopped at Git delivery, with implementation and local acceptance gates passed. It is not labeled completed/pushed.** Once GitHub connectivity is restored, the pending commits can be pushed normally after checking the remote state; no force push is authorized. The three unrelated user documents remain untracked and unchanged.
 
