@@ -10,6 +10,7 @@ use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormAnswer;
+use App\Domains\Lms\Services\LmsStudentLifecycle;
 use App\Domains\Students\Models\Student;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -25,6 +26,7 @@ class StudentPrivacyService
         private DatabaseCapability $database,
         private LessonMaterialService $lessonMaterials,
         private TeachingRecordService $teaching,
+        private LmsStudentLifecycle $learning,
     ) {}
 
     public function anonymize(int $studentId, ?int $administratorId = null): Student
@@ -123,6 +125,7 @@ class StudentPrivacyService
             DB::table('student_bins')->where('student_id', $studentId)->update(['title' => 'Redacted educational note', 'body' => '[redacted]', 'student_visible' => false]);
             $this->lessonMaterials->eraseForBookings($lockedIds, $administratorId);
             $this->teaching->erase($studentId);
+            $this->learning->erase($studentId);
             DB::table('recurring_lesson_plans')->where('student_id', $studentId)->update(['status' => 'paused']);
             DB::table('booking_waitlists')->where('student_id', $studentId)->update(['status' => 'withdrawn', 'notes' => null]);
             DB::table('student_unavailabilities')->where('student_id', $studentId)->update(['status' => 'cancelled', 'notes' => null]);

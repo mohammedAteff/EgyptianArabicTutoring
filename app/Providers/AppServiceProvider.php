@@ -11,6 +11,13 @@ use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
 use App\Domains\CMS\Services\AnnouncementService;
+use App\Domains\Lms\Models\AccessGrant;
+use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Models\Enrollment;
+use App\Domains\Lms\Models\LearningAssignment;
+use App\Domains\Lms\Models\Lesson;
+use App\Domains\Lms\Models\LessonBlock;
+use App\Domains\Lms\Models\Section;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
@@ -19,6 +26,7 @@ use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\System\Services\DevelopmentDataSchema;
 use App\Policies\LessonMaterialPolicy;
 use App\Policies\LessonWorkspacePolicy;
+use App\Policies\LmsPolicy;
 use App\Policies\StaffBinPolicy;
 use App\Policies\StaffTaskPolicy;
 use App\Policies\StudentBinPolicy;
@@ -81,6 +89,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Booking::class, LessonWorkspacePolicy::class);
         Gate::policy(LessonMaterial::class, LessonMaterialPolicy::class);
         Gate::policy(Student::class, StudentTeachingPolicy::class);
+        foreach ([Course::class, Section::class, Lesson::class, LessonBlock::class, AccessGrant::class, Enrollment::class, LearningAssignment::class] as $learningModel) {
+            Gate::policy($learningModel, LmsPolicy::class);
+        }
         class_exists(Student::class);
         app(TelegramBusinessEvents::class)->register();
 

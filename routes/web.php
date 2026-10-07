@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
 use App\Http\Controllers\Admin\DevelopmentToolsController;
 use App\Http\Controllers\Admin\FormController;
+use App\Http\Controllers\Admin\LmsAccessController;
 use App\Http\Controllers\Admin\MaintenanceAnalyticsController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\Admin\MeetingLinkController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LmsFoundationController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ResourceController;
@@ -79,6 +81,8 @@ use Illuminate\Support\Facades\Route;
 
 // Homepage
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/courses/{course}', [LmsFoundationController::class, 'course'])->whereNumber('course')->name('lms.courses.show');
+Route::get('/courses/{course}/lessons/{lesson}', [LmsFoundationController::class, 'lesson'])->whereNumber(['course', 'lesson'])->name('lms.lessons.show');
 Route::get('/fr', [HomeController::class, 'index'])->name('home.fr');
 Route::get('/de', [HomeController::class, 'index'])->name('home.de');
 
@@ -90,6 +94,10 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
     Route::middleware('student.auth')->group(function () {
+        Route::get('/lms/courses/{course}', [LmsFoundationController::class, 'course'])->whereNumber('course')->name('lms.courses.show');
+        Route::get('/lms/courses/{course}/lessons/{lesson}', [LmsFoundationController::class, 'lesson'])->whereNumber(['course', 'lesson'])->name('lms.lessons.show');
+        Route::get('/lms/courses/{course}/lessons/{lesson}/resources/{block}', [LmsFoundationController::class, 'resource'])->whereNumber(['course', 'lesson', 'block'])->name('lms.resources.open');
+        Route::get('/lms/assignments/{assignment}', [LmsFoundationController::class, 'assignment'])->whereNumber('assignment')->name('lms.assignments.show');
         Route::get('/planning', [SchedulingController::class, 'index'])->name('scheduling.index');
         Route::post('/planning/{kind}', [SchedulingController::class, 'store'])->whereIn('kind', ['holiday', 'waitlist'])->middleware('throttle:30,1')->name('scheduling.store');
         Route::post('/waitlist/{interest}/withdraw', [SchedulingController::class, 'withdraw'])->whereNumber('interest')->name('waitlist.withdraw');
@@ -265,6 +273,12 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     |--------------------------------------------------------------------------
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
+        Route::prefix('lms')->name('lms.')->middleware('role:super_admin,admin')->group(function (): void {
+            Route::post('/students/{student}/courses/{course}/access', [LmsAccessController::class, 'issue'])->whereNumber(['student', 'course'])->middleware('throttle:30,1')->name('access.issue');
+            Route::patch('/grants/{grant}', [LmsAccessController::class, 'change'])->whereNumber('grant')->middleware('throttle:30,1')->name('access.change');
+            Route::get('/students/{student}/access', [LmsAccessController::class, 'studentAccess'])->whereNumber('student')->name('students.access');
+            Route::get('/courses/{course}/students', [LmsAccessController::class, 'courseStudents'])->whereNumber('course')->name('courses.students');
+        });
         Route::middleware('role:super_admin,admin,assistant')->group(function (): void {
             Route::get('/today', [OperationsController::class, 'index'])->name('operations.index');
             Route::get('/tasks', [StaffTaskController::class, 'index'])->name('tasks.index');

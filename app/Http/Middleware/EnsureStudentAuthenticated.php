@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentSessionContext;
 use App\Domains\Timezone\Services\TimezoneService;
 use Closure;
 use Illuminate\Http\Request;
@@ -11,6 +11,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureStudentAuthenticated
 {
+    public function __construct(private StudentSessionContext $students) {}
+
     /**
      * Handle an incoming request.
      *
@@ -18,16 +20,9 @@ class EnsureStudentAuthenticated
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $studentId = $request->session()->get('student_id');
-        $expiresAt = $request->session()->get('student_auth_expires_at');
         $guard = Auth::guard('student');
-
-        $isExpired = ! is_string($expiresAt) || now('UTC')->greaterThanOrEqualTo($expiresAt);
-        $student = is_numeric($studentId) && ! $isExpired
-            ? Student::verified()->whereNull('suspended_at')->find((int) $studentId)
-            : null;
-
-        if (! $student || (int) $guard->id() !== (int) $studentId) {
+        $student = $this->students->current($request);
+        if (! $student) {
             $guard->logout();
             $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at']);
 

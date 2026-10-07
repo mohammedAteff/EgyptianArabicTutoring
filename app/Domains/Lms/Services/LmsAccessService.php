@@ -1,0 +1,189 @@
+<?php
+
+namespace App\Domains\Lms\Services;
+
+use App\Domains\Lms\Models\AccessGrant;
+use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Models\Enrollment;
+use App\Domains\Lms\Models\LearningAssignment;
+use App\Domains\Lms\Models\Lesson;
+use App\Domains\Lms\Models\LessonBlock;
+use App\Domains\Lms\Models\Section;
+use App\Domains\Students\Models\Student;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+
+class LmsAccessService
+{
+    public function __construct(private LmsAccessWindow $windows) {}
+
+    public function canAccess(?Student $student, Model $target): bool
+    {
+        return $this->resolve($student, $target)['allowed'];
+    }
+
+    /** One fresh graph and the same decision function keep outline reads bounded.
+     * @return array{course: Course, sections: Collection<int, Section>}|null
+     */
+    public function outline(?Student $student, Course $course): ?array
+    {
+        $student = $student ? Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->find($student->id) : null;
+        $studentId = $student ? $student->id : 0;
+        $course = Course::query()->with(['sections.lessons', 'accessRule', 'grants' => fn ($query) => $query->where('student_id', $studentId)->with(['learningAssignment.booking', 'lesson:id,section_id'])])->find($course->id);
+        if (! $course || ! $this->published($course)) {
+            return null;
+        }
+        $anchor = $student ? $this->anchors(Enrollment::query()->where('student_id', $student->id)->where('course_id', $course->id)->get(), 'course_id')->get($course->id) : null;
+        if (! $this->decision($student, $course, $course, $anchor)['allowed']) {
+            return null;
+        }
+        $sections = $course->sections->filter(fn (Section $section): bool => $this->published($section) && $this->decision($student, $course, $section, $anchor)['allowed'])->values();
+        foreach ($sections as $section) {
+            $section->setRelation('lessons', $section->lessons->filter(fn (Lesson $lesson): bool => $this->published($lesson) && $this->decision($student, $course, $lesson, $anchor)['allowed'])->values());
+        }
+
+        return ['course' => $course, 'sections' => $sections];
+    }
+
+    /** @return Collection<int, LessonBlock> */
+    public function lessonBlocks(?Student $student, Lesson $lesson): Collection
+    {
+        if (! $this->canAccess($student, $lesson)) {
+            return collect();
+        }
+
+        return $lesson->blocks()->with('resource')->get()->filter(fn (LessonBlock $block): bool => $block->status === 'ready'
+            && ($block->kind !== 'resource' || $block->resource?->isPublished()))->values();
+    }
+
+    /** @return array{allowed: bool, sources: list<string>} */
+    public function resolve(?Student $student, Model $target): array
+    {
+        $student = $student ? Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->find($student->id) : null;
+        $target = $target->exists ? $target->newQuery()->find($target->getKey()) : null;
+        if (! $target) {
+            return ['allowed' => false, 'sources' => []];
+        }
+        if ($target instanceof LearningAssignment) {
+            $grant = $target->accessGrant;
+            if (! $student || ! $grant || (int) $grant->student_id !== (int) $student->id || $target->status !== 'assigned' || ! $this->windows->active($grant)
+                || ($target->booking_id !== null && (int) $target->booking?->student_id !== (int) $student->id)) {
+                return ['allowed' => false, 'sources' => []];
+            }
+            $target = $grant->lesson ?? $grant->section ?? $grant->course;
+        }
+        if ($target instanceof LessonBlock) {
+            if ($target->status !== 'ready' || ($target->kind === 'resource' && ! $target->resource?->isPublished())) {
+                return ['allowed' => false, 'sources' => []];
+            }
+            $target = $target->lesson;
+        }
+        if (! ($target instanceof Course || $target instanceof Section || $target instanceof Lesson)) {
+            return ['allowed' => false, 'sources' => []];
+        }
+        $course = $target instanceof Course ? $target : $target->course;
+        if (! $course || ! $this->published($course)
+            || ($target instanceof Section && ! $this->published($target))
+            || ($target instanceof Lesson && (! $this->published($target) || ! $target->section || ! $this->published($target->section)))) {
+            return ['allowed' => false, 'sources' => []];
+        }
+        $studentId = $student ? $student->id : 0;
+        $course->load(['accessRule', 'grants' => fn ($query) => $query->where('student_id', $studentId)->with(['learningAssignment.booking', 'lesson:id,section_id'])]);
+        $enrollment = $student ? $this->anchors(Enrollment::query()->where('student_id', $student->id)->where('course_id', $course->id)->get(), 'course_id')->get($course->id) : null;
+
+        return $this->decision($student, $course, $target, $enrollment);
+    }
+
+    /** @return Collection<int, Course> */
+    public function activeForStudent(Student $student): Collection
+    {
+        $student = Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->find($student->id);
+        if (! $student) {
+            return collect();
+        }
+        $courses = Course::query()->where('status', 'published')->where('published_at', '<=', now('UTC'))
+            ->where(fn ($query) => $query->where('kind', 'catalog')->orWhere('owner_student_id', $student->id))
+            ->with(['accessRule', 'grants' => fn ($query) => $query->where('student_id', $student->id)->with(['learningAssignment.booking', 'lesson:id,section_id'])])
+            ->orderBy('id')->get();
+        $enrollments = $this->anchors(Enrollment::query()->where('student_id', $student->id)->get(), 'course_id');
+
+        return $courses->filter(fn (Course $course): bool => $this->decision($student, $course, $course, $enrollments->get($course->id))['allowed'])->values();
+    }
+
+    /** @return Collection<int, Student> */
+    public function studentsWithCourseAccess(Course $course): Collection
+    {
+        $course = Course::query()->with(['accessRule', 'grants.learningAssignment.booking', 'grants.lesson:id,section_id'])->findOrFail($course->id);
+        if (! $this->published($course)) {
+            return collect();
+        }
+        $students = Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->when($course->kind === 'private', fn ($query) => $query->whereKey($course->owner_student_id))->orderBy('id')->get();
+        $enrollments = $this->anchors(Enrollment::query()->where('course_id', $course->id)->get(), 'student_id');
+
+        return $students->filter(fn (Student $student): bool => $this->decision($student, $course, $course, $enrollments->get($student->id))['allowed'])->values();
+    }
+
+    /** @return array{allowed: bool, sources: list<string>} */
+    private function decision(?Student $student, Course $course, Course|Section|Lesson $target, ?Enrollment $enrollment): array
+    {
+        if ($course->kind === 'private' && (! $student || (int) $course->owner_student_id !== (int) $student->id)) {
+            return ['allowed' => false, 'sources' => []];
+        }
+        $sources = [];
+        $rule = $course->accessRule;
+        if ($rule && $this->windows->active($rule, $enrollment ? CarbonImmutable::instance($enrollment->enrolled_at)->utc() : null)
+            && ($rule->audience === 'public' || ($student && in_array($rule->audience, ['member', 'all_students'], true)))) {
+            $sources[] = 'rule:'.$rule->id;
+        }
+        if ($student) {
+            foreach ($course->grants as $grant) {
+                if ((int) $grant->student_id === (int) $student->id && $this->windows->active($grant)
+                    && $this->validAssignment($grant)
+                    && $this->covers($grant, $target)) {
+                    $sources[] = 'grant:'.$grant->id;
+                }
+            }
+        }
+
+        return ['allowed' => $sources !== [], 'sources' => $sources];
+    }
+
+    private function covers(AccessGrant $grant, Course|Section|Lesson $target): bool
+    {
+        if ($target instanceof Course || ($grant->section_id === null && $grant->lesson_id === null)) {
+            return true;
+        }
+        if ($target instanceof Section) {
+            return (int) $grant->section_id === (int) $target->id || ($grant->lesson && (int) $grant->lesson->section_id === (int) $target->id);
+        }
+
+        return (int) $grant->lesson_id === (int) $target->id || (int) $grant->section_id === (int) $target->section_id;
+    }
+
+    private function validAssignment(AccessGrant $grant): bool
+    {
+        if ($grant->source_kind !== 'private_assignment') {
+            return true;
+        }
+        $assignment = $grant->learningAssignment;
+
+        return $assignment !== null && $assignment->status === 'assigned'
+            && ($assignment->booking_id === null || (int) $assignment->booking?->student_id === (int) $grant->student_id);
+    }
+
+    /** Merge history retains the earliest relative-rule anchor without restarting access.
+     * @param  Collection<int, Enrollment>  $rows
+     * @return Collection<int, Enrollment>
+     */
+    private function anchors(Collection $rows, string $key): Collection
+    {
+        return $rows->groupBy($key)->filter(fn (Collection $group): bool => $group->contains('status', 'enrolled'))
+            ->map(fn (Collection $group): Enrollment => $group->sortBy('enrolled_at')->first());
+    }
+
+    private function published(Course|Section|Lesson $target): bool
+    {
+        return $target->status === 'published' && $target->published_at !== null && $target->published_at->lte(now('UTC'));
+    }
+}

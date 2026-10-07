@@ -6,6 +6,7 @@ use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Database\Services\DatabaseCapability;
+use App\Domains\Lms\Services\LmsStudentLifecycle;
 use App\Domains\Students\Models\Student;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -19,6 +20,7 @@ class StudentMergeService
         private AvailabilityService $availability,
         private AuditLogService $auditLogs,
         private DatabaseCapability $database,
+        private LmsStudentLifecycle $learning,
     ) {}
 
     public function merge(int $primaryId, int $secondaryId, ?int $administratorId = null): Student
@@ -133,6 +135,8 @@ class StudentMergeService
 
                 DB::table($table)->where('student_id', $secondaryId)->update($changes);
             }
+
+            $this->learning->merge($primaryId, $secondaryId);
 
             DB::table('session_reschedules')
                 ->where('actor_type', 'student')

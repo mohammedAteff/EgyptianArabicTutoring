@@ -16,6 +16,7 @@ use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\Students\Services\StudentSessionContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -84,13 +85,7 @@ class ResourceController extends Controller
 
     private function authenticatedStudent(Request $request): ?Student
     {
-        $id = Auth::guard('student')->id();
-        $expires = $request->session()->get('student_auth_expires_at');
-        if (! $id || (int) $request->session()->get('student_id') !== (int) $id || ! is_string($expires) || now('UTC')->gte($expires)) {
-            return null;
-        }
-
-        return Student::verified()->whereNull('suspended_at')->find($id);
+        return app(StudentSessionContext::class)->current($request);
     }
 
     public function preview(Request $request, string $slug): View

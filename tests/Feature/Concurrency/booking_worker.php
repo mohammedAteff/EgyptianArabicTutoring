@@ -20,6 +20,9 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Forms\Services\FormSubmissionService;
+use App\Domains\Lms\Models\AccessGrant;
+use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Services\LmsAccessOperations;
 use App\Domains\Notifications\Services\TelegramAutomationService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Students\Models\PaymentRecord;
@@ -40,6 +43,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 require __DIR__.'/../../../vendor/autoload.php';
 $app = require_once __DIR__.'/../../../bootstrap/app.php';
@@ -71,6 +75,18 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['lms_grant', 'lms_change'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('LMS races require the dedicated test database.');
+        }
+        $actor = Administrator::query()->findOrFail((int) $data['administrator_id']);
+        $operations = app(LmsAccessOperations::class);
+        $grant = $action === 'lms_grant'
+            ? $operations->grant($actor, Student::query()->findOrFail((int) $data['student_id']), Course::query()->findOrFail((int) $data['course_id']), $data['terms'] ?? [], (string) $data['key'])
+            : $operations->change($actor, AccessGrant::query()->findOrFail((int) $data['grant_id']), (string) $data['change'], $data['terms'] ?? [], (int) $data['version'], (string) $data['key']);
+        echo 'RESULT:SUCCESS:'.$grant->id."\n";
+        exit(0);
+    }
     if ($action === 'development_confirm') {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Development races require the dedicated test database.');
@@ -277,6 +293,13 @@ try {
 } catch (ValidationException $e) {
     echo 'RESULT:CONFLICT:'.$e->getMessage()."\n";
     exit(2);
+} catch (HttpException $e) {
+    if (in_array($e->getStatusCode(), [404, 409], true)) {
+        echo 'RESULT:CONFLICT:'.$e->getMessage()."\n";
+        exit(2);
+    }
+    echo 'RESULT:EXCEPTION:'.$e->getMessage()."\n";
+    exit(3);
 } catch (Throwable $e) {
     echo 'RESULT:EXCEPTION:'.get_class($e).':'.$e->getMessage()."\n";
     exit(3);
