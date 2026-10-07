@@ -22,8 +22,10 @@ use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Forms\Services\FormSubmissionService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsAccessOperations;
+use App\Domains\Lms\Services\StudentLearningStateService;
 use App\Domains\Notifications\Services\TelegramAutomationService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Students\Models\PaymentRecord;
@@ -33,6 +35,7 @@ use App\Domains\Students\Services\PackageRenewalService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
+use App\Domains\Students\Services\StudentPrivacyService;
 use App\Domains\System\Services\DevelopmentToolsService;
 use App\Http\Controllers\Admin\AccountSuspensionController;
 use App\Http\Controllers\Student\FormController;
@@ -76,6 +79,26 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['learning_visit', 'learning_note', 'learning_bookmark', 'learning_privacy'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Student learning races require the dedicated test database.');
+        }
+        $student = Student::query()->findOrFail((int) $data['student_id']);
+        if ($action === 'learning_privacy') {
+            app(StudentPrivacyService::class)->anonymize($student->id, (int) $data['administrator_id']);
+        } else {
+            $state = app(StudentLearningStateService::class);
+            $course = Course::query()->findOrFail((int) $data['course_id']);
+            $lesson = Lesson::query()->findOrFail((int) $data['lesson_id']);
+            match ($action) {
+                'learning_visit' => $state->visit($student, $course, $lesson),
+                'learning_note' => $state->saveNote($student, $course, $lesson, (string) $data['body'], $data['note_id'] ?? null, $data['version'] ?? null),
+                'learning_bookmark' => $state->bookmark($student, $course, $lesson, (int) $data['block_id'], (float) $data['seconds'], $data['label'] ?? null),
+            };
+        }
+        echo "RESULT:SUCCESS:student-learning\n";
+        exit(0);
+    }
     if (in_array($action, ['course_studio_create', 'course_studio_write', 'course_studio_publish', 'course_studio_duplicate'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Course Studio races require the dedicated test database.');

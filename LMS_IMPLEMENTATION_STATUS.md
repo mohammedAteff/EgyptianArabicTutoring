@@ -3,7 +3,81 @@
 Date: 2026-10-07 (Africa/Cairo).
 
 
-## Stage 3 disposition — current implementation
+
+## Stage 4 disposition — current implementation
+
+**COMPLETE — The Student LMS implementation and all required local gates pass.** Students can discover and consume authorized courses inside the existing Portal, navigate ordered lessons, use mixed content, keep private notes and bookmark meaningful direct-video timestamps. Completed remains explicitly empty until real completion exists. No Stage 5 or production deployment was started.
+
+Stage 4 was separately authorized after Stage 3 application commit 59d992f1290b35e50fa8dbb3e510b049225fb4ad. Plan section 14 records actual Student Hub, personal-state, content/file, access-state and lifecycle contracts. The Stage 1 proposal and historical Stage 3 “Stage 4 deferred” statements are superseded only for this scope.
+
+### Stage 4 verification receipts
+
+| Gate | Actual final evidence |
+|---|---|
+| New student behavior/security | PASS **39 tests / 324 assertions** in the full current-schema run |
+| Focused Student/access/auth/Portal/file regressions | PASS **141 tests / 835 assertions**; StudentLearningTest, LmsFoundationTest, LmsAccessOperationsTest, LmsLifecycleIntegrationTest, StudentAuthenticationTest, StudentSecondaryEmailTest, SessionInactivityAndCookieRefreshTest, StudentTeachingExperienceTest and matching Resource/material tests |
+| New real concurrent personal-state races | PASS **5 tests / 24 assertions**: simultaneous visits, same timestamp saves, same-version note edits, privacy erasure versus save and access withdrawal versus save |
+| Full current-schema application regression | PASS **1,168 tests / 9,769 assertions**, zero failures/errors/skips, approximately 357 seconds; the 1,129-test Stage 3 application plus all 39 new ordinary tests |
+| Full dedicated concurrency regression | PASS **40 tests / 227 assertions**, zero failures/errors/skips, approximately 43 seconds; MariaDbConcurrencyVerificationTest, BusinessLifecycleConcurrencyTest, DevelopmentDataConcurrencyTest, LmsAccessConcurrencyTest, CourseStudioConcurrencyTest and StudentLearningConcurrencyTest |
+| JavaScript | PASS **34 tests**, zero failures/skips; 27 existing plus 7 player tests covering finite timestamps, seek boundaries, metadata/error state, matching form/video and matching bookmark/video |
+| Frontend build | PASS final Vite build, **114.65 kB CSS / 10.42 kB application JS**, approximately 1.76 seconds; dependencies unchanged |
+| Browser / responsive UI | PASS default 1280px desktop and 390px mobile; no horizontal overflow, collapsed mobile/open desktop curriculum, working disclosure/input, mixed Arabic/English direction and 44px learning/nav/sign-out touch targets; no warning/error logs |
+| Browser evidence boundary | Real Blade HTML from isolated HTTP fixtures, actual built CSS/player JS and existing Herd; no business login or session bypass. Submission/navigation/analytics disabled, tokens/external media source removed; temporary public fixtures and browser tab removed and viewport reset. Provider playback itself is not claimed from this visual review. |
+| PHPStan no-regression | PASS complete path/identifier/message diagnostic multiset **255 → 255**, exactly equal; no added/removed diagnostics, ignores, baselines or weaker configuration. The analyzer retains its pre-existing nonzero baseline result. |
+| Blade / routes | PASS view cache/clear and route cache/clear; all **11** new named routes resolve under existing Student middleware; old routes preserved |
+| Pint / whitespace | PASS required dirty-PHP formatter and working/staged diff checks; no later PHP edits |
+| Dependency/security audits | PASS Composer **0 advisories / 0 abandoned packages**, npm **0 vulnerabilities** |
+| Local migration/schema | PASS only the additive personal-state migration on verified local bolt_landing / MariaDB 10.11.18, **batch 21**, **121 application tables / 77 Ran migrations**; +3 tables/+1 migration, no generated-column or typed-finance guard changes; no business-data seeding |
+| Production | Not freshly inspected, backed up, deployed or retested; accepted historical production evidence remains its recorded 4296b21 / MariaDB 11.8.9 baseline |
+
+The current-schema suite excludes historical MigrationACompatibilityTest and the six dedicated concurrency classes. Database suites run serially against the explicit bolt_landing_test database. Independent workers use that same isolated database with the dedicated concurrency configuration. No existing test was weakened. UI-only review files were transient, not application routes.
+
+During development, meaningful tests caught hidden-payload access through default serialization and an expiry-label Blade directive; these were corrected in the implementation. Synthetic fixture defects (Resource publication field, forbidden Bunny payload and timezone assertion) were corrected without weakening schema or behavior. The final focused/full receipts above include the corrected cases. Existing Bunny schema enforcement is preserved rather than bypassed to manufacture a test URL.
+
+### Stage 4 exact file inventory
+
+| Files changed | Resulting behavior |
+|---|---|
+| app/Domains/Lms/Models/LearningVisit.php; LessonNote.php; LessonBookmark.php | Guarded canonical-owner personal data, precise relationships/casts/factories, hidden private bodies/labels |
+| app/Domains/Lms/Services/StudentLearningService.php; StudentLearningStateService.php | Authoritative learner read model and serialized current-access personal writes |
+| app/Domains/Lms/Services/LmsAccessService.php; LmsAccessWindow.php | Presentation expiry/denial using the same source decisions, scope and UTC bounds; existing resolution contract preserved |
+| app/Domains/Lms/Services/LmsStudentLifecycle.php | Canonical merge transfers private data/latest visits; erasure removes personal text/state |
+| app/Http/Controllers/Student/LearningController.php; routes/web.php | Eleven existing-guard HTML/read/write/file routes with server ownership, scope and private response headers |
+| database/migrations/2026_10_07_183616_create_lms_student_learning_state_tables.php | Three additive tables, coherent parent FKs/indexes, bounded bookmark time and populated rollback refusal |
+| database/factories/LearningVisitFactory.php; LessonNoteFactory.php; LessonBookmarkFactory.php | Useful isolated canonical Student/lesson/block/visit fixtures; no genuine-data seeder |
+| resources/views/layouts/student.blade.php | Natural My Learning entry, preserved tutoring entry and mobile navigation touch targets |
+| resources/views/student/learning/index.blade.php; course.blade.php; lesson.blade.php; curriculum.blade.php; notes.blade.php; feedback.blade.php; unavailable.blade.php | Hub, published course/lesson experience, filtered mobile/desktop curriculum, private notes/bookmarks and unavailable states |
+| resources/js/learning-player.js; resources/js/app.js | Native direct-video timestamp capture and matching bookmark seek; no player progress or analytics writer |
+| tests/Feature/StudentLearningTest.php; StudentLearningConcurrencyTest.php; tests/Feature/Concurrency/booking_worker.php | A/B, publication/access/auth/file/private-ID/validation/lifecycle/notification tests and independent write races |
+| tests/learning-player.test.mjs | Seven meaningful player boundary/control tests alongside existing JS regressions |
+| LMS_IMPLEMENTATION_PLAN.md; LMS_IMPLEMENTATION_STATUS.md | Actual Stage 4 architecture, invariant mapping, final gates and later-stage insertion points |
+
+### Canonical contracts and preserved invariants
+
+Existing StudentSessionContext and student.auth remain the sole identity/session proof. The hub starts with Stage 2 activeForStudent; outlines, files, private assignments and personal writes repeat current access. Multiple grants form an OR union without duplicate cards. Unavailable states show no inaccessible title/instructions/foreign identity. Current access expiry is the latest effective finite end or no scheduled end; lesson display respects that exact lesson’s scoped sources. All dates use canonical Portal display timezone and elapsed-day/UTC authority.
+
+Last-viewed activity is only Student/Course/last lesson/time. Overview visits retain the last lesson, inaccessible continuations fall back to the authorized overview, and denied reads create no visit. There is no watched fraction, percentage, course completion, resume writer or analytics inference.
+
+Notes are private plain text with create/edit/delete and optimistic conflict handling. Their owner-only paginated list supports read/delete after expiry without exposing old instructional metadata. Current lesson access is required to create/edit. Bookmarks are private Student/lesson/block/millisecond navigation hints with optional labels. Direct HTML5 video provides meaningful currentTime only after finite duration is available; metadata/error controls and bounded matching seek are implemented. YouTube/Vimeo iframe timestamps are not fabricated. This does not certify how much a Student watched.
+
+All real Stage 3 content types render through the existing sanitizer/provider rules. Images/Resource/PDF/files use nested entitlement plus LessonMaterialService’s current private file/Resource delivery. Unsafe or missing content fails clearly. Bunny remains a null-payload protected-video placeholder; no insecure permanent playback link is exposed.
+
+There are no new Livewire components/public learner properties. Native allowlisted form payloads, ignored untrusted Student/target fields, server nested-ID checks and owned-ID queries provide the tampering boundary tested here. Existing Livewire functionality remains in the full regression suite.
+
+Touched invariants are I1–3 (identity/ownership/auth), I4 (staff roles), I8 (Student timezone), I10 (locking), I17 (history versus explicitly deletable personal content), I19–20 (Resource/private files), I21 (teaching sharing), I22 (notification synchronization), I23–24 (privacy/analytics/private payloads) and I27 (destructive tools). Canonical merge/erasure handle all personal bodies and visit collisions. No automatic admin/tutor note exposure or private-text audit payload exists. Existing Portal notification sync/read-state and first-party pageview/activity remain; no duplicate semantic learning/game event was added.
+
+Booking, typed one_hour/two_hour entitlements, funding, calendars, cancellations, refunds, finance, recurrence, meeting rooms, staff security and the nine pre-LMS repairs have no new writer. Their existing full/current-concurrency regressions remain authoritative; historical production PARTIAL dispositions are not upgraded by local LMS tests.
+
+### Scope, insertion points and release boundary
+
+Stage 5 may add a protected-provider adapter at safe block rendering/player capability and reauthorize playback requests. It can reuse Student/lesson/block timestamp bookmarks only after reliable provider-time capability exists. Stage 6 must create separate educational progress/completion/resume facts; opening a lesson, a private bookmark or a pageview is not completion. Learner release/version-upgrade semantics remain an explicit later decision.
+
+Current Course Studio has no stored cover/description fields; cards use a neutral current-style cover. The three minimal personal tables deliberately do not require enrollment/release pins because broad Public/Member access may have no enrollment. Personal notes remain Student-only. Existing tutoring Assign Learning, prerequisites, drip, quizzes, graded assignments, protected Bunny playback/devices/watermarking, aggregate LMS analytics, AI/transcription and whole-site redesign remain deferred. No Stage 5 is started automatically.
+
+Established workflow remains **test → commit → non-force push on main**. Only the Stage 4 application/tests and the two requested records are staged. The three pre-existing untracked Hostinger/proposal documents remain untouched. Review copies/final chat carry the exact delivery SHA after commit/push; the committed document cannot contain its own future hash. No production deployment or documentation-only deployment is performed.
+
+---
+## Stage 3 disposition — historical receipt, superseded for Stage 4
 
 **COMPLETE — Course Studio is implemented and all required local gates passed.** Authorized Admin/Super Admin staff can list/filter, create, edit drafts, organize sections/lessons/content, reorder and move lessons, attach/reuse private files and Resources, securely preview, publish/unpublish, duplicate and archive/restore courses. Publication preserves selected child states and keeps pending edits separate from the current live Course. No Stage 4 or production deployment was started.
 
@@ -301,7 +375,7 @@ No invariant relaxation or material roadmap change is proposed. If any future de
 - [x] Stage 1 final fresh full current-schema gate all-green; initial heartbeat timing checkpoint retained separately.
 - [x] Stage 2 — foundation/schema/LMS access; current member assumption and confirmed elapsed windows documented; MariaDB/lifecycle/concurrency/full gates passed.
 - [x] Stage 3 — Course Studio/mixed content/drafts/releases/preview; current authoring/access/file/lifecycle/concurrency/UI and full local gates passed.
-- [ ] Stage 4 — My Learning/For You/Continue/player/private notes and bookmarks.
+- [x] Stage 4 — My Learning/For You/Continue/player/private notes/bookmarks; access/auth/file/privacy/UI/concurrency and full local gates passed.
 - [ ] Stage 5 — Bunny security/profiles/devices/leases/dynamic watermark, measured residual limits.
 - [ ] Stage 6 — progress/completion/prerequisites/drip/quizzes/submissions/reviews.
 - [ ] Stage 7 — tutoring/private Assign Learning/follow-up/timeline integration.

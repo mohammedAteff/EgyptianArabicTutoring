@@ -56,17 +56,25 @@ class LmsAccessWindow
         if ($fact instanceof AccessGrant && $fact->status !== 'active') {
             return false;
         }
+        $bounds = $this->bounds($fact, $anchor);
+
+        return $bounds['anchored'] && ($bounds['start'] === null || $now->gte($bounds['start'])) && ($bounds['end'] === null || $now->lt($bounds['end']));
+    }
+
+    /** @return array{start:?CarbonImmutable,end:?CarbonImmutable,anchored:bool} */
+    public function bounds(AccessGrant|AccessRule $fact, ?CarbonImmutable $anchor = null): array
+    {
         $start = $fact->starts_at ? CarbonImmutable::instance($fact->starts_at)->utc() : null;
         $end = $fact->expires_at ? CarbonImmutable::instance($fact->expires_at)->utc() : null;
         if ($fact instanceof AccessRule && $fact->access_mode === 'relative') {
             if ($anchor === null || ! $fact->relative_days) {
-                return false;
+                return ['start' => $start, 'end' => null, 'anchored' => false];
             }
             $start = $start && $start->gt($anchor) ? $start : $anchor;
             $end = $start->addSeconds($fact->relative_days * 86400);
         }
 
-        return ($start === null || $now->gte($start)) && ($end === null || $now->lt($end));
+        return ['start' => $start, 'end' => $end, 'anchored' => true];
     }
 
     public function instant(?string $value): ?string

@@ -1,6 +1,6 @@
 # LMS V1 Implementation Plan
 
-Date: 2026-10-07 (Africa/Cairo). Stage 1 discovery is retained below. The owner separately authorized Stages 2 and 3; sections 12 and 13 record their actual contracts and supersede the corresponding proposals. Production has not been deployed in this task.
+Date: 2026-10-07 (Africa/Cairo). Stage 1 discovery is retained below. The owner separately authorized Stages 2, 3 and 4; sections 12–14 record their actual contracts and supersede the corresponding proposals. Production has not been deployed in this task.
 
 ## 1. Baseline, authorities and evidence precedence
 
@@ -530,3 +530,98 @@ The remaining invariants are preserved by existing writers and full regressions,
 Focused authoring/publication/asset/access/lifecycle tests, actual MariaDB authoring races, full current-schema and dedicated concurrency regressions, JavaScript/editor tests, Vite build, Blade/routes, Pint, whitespace, complete PHPStan diagnostic-multiset comparison and Composer/npm audits are recorded in the current Stage 3 status receipt. The previously accepted 255 PHPStan diagnostics are retained unchanged; no ignore/baseline/level/config weakening is introduced. Dependencies remain unchanged.
 
 Stage 4 onward is not started: My Learning/student player, private notes/bookmarks, Bunny API/security/devices, progress/completion/prerequisites/drip, quizzes/graded assignments, tutor Assign Learning UI, learning analytics, AI/transcription/ecommerce and whole-site branding remain deferred. Production has not been deployed. A later authorized deployment must take the existing required backup, inspect the actual schema/constraints and exact application SHA, rehearse the additive DDL, build assets and perform production staff authorization/private-file/Resource/learner access regression checks. Documentation SHA alignment alone does not authorize deployment.
+
+## 14. Stage 4 actual Student Learning implementation
+
+Stage 4 was explicitly requested after application commit 59d992f1290b35e50fa8dbb3e510b049225fb4ad. This section supersedes Stage 1 learner/player/personal-state proposals and earlier Stage 4 deferrals. Sections 1–13 remain historical discovery and completed-stage receipts. Stage 5 is not authorized by this implementation.
+
+### 14.1 Canonical Portal, access and read model
+
+The Student Portal remains the learner shell. LearningController, StudentLearningService and StudentLearningStateService live in the existing controller/domain structure. All eleven new routes use the existing student.auth middleware and StudentSessionContext: the student guard, matching session Student ID, absolute UTC proof expiry and verified/unsuspended/unmerged canonical Student are checked on every request. No account, login, normalization or session mechanism was introduced. Staff authentication alone confers no learner access.
+
+My Learning is GET /student/my-learning, named student.learning.index. HTML course and lesson pages use /student/learn/courses/{course} and its /lessons/{lesson} child. /student/learn/for-you/{assignment} displays an owned effective Stage 2 learning assignment. The existing /student/learning tutoring area remains available as “Tutoring work”; its routes, homework, notes, plans, funding and feedback contracts are preserved. Existing Stage 2 /student/lms JSON endpoints retain their contracts.
+
+StudentLearningService starts with LmsAccessService.activeForStudent. Courses are filtered on the server by current publication, canonical ownership and the Stage 2 OR decision; there is one card per Course even with multiple grants. The hub renders Continue Learning, My Courses, For You and an explicit extension-ready Completed empty state. It presents no percentage, completion declaration, prerequisite or drip restriction. Current Course Studio has title/kind/slug but no authorable cover or description fields; cards use the existing palette and a neutral Arabic cover panel instead of inventing stored metadata.
+
+Continue Learning takes the six most recent owned visits within the currently authorized Course collection. Each destination reuses the authorized outline: an inaccessible last lesson falls back to the authorized Course overview. Revoked, expired, archived and unpublished courses are removed from the hub. For You first queries only assignments whose grant belongs to this Student, then calls canonical assignment access, including booking ownership, assigned state, window, target and publication. Unsupported quiz/graded-assignment/private-video features are not presented as functional learning.
+
+Course/lesson pages use only published live rows. Pending CMS revisions are never student content. The Course outline and flattened lesson order come from the Stage 2 filtered graph. Previous/next links refer only to those authorized lessons; scoped grants cannot reveal siblings. Every subsequent course, lesson, assignment and material request rechecks current authorization. Tampered Course/lesson/block combinations return 404.
+
+HTML pages reuse StudentPortalService.data, including StudentTeachingReadModel and its existing visit-synchronized StudentNotificationService. No new notification events or read-state replacement were added. Repeated learning visits preserve semantic deduplication and marked-read state. This reuse also preserves canonical display timezone and the established Portal data boundary; no broad Portal refactor was needed.
+
+### 14.2 Availability, dates and expiry
+
+LmsAccessWindow.bounds extracts the same UTC start/end calculation used by active; it does not introduce another entitlement engine. Relative rules still require the earliest retained enrollment anchor, and the owner-confirmed relative duration remains elapsed 24-hour days. Start is inclusive and end exclusive.
+
+LmsAccessService.accessEndings uses the same decision sources, coverage and bounds. The current authorized union ends at the latest effective finite end; any effective source without an end makes the union unscheduled. Future/revoked sources are excluded. Course cards describe current course access, which can contain differently scoped lessons. Lesson pages calculate the union for that exact lesson, so a later sibling grant cannot falsely extend its displayed availability. Enrollment/grant/source IDs are not rendered.
+
+An owned grant/enrollment/private-owner/last-view relationship permits generic unavailable copy for future, expired, revoked, not currently published and archived learning. This reveals no title, instructions, curriculum, foreign owner or internal entitlement details. Foreign private and unrecognized items get generic unavailable/404 behavior. Missing bindings receive the existing 404. Display dates follow Portal session Student timezone → canonical preferred zone → Business Timezone; UTC storage and existing booking/DST interpretation remain unchanged.
+
+### 14.3 Minimal functional state and private personal content
+
+One additive migration creates three tables and one compound block-parent unique index:
+
+| Table | Actual retained state / constraints |
+|---|---|
+| lms_learning_visits | Canonical student_id, course_id, optional last lesson_id, accessed_at UTC and timestamps; unique Student/Course; recent-visit index; composite lesson/Course FK prevents mismatched nesting |
+| lms_lesson_notes | Canonical student_id, lesson_id, escaped plain-text body up to 10,000 characters, optimistic lock_version and timestamps; owner/lesson index |
+| lms_lesson_bookmarks | Canonical student_id, lesson_id, block_id, integer position_milliseconds up to 86,400,000, optional private label up to 500 characters and timestamps; composite block/lesson FK and owner/lesson index |
+
+All ownership/target FKs restrict structural deletion. Populated migration rollback refuses personal data destruction. These three models deliberately extend ordinary Eloquent Model instead of the retain-history LmsModel: authorized deletion of personal text/bookmarks is a specified feature, and privacy erasure must remove their bodies. They guard all mass assignment; private text/labels are hidden from default serialization. No staff/tutor route or automatic sharing was introduced.
+
+Opening an authorized overview updates accessed_at while preserving an existing last lesson; opening a lesson updates both. Hub listing and private-note reads do not fabricate course visits. Visits contain no watched seconds, percentage, completion, educational progress, resume position or analytics event.
+
+Notes support create/edit/delete and read in the lesson. Edits require matching Student, lesson, current access and version; stale edit/delete returns 409. The separate owner-only /student/my-learning/notes list retains read/delete access after entitlement expiry, without loading or displaying inaccessible Course/lesson metadata. It is paginated at 20. Editing remains in an authorized lesson. Ordinary note deletions do not delete instructional content or financial/history facts.
+
+Personal writes use the existing TeachingRecordService canonical Student lock, then Course/lesson/content locks and the current Stage 2 access check. This order serializes with grants, publication, merge and privacy. Repeated bookmark saves for the same Student/block/millisecond update the same row under the Student lock. Student identity, target and versions are assigned from trusted context; submitted student_id, lesson_id and other unknown fields cannot take ownership or alter state.
+
+Canonical merge transfers notes/bookmarks and increments transferred note versions. A Student/Course visit collision retains the latest access time and available last lesson. Independently owned bookmarks/labels are retained rather than discarded during merge. Canonical privacy erasure deletes all three personal collections while existing grant/revision/private-asset redaction remains authoritative. Other Students’ notes and shared catalog content remain intact. Course duplication still copies only authoring content and creates no learner runtime state.
+
+This minimal schema intentionally differs from Stage 1 speculative enrollment/release-owned annotations: Public/Member access can exist without an enrollment, and this stage does not pin learner releases. Student/lesson/block identity is authoritative now. Release-upgrade/progress/reset semantics remain a later explicit decision.
+
+### 14.4 Content, files and player capability
+
+All seven real Stage 3 types render: rich text, image, file, Resource, external link, YouTube and approved external video. Student rendering reuses LmsContentService normalization/sanitization with explicit internal payload access; default hidden model payloads are not unhidden for transport. Invalid legacy content fails with an unavailable message. No raw author iframe or script is rendered.
+
+Images use an authorized nested material URL and verified inline image delivery. PDF/other attachments use private download responses. Resource links use the same nested authorization and existing LessonMaterialService.openResource; linked files use openCourseAsset. Both retain current Resource publication, usable asset ownership/kind, physical safe path, MIME/hash/bytes and no-store/nosniff/no-referrer controls. No storage path appears in the page or a public asset URL, and no direct unscoped asset endpoint was introduced. Existing public Resource immediate single-use requests/downloads remain unchanged.
+
+YouTube normalizes to youtube-nocookie controlled embeds; Vimeo uses its approved numeric-ID embed. Iframes are restricted to approved providers, with a sandbox and origin-only referrer. Direct HTTPS MP4/WebM/OGV uses a native HTML5 player. The existing supported external providers remain external playback; no protection/DRM claim is made for them.
+
+learning-player.js captures currentTime only when a finite positive duration and valid bounded position are available. The native form stores a private bookmark; it never records playback progress. Matching saved block/time buttons seek only that rendered video, wait for metadata when necessary, refuse out-of-duration positions and do not autoplay. The server rechecks Student/lesson/block access, safe direct-video provider and numeric/label limits; timestamps are personal navigation hints, not proof of watching.
+
+YouTube/Vimeo have no reliable timestamp integration in this stage, so no bookmark controls are offered for their iframe players. Direct-video loading failures disable capture with clear copy. Bunny blocks retain database-enforced placeholder/null-payload behavior and an explicit protected-playback-unavailable message; no public permanent Bunny URL is emitted.
+
+Existing first-party Portal telemetry may record its established pageviews/activity. No LMS semantic recorder, progress event, player telemetry hook or third-party tracking dependency was added. New curriculum IDs avoid the existing generic telemetry section selector, and note/label bodies never become event metadata.
+
+### 14.5 Responsive UI and evidence boundaries
+
+New Blade views use the existing warm Student shell, Nile palette, CSS bundle and native forms. Mobile uses a native collapsible curriculum with keyboard access; desktop defaults open with an ordered sidebar. Touch controls and Portal navigation/sign-out have 44px minimum heights. Mixed Arabic/English headings, notes and free text use dir=auto; the whole page is not globally forced RTL.
+
+Student A/B HTTP tests cover hub, course, lesson, nested scope, private item, Resource/image/PDF endpoints, note ID and bookmark ID isolation. Future, expired, revoked, draft, unpublished, archived, hidden ancestors, guest/staff/expired-session and unsafe content cases are covered. Native allowlisted requests and server scoping are the property-tampering equivalent: there are no new Livewire components or public learner properties to mutate. Existing Livewire and staff/Portal regressions remain in the full suite.
+
+Independent MariaDB workers test same-course visits, same timestamp saves, same-version note edits, erasure versus save and revocation versus save. JS tests cover timestamp/seek boundaries, loaded metadata/errors, matching form/video and matching bookmark/video behavior.
+
+Desktop/mobile browser review used synthetic HTML rendered by isolated authenticated HTTP tests, actual compiled assets and existing Herd. Fixtures disabled submission/navigation/analytics, removed tokens and external video source, and were removed afterward. Arabic input and edit disclosure, curriculum toggle, width, touch targets and console were checked. This is visual/input evidence, not a business-account login, production certification or real provider playback test.
+
+The final status receipt records focused tests, full current-schema and dedicated concurrency regressions, JS/build, Blade/route caches, Pint/whitespace, complete unchanged PHPStan multiset, audits and local migration evidence. No tests, suppressions, analysis level, dependency or auth/file boundaries were weakened.
+
+### 14.6 Invariants and next-stage insertion points
+
+| Invariant | Preserved integration |
+|---|---|
+| I1–3 identity/ownership/auth | Canonical Student/session proof, per-request refresh, owner-only notes/bookmarks/assignments and scoped nested 404s |
+| I4 staff roles | Existing admin/tutor authority preserved; staff guard confers no personal learner-data route |
+| I8 Student timezone | Portal display-zone precedence, UTC state/window storage and current IANA offset formatting |
+| I10 locking | Existing canonical Student-before-Course ordering; optimistic notes and real concurrent writes |
+| I17 history | Visits/personal content are expressly deletable functional data; retained LMS grants/releases and tutoring ledgers are unchanged |
+| I19–20 Resource/private files | Current publication and nested access precede the same private delivery authority; no public storage path |
+| I21 teaching sharing | Existing tutoring area remains; personal learner notes are not tutor/admin notes and are not shared |
+| I22 notifications | Existing on-visit synchronization/deduplication and marked-read state preserved |
+| I23–24 privacy/analytics/audit | Canonical merge/erasure extends to personal bodies, no duplicate learning events, no private text in logs |
+| I27 destructive tools | Restrictive dependencies and populated rollback remain fail closed; no expanded reset/export/restore permission |
+
+Stage 5 should insert an approved protected-provider adapter at the normalized block rendering/player capability boundary and repeat nested entitlement checks before secure playback. It may reuse Student/lesson/block timestamp bookmarks after adding reliable provider-time support; a Bunny URL is never a substitute for protected authorization.
+
+Stage 6 should introduce separate authoritative educational progress/completion/resume facts and aggregate them for real Completed cards. It must not infer completion from visits, bookmarks, pageviews or personal notes, and must explicitly decide release/version upgrades. Prerequisites, drip, quizzes, graded assignments, tutoring Assign Learning, aggregate LMS analytics, AI/transcription and brand redesign remain deferred.
+
+Production has not been deployed. Normal local bolt_landing received only this additive migration, batch 21: 121 application tables and 77 Ran migrations, with no new generated columns or typed-finance guard alteration. No business data was seeded for UI review. A later explicitly requested deployment still requires the established backup, exact-SHA/schema preflight, reviewed DDL and production authorization/file/Resource/Portal regressions; documentation parity is not deployment authorization.

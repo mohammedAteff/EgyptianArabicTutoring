@@ -7,6 +7,7 @@ use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Enrollment;
 use App\Domains\Lms\Models\LearningAssignment;
+use App\Domains\Lms\Models\LearningVisit;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
@@ -122,6 +123,95 @@ class LmsAccessService
         $enrollments = $this->anchors(Enrollment::query()->where('course_id', $course->id)->get(), 'student_id');
 
         return $students->filter(fn (Student $student): bool => $this->decision($student, $course, $course, $enrollments->get($student->id))['allowed'])->values();
+    }
+
+    /** Display the union of effective sources, using the same decision and elapsed-day bounds.
+     * @param  Collection<int, Course>  $courses  Already filtered by activeForStudent or outline.
+     * @return array<int, CarbonImmutable|null>
+     */
+    public function accessEndings(Student $student, Collection $courses, ?Lesson $lesson = null): array
+    {
+        $anchors = $this->anchors(Enrollment::query()->where('student_id', $student->id)->whereIn('course_id', $courses->pluck('id')->all())->get(), 'course_id');
+        $endings = [];
+        foreach ($courses as $course) {
+            $anchor = $anchors->get($course->id);
+            $sources = $this->decision($student, $course, $lesson ?? $course, $anchor)['sources'];
+            $ends = [];
+            if ($course->accessRule && in_array('rule:'.$course->accessRule->id, $sources, true)) {
+                $ends[] = $this->windows->bounds($course->accessRule, $anchor ? CarbonImmutable::instance($anchor->enrolled_at)->utc() : null)['end'];
+            }
+            foreach ($course->grants as $grant) {
+                if (in_array('grant:'.$grant->id, $sources, true)) {
+                    $ends[] = $this->windows->bounds($grant)['end'];
+                }
+            }
+            $endings[$course->id] = in_array(null, $ends, true) ? null : collect($ends)->sort()->last();
+        }
+
+        return $endings;
+    }
+
+    /** Denial copy contains no titles, private instructions, source identifiers or foreign ownership.
+     * @return array{message:string,at:?CarbonImmutable}
+     */
+    public function unavailable(Student $student, Course $course, ?Lesson $lesson = null): array
+    {
+        $generic = ['message' => 'This learning item is unavailable.', 'at' => null];
+        if ($course->kind === 'private' && (int) $course->owner_student_id !== (int) $student->id) {
+            return $generic;
+        }
+        $grants = $course->grants()->where('student_id', $student->id)->with(['learningAssignment.booking', 'lesson:id,section_id'])->get();
+        $enrollments = Enrollment::query()->where('student_id', $student->id)->where('course_id', $course->id)->get();
+        $known = $grants->isNotEmpty() || $enrollments->isNotEmpty() || (int) $course->owner_student_id === (int) $student->id
+            || LearningVisit::query()->where('student_id', $student->id)->where('course_id', $course->id)->exists();
+        if (! $known) {
+            return $generic;
+        }
+        $targets = [$course];
+        if ($lesson) {
+            if ((int) $lesson->course_id !== (int) $course->id) {
+                return $generic;
+            }
+            $targets = [$course, $lesson->section, $lesson];
+        }
+        foreach ($targets as $target) {
+            if (! $target || $target->status === 'archived') {
+                return ['message' => 'This learning item is no longer available.', 'at' => null];
+            }
+            if (! $this->published($target)) {
+                return ['message' => 'This learning item is not currently published.', 'at' => null];
+            }
+        }
+        $anchor = $this->anchors($enrollments, 'course_id')->get($course->id);
+        $facts = $grants->filter(fn (AccessGrant $grant): bool => $this->covers($grant, $lesson ?? $course) && $this->validAssignment($grant));
+        $rule = $course->accessRule;
+        if ($rule && in_array($rule->audience, ['public', 'member', 'all_students'], true)) {
+            $facts = $facts->concat([$rule]);
+        }
+        $future = [];
+        $expired = [];
+        foreach ($facts as $fact) {
+            if ($fact instanceof AccessGrant && $fact->status !== 'active') {
+                continue;
+            }
+            $bounds = $this->windows->bounds($fact, $anchor ? CarbonImmutable::instance($anchor->enrolled_at)->utc() : null);
+            if ($bounds['anchored'] && $bounds['start']?->isFuture()) {
+                $future[] = $bounds['start'];
+            } elseif ($bounds['end'] && $bounds['end']->lte(now('UTC'))) {
+                $expired[] = $bounds['end'];
+            }
+        }
+        if ($future !== []) {
+            return ['message' => 'Your access starts', 'at' => collect($future)->sort()->first()];
+        }
+        if ($expired !== []) {
+            return ['message' => 'Your access expired', 'at' => collect($expired)->sort()->last()];
+        }
+        if ($grants->isNotEmpty() && $grants->every(fn (AccessGrant $grant): bool => $grant->status === 'revoked')) {
+            return ['message' => 'Your access has been withdrawn.', 'at' => null];
+        }
+
+        return $generic;
     }
 
     /** @return array{allowed: bool, sources: list<string>} */

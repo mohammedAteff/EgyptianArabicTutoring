@@ -61,6 +61,7 @@ use App\Http\Controllers\Student\DashboardController as StudentDashboardControll
 use App\Http\Controllers\Student\FinancialStatementController;
 use App\Http\Controllers\Student\FormController as StudentFormController;
 use App\Http\Controllers\Student\HomeworkController;
+use App\Http\Controllers\Student\LearningController;
 use App\Http\Controllers\Student\LessonFeedbackController;
 use App\Http\Controllers\Student\LessonWorkspaceController;
 use App\Http\Controllers\Student\ProfileController;
@@ -95,6 +96,17 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
     Route::middleware('student.auth')->group(function () {
+        Route::get('/my-learning', [LearningController::class, 'index'])->name('learning.index');
+        Route::get('/my-learning/notes', [LearningController::class, 'notes'])->name('learning.notes.index');
+        Route::delete('/my-learning/notes/{note}', [LearningController::class, 'deleteNote'])->whereNumber('note')->middleware('throttle:60,1')->name('learning.notes.destroy');
+        Route::get('/learn/for-you/{assignment}', [LearningController::class, 'assignment'])->whereNumber('assignment')->name('learning.assignments.show');
+        Route::get('/learn/courses/{course}', [LearningController::class, 'course'])->whereNumber('course')->name('learning.courses.show');
+        Route::get('/learn/courses/{course}/lessons/{lesson}', [LearningController::class, 'lesson'])->whereNumber(['course', 'lesson'])->name('learning.lessons.show');
+        Route::get('/learn/courses/{course}/lessons/{lesson}/materials/{block}', [LearningController::class, 'material'])->whereNumber(['course', 'lesson', 'block'])->name('learning.materials.open');
+        Route::post('/learn/courses/{course}/lessons/{lesson}/notes', [LearningController::class, 'storeNote'])->whereNumber(['course', 'lesson'])->middleware('throttle:60,1')->name('learning.notes.store');
+        Route::patch('/learn/courses/{course}/lessons/{lesson}/notes/{note}', [LearningController::class, 'updateNote'])->whereNumber(['course', 'lesson', 'note'])->middleware('throttle:60,1')->name('learning.notes.update');
+        Route::post('/learn/courses/{course}/lessons/{lesson}/bookmarks', [LearningController::class, 'storeBookmark'])->whereNumber(['course', 'lesson'])->middleware('throttle:60,1')->name('learning.bookmarks.store');
+        Route::delete('/learn/courses/{course}/lessons/{lesson}/bookmarks/{bookmark}', [LearningController::class, 'deleteBookmark'])->whereNumber(['course', 'lesson', 'bookmark'])->middleware('throttle:60,1')->name('learning.bookmarks.destroy');
         Route::get('/lms/courses/{course}', [LmsFoundationController::class, 'course'])->whereNumber('course')->name('lms.courses.show');
         Route::get('/lms/courses/{course}/lessons/{lesson}', [LmsFoundationController::class, 'lesson'])->whereNumber(['course', 'lesson'])->name('lms.lessons.show');
         Route::get('/lms/courses/{course}/lessons/{lesson}/resources/{block}', [LmsFoundationController::class, 'resource'])->whereNumber(['course', 'lesson', 'block'])->name('lms.resources.open');

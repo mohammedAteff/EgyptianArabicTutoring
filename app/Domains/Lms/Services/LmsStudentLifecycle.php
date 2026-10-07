@@ -6,6 +6,7 @@ use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Enrollment;
+use App\Domains\Lms\Models\LearningVisit;
 use App\Domains\Lms\Models\LmsAsset;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -31,12 +32,28 @@ class LmsStudentLifecycle
         }
         DB::table('lms_access_grants')->where('student_id', $secondaryId)->update(['student_id' => $primaryId]);
         DB::table('lms_access_events')->where('student_id', $secondaryId)->update(['student_id' => $primaryId]);
+        $visits = LearningVisit::query()->whereIn('student_id', [$primaryId, $secondaryId])->orderBy('id')->lockForUpdate()->get();
+        foreach ($visits->where('student_id', $secondaryId) as $source) {
+            $survivor = $visits->where('student_id', $primaryId)->firstWhere('course_id', $source->course_id);
+            if ($survivor) {
+                $latest = $source->accessed_at->gt($survivor->accessed_at) ? $source : $survivor;
+                $survivor->forceFill(['lesson_id' => $latest->lesson_id ?? $source->lesson_id ?? $survivor->lesson_id, 'accessed_at' => $latest->accessed_at])->save();
+                $source->delete();
+            } else {
+                $source->forceFill(['student_id' => $primaryId])->save();
+            }
+        }
+        DB::table('lms_lesson_notes')->where('student_id', $secondaryId)->update(['student_id' => $primaryId, 'lock_version' => DB::raw('lock_version + 1')]);
+        DB::table('lms_lesson_bookmarks')->where('student_id', $secondaryId)->update(['student_id' => $primaryId]);
     }
 
     /** The existing privacy service owns authorization, locks and structural retention. */
     public function erase(int $studentId): void
     {
         $this->requireTransaction();
+        foreach (['lms_lesson_notes', 'lms_lesson_bookmarks', 'lms_learning_visits'] as $table) {
+            DB::table($table)->where('student_id', $studentId)->delete();
+        }
         Course::query()->whereIn('id', AccessGrant::query()->where('student_id', $studentId)->select('course_id'))
             ->orWhere('owner_student_id', $studentId)->orderBy('id')->lockForUpdate()->get(['id']);
         $grants = AccessGrant::query()->where('student_id', $studentId)->orderBy('id')->lockForUpdate()->get(['id']);
