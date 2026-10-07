@@ -43,6 +43,25 @@ class StageOnePresentationTest extends TestCase
         $this->assertSame(1, $xpath->query('//button[@id="admin-desktop-sidebar-toggle" and @aria-controls="admin-sidebar"]')->length);
     }
 
+    public function test_assistant_shell_omits_destinations_denied_by_existing_role_middleware(): void
+    {
+        $assistant = AdministratorFactory::new()->create(['role' => 'assistant']);
+        $response = $this->actingAs($assistant, 'web')->get(route('admin.operations.index'))->assertOk();
+        $xpath = $this->xpath($response->getContent());
+
+        foreach (['admin.dashboard', 'admin.notifications.index', 'admin.availability.index', 'admin.resources.index',
+            'admin.games.index', 'admin.content.index', 'admin.pages.index', 'admin.blog.index', 'admin.promotions.index',
+            'admin.media.index', 'admin.analytics', 'admin.analytics.countries', 'admin.analytics.sections',
+            'admin.reports.index', 'admin.settings.index', 'admin.health'] as $destination) {
+            $this->get(route($destination))->assertForbidden();
+            $this->assertSame(0, $xpath->query('//a[@href="'.route($destination).'"]')->length, $destination);
+        }
+        foreach (['admin.operations.index', 'admin.tasks.index', 'admin.staff-bins.index', 'admin.students.index',
+            'admin.bookings.index', 'admin.contacts.index', 'admin.leads', 'admin.forms.index'] as $destination) {
+            $this->assertGreaterThan(0, $xpath->query('//nav[@id="admin-sidebar-nav"]//a[@href="'.route($destination).'"]')->length, $destination);
+        }
+    }
+
     public function test_identity_copy_controls_are_upper_right_siblings_and_do_not_submit_forms(): void
     {
         $student = Student::factory()->verified()->create();

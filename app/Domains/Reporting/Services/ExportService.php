@@ -76,6 +76,7 @@ class ExportService
 
         $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
         $response->headers->set('Content-Disposition', 'attachment; filename="'.$filename.'"');
+        $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
 
@@ -167,7 +168,8 @@ class ExportService
 
             return response()->download($tempFilePath, $filename, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ])->deleteFileAfterSend(true);
+                'Cache-Control' => 'private, no-store',
+            ])->deleteFileAfterSend(true)->setPrivate();
         } catch (\Throwable $exception) {
             if ($tempFilePath !== null && is_file($tempFilePath)) {
                 unlink($tempFilePath);

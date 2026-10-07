@@ -128,7 +128,6 @@
                     } else if (data.download_url) {
                         this.downloadUrl = data.download_url;
                         this.state = 'unlocked';
-                        window.location.href = data.download_url;
                     }
                 })
                 .catch(() => {

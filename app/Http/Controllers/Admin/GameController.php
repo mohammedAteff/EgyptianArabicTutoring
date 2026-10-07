@@ -128,10 +128,6 @@ class GameController extends Controller
         $action = $request->input('action');
         $isDraftAction = $action === 'draft' || ($action !== 'publish' && in_array($game->status, ['available', 'coming_soon'], true) && $validated['status'] === 'draft');
 
-        if ($action === 'publish') {
-            $validated['status'] = 'available';
-        }
-
         if ($isDraftAction && in_array($game->status, ['available', 'coming_soon'], true)) {
             $nextRevision = ($game->revisions()->max('revision_number') ?? 0) + 1;
             ContentRevision::create([

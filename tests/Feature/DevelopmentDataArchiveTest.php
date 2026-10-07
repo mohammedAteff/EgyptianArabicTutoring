@@ -27,8 +27,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Process\Exception\LogicException;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -80,6 +82,26 @@ class DevelopmentDataArchiveTest extends TestCase
         $this->assertSame([$selected->id], array_column($read['rows']['students'], 'id'));
         $this->assertContains('financial.payments', $read['manifest']['excluded_modules']);
         $this->assertModelExists($other);
+    }
+
+    public function test_export_remains_readable_when_optional_git_metadata_cannot_be_collected(): void
+    {
+        $actor = $this->actor();
+        $student = Student::factory()->verified()->create();
+        if (function_exists('proc_open')) {
+            Process::shouldReceive('path')->once()->with(base_path())->andReturnSelf();
+            Process::shouldReceive('timeout')->once()->with(3)->andReturnSelf();
+            Process::shouldReceive('run')->once()->with(['git', 'rev-parse', 'HEAD'])
+                ->andThrow(new LogicException('Process execution is unavailable.'));
+        }
+
+        $archive = $this->export($actor, ['students.profile'], ['student_id' => $student->id]);
+        $read = app(DevelopmentDataArchiveService::class)->read($actor, $archive['path']);
+
+        $this->assertNull($read['manifest']['application_sha']);
+        $this->assertSame([$student->id], array_column($read['rows']['students'], 'id'));
+        $this->assertSame($archive['sha256'], $read['sha256']);
+        $this->assertModelExists($student);
     }
 
     public function test_import_upload_is_inspection_only_and_requires_selected_preview(): void

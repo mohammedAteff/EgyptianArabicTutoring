@@ -110,6 +110,7 @@
                 <div>
                     <div class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Overview</div>
                     <div class="space-y-1">
+                        @if(auth('web')->user()?->isAdmin())
                         <a href="{{ route('admin.dashboard') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.dashboard') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
@@ -132,6 +133,7 @@
                                 <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-slate-950">{{ $sidebarUnreadCount }}</span>
                             @endif
                         </a>
+                        @endif
                 @if(in_array(auth('web')->user()?->role, ['super_admin','admin','assistant'],true))
                 <a href="{{ route('admin.operations.index') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.operations.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}">Today & Operations</a>
                 <a href="{{ route('admin.tasks.index') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.tasks.*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800' }}">Staff Tasks</a>
@@ -170,11 +172,13 @@
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                             Bookings & Calendar
                         </a>
+                        @if(auth('web')->user()?->isAdmin())
                         <a href="{{ route('admin.availability.index') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.availability.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             Tutor Availability
                         </a>
+                        @endif
                         <a href="{{ route('admin.contacts.index') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.contacts.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
@@ -192,6 +196,7 @@
                 <div>
                     <div class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Content & Learning</div>
                     <div class="space-y-1">
+                        @if(auth('web')->user()?->isAdmin())
                         <a href="{{ route('admin.resources.index') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.resources.index', 'admin.resources.create', 'admin.resources.edit') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
@@ -221,19 +226,23 @@
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
                             Promotions Portal
                         </a>
+                        @endif
                         <a href="{{ route('admin.forms.index') }}" class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.forms.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
                             Student Forms
                         </a>
+                        @if(auth('web')->user()?->isAdmin())
                         <a href="{{ route('admin.media.index') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.media.*') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                             Media Library
                         </a>
+                        @endif
                     </div>
                 </div>
 
                 <!-- Insights & Reports -->
+                @if(auth('web')->user()?->isAdmin())
                 <div>
                     <div class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Insights & Telemetry</div>
                     <div class="space-y-1">
@@ -264,6 +273,8 @@
                 </div>
 
                 <!-- Settings & System -->
+                @endif
+                @if(auth('web')->user()?->isAdmin())
                 <div>
                     <div class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Configuration</div>
                     <div class="space-y-1">
@@ -305,6 +316,7 @@
                         @endif
                     </div>
                 </div>
+                @endif
             </nav>
 
             <!-- Current User & Logout Footer -->
@@ -421,6 +433,7 @@
     </form>
 
                     <!-- Notification Bell -->
+                    @if(auth('web')->user()?->isAdmin())
                     <a href="{{ route('admin.notifications.index') }}" class="relative p-2 text-slate-500 hover:text-amber-600 transition-colors" title="Notifications">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                         @if(($sidebarUnreadCount ?? 0) > 0)
@@ -428,6 +441,7 @@
                         @endif
                     </a>
 
+                    @endif
                     <a href="{{ route('home') }}" target="_blank" aria-label="View Website" class="flex min-h-11 min-w-11 items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-amber-600 transition-colors">
                         <span class="hidden lg:inline">View Website</span>
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
@@ -449,7 +463,9 @@
                             <span class="text-xs text-amber-800 ml-1">Category: <code class="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 font-semibold">{{ $offsiteBackupCategory }}</code>. Check system health and storage configuration.</span>
                         </div>
                     </div>
+                    @if(auth('web')->user()?->isSuperAdmin())
                     <a href="{{ route('admin.health') }}" class="text-xs font-bold text-amber-900 underline hover:text-amber-950 shrink-0">View System Health &rarr;</a>
+                    @endif
                 </div>
             @endif
 
@@ -484,7 +500,9 @@
             </main>
         </div>
     </div>
+    @if(auth('web')->user()?->isAdmin())
     @include('admin.partials.media-picker')
+    @endif
 
     <script>
 

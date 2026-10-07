@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class CmsDraftAndPreviewMatrixTest extends TestCase
@@ -257,6 +258,31 @@ class CmsDraftAndPreviewMatrixTest extends TestCase
         $this->get(route('resources.show', $resource->slug))
             ->assertOk()
             ->assertSee('Final Approved Draft Title');
+    }
+
+    #[TestWith(['available'])]
+    #[TestWith(['coming_soon'])]
+    #[TestWith(['disabled'])]
+    public function test_publishing_game_edits_preserves_the_selected_catalog_availability(string $status): void
+    {
+        $game = Game::create(['title' => 'Selected catalog availability', 'slug' => 'selected-catalog-availability',
+            'description' => 'Harmless catalog fixture', 'status' => 'available', 'sort_order' => 1]);
+
+        $this->actingAs($this->admin, 'web')->put(route('admin.games.update', $game), [
+            'action' => 'publish', 'title' => $game->title, 'description' => $game->description,
+            'status' => $status, 'sort_order' => 1,
+        ])->assertRedirect(route('admin.games.index'));
+
+        $this->assertSame($status, $game->fresh()->status);
+        $catalog = $this->get(route('games.index'))->assertOk();
+        if ($status === 'disabled') {
+            $catalog->assertDontSeeText($game->title);
+        } else {
+            $catalog->assertSeeText($game->title);
+            if ($status === 'coming_soon') {
+                $catalog->assertSeeText('Coming Soon');
+            }
+        }
     }
 
     public function test_game_draft_to_publish_workflow_and_discard(): void

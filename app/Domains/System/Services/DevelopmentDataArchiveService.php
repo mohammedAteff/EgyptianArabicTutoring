@@ -68,10 +68,8 @@ class DevelopmentDataArchiveService
             if ($snapshots !== []) {
                 $included[] = 'backups.snapshots';
             }
-            $result = Process::path(base_path())->timeout(3)->run(['git', 'rev-parse', 'HEAD']);
-            $sha = trim($result->output());
             $manifest = ['format_version' => DevelopmentDataCatalog::VERSION, 'compatibility_version' => DevelopmentDataCatalog::VERSION,
-                'archive_id' => $identity, 'application_version' => app()->version(), 'application_sha' => preg_match('/^[a-f0-9]{40}$/D', $sha) ? $sha : null,
+                'archive_id' => $identity, 'application_version' => app()->version(), 'application_sha' => $this->applicationSha(),
                 'created_at_utc' => now('UTC')->toIso8601String(), 'business_timezone' => app(TimezoneService::class)->getBusinessTimezone(),
                 'included_modules' => $included, 'excluded_modules' => array_values(array_diff(array_keys(DevelopmentDataCatalog::MODULES), $included)),
                 'row_counts' => $counts, 'schema' => $schema, 'file_inventory' => $inventory, 'managed_snapshots' => $snapshotInventory,
@@ -109,6 +107,22 @@ class DevelopmentDataArchiveService
         $foreign = array_map(fn (array $key): array => array_intersect_key($key, array_flip(['columns', 'foreign_table', 'foreign_columns', 'on_update', 'on_delete'])), $meta['foreign_keys']);
 
         return hash('sha256', json_encode([$columns, $foreign, $meta['primary']], JSON_THROW_ON_ERROR));
+    }
+
+    /** Git metadata is optional on hosts without process execution or a checkout. */
+    private function applicationSha(): ?string
+    {
+        if (! function_exists('proc_open')) {
+            return null;
+        }
+        try {
+            $result = Process::path(base_path())->timeout(3)->run(['git', 'rev-parse', 'HEAD']);
+            $sha = trim($result->output());
+
+            return $result->successful() && preg_match('/^[a-f0-9]{40}$/D', $sha) ? $sha : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** @return array{manifest: array<string, mixed>, rows: array<string, list<array<string, mixed>>>, payloads: array<string, string>, sha256: string} */

@@ -64,6 +64,7 @@ class FilterAwareExportsTest extends TestCase
         $this->assertGreaterThan($count($screen), $count($clear), $type.' clear scope');
         foreach (['csv', 'xlsx'] as $format) {
             $download = $this->get(route($exportRoute, array_merge($scope, ['format' => $format, 'page' => 999])))->assertOk();
+            $download->assertHeader('Cache-Control', 'no-store, private');
             $data = $this->contents($download, $format);
             $this->assertStringContainsString($included, $data, $type.' '.$format);
             $this->assertStringNotContainsString($excluded, $data, $type.' '.$format);
