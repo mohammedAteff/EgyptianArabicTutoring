@@ -5,15 +5,17 @@ namespace App\Domains\Lms\Services;
 use App\Domains\CMS\Services\RichTextSanitizer;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\LmsAsset;
+use App\Domains\Lms\Models\VideoAsset;
 use App\Domains\Resources\Models\Resource;
 use App\Rules\SafeLessonUrl;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class LmsContentService
 {
-    public const AUTHORABLE = ['rich_text', 'image', 'file', 'resource', 'external_link', 'youtube_video', 'external_video'];
+    public const AUTHORABLE = ['rich_text', 'image', 'file', 'resource', 'external_link', 'youtube_video', 'external_video', 'video'];
 
     public function __construct(private RichTextSanitizer $sanitizer) {}
 
@@ -24,20 +26,30 @@ class LmsContentService
 
     /** @param array<string,mixed> $data
      * @param  list<int>  $allowedAssetIds
-     * @return array{kind:string,status:string,resource_id:?int,asset_id:?int,payload:?array<string,mixed>}
+     * @param  list<int>  $allowedVideoIds
+     * @return array{kind:string,status:string,resource_id:?int,asset_id:?int,video_asset_id?:int|null,payload:?array<string,mixed>}
      */
-    public function normalize(Course $course, array $data, array $allowedAssetIds = []): array
+    public function normalize(Course $course, array $data, array $allowedAssetIds = [], array $allowedVideoIds = []): array
     {
         $values = Validator::make($data, ['kind' => ['required', Rule::in(self::AUTHORABLE)],
             'html' => ['nullable', 'string', 'max:50000'], 'url' => ['nullable', 'string', 'max:2000'],
             'resource_id' => ['nullable', 'integer', 'min:1'], 'asset_id' => ['nullable', 'integer', 'min:1'],
+            'video_asset_id' => ['nullable', 'integer', 'min:1'],
             'source' => ['nullable', Rule::in(['resource', 'asset'])],
             'alt' => ['nullable', 'string', 'max:300'], 'label' => ['nullable', 'string', 'max:300']])->validate();
         $kind = $values['kind'];
         $payload = null;
         $resourceId = null;
         $assetId = null;
-        if ($kind === 'resource' || ($kind === 'file' && ($values['source'] ?? 'asset') === 'resource')) {
+        if ($kind === 'video') {
+            $video = VideoAsset::query()->with('course')->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->find($values['video_asset_id'] ?? 0);
+            if (! $video || ! $video->usableFor($course)
+                || ((int) $video->course_id !== (int) $course->id && ! in_array((int) $video->id, $allowedVideoIds, true))) {
+                $this->invalid('video_asset_id', 'Choose ready media belonging to this course draft.');
+            }
+
+            return ['kind' => 'video', 'status' => 'ready', 'resource_id' => null, 'asset_id' => null, 'video_asset_id' => (int) $video->id, 'payload' => null];
+        } elseif ($kind === 'resource' || ($kind === 'file' && ($values['source'] ?? 'asset') === 'resource')) {
             if (empty($values['resource_id'])) {
                 $this->invalid('resource_id', 'Choose a published Resource from the library.');
             }
@@ -101,7 +113,7 @@ class LmsContentService
             $this->invalid('content', 'This content block needs to be updated before preview or publication.');
         }
 
-        return ['kind' => $block['kind'], 'resource_id' => $block['resource_id'] ?? null, 'asset_id' => $block['asset_id'] ?? null,
+        return ['kind' => $block['kind'], 'resource_id' => $block['resource_id'] ?? null, 'asset_id' => $block['asset_id'] ?? null, 'video_asset_id' => $block['video_asset_id'] ?? null,
             'source' => ! empty($block['resource_id']) ? 'resource' : 'asset', 'html' => $payload['html'] ?? null,
             'url' => $payload['url'] ?? null, 'alt' => $payload['alt'] ?? null, 'label' => $payload['label'] ?? null];
     }

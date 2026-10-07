@@ -11,6 +11,9 @@
                 @forelse($blocks as $block)
                     <section class="overflow-hidden rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
                         @switch($block['kind'])
+                            @case('video')
+                                @include('student.learning.protected-video')
+                                @break
                             @case('rich_text')
                                 <div dir="auto" class="cms-rich-text break-words">{!! $block['payload']['html'] !!}</div>
                                 @break

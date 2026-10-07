@@ -11,6 +11,7 @@ use App\Domains\Lms\Models\CourseRelease;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\LmsAsset;
+use App\Domains\Lms\Models\ProtectionProfile;
 use App\Domains\Lms\Models\Section;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Services\TeachingRecordService;
@@ -72,6 +73,16 @@ class CourseStudioService
                 case 'access':
                     $graph['access'] = $this->access($course, $data);
                     break;
+                case 'protection':
+                    app(LmsVideoSettings::class)->authorize($actor);
+                    $values = Validator::make($data, ['protection_profile_id' => ['nullable', 'integer', Rule::exists('lms_protection_profiles', 'id')->where('active', true)], 'key' => ['nullable', 'string', 'max:80']])->validate();
+                    if (! empty($values['key'])) {
+                        [$section, $lesson] = $this->lessonIndex($graph, $values['key']);
+                        $graph['sections'][$section]['lessons'][$lesson]['protection_profile_id'] = $values['protection_profile_id'] ?? null;
+                    } else {
+                        $graph['protection_profile_id'] = $values['protection_profile_id'] ?? null;
+                    }
+                    break;
                 case 'add_section':
                     $values = $this->nodeValues($data);
                     $graph['sections'][] = ['key' => 'section:'.Str::uuid(), 'id' => null, 'title' => $values['title'], 'status' => $values['status'], 'lessons' => []];
@@ -104,18 +115,19 @@ class CourseStudioService
                     break;
                 case 'add_block':
                     [$section, $lesson] = $this->lessonIndex($graph, (string) ($data['parent_key'] ?? ''));
-                    $block = $this->content->normalize($course, $data, $this->assetIds($graph));
+                    $block = $this->content->normalize($course, $data, $this->assetIds($graph), $this->assetIds($graph, 'video_asset_id'));
                     $graph['sections'][$section]['lessons'][$lesson]['blocks'][] = ['key' => 'block:'.Str::uuid(), 'id' => null] + $block;
                     break;
                 case 'edit_block':
                     [$section, $lesson, $block] = $this->blockIndex($graph, (string) ($data['key'] ?? ''));
-                    $values = $this->content->normalize($course, $data, $this->assetIds($graph));
+                    $values = $this->content->normalize($course, $data, $this->assetIds($graph), $this->assetIds($graph, 'video_asset_id'));
+                    $values['video_asset_id'] ??= null;
                     $graph['sections'][$section]['lessons'][$lesson]['blocks'][$block] = array_replace($graph['sections'][$section]['lessons'][$lesson]['blocks'][$block], $values);
                     break;
                 case 'remove_block':
                     [$section, $lesson, $block] = $this->blockIndex($graph, (string) ($data['key'] ?? ''));
                     $graph['sections'][$section]['lessons'][$lesson]['blocks'][$block] = array_replace($graph['sections'][$section]['lessons'][$lesson]['blocks'][$block],
-                        ['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'payload' => null]);
+                        ['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'video_asset_id' => null, 'payload' => null]);
                     break;
                 case 'reorder_section':
                     $graph['sections'] = $this->reorder($graph['sections'], (string) ($data['key'] ?? ''), (string) ($data['direction'] ?? ''));
@@ -256,12 +268,14 @@ class CourseStudioService
         $rule = $course->accessRule;
 
         return ['schema' => 1, 'title' => $course->title, 'slug' => $course->slug,
+            ...($course->protection_profile_id !== null ? ['protection_profile_id' => $course->protection_profile_id] : []),
             'access' => ['audience' => $rule ? $rule->audience : 'selected_students', 'access_mode' => $rule ? $rule->access_mode : 'permanent',
                 'starts_at' => $rule?->starts_at?->toIso8601String(), 'expires_at' => $rule?->expires_at?->toIso8601String(), 'relative_days' => $rule?->relative_days],
             'sections' => $course->sections->map(fn (Section $section): array => ['key' => 'section:'.$section->id, 'id' => $section->id, 'title' => $section->title, 'status' => $section->status,
                 'lessons' => $section->lessons->map(fn (Lesson $lesson): array => ['key' => 'lesson:'.$lesson->id, 'id' => $lesson->id, 'title' => $lesson->title, 'slug' => $lesson->slug, 'status' => $lesson->status,
+                    ...($lesson->protection_profile_id !== null ? ['protection_profile_id' => $lesson->protection_profile_id] : []),
                     'blocks' => $lesson->blocks->map(fn (LessonBlock $block): array => ['key' => 'block:'.$block->id, 'id' => $block->id, 'kind' => $block->kind, 'status' => $block->status,
-                        'resource_id' => $block->resource_id, 'asset_id' => $block->asset_id, 'payload' => $block->payload])->all()])->all()])->all()];
+                        'resource_id' => $block->resource_id, 'asset_id' => $block->asset_id, ...($block->video_asset_id !== null ? ['video_asset_id' => $block->video_asset_id] : []), 'payload' => $block->payload])->all()])->all()])->all()];
     }
 
     /** @param array<string,mixed> $data
@@ -338,14 +352,14 @@ class CourseStudioService
 
     /** @param array<string,mixed> $graph
      * @return list<int> */
-    private function assetIds(array $graph): array
+    private function assetIds(array $graph, string $field = 'asset_id'): array
     {
         $ids = [];
         foreach ($graph['sections'] as $section) {
             foreach ($section['lessons'] as $lesson) {
                 foreach ($lesson['blocks'] as $block) {
-                    if (! empty($block['asset_id'])) {
-                        $ids[] = (int) $block['asset_id'];
+                    if (! empty($block[$field])) {
+                        $ids[] = (int) $block[$field];
                     }
                 }
             }
@@ -438,6 +452,16 @@ class CourseStudioService
             'sections.*.lessons.*.status' => ['required', Rule::in(['draft', 'published', 'unpublished', 'archived'])],
             'sections.*.lessons.*.blocks' => ['present', 'array', 'max:100']])->validate();
         $graph['access'] = $this->access($course, $graph['access']);
+        $profileIds = collect([$graph['protection_profile_id'] ?? null]);
+        foreach ($graph['sections'] as $section) {
+            foreach ($section['lessons'] as $lesson) {
+                $profileIds->push($lesson['protection_profile_id'] ?? null);
+            }
+        }
+        $profileIds = $profileIds->filter()->unique();
+        if (ProtectionProfile::query()->whereIn('id', $profileIds)->where('active', true)->count() !== $profileIds->count()) {
+            $this->invalid('protection_profile_id', 'Review unavailable protection profiles before publishing.');
+        }
         $available = 0;
         $slugs = [];
         $assets = $this->assetIds($graph);
@@ -458,7 +482,7 @@ class CourseStudioService
                     if ($block['status'] !== 'ready' || ! in_array($block['kind'], LmsContentService::AUTHORABLE, true)) {
                         $this->invalid('publication', 'Remove unavailable content from lesson “'.$lesson['title'].'” before publishing.');
                     }
-                    $normalized = $this->content->normalize($course, $this->content->input($block), $assets);
+                    $normalized = $this->content->normalize($course, $this->content->input($block), $assets, $this->assetIds($graph, 'video_asset_id'));
                     if ($normalized['resource_id'] !== null) {
                         $resource = Resource::query()->findOrFail($normalized['resource_id']);
                         if (! $this->files->resourceAvailable($resource)) {
@@ -494,6 +518,7 @@ class CourseStudioService
      * @return array<string,mixed> */
     private function persist(Course $course, array $graph): array
     {
+        $course->forceFill(['protection_profile_id' => $graph['protection_profile_id'] ?? null])->save();
         $sections = Section::query()->where('course_id', $course->id)->lockForUpdate()->get()->keyBy('id');
         $lessons = Lesson::query()->where('course_id', $course->id)->lockForUpdate()->get()->keyBy('id');
         $blocks = LessonBlock::query()->whereIn('lesson_id', $lessons->modelKeys())->lockForUpdate()->get()->keyBy('id');
@@ -520,6 +545,7 @@ class CourseStudioService
                 $node = ! empty($lesson['id']) ? $lessons->get($lesson['id']) : new Lesson;
                 abort_unless($node instanceof Lesson, 404);
                 $node->forceFill(['course_id' => $course->id, 'section_id' => $model->id, 'title' => $lesson['title'], 'slug' => $lesson['slug'], 'status' => $lesson['status'], 'sort_order' => $lessonOrder,
+                    'protection_profile_id' => $lesson['protection_profile_id'] ?? null,
                     'published_at' => $lesson['status'] === 'published' ? ($node->published_at ?? now('UTC')) : $node->published_at, 'lock_version' => ($node->lock_version ?? 0) + 1])->save();
                 $lesson['id'] = $node->id;
                 $lesson['key'] = 'lesson:'.$node->id;
@@ -528,7 +554,7 @@ class CourseStudioService
                     $part = ! empty($block['id']) ? $blocks->get($block['id']) : new LessonBlock;
                     abort_unless($part instanceof LessonBlock, 404);
                     $part->forceFill(['lesson_id' => $node->id, 'kind' => $block['kind'], 'status' => $block['status'], 'resource_id' => $block['resource_id'] ?? null,
-                        'asset_id' => $block['asset_id'] ?? null, 'payload' => $block['payload'] ?? null, 'sort_order' => $blockOrder, 'lock_version' => ($part->lock_version ?? 0) + 1])->save();
+                        'asset_id' => $block['asset_id'] ?? null, 'video_asset_id' => $block['video_asset_id'] ?? null, 'payload' => $block['payload'] ?? null, 'sort_order' => $blockOrder, 'lock_version' => ($part->lock_version ?? 0) + 1])->save();
                     $block['id'] = $part->id;
                     $block['key'] = 'block:'.$part->id;
                     $seenBlocks[] = $part->id;
@@ -537,7 +563,7 @@ class CourseStudioService
         } unset($section);
         Section::query()->where('course_id', $course->id)->whereNotIn('id', $seenSections)->update(['status' => 'archived']);
         Lesson::query()->where('course_id', $course->id)->whereNotIn('id', $seenLessons)->update(['status' => 'archived']);
-        LessonBlock::query()->whereIn('lesson_id', $lessons->modelKeys())->whereNotIn('id', $seenBlocks)->update(['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'payload' => null]);
+        LessonBlock::query()->whereIn('lesson_id', $lessons->modelKeys())->whereNotIn('id', $seenBlocks)->update(['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'video_asset_id' => null, 'payload' => null]);
 
         return $graph;
     }

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $kind
  * @property string $status
  * @property int|null $resource_id
+ * @property int|null $video_asset_id
  * @property array<string, mixed>|null $payload
  * @property int $lock_version
  */
@@ -18,7 +19,7 @@ class LessonBlock extends LmsModel
 {
     use HasFactory;
 
-    public const KINDS = ['bunny_video', 'youtube_video', 'external_video', 'rich_text', 'image', 'file', 'resource', 'external_link', 'quiz', 'assignment'];
+    public const KINDS = ['video', 'bunny_video', 'youtube_video', 'external_video', 'rich_text', 'image', 'file', 'resource', 'external_link', 'quiz', 'assignment'];
 
     protected $table = 'lms_lesson_blocks';
 
@@ -50,5 +51,11 @@ class LessonBlock extends LmsModel
     public function asset(): BelongsTo
     {
         return $this->belongsTo(LmsAsset::class, 'asset_id');
+    }
+
+    /** @return BelongsTo<VideoAsset, $this> */
+    public function videoAsset(): BelongsTo
+    {
+        return $this->belongsTo(VideoAsset::class, 'video_asset_id');
     }
 }

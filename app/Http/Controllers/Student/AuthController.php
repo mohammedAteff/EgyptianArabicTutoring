@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\Lms\Services\ProtectedPlaybackService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentAuthAttemptTracker;
 use App\Domains\Students\Services\StudentEmailService;
@@ -117,6 +118,7 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        app(ProtectedPlaybackService::class)->logout($request);
         Auth::guard('student')->logout();
         $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at']);
 

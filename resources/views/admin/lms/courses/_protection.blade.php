@@ -1,0 +1,5 @@
+<form method="POST" action="{{ route('admin.lms.courses.update', $course) }}" class="flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-4">
+    @csrf<input type="hidden" name="version" value="{{ $course->lock_version }}"><input type="hidden" name="operation" value="protection">@if(isset($protectionLesson))<input type="hidden" name="key" value="{{ $protectionLesson['key'] }}">@endif
+    <label class="min-w-0 flex-1 text-sm font-semibold text-slate-700">{{ isset($protectionLesson) ? 'Lesson protection override' : 'Course protection profile' }}<select name="protection_profile_id" class="mt-2 block min-h-11 w-full rounded-xl border border-slate-300 px-3 text-sm"><option value="">{{ isset($protectionLesson) ? 'Inherit course profile' : 'Use course default (Private / Member)' }}</option>@foreach($profiles as $profile)<option value="{{ $profile->id }}" @selected((int)(isset($protectionLesson) ? ($protectionLesson['protection_profile_id']??0) : ($graph['protection_profile_id']??0))===(int)$profile->id)>{{ $profile->name }}</option>@endforeach</select></label>
+    <x-lms.button tone="neutral">Save protection draft</x-lms.button>
+</form>

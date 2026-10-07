@@ -17,6 +17,8 @@
     </div>
     <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Draft editing:</strong> save each form as you work. Learners keep the current live course until you publish. Section and lesson states are preserved; only Published sections and lessons become available.</div>
     <fieldset @disabled($course->status==='archived') class="min-w-0 space-y-6">
+        @include('admin.lms.courses._videos')
+        @if(auth()->user()?->role==='super_admin')@include('admin.lms.courses._protection')@endif
         <div class="grid gap-6 xl:grid-cols-2">
             <section class="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
                 <h2 class="text-lg font-bold text-slate-900">Course details</h2>
@@ -74,6 +76,7 @@
                         <summary class="cursor-pointer rounded-t-2xl bg-slate-50 p-4 text-sm font-bold text-slate-800"><span dir="auto">Lesson {{ $lessonIndex+1 }} · {{ $lesson['title'] }}</span><span class="ml-2 rounded-lg bg-white px-2 py-1 text-xs font-semibold capitalize text-slate-500">{{ $lesson['status'] }}</span></summary>
                         <div class="space-y-5 p-4 sm:p-5">
                             <div class="flex justify-end">@include('admin.lms.courses._order',['course'=>$course,'operation'=>'reorder_lesson','key'=>$lesson['key'],'index'=>$lessonIndex,'count'=>count($section['lessons']),'label'=>$lesson['title']])</div>
+                            @if(auth()->user()?->role==='super_admin')@include('admin.lms.courses._protection', ['protectionLesson' => $lesson])@endif
                             <form method="POST" action="{{ route('admin.lms.courses.update',$course) }}" class="grid gap-4 md:grid-cols-3">
                                 @csrf<input type="hidden" name="version" value="{{ $course->lock_version }}"><input type="hidden" name="operation" value="edit_lesson"><input type="hidden" name="key" value="{{ $lesson['key'] }}">
                                 <x-lms.input label="Lesson title" name="title" :id="'lesson-'.$sectionIndex.'-'.$lessonIndex.'-title'" :value="$lessonForm['title']" :required="true" maxlength="200"/>

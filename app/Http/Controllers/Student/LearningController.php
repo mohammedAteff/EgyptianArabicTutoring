@@ -51,7 +51,12 @@ class LearningController extends Controller
         }
         $this->state->visit($student, $data['course'], $data['lesson']);
 
-        return $this->page($request, 'student.learning.lesson', $data);
+        $response = $this->page($request, 'student.learning.lesson', $data);
+        if ($data['blocks']->contains('kind', 'video')) {
+            $response->headers->set('Referrer-Policy', 'strict-origin');
+        }
+
+        return $response;
     }
 
     public function assignment(Request $request, int $assignment): Response

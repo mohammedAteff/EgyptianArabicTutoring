@@ -14,6 +14,8 @@
             @if($block['status']!=='withdrawn')
             @if(isset($block['preview_error'])||$block['status']!=='ready')
                 <p class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">{{ $block['preview_error']??'This content is unavailable and cannot be active in a published lesson.' }}</p>
+            @elseif($block['kind']==='video')
+                <p class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Video asset #{{ $block['video_asset_id'] }} is attached to this draft. Protected playback requires a current Student login and entitlement in the learning player.</p>
             @elseif($block['kind']==='rich_text')
                 <div dir="auto" class="break-words text-sm leading-8 text-slate-700 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold [&_ul]:list-disc [&_ul]:ps-6 [&_ol]:list-decimal [&_ol]:ps-6 [&_p]:my-3 [&_a]:text-amber-700 [&_a]:underline [&_blockquote]:border-s-4 [&_blockquote]:border-amber-300 [&_blockquote]:ps-4">{!! $block['payload']['html'] !!}</div>
             @elseif($block['kind']==='image')

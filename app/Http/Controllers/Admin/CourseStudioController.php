@@ -6,6 +6,8 @@ use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\LmsAsset;
+use App\Domains\Lms\Models\ProtectionProfile;
+use App\Domains\Lms\Models\VideoAsset;
 use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsContentService;
 use App\Domains\Resources\Models\Resource;
@@ -83,15 +85,17 @@ class CourseStudioController extends Controller
         return $this->view('admin.lms.courses.edit', ['title' => 'Edit Course', 'course' => $course, 'graph' => $graph,
             'resources' => Resource::query()->published()->orderBy('title')->get(['id', 'title', 'file_type', 'file_path']),
             'assets' => LmsAsset::query()->where('status', 'active')->where(fn ($query) => $query->where('course_id', $course->id)->orWhereIn('id', $ids))->orderBy('id')->get(),
+            'videoAssets' => VideoAsset::query()->where(fn ($query) => $query->where('course_id', $course->id)->orWhereIn('id', $this->assetIds($graph, 'video_asset_id')))->whereNot('status', 'deleted')->orderBy('id')->get(),
+            'profiles' => ProtectionProfile::query()->where('active', true)->orderBy('id')->get(),
             'hasDraft' => $course->revisions()->where('status', 'draft')->exists()]);
     }
 
     public function update(Request $request, Course $course): RedirectResponse
     {
         $actor = $this->actor($request);
-        $values = $request->validate(['operation' => ['required', Rule::in(['metadata', 'access', 'add_section', 'edit_section', 'add_lesson', 'edit_lesson', 'move_lesson', 'add_block', 'edit_block', 'remove_block', 'reorder_section', 'reorder_lesson', 'reorder_block'])],
+        $values = $request->validate(['operation' => ['required', Rule::in(['protection', 'metadata', 'access', 'add_section', 'edit_section', 'add_lesson', 'edit_lesson', 'move_lesson', 'add_block', 'edit_block', 'remove_block', 'reorder_section', 'reorder_lesson', 'reorder_block'])],
             'version' => ['required', 'integer', 'min:1']]);
-        $data = $request->only(['title', 'slug', 'status', 'key', 'parent_key', 'destination', 'direction', 'audience', 'access_mode', 'starts_at', 'expires_at', 'relative_days', 'kind', 'html', 'url', 'resource_id', 'asset_id', 'source', 'alt', 'label']);
+        $data = $request->only(['protection_profile_id', 'video_asset_id', 'title', 'slug', 'status', 'key', 'parent_key', 'destination', 'direction', 'audience', 'access_mode', 'starts_at', 'expires_at', 'relative_days', 'kind', 'html', 'url', 'resource_id', 'asset_id', 'source', 'alt', 'label']);
         if ($values['operation'] === 'access') {
             foreach (['starts_at', 'expires_at'] as $field) {
                 if (! empty($data[$field])) {
@@ -179,7 +183,7 @@ class CourseStudioController extends Controller
                         continue;
                     }
                     try {
-                        $block = array_replace($block, $this->content->normalize($course, $this->content->input($block), $assetIds));
+                        $block = array_replace($block, $this->content->normalize($course, $this->content->input($block), $assetIds, $this->assetIds($graph, 'video_asset_id')));
                     } catch (ValidationException $exception) {
                         $block['preview_error'] = implode(' ', Arr::flatten($exception->errors()));
                     }
@@ -239,14 +243,14 @@ class CourseStudioController extends Controller
 
     /** @param array<string,mixed> $graph
      * @return list<int> */
-    private function assetIds(array $graph): array
+    private function assetIds(array $graph, string $field = 'asset_id'): array
     {
         $ids = [];
         foreach ($graph['sections'] as $section) {
             foreach ($section['lessons'] as $lesson) {
                 foreach ($lesson['blocks'] as $block) {
-                    if (! empty($block['asset_id'])) {
-                        $ids[] = (int) $block['asset_id'];
+                    if (! empty($block[$field])) {
+                        $ids[] = (int) $block[$field];
                     }
                 }
             }

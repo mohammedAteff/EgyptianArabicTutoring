@@ -3,7 +3,8 @@
 <div class="mx-auto max-w-5xl space-y-6">
     <a href="{{ route('admin.students.index') }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">&larr; Student records</a>
     <header><h1 class="font-serif text-3xl font-bold text-slate-900">Teaching workspace</h1><p class="mt-2 text-slate-600">{{ $student->name }}@if($bookingId) · Lesson #{{ $bookingId }}@endif</p>
-    @if($bookingId)<a href="{{ route('admin.lessons.show', $bookingId) }}" class="mt-2 inline-block text-sm font-semibold text-amber-700 underline">Back to lesson materials</a>@endif</header>
+    @if($bookingId)<a href="{{ route('admin.lessons.show', $bookingId) }}" class="mt-2 inline-block text-sm font-semibold text-amber-700 underline">Back to lesson materials</a>@endif
+    @can('manageTeaching', $student)<a href="{{ route('admin.lms.video.devices', $student) }}" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-amber-700 underline">Authorized video browsers</a>@endcan</header>
     @if($errors->any())<div role="alert" class="rounded-xl bg-red-50 p-4 text-red-800"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <p class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Share selected teaching records with the student. Tutor preparation stays staff-only. Educational Notes remain in their existing area.</p>
     @foreach(['homework' => 'Homework', 'plan' => 'Learning plans', 'preparation' => 'Tutor preparation · Staff only', 'resource' => 'Assigned resources', 'error' => 'Pronunciation and error log', 'tag' => 'Student and lesson tags'] as $kind => $heading)

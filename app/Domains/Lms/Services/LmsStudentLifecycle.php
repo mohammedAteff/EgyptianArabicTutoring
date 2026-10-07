@@ -19,6 +19,8 @@ class LmsStudentLifecycle
     public function merge(int $primaryId, int $secondaryId): void
     {
         $this->requireTransaction();
+        DB::table('lms_playback_leases')->whereIn('student_id', [$primaryId, $secondaryId])->where('status', 'active')->update(['status' => 'revoked']);
+        DB::table('lms_authorized_devices')->whereIn('student_id', [$primaryId, $secondaryId])->update(['status' => 'revoked', 'revoked_at' => now('UTC')]);
         Course::query()->whereIn('id', AccessGrant::query()->whereIn('student_id', [$primaryId, $secondaryId])->select('course_id'))
             ->orWhereIn('owner_student_id', [$primaryId, $secondaryId])->orderBy('id')->lockForUpdate()->get(['id']);
         DB::table('lms_courses')->where('owner_student_id', $secondaryId)->update(['owner_student_id' => $primaryId]);
@@ -51,6 +53,8 @@ class LmsStudentLifecycle
     public function erase(int $studentId): void
     {
         $this->requireTransaction();
+        DB::table('lms_playback_leases')->where('student_id', $studentId)->delete();
+        DB::table('lms_authorized_devices')->where('student_id', $studentId)->delete();
         foreach (['lms_lesson_notes', 'lms_lesson_bookmarks', 'lms_learning_visits'] as $table) {
             DB::table($table)->where('student_id', $studentId)->delete();
         }
@@ -63,6 +67,7 @@ class LmsStudentLifecycle
         DB::table('lms_enrollments')->where('student_id', $studentId)->where('status', '!=', 'superseded')->update(['status' => 'archived']);
         $courses = Course::query()->where('owner_student_id', $studentId)->orderBy('id')->lockForUpdate()->get();
         foreach ($courses as $course) {
+            DB::table('lms_video_assets')->where('course_id', $course->id)->where('status', '!=', 'deleted')->update(['status' => 'withdrawn', 'label' => 'Redacted private media', 'external_url' => null]);
             $course->forceFill(['title' => 'Redacted private learning', 'slug' => 'private-redacted-'.$course->id.'-'.bin2hex(random_bytes(8)), 'status' => 'archived',
                 'lock_version' => $course->lock_version + 1])->save();
             DB::table('content_revisions')->where('revisable_type', Course::class)->where('revisable_id', $course->id)->update([
@@ -79,7 +84,7 @@ class LmsStudentLifecycle
             foreach ($lessons as $lessonId) {
                 DB::table('lms_lessons')->where('id', $lessonId)->update(['title' => 'Redacted lesson', 'slug' => 'redacted-lesson-'.$lessonId.'-'.bin2hex(random_bytes(8)), 'status' => 'archived']);
             }
-            DB::table('lms_lesson_blocks')->whereIn('lesson_id', $lessons)->update(['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'payload' => null]);
+            DB::table('lms_lesson_blocks')->whereIn('lesson_id', $lessons)->update(['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'video_asset_id' => null, 'payload' => null]);
         }
     }
 

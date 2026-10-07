@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property string $status
  * @property Carbon|null $published_at
  * @property int $lock_version
+ * @property int|null $protection_profile_id
  */
 class Lesson extends LmsModel
 {

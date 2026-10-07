@@ -18,6 +18,8 @@ use App\Domains\Lms\Models\LearningAssignment;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
+use App\Domains\Lms\Services\BunnyStreamProvider;
+use App\Domains\Lms\Services\VideoDeliveryProvider;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
@@ -51,6 +53,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(VideoDeliveryProvider::class, BunnyStreamProvider::class);
         $this->app->scoped(DevelopmentDataSchema::class);
         $this->app->scoped(AnalyticsLifecycle::class);
         ini_set('unserialize_callback_func', 'spl_autoload_call');

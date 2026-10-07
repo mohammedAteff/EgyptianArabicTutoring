@@ -23,9 +23,14 @@ use App\Domains\Forms\Services\FormSubmissionService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Lesson;
+use App\Domains\Lms\Models\LessonBlock;
+use App\Domains\Lms\Models\VideoAsset;
 use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsAccessOperations;
+use App\Domains\Lms\Services\LmsVideoService;
+use App\Domains\Lms\Services\ProtectedPlaybackService;
 use App\Domains\Lms\Services\StudentLearningStateService;
+use App\Domains\Lms\Services\VideoDeviceService;
 use App\Domains\Notifications\Services\TelegramAutomationService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Students\Models\PaymentRecord;
@@ -43,6 +48,9 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Session\ArraySessionHandler;
+use Illuminate\Session\Store;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -79,6 +87,66 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['video_issue', 'video_renew', 'video_register', 'video_device_revoke', 'video_grant_revoke', 'video_reconcile'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Video races require the dedicated test database.');
+        }
+        config(['app.url' => 'http://example.test']);
+        Http::preventStrayRequests();
+        $asset = VideoAsset::query()->findOrFail((int) $data['asset_id']);
+        Http::fake(function ($httpRequest) use ($asset, $data) {
+            if (str_contains($httpRequest->url(), '/videolibrary/')) {
+                return Http::response(['Id' => 123, 'PullZoneId' => 456, 'PlayerTokenAuthenticationEnabled' => true, 'BlockNoneReferrer' => true, 'EnableMP4Fallback' => false, 'ExposeOriginals' => false, 'AllowDirectPlay' => false, 'AllowEarlyPlay' => false, 'EnableDRM' => false, 'AllowedReferrers' => ['example.test']]);
+            }
+            if (str_contains($httpRequest->url(), '/pullzone/')) {
+                return Http::response(['Id' => 456, 'Enabled' => true, 'Suspended' => false, 'ZoneSecurityEnabled' => true, 'ZoneSecurityIncludeHashRemoteIP' => false, 'ZoneSecurityKey' => 'fixture-sign-key-123456', 'Hostnames' => [['Value' => 'test-library.b-cdn.net', 'ForceSSL' => true]], 'BlockNoneReferrer' => true, 'AllowedReferrers' => ['example.test'], 'EdgeRules' => [], 'EdgeScriptId' => null, 'MiddlewareScriptId' => null, 'EnableAccessControlOriginHeader' => true, 'AccessControlOriginHeaderExtensions' => ['*']]);
+            }
+            if ($httpRequest->url() === 'https://video.bunnycdn.com/library/123/videos/'.$asset->provider_video_id) {
+                if (! empty($data['read_gate'])) {
+                    file_put_contents($data['read_gate'], 'read', LOCK_EX);
+                    usleep(500000);
+                }
+
+                return Http::response(['guid' => $asset->provider_video_id, 'videoLibraryId' => 123, 'status' => (int) ($data['provider_status'] ?? 4), 'length' => 300, 'hasMP4Fallback' => false]);
+            }
+            throw new RuntimeException('Unexpected provider endpoint in race.');
+        });
+        if (! empty($data['wait_read_gate'])) {
+            $deadline = microtime(true) + 5;
+            while (! is_file($data['wait_read_gate']) && microtime(true) < $deadline) {
+                usleep(10000);
+            }
+            if (! is_file($data['wait_read_gate'])) {
+                throw new RuntimeException('Provider read synchronization timed out.');
+            }
+        }
+        if ($action === 'video_reconcile') {
+            $result = app(LmsVideoService::class)->reconcile($asset);
+            echo 'RESULT:SUCCESS:'.$result->status."\n";
+            exit(0);
+        }
+        $student = Student::query()->findOrFail((int) $data['student_id']);
+        $request = Request::create('/student/synthetic-video-race', 'POST', ['request_key' => $data['request_key'] ?? null, 'lease_token' => $data['lease_token'] ?? null], [VideoDeviceService::COOKIE => $data['device_token'] ?? '']);
+        $session = new Store('video-race', new ArraySessionHandler(120));
+        $session->setId($data['session_id'] ?? str_repeat('a', 40));
+        $session->start();
+        $session->put(['student_id' => $student->id, 'student_auth_expires_at' => now('UTC')->addHour()->toIso8601String()]);
+        $request->setLaravelSession($session);
+        Auth::guard('student')->setUser($student);
+        if ($action === 'video_register') {
+            app(VideoDeviceService::class)->register($request, $student);
+        } elseif ($action === 'video_device_revoke') {
+            app(VideoDeviceService::class)->revoke($student, (int) $data['device_id']);
+        } elseif ($action === 'video_grant_revoke') {
+            app(LmsAccessOperations::class)->change(Administrator::query()->findOrFail((int) $data['administrator_id']), AccessGrant::query()->findOrFail((int) $data['grant_id']), 'revoke', [], 1, 'race-revoke-'.$data['request_key']);
+        } else {
+            $result = app(ProtectedPlaybackService::class)->authorize($request, Course::query()->findOrFail((int) $data['course_id']), Lesson::query()->findOrFail((int) $data['lesson_id']), LessonBlock::query()->findOrFail((int) $data['block_id']), $action === 'video_renew' ? (int) $data['lease_id'] : null);
+            echo 'RESULT:SUCCESS:'.$result['lease_id']."\n";
+            exit(0);
+        }
+        echo "RESULT:SUCCESS\n";
+        exit(0);
+    }
     if (in_array($action, ['learning_visit', 'learning_note', 'learning_bookmark', 'learning_privacy'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Student learning races require the dedicated test database.');
@@ -337,7 +405,7 @@ try {
     echo 'RESULT:CONFLICT:'.$e->getMessage()."\n";
     exit(2);
 } catch (HttpException $e) {
-    if (in_array($e->getStatusCode(), [404, 409], true)) {
+    if (in_array($e->getStatusCode(), [403, 404, 409], true)) {
         echo 'RESULT:CONFLICT:'.$e->getMessage()."\n";
         exit(2);
     }

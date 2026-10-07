@@ -1,10 +1,87 @@
 # LMS V1 Implementation Status
 
-Date: 2026-10-07 (Africa/Cairo).
+Date: 2026-10-08 (Africa/Cairo).
 
+## Stage 5 disposition — current implementation
 
+**COMPLETE — Stage 5 implementation and local/mock verification. Live Bunny certification remains pending by the owner's explicit choice.** Course Studio now manages generic video assets and direct resumable Bunny uploads, honest processing and reference-safe media lifecycle. Protected playback remains Laravel-authorized with short CDN capabilities, fresh renewal, browser controls, serialized stream limits and server-selected moving watermark policy. Premium DRM is **NOT CONFIGURED** and a required-DRM policy fails closed. No production deployment or Stage 6 work was started.
 
-## Stage 4 disposition — current implementation
+The owner approved provider mocks rather than supplying a non-production library and separately approved the two application dependencies, hls.js and tus-js-client. Plan section 15 records actual domain/schema, current official provider mechanisms, lifetimes, locking, privacy, operational limits and the pending live checklist. Historical Stage 1–4 receipts and accepted pre-LMS production limitations retain their original evidence boundary.
+
+### Stage 5 verification receipts
+
+| Gate | Actual evidence |
+|---|---|
+| Focused provider/Studio/playback/authoring | PASS **89 tests / 439 assertions**, including 77 new ordinary tests plus existing CourseStudioTest |
+| Full current-schema application regression | PASS **1,245 tests / 10,112 assertions**, zero failures/errors/skips; approximately 350 seconds, including canonical auth/Portal, private material/file/Resource, lifecycle/privacy, booking/finance and existing Livewire regressions |
+| New independent MariaDB video races | PASS **6 tests / 29 assertions**: last stream, same-request retry, last browser, revoke versus issue, source withdrawal versus renewal and overlapping old/new provider polls |
+| Full dedicated concurrency regression | PASS **46 tests / 256 assertions**, zero failures/errors/skips; approximately 51 seconds, all seven concurrency classes, direct runner exit 0 |
+| JavaScript | PASS **37 tests**, zero failures/skips; scoped manifest/variant/segment/key rewriting, hostile host/scope/traversal rejection and expiry/renewal bounds alongside existing regressions |
+| Production frontend build | PASS Vite; CSS about **129.83 kB**, app JS **21.33 kB**, TUS chunk **60.41 kB**, dynamic HLS chunk **574.74 kB**; HLS chunk-size warning is nonblocking, no limit weakened |
+| Browser / responsive review | PASS desktop 1280px / mobile 390px: player, Studio media, settings and own-browser page, no horizontal overflow, 44px controls, Arabic input and blank credential fields; no browser warnings/errors. Synthetic HTTP-rendered Blade fixtures with built assets; submissions/navigation/external calls disabled, fixture files/tab removed and viewport reset; no live playback certification |
+| PHPStan no-regression | PASS complete path/identifier/message diagnostic multiset **255 → 255**, exactly equal with duplicates; no ignores, new baseline or weakened configuration. Existing analyzer exit remains nonzero for its unchanged baseline. |
+| Blade / routes | PASS view cache/clear and route cache/clear; all **19** new named video routes resolve with the existing guards/roles and only the authenticated provider callback excluded from CSRF |
+| Pint / whitespace | PASS required dirty-PHP Pint and working/staged diff checks; no subsequent PHP changes |
+| Dependency/security audits | PASS Composer **0 advisories / 0 abandoned packages**, npm **0 vulnerabilities** |
+| Local migration/schema | PASS additive migration on verified local bolt_landing / MariaDB 10.11.18, **batch 22**, **127 application tables / 78 Ran migrations**, +6 tables/+1 migration; **14 generated columns / 4 finance guards unchanged**; only four default profiles seeded |
+| Local data boundary | Three existing Student rows and zero Course rows unchanged; zero provider connections/media/browser/lease rows added to normal local data; no genuine account login, credential configuration or business-data mutation |
+| Provider/live/production | Official API/security documentation verified; exact provider HTTP behavior mocked. No live library configured, uploaded, played or certified; no production inspection, backup, deployment or retest |
+
+Normal and concurrency database suites run serially against explicit bolt_landing_test / MariaDB 10.11.18. The current-schema suite excludes historical MigrationACompatibilityTest and seven dedicated concurrency classes; all seven are run under phpunit.concurrency.xml with independent gated processes. No existing test/assertion was weakened. The new signing tests use fixed independently checked vectors rather than reimplementing the signer as the expected value.
+
+Tests caught and repaired a missing publication-check import and a real merge-quota edge case: soft-deleted secondary Students still have unexpired issued capabilities and must remain in the surviving Student's quota. The status-poll race drove asset-locked bounded reconciliation. Synthetic fixture/cookie/session/schema setup and HTTP expectation mistakes were corrected without weakening production contracts. Full regression evidence includes the resulting behavior.
+
+### Stage 5 security evidence and actual behavior
+
+Canonical StudentSessionContext, absolute login expiry and Stage 2 entitlement/publication/source scope precede every protected issue/renewal. Nested Course/lesson/block/media and current private owner are checked again under canonical locks. Student B cannot obtain A's media capability, identity or browser/lease data, even with copied IDs/proofs. Foreign nested targets, injected private media references, future/expired/revoked sources, unpublished ancestors, processing/replaced media, changed policies/config, missing credentials, timeout/malformed provider state, session regeneration, logout and revoked browsers fail closed. Initial learner HTML/public JSON contain no provider GUID or signed URL. No new Livewire public property or client-supplied Student identity chooses access.
+
+The real adapter checks the account API library and linked CDN zone on every authorization: embed and CDN token controls, signing-key match, non-IP-bound authorization, forced HTTPS, exact approved domains/empty-referrer blocking, HLS CORS, no unsupported edge rules/scripts, and disabled originals/MP4 fallback/direct/early playback/DRM. Current CDN signing uses HS256-prefixed Base64URL HMAC-SHA256 for the video directory; TUS uses the separately documented SHA-256 scoped upload signature. Invalid remote configuration returns a safe 503 without secret-bearing HTTP exceptions. The protected lesson uses strict-origin referrers; private-file responses retain their existing no-referrer boundary.
+
+Course Studio reserves one local request before remote creation. Upload bytes go directly from staff browser to Bunny with renewable 15-minute scoped TUS tickets. Ready comes from fresh GET status 4 plus usable duration/no fallback, never upload completion or callback hints. Raw callback HMAC uses the library Read-Only key; size/shape/known library/GUID are bounded; exact digests are idempotent. Distinct old callbacks and overlapping polls use serialized fresh GET rather than stale callback state. Delete is explicit and blocked by live, draft or retained historical references. Unknown creation GUIDs cannot be reported deleted; ambiguous delete records failure. Local orphan candidates exist; global remote inventory/unknown post-timeout orphan recovery remains manual.
+
+Profile inheritance is lesson → Course → Private/Member default. Super Admin alone changes provider secrets, policy fields and explicit draft overrides; Admin can author content with existing profiles, Assistant is denied. All Portal protected playback requires current Student authentication, including the Public profile. Private/Premium defaults are two browsers, one stream and required moving watermark; Member four/two; Public no configured quotas. Defaults are 120-second capability, 30-second renewal and 150-second lease. Authorization never exceeds absolute login or effective lesson access end. Profile settings cap TTL at 600 seconds and lease at 900 seconds.
+
+Browser identity is a high-entropy encrypted HttpOnly/Lax cookie with mounted path/domain and Secure in production. The database stores only its hash, label, state and last use, with no raw IP/UA/fingerprint. Current Student row locking serializes enrollment, count/insert, renewal and revocation. Quota continues to count unexpired capabilities after close/revoke and after canonical merge, including soft-deleted secondary identities. Independent process evidence proves limits; abandoned leases expire without requiring a worker. Students manage only their own browser registrations; staff use existing manageTeaching authority. No private notes are exposed.
+
+The custom native/HLS player uses memory-only lease proof, checked loader scopes, periodic access renewal, hard local expiry and stop/clear behavior. Close/hidden page/fatal failures release best-effort; a paused player does not renew indefinitely. Moving pseudonymous Learner reference plus session code is selected server-side. Container fullscreen retains the overlay; native fullscreen/PiP/casting/download controls are not offered. No global right-click suppression exists. The browser overlay remains removable and cannot prevent screen capture or deliberate bearer-token sharing.
+
+Revocation blocks new/renewed capabilities; it cannot instantly recall issued CDN tokens or delivered bytes. Default maximum residual token lifetime is 120 seconds, shorter at access/login expiry, up to 600 seconds only if Super changes policy. DRM is **NOT CONFIGURED**, optional extension only; explicitly required DRM returns unavailable rather than downgrading. Ordinary V1 does not require paid DRM. External video remains the external provider's weaker protection class.
+
+Canonical merge revokes both browser/lease proof sets instead of transferring them. Erasure deletes security proofs and withdraws/redacts source-private video metadata/content references while preserving shared catalog media. It performs no remote DELETE and makes no claim about provider copies/backups. Application backup includes metadata, not remote video bytes. Retained historical revisions conservatively pin used assets; independently reviewed history/provider retention and source recovery are needed before production use.
+
+The bounded hourly prune command expires stale leases, removes old security leases after seven days, retains revoked-cookie tombstones 366 days and trims callback digests after 30 days. Production scheduler operation is not presumed. Security start/close/config/device audit uses safe IDs/status only; renewal is not a per-heartbeat audit or visitor event. Existing Portal notifications and private materials remain under their current authority. Bunny timestamps reuse private idempotent Stage 4 bookmarks with duration bounds; no watched percentage/time, completion, resume/progress, prerequisite, assessment or Stage 8 analytics is created.
+
+### Stage 5 touched invariants and exact file inventory
+
+I1–3 identity/ownership/auth, I4–5 staff/security, I10 ordered locks, I17 retained history, I19–20 Resource/private files, I21 teaching scope, I22 notification synchronization, I23–24 privacy/audit and I27 destructive-tools boundaries are preserved. Destructive tools remain fail closed for new unknown dependents; no expanded reset/export/restore permission exists. Finance, typed one_hour/two_hour provenance, booking/cancellation/refund, calendar/recurrence/room assignment and unrelated authentication writers are unchanged. Accepted pre-LMS PARTIAL production dispositions are not upgraded by local tests.
+
+| Task files | Result |
+|---|---|
+| app/Domains/Lms/Models/{VideoProviderConnection,VideoAsset,ProtectionProfile,AuthorizedDevice,PlaybackLease,VideoWebhookReceipt}.php; matching six database/factories files | Bounded media/config/security identities, hidden encrypted keys/proofs and isolated fixtures |
+| app/Domains/Lms/Models/{Course,Lesson,LessonBlock}.php | Generic video/profile relationships and typed model contracts |
+| app/Domains/Lms/Services/{VideoDeliveryProvider,BunnyStreamProvider,LmsVideoService,LmsVideoSettings,LmsVideoProfiles,VideoDeviceService,ProtectedPlaybackService}.php | Real provider adapter, media lifecycle, Super-only config, reusable policy and canonical secure playback engine |
+| app/Exceptions/VideoProviderUnavailable.php; app/Providers/AppServiceProvider.php | Sanitized fail-closed provider exception and bounded adapter binding |
+| app/Domains/Lms/Services/{CourseStudioService,LmsContentService,LmsAccessService,StudentLearningService,StudentLearningStateService,LmsStudentLifecycle}.php | Generic authoring/ready-content/owner projection, private bookmarks and merge/erasure integration |
+| app/Http/Controllers/Admin/{CourseStudioController,CourseVideoController,VideoSettingsController,VideoDeviceController}.php | Scoped Course Studio media, profiles/secrets and staff browser management |
+| app/Http/Controllers/Student/{ProtectedPlaybackController,VideoDeviceController,AuthController,LearningController}.php; app/Http/Controllers/{BunnyStreamWebhookController,LmsFoundationController}.php | Canonical Student playback/device/logout, secure projections/referrer policy and authenticated bounded callbacks |
+| app/Console/Commands/PruneLmsVideoSecurity.php; routes/{web,console}.php; bootstrap/app.php | Security routes, throttles, CSRF-scoped callback exclusion, scheduled retention and secret flash exclusion |
+| app/Domains/Analytics/Services/AnalyticsService.php | Security/webhook traffic excluded from visitor telemetry |
+| database/migrations/2026_10_07_194042_create_lms_video_security_tables.php | Six additive tables, policy seeds, generic block/profile FKs and coherent guards; populated rollback refused |
+| resources/views/admin/lms/courses/{_videos,_protection,_block-form,edit,preview}.blade.php | Direct/resumed upload, status/reference lifecycle and profile/generic video draft controls |
+| resources/views/admin/lms/video/{settings,devices}.blade.php; resources/views/admin/students/teaching.blade.php | Masked Super settings, policy truth and discoverable authorized staff browser controls |
+| resources/views/student/learning/{protected-video,devices,lesson,index}.blade.php | Integrated custom secure player and discoverable own browser management |
+| resources/js/{protected-video,bunny-upload,app}.js; package.json; package-lock.json | Directory-scoped HLS delivery, renewal/expiry, moving watermark and direct resumable uploads; only two approved new dependencies |
+| tests/Feature/{BunnyStreamProviderTest,LmsVideoStudioTest,ProtectedPlaybackTest,ProtectedPlaybackConcurrencyTest}.php; tests/Feature/Concurrency/booking_worker.php; tests/protected-video.test.mjs | Provider vectors/mock integration, authorization/privacy/session/lifecycle contracts and real process races plus JS boundaries |
+| LMS_IMPLEMENTATION_PLAN.md; LMS_IMPLEMENTATION_STATUS.md | Actual Stage 5 contracts, evidence, limitations and pending provider/release checklist |
+
+### Pending live certification and release boundary
+
+No non-production library was available for this task; the owner explicitly accepted provider mocks and live verification pending. Before production certification: configure credentials outside chat in protected Super settings, verify real library/zone fields and permissions, test direct/resumed upload and processing/failure/callback/delete, unsigned/expired/all HLS and alternate direct paths, allowed/disallowed/empty referrers, CORS/forced HTTPS, Chrome/Safari/mobile long renewal/expiry/revocation and watermark in permitted fullscreen. After the full suite, final responsive/field-ID adjustments were additionally checked by **131 tests / 808 assertions** across playback/Studio/Student Learning/teaching, then **25 Studio tests / 128 assertions**, plus final build/Blade/route checks. Native HLS resource URL propagation particularly requires live proof. Any unsupported remote override remains fail closed; no permissive workaround is approved.
+
+Established delivery workflow remains **test → commit → non-force push on main**. The exact committed/pushed application SHA is in the final receipt and chat; this document cannot contain its own future hash. Only Stage 5 task files and these two requested records are staged. Three pre-existing untracked Hostinger/proposal documents remain untouched. No production hot edits, production backup/deploy/retest, Markdown-only parity deployment or Stage 6 continuation occurred.
+
+---
+## Stage 4 disposition — historical receipt, superseded for Stage 5
 
 **COMPLETE — The Student LMS implementation and all required local gates pass.** Students can discover and consume authorized courses inside the existing Portal, navigate ordered lessons, use mixed content, keep private notes and bookmark meaningful direct-video timestamps. Completed remains explicitly empty until real completion exists. No Stage 5 or production deployment was started.
 

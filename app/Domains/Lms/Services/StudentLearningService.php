@@ -69,7 +69,7 @@ class StudentLearningService
         $blocks = $this->access->lessonBlocks($student, $current);
         $assetIds = $blocks->pluck('asset_id')->filter()->map(fn ($id): int => (int) $id)->values()->all();
         $rendered = $blocks->map(fn (LessonBlock $block): array => $this->renderBlock($data['course'], $current, $block, $assetIds));
-        $bookmarkableIds = $rendered->filter(fn (array $block): bool => $block['kind'] === 'external_video' && ($block['payload']['provider'] ?? null) === 'direct')->pluck('id');
+        $bookmarkableIds = $rendered->filter(fn (array $block): bool => $block['kind'] === 'video' || ($block['kind'] === 'external_video' && ($block['payload']['provider'] ?? null) === 'direct'))->pluck('id');
         $index = $data['lessonList']->search(fn (Lesson $item): bool => (int) $item->id === (int) $current->id);
 
         return $data + ['lesson' => $current, 'blocks' => $rendered,
@@ -85,6 +85,15 @@ class StudentLearningService
     private function renderBlock(Course $course, Lesson $lesson, LessonBlock $block, array $assetIds): array
     {
         try {
+            if ($block->kind === 'video') {
+                $video = $block->videoAsset;
+                if ($video && $video->provider !== 'bunny') {
+                    return ['id' => $block->id] + $this->content->normalize($course, ['kind' => $video->provider === 'youtube' ? 'youtube_video' : 'external_video', 'url' => $video->external_url]);
+                }
+
+                return ['id' => $block->id, 'kind' => 'video', 'label' => $video ? $video->label : 'Protected video',
+                    'authorizationUrl' => route('student.video.authorize', [$course, $lesson, $block])];
+            }
             $data = $this->content->normalize($course, $this->content->input($block->only(['kind', 'resource_id', 'asset_id', 'payload'])), $assetIds);
 
             return ['id' => $block->id, 'url' => route('student.learning.materials.open', [$course, $lesson, $block]), 'resourceTitle' => $block->resource?->title] + $data;

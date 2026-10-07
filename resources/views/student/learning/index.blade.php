@@ -3,7 +3,10 @@
 <div class="space-y-10">
     <header class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-2"><p class="text-xs font-semibold uppercase tracking-widest text-nile-700">Your learning space</p><h1 class="text-3xl font-bold tracking-tight sm:text-4xl">My Learning</h1><p class="text-stone-600">Make a little room for Arabic today.</p></div>
-        <a href="{{ route('student.learning.notes.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-nile-900">Private notes · {{ $privateNoteCount }}</a>
+        <div class="flex flex-wrap gap-3">
+            <a href="{{ route('student.learning.notes.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-nile-900">Private notes · {{ $privateNoteCount }}</a>
+            <a href="{{ route('student.video.devices') }}" class="inline-flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-nile-900">Authorized browsers</a>
+        </div>
     </header>
     @include('student.learning.feedback')
     <nav aria-label="Learning sections" class="flex flex-wrap gap-2">

@@ -55,7 +55,7 @@ class LmsAccessService
             return collect();
         }
 
-        return $lesson->blocks()->with(['resource', 'asset.course', 'lesson.course'])->get()->filter(fn (LessonBlock $block): bool => $this->readyBlock($block))->values();
+        return $lesson->blocks()->with(['resource', 'asset.course', 'videoAsset.course', 'lesson.course'])->get()->filter(fn (LessonBlock $block): bool => $this->readyBlock($block))->values();
     }
 
     /** @return array{allowed: bool, sources: list<string>} */
@@ -290,6 +290,9 @@ class LmsAccessService
             $course = $block->lesson?->course;
 
             return $asset !== null && $course !== null && $asset->kind === $block->kind && $asset->usableFor($course) && $this->files->courseAssetAvailable($asset);
+        }
+        if ($block->kind === 'video') {
+            return $block->videoAsset !== null && $block->lesson?->course !== null && $block->videoAsset->usableFor($block->lesson->course);
         }
 
         return true;

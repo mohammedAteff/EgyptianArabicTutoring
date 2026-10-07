@@ -62,12 +62,24 @@ class StudentLearningStateService
             [$student, $course, $lesson] = $this->lockTarget($student, $course, $lesson);
             $block = $lesson->blocks()->lockForUpdate()->findOrFail($blockId);
             abort_unless($this->access->canAccess($student, $block), 404);
-            $data = $this->content->normalize($course, $this->content->input($block->only(['kind', 'resource_id', 'asset_id', 'payload'])));
-            if ($data['kind'] !== 'external_video' || ($data['payload']['provider'] ?? null) !== 'direct') {
+            $data = $this->content->normalize($course, $this->content->input($block->only(['kind', 'resource_id', 'asset_id', 'video_asset_id', 'payload'])), [], $block->video_asset_id ? [(int) $block->video_asset_id] : []);
+            $timestampSupported = $data['kind'] === 'external_video' && ($data['payload']['provider'] ?? null) === 'direct';
+            if ($block->kind === 'video' && $block->videoAsset) {
+                $video = $block->videoAsset;
+                $timestampSupported = $video->provider === 'bunny';
+                if ($video->provider === 'external') {
+                    $external = $this->content->normalize($course, ['kind' => 'external_video', 'url' => $video->external_url]);
+                    $timestampSupported = ($external['payload']['provider'] ?? null) === 'direct';
+                }
+            }
+            if (! $timestampSupported) {
                 throw ValidationException::withMessages(['block_id' => 'Timestamp bookmarks are available for direct videos.']);
             }
             if (! is_finite($seconds) || $seconds < 0 || $seconds > 86400) {
                 throw ValidationException::withMessages(['seconds' => 'Choose a video timestamp between 0 and 86400 seconds.']);
+            }
+            if ($block->kind === 'video' && $block->videoAsset?->provider === 'bunny' && $seconds > ($block->videoAsset->duration_seconds ?? 0)) {
+                throw ValidationException::withMessages(['seconds' => 'Choose a timestamp within this video.']);
             }
             $label = Validator::make(['label' => $label], ['label' => ['nullable', 'string', 'max:500']])->validate()['label'];
             $position = (int) round($seconds * 1000);

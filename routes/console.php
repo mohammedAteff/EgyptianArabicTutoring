@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 
+Schedule::command('lms:video:prune-security')->hourly()->withoutOverlapping()->name('lms:video:prune-security');
+
 // 1. Scheduler Heartbeat: executes every minute to prove host cron is active
 Schedule::call(function () {
     Setting::set('last_scheduler_run_at', now('UTC')->toIso8601String(), 'system');

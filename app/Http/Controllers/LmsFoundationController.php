@@ -37,7 +37,9 @@ class LmsFoundationController extends Controller
         $blocks = $this->access->lessonBlocks($student, $lesson)
             ->map(function (LessonBlock $block) use ($student, $course, $lesson): array {
                 $data = $block->only(['id', 'kind', 'sort_order']);
-                if ($block->kind === 'resource') {
+                if ($block->kind === 'video') {
+                    $data['authorization_url'] = $student ? route('student.video.authorize', [$course, $lesson, $block]) : null;
+                } elseif ($block->kind === 'resource') {
                     $data['url'] = $student ? route('student.lms.resources.open', [$course, $lesson, $block]) : route('resources.show', $block->resource->slug);
                 } else {
                     $data['content'] = $block->payload;

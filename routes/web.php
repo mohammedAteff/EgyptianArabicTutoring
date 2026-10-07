@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\BusinessLifecycleReportController;
 use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\CourseStudioController;
+use App\Http\Controllers\Admin\CourseVideoController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
 use App\Http\Controllers\Admin\DevelopmentToolsController;
@@ -46,9 +47,11 @@ use App\Http\Controllers\Admin\TelegramController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\TwoFactorChallengeController;
 use App\Http\Controllers\Admin\TwoFactorSecurityController;
+use App\Http\Controllers\Admin\VideoSettingsController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\BunnyStreamWebhookController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LmsFoundationController;
@@ -65,13 +68,17 @@ use App\Http\Controllers\Student\LearningController;
 use App\Http\Controllers\Student\LessonFeedbackController;
 use App\Http\Controllers\Student\LessonWorkspaceController;
 use App\Http\Controllers\Student\ProfileController;
+use App\Http\Controllers\Student\ProtectedPlaybackController;
 use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
 use App\Http\Controllers\Student\ResourceAssignmentController;
 use App\Http\Controllers\Student\SchedulingController;
 use App\Http\Controllers\Student\TeachingController;
+use App\Http\Controllers\Student\VideoDeviceController;
 use App\Http\Controllers\StudentBinController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
+use App\Http\Middleware\TrackVisitorSession;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -84,6 +91,9 @@ use Illuminate\Support\Facades\Route;
 // Homepage
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/courses/{course}', [LmsFoundationController::class, 'course'])->whereNumber('course')->name('lms.courses.show');
+Route::post('/integrations/bunny-stream/webhook', BunnyStreamWebhookController::class)
+    ->withoutMiddleware([PreventRequestForgery::class, TrackVisitorSession::class])
+    ->middleware('throttle:120,1')->name('bunny-stream.webhook');
 Route::get('/courses/{course}/lessons/{lesson}', [LmsFoundationController::class, 'lesson'])->whereNumber(['course', 'lesson'])->name('lms.lessons.show');
 Route::get('/fr', [HomeController::class, 'index'])->name('home.fr');
 Route::get('/de', [HomeController::class, 'index'])->name('home.de');
@@ -97,6 +107,13 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
     Route::middleware('student.auth')->group(function () {
         Route::get('/my-learning', [LearningController::class, 'index'])->name('learning.index');
+        Route::get('/my-learning/browsers', [VideoDeviceController::class, 'index'])->name('video.devices');
+        Route::post('/my-learning/browsers', [VideoDeviceController::class, 'register'])->middleware('throttle:10,1')->name('video.devices.register');
+        Route::patch('/my-learning/browsers/{device}', [VideoDeviceController::class, 'update'])->whereNumber('device')->middleware('throttle:30,1')->name('video.devices.update');
+        Route::delete('/my-learning/browsers/{device}', [VideoDeviceController::class, 'revoke'])->whereNumber('device')->middleware('throttle:30,1')->name('video.devices.revoke');
+        Route::post('/learn/courses/{course}/lessons/{lesson}/videos/{block}', [ProtectedPlaybackController::class, 'authorize'])->whereNumber(['course', 'lesson', 'block'])->middleware('throttle:30,1')->name('video.authorize');
+        Route::post('/learn/courses/{course}/lessons/{lesson}/videos/{block}/leases/{lease}', [ProtectedPlaybackController::class, 'renew'])->whereNumber(['course', 'lesson', 'block', 'lease'])->middleware('throttle:60,1')->name('video.renew');
+        Route::post('/my-learning/video-leases/{lease}/close', [ProtectedPlaybackController::class, 'close'])->whereNumber('lease')->middleware('throttle:30,1')->name('video.close');
         Route::get('/my-learning/notes', [LearningController::class, 'notes'])->name('learning.notes.index');
         Route::delete('/my-learning/notes/{note}', [LearningController::class, 'deleteNote'])->whereNumber('note')->middleware('throttle:60,1')->name('learning.notes.destroy');
         Route::get('/learn/for-you/{assignment}', [LearningController::class, 'assignment'])->whereNumber('assignment')->name('learning.assignments.show');
@@ -287,6 +304,17 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
         Route::prefix('lms')->name('lms.')->middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/video/settings', [VideoSettingsController::class, 'index'])->middleware('role:super_admin')->name('video.settings');
+            Route::post('/video/settings', [VideoSettingsController::class, 'update'])->middleware(['role:super_admin', 'throttle:10,1'])->name('video.settings.update');
+            Route::post('/video/verify', [VideoSettingsController::class, 'verify'])->middleware(['role:super_admin', 'throttle:10,1'])->name('video.settings.verify');
+            Route::patch('/video/profiles/{profile}', [VideoSettingsController::class, 'profile'])->whereNumber('profile')->middleware(['role:super_admin', 'throttle:10,1'])->name('video.profiles.update');
+            Route::post('/courses/{course}/videos', [CourseVideoController::class, 'store'])->whereNumber('course')->middleware('throttle:20,1')->name('videos.store');
+            Route::post('/courses/{course}/external-videos', [CourseVideoController::class, 'external'])->whereNumber('course')->middleware('throttle:20,1')->name('videos.external');
+            Route::post('/courses/{course}/videos/{asset}/upload', [CourseVideoController::class, 'upload'])->whereNumber(['course', 'asset'])->middleware('throttle:20,1')->name('videos.upload');
+            Route::post('/courses/{course}/videos/{asset}/status', [CourseVideoController::class, 'status'])->whereNumber(['course', 'asset'])->middleware('throttle:30,1')->name('videos.status');
+            Route::delete('/courses/{course}/videos/{asset}', [CourseVideoController::class, 'destroy'])->whereNumber(['course', 'asset'])->middleware('throttle:10,1')->name('videos.destroy');
+            Route::get('/students/{student}/video-browsers', [App\Http\Controllers\Admin\VideoDeviceController::class, 'index'])->whereNumber('student')->name('video.devices');
+            Route::delete('/students/{student}/video-browsers/{device}', [App\Http\Controllers\Admin\VideoDeviceController::class, 'revoke'])->whereNumber(['student', 'device'])->middleware('throttle:30,1')->name('video.devices.revoke');
             Route::get('/courses', [CourseStudioController::class, 'index'])->name('courses.index');
             Route::get('/courses/create', [CourseStudioController::class, 'create'])->name('courses.create');
             Route::post('/courses', [CourseStudioController::class, 'store'])->middleware('throttle:30,1')->name('courses.store');

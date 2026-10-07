@@ -234,6 +234,9 @@ class AnalyticsService
 
     public function excluded(Request $request): bool
     {
+        if ($request->routeIs('student.video.*', 'bunny-stream.webhook')) {
+            return true;
+        }
         if ($request->user('web') || $request->is('admin*', 'preview*', '*/preview', 'build/*', 'assets/*', 'up') || $request->header('X-Analytics-Synthetic') === '1') {
             return true;
         }
