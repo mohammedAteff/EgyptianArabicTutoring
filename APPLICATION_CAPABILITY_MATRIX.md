@@ -1,5 +1,20 @@
 # Application Capability Matrix
 
+## Acceptance remediation addendum (2026-10-07)
+
+Current application release `4296b21368cbc9c564d0cb7a85e29b2ae408e0ee`; see PRODUCTION_APPLICATION_ACCEPTANCE_REPORT.md for all153 final dispositions/limits and PRE_LMS_DEFECT_AND_REMEDIATION_LOG.md for nine bounded repairs. Permanent IDs/business authorities remain unchanged.
+
+- STU-022: mounted notification links now render through the existing URL generator.
+- PUB-007/PUB-012: confirmation display time,IANA label and instant offset agree without rewriting stored snapshots; ReschedulePresentationTest includes summer/winter regression.
+- PUB-015/PUB-016: the visible Resource control consumes the immediate single-use grant; actual resource-access.test.mjs covers the active client method and real browser file proof is recorded.
+- SA-001: Assistant nav/bell/media controls reflect existing server permissions; no role expansion.
+- SA-019/SA-026/SA-035/SA-071–SA-076: common CSV/XLSX response is private/no-store; existing filters/ownership/privacy are preserved.
+- SA-068/PUB-018: publication retains explicitly selected availability. Internal game opening is server-owned; external-card opening/outbound event is client-owned, avoiding different-UUID duplication.
+- SA-094/SA-097: optional Git application_sha may be null on a proc_open-disabled host; compatibility,payload hashes,private paths and owner gates remain mandatory.
+
+This addendum updates repaired runtime behavior/evidence. Historical inventory cross-checks below describe their earlier point in time; later QA actions do not renumber or expand the matrix.
+
+
 Authoritative pre-LMS inventory — 2026-10-06. Permanent IDs: PUB-001–PUB-026, STU-001–STU-028 and SA-001–SA-099. Retain IDs when descriptions change; add future IDs instead of renumbering. This describes current application behavior and designs later QA; it is not an execution authorization for that QA.
 
 **Authority and baseline.** Production application SHA is **`7cb9a236b60350cfa134c2d6c94e14df1eb20c6b`**. At discovery, freshly fetched local HEAD and origin/main were **`64c7ccd6dc8744e7172591c539b00c790a070508`**. The owner explicitly approved documentation-only later commits on 2026-10-06. Their only differences from the deployed SHA were PRE_LMS_PRODUCTION_DEPLOYMENT_REPORT.md, REMAINING_FEATURES_IMPLEMENTATION_TRACKER.md and STAGE_5_DEVELOPMENT_LAUNCH_DATA_TOOLS_REPORT.md. Application code, migrations, locks/dependencies, tracked assets and runtime configuration matched the pinned candidate. Production tracked checkout was clean. This matrix/tracker delivery adds documentation commits without changing or deploying the application.
