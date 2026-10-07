@@ -45,4 +45,10 @@ class LessonBlock extends LmsModel
     {
         return $this->belongsTo(Resource::class);
     }
+
+    /** @return BelongsTo<LmsAsset, $this> */
+    public function asset(): BelongsTo
+    {
+        return $this->belongsTo(LmsAsset::class, 'asset_id');
+    }
 }

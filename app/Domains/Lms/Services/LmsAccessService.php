@@ -2,6 +2,7 @@
 
 namespace App\Domains\Lms\Services;
 
+use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Enrollment;
@@ -16,7 +17,7 @@ use Illuminate\Support\Collection;
 
 class LmsAccessService
 {
-    public function __construct(private LmsAccessWindow $windows) {}
+    public function __construct(private LmsAccessWindow $windows, private LessonMaterialService $files) {}
 
     public function canAccess(?Student $student, Model $target): bool
     {
@@ -53,8 +54,7 @@ class LmsAccessService
             return collect();
         }
 
-        return $lesson->blocks()->with('resource')->get()->filter(fn (LessonBlock $block): bool => $block->status === 'ready'
-            && ($block->kind !== 'resource' || $block->resource?->isPublished()))->values();
+        return $lesson->blocks()->with(['resource', 'asset.course', 'lesson.course'])->get()->filter(fn (LessonBlock $block): bool => $this->readyBlock($block))->values();
     }
 
     /** @return array{allowed: bool, sources: list<string>} */
@@ -74,7 +74,7 @@ class LmsAccessService
             $target = $grant->lesson ?? $grant->section ?? $grant->course;
         }
         if ($target instanceof LessonBlock) {
-            if ($target->status !== 'ready' || ($target->kind === 'resource' && ! $target->resource?->isPublished())) {
+            if (! $this->readyBlock($target)) {
                 return ['allowed' => false, 'sources' => []];
             }
             $target = $target->lesson;
@@ -185,5 +185,23 @@ class LmsAccessService
     private function published(Course|Section|Lesson $target): bool
     {
         return $target->status === 'published' && $target->published_at !== null && $target->published_at->lte(now('UTC'));
+    }
+
+    private function readyBlock(LessonBlock $block): bool
+    {
+        if ($block->status !== 'ready') {
+            return false;
+        }
+        if ($block->resource_id !== null) {
+            return $block->resource?->isPublished() ?? false;
+        }
+        if (in_array($block->kind, ['image', 'file'], true)) {
+            $asset = $block->asset;
+            $course = $block->lesson?->course;
+
+            return $asset !== null && $course !== null && $asset->kind === $block->kind && $asset->usableFor($course) && $this->files->courseAssetAvailable($asset);
+        }
+
+        return true;
     }
 }

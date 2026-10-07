@@ -4,6 +4,7 @@ namespace App\Domains\System\Services;
 
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Analytics\Services\AnalyticsLifecycle;
+use App\Domains\Lms\Models\Course;
 use App\Domains\Timezone\Services\TimezoneService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
@@ -192,6 +193,10 @@ class DevelopmentDataArchiveService
                     throw ValidationException::withMessages(['archive' => 'The row inventory does not match its manifest.']);
                 }
                 foreach ($records as $row) {
+                    if ($table === 'content_revisions' && is_array($row) && is_string($row['revisable_type'] ?? null)
+                        && strcasecmp($row['revisable_type'], Course::class) === 0) {
+                        throw ValidationException::withMessages(['archive' => 'LMS course revisions require a reviewed LMS restore workflow; Resource archives cannot restore them.']);
+                    }
                     if (! is_array($row) || array_diff(array_keys($row), array_keys($this->graph->schema()[$table]['columns'])) !== []
                         || $row !== $this->sanitizer->row($row, $table)) {
                         throw ValidationException::withMessages(['archive' => 'Archive rows contain unknown columns or prohibited credential fields.']);

@@ -22,6 +22,7 @@ use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Forms\Services\FormSubmissionService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsAccessOperations;
 use App\Domains\Notifications\Services\TelegramAutomationService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
@@ -75,6 +76,25 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['course_studio_create', 'course_studio_write', 'course_studio_publish', 'course_studio_duplicate'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Course Studio races require the dedicated test database.');
+        }
+        $actor = Administrator::query()->findOrFail((int) $data['administrator_id']);
+        $studio = app(CourseStudioService::class);
+        if ($action === 'course_studio_create') {
+            $course = $studio->create($actor, $data['values']);
+        } else {
+            $source = Course::query()->findOrFail((int) $data['course_id']);
+            $course = match ($action) {
+                'course_studio_write' => $studio->write($actor, $source, 'metadata', $data['values'], (int) $data['version']),
+                'course_studio_publish' => $studio->publish($actor, $source, (int) $data['version']),
+                'course_studio_duplicate' => $studio->duplicate($actor, $source, (int) $data['version']),
+            };
+        }
+        echo 'RESULT:SUCCESS:'.$course->id."\n";
+        exit(0);
+    }
     if (in_array($action, ['lms_grant', 'lms_change'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('LMS races require the dedicated test database.');

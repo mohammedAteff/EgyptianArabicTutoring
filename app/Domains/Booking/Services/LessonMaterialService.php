@@ -2,15 +2,20 @@
 
 namespace App\Domains\Booking\Services;
 
+use App\Domains\Administration\Models\Administrator;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
+use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Models\LmsAsset;
 use App\Domains\Resources\Models\Resource;
 use App\Rules\SafeLessonUrl;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -20,6 +25,131 @@ use Throwable;
 class LessonMaterialService
 {
     public function __construct(private AuditLogService $audits) {}
+
+    public function storeCourseAsset(Course $course, Administrator $actor, UploadedFile $file, string $kind): LmsAsset
+    {
+        Gate::forUser($actor)->authorize('manage', $course);
+        Validator::make(['kind' => $kind, 'file' => $file], [
+            'kind' => ['required', 'in:image,file'],
+            'file' => $kind === 'image' ? ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240', 'dimensions:max_width=12000,max_height=12000']
+                : ['required', 'file', 'mimes:pdf,zip,doc,docx,mp3,wav,m4a', 'max:51200'],
+        ])->validate();
+        $uploadPath = $file->getRealPath();
+        if (! is_string($uploadPath)) {
+            throw ValidationException::withMessages(['file' => 'The uploaded file could not be read. Please retry.']);
+        }
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($uploadPath);
+        $extension = match ($mime) {
+            'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+            'application/pdf' => 'pdf', 'application/zip', 'application/x-zip-compressed' => 'zip',
+            'application/msword', 'application/vnd.ms-office' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'audio/mpeg' => 'mp3', 'audio/wav', 'audio/x-wav', 'audio/vnd.wave' => 'wav', 'audio/mp4', 'audio/x-m4a' => 'm4a',
+            default => throw ValidationException::withMessages(['file' => 'This file type is not supported.']),
+        };
+        $path = null;
+        try {
+            $path = $file->storeAs('lms-assets', Str::uuid().'.'.$extension, 'local');
+            if (! is_string($path) || ! Storage::disk('local')->exists($path) || (int) $file->getSize() < 1) {
+                throw ValidationException::withMessages(['file' => 'The attachment could not be saved. Please retry.']);
+            }
+            $asset = new LmsAsset;
+            $asset->forceFill(['course_id' => $course->id, 'kind' => $kind, 'status' => 'active', 'disk' => 'local', 'path' => $path,
+                'mime_type' => $mime, 'byte_size' => $file->getSize(), 'sha256' => hash_file('sha256', Storage::disk('local')->path($path)),
+                'original_name' => mb_substr($file->getClientOriginalName(), 0, 200), 'created_by' => $actor->id])->save();
+
+            return $asset;
+        } catch (Throwable $exception) {
+            if (is_string($path)) {
+                $this->discardCourseAssetFile($path);
+            }
+            throw $exception;
+        }
+    }
+
+    public function courseAssetAvailable(LmsAsset $asset): bool
+    {
+        if ($asset->status !== 'active' || $asset->disk !== 'local' || ! is_string($asset->path)
+            || ! preg_match('~^lms-assets/[0-9a-f-]{36}\.(?:jpg|png|webp|pdf|zip|doc|docx|mp3|wav|m4a)$~D', $asset->path)) {
+            return false;
+        }
+        $path = $this->privatePath($asset->path, 'lms-assets');
+        if ($path !== null && $asset->kind === 'image') {
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+            if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true) || $mime !== $asset->mime_type) {
+                return false;
+            }
+        }
+
+        return $path !== null && filesize($path) === $asset->byte_size && hash_equals($asset->sha256, (string) hash_file('sha256', $path));
+    }
+
+    public function openCourseAsset(LmsAsset $asset): BinaryFileResponse
+    {
+        abort_unless($this->courseAssetAvailable($asset), 404);
+        abort_unless(is_string($asset->path), 404);
+        $path = $this->privatePath($asset->path, 'lms-assets');
+        abort_if($path === null, 404);
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($asset->kind === 'image') {
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+            abort_unless(in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true) && $mime === $asset->mime_type, 404);
+            $response = response()->file($path, ['Content-Type' => $mime]);
+        } else {
+            $response = response()->download($path, 'course-attachment.'.$extension, ['Content-Type' => 'application/octet-stream']);
+        }
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('Referrer-Policy', 'no-referrer');
+        $response->setPrivate();
+
+        return $response;
+    }
+
+    public function discardCourseAssetFile(string $path): bool
+    {
+        if (! preg_match('~^lms-assets/[0-9a-f-]{36}\.(?:jpg|png|webp|pdf|zip|doc|docx|mp3|wav|m4a)$~D', $path)) {
+            return false;
+        }
+
+        return $this->privatePath($path, 'lms-assets') === null ? ! Storage::disk('local')->exists($path) : Storage::disk('local')->delete($path);
+    }
+
+    public function cleanupCourseAsset(LmsAsset $asset): bool
+    {
+        if ($asset->status !== 'withdrawn') {
+            return false;
+        }
+        try {
+            if ($asset->path === null) {
+                return true;
+            }
+            if (! $this->discardCourseAssetFile($asset->path)) {
+                return false;
+            }
+            $asset->forceFill(['path' => null, 'original_name' => null])->save();
+
+            return true;
+        } catch (Throwable) {
+            Log::warning('Course attachment privacy cleanup pending.', ['asset_id' => $asset->id]);
+
+            return false;
+        }
+    }
+
+    public function resourceAvailable(Resource $resource): bool
+    {
+        if (! $resource->isPublished()) {
+            return false;
+        }
+        if ($resource->external_url) {
+            return SafeLessonUrl::isSafe($resource->external_url);
+        }
+        $path = $resource->file_path;
+
+        return is_string($path) && in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), ['pdf', 'zip', 'doc', 'docx', 'mp3', 'wav', 'm4a'], true)
+            && $this->privatePath($path, 'resources') !== null;
+    }
 
     /** @param array<string, mixed> $data */
     public function attach(Booking $booking, array $data, int $actorId): LessonMaterial

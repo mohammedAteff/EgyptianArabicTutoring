@@ -56,7 +56,8 @@ class LmsStructureService
         $this->validateTitle($title, $order);
 
         return DB::transaction(function () use ($actor, $course, $title, $order): Section {
-            Course::query()->lockForUpdate()->findOrFail($course->id);
+            $lockedCourse = Course::query()->lockForUpdate()->findOrFail($course->id);
+            $this->requireFoundationCourse($lockedCourse);
             Gate::forUser($actor)->authorize('manage', $course);
             $section = new Section;
             $section->forceFill(['course_id' => $course->id, 'title' => $title, 'sort_order' => $order])->save();
@@ -74,7 +75,8 @@ class LmsStructureService
 
         return DB::transaction(function () use ($actor, $section, $title, $slug, $order): Lesson {
             $current = Section::query()->findOrFail($section->id);
-            Course::query()->lockForUpdate()->findOrFail($current->course_id);
+            $lockedCourse = Course::query()->lockForUpdate()->findOrFail($current->course_id);
+            $this->requireFoundationCourse($lockedCourse);
             $current = Section::query()->lockForUpdate()->findOrFail($section->id);
             Gate::forUser($actor)->authorize('manage', $current);
             $lesson = new Lesson;
@@ -120,7 +122,8 @@ class LmsStructureService
 
         return DB::transaction(function () use ($actor, $lesson, $values, $kind, $payload, $ready): LessonBlock {
             $current = Lesson::query()->findOrFail($lesson->id);
-            Course::query()->lockForUpdate()->findOrFail($current->course_id);
+            $lockedCourse = Course::query()->lockForUpdate()->findOrFail($current->course_id);
+            $this->requireFoundationCourse($lockedCourse);
             Lesson::query()->lockForUpdate()->findOrFail($current->id);
             Gate::forUser($actor)->authorize('manage', $current);
             if ($kind === 'resource') {
@@ -142,7 +145,8 @@ class LmsStructureService
 
         return DB::transaction(function () use ($actor, $target, $status, $expectedVersion): Course|Section|Lesson {
             $current = $target->newQuery()->findOrFail($target->id);
-            Course::query()->lockForUpdate()->findOrFail($current instanceof Course ? $current->id : $current->course_id);
+            $lockedCourse = Course::query()->lockForUpdate()->findOrFail($current instanceof Course ? $current->id : $current->course_id);
+            $this->requireFoundationCourse($lockedCourse);
             $current = $target->newQuery()->lockForUpdate()->findOrFail($target->id);
             Gate::forUser($actor)->authorize('manage', $current);
             abort_if($current->lock_version !== $expectedVersion, 409, 'The LMS object changed. Reload before updating.');
@@ -182,5 +186,11 @@ class LmsStructureService
     private function validateTitle(string $title, int $order): void
     {
         Validator::make(['title' => $title, 'sort_order' => $order], ['title' => ['required', 'string', 'max:200'], 'sort_order' => ['integer', 'between:0,10000']])->validate();
+    }
+
+    private function requireFoundationCourse(Course $course): void
+    {
+        abort_if($course->getAttribute('current_release_id') !== null || $course->revisions()->where('status', 'draft')->exists(), 409,
+            'Use Course Studio drafts to change an authored course.');
     }
 }

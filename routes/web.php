@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\BookingPolicyController;
 use App\Http\Controllers\Admin\BusinessLifecycleReportController;
 use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContentController;
+use App\Http\Controllers\Admin\CourseStudioController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
 use App\Http\Controllers\Admin\DevelopmentToolsController;
@@ -274,6 +275,18 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
         Route::prefix('lms')->name('lms.')->middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/courses', [CourseStudioController::class, 'index'])->name('courses.index');
+            Route::get('/courses/create', [CourseStudioController::class, 'create'])->name('courses.create');
+            Route::post('/courses', [CourseStudioController::class, 'store'])->middleware('throttle:30,1')->name('courses.store');
+            Route::get('/courses/{course}/edit', [CourseStudioController::class, 'edit'])->whereNumber('course')->name('courses.edit');
+            Route::post('/courses/{course}/draft', [CourseStudioController::class, 'update'])->whereNumber('course')->middleware('throttle:60,1')->name('courses.update');
+            Route::post('/courses/{course}/lifecycle', [CourseStudioController::class, 'lifecycle'])->whereNumber('course')->middleware('throttle:30,1')->name('courses.lifecycle');
+            Route::post('/courses/{course}/duplicate', [CourseStudioController::class, 'duplicate'])->whereNumber('course')->middleware('throttle:30,1')->name('courses.duplicate');
+            Route::post('/courses/{course}/discard', [CourseStudioController::class, 'discard'])->whereNumber('course')->middleware('throttle:30,1')->name('courses.discard');
+            Route::post('/courses/{course}/attachments', [CourseStudioController::class, 'upload'])->whereNumber('course')->middleware('throttle:20,1')->name('courses.upload');
+            Route::get('/courses/{course}/preview', [CourseStudioController::class, 'preview'])->whereNumber('course')->name('courses.preview');
+            Route::get('/courses/{course}/preview/assets/{asset}', [CourseStudioController::class, 'asset'])->whereNumber(['course', 'asset'])->name('courses.assets');
+            Route::get('/courses/{course}/preview/resources/{resource}', [CourseStudioController::class, 'resource'])->whereNumber(['course', 'resource'])->name('courses.resources');
             Route::post('/students/{student}/courses/{course}/access', [LmsAccessController::class, 'issue'])->whereNumber(['student', 'course'])->middleware('throttle:30,1')->name('access.issue');
             Route::patch('/grants/{grant}', [LmsAccessController::class, 'change'])->whereNumber('grant')->middleware('throttle:30,1')->name('access.change');
             Route::get('/students/{student}/access', [LmsAccessController::class, 'studentAccess'])->whereNumber('student')->name('students.access');

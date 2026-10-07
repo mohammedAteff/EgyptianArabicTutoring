@@ -2,14 +2,18 @@
 
 namespace App\Domains\Lms\Services;
 
+use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Enrollment;
+use App\Domains\Lms\Models\LmsAsset;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class LmsStudentLifecycle
 {
+    public function __construct(private LessonMaterialService $files) {}
+
     /** Called only after the canonical merge has locked its Student/Booking graph. */
     public function merge(int $primaryId, int $secondaryId): void
     {
@@ -44,12 +48,21 @@ class LmsStudentLifecycle
         foreach ($courses as $course) {
             $course->forceFill(['title' => 'Redacted private learning', 'slug' => 'private-redacted-'.$course->id.'-'.bin2hex(random_bytes(8)), 'status' => 'archived',
                 'lock_version' => $course->lock_version + 1])->save();
+            DB::table('content_revisions')->where('revisable_type', Course::class)->where('revisable_id', $course->id)->update([
+                'title' => 'Redacted private learning', 'status' => 'privacy_erased',
+                'content' => json_encode(['schema' => 1, 'title' => 'Redacted private learning', 'slug' => $course->slug,
+                    'access' => ['audience' => 'selected_students', 'access_mode' => 'permanent', 'starts_at' => null, 'expires_at' => null, 'relative_days' => null], 'sections' => []], JSON_THROW_ON_ERROR),
+            ]);
+            foreach (LmsAsset::query()->where('course_id', $course->id)->orderBy('id')->lockForUpdate()->get() as $asset) {
+                $asset->forceFill(['status' => 'withdrawn', 'original_name' => null])->save();
+                DB::afterCommit(fn () => $this->files->cleanupCourseAsset($asset));
+            }
             DB::table('lms_sections')->where('course_id', $course->id)->update(['title' => 'Redacted section', 'status' => 'archived']);
             $lessons = DB::table('lms_lessons')->where('course_id', $course->id)->pluck('id');
             foreach ($lessons as $lessonId) {
                 DB::table('lms_lessons')->where('id', $lessonId)->update(['title' => 'Redacted lesson', 'slug' => 'redacted-lesson-'.$lessonId.'-'.bin2hex(random_bytes(8)), 'status' => 'archived']);
             }
-            DB::table('lms_lesson_blocks')->whereIn('lesson_id', $lessons)->update(['status' => 'withdrawn', 'resource_id' => null, 'payload' => null]);
+            DB::table('lms_lesson_blocks')->whereIn('lesson_id', $lessons)->update(['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'payload' => null]);
         }
     }
 

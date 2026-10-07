@@ -2,12 +2,14 @@
 
 namespace App\Domains\Lms\Models;
 
+use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\Students\Models\Student;
 use Database\Factories\LmsCourseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /** @property int $id
@@ -22,6 +24,18 @@ class Course extends LmsModel
     use HasFactory;
 
     protected $table = 'lms_courses';
+
+    /** @return MorphMany<ContentRevision, $this> */
+    public function revisions(): MorphMany
+    {
+        return $this->morphMany(ContentRevision::class, 'revisable');
+    }
+
+    /** @return BelongsTo<CourseRelease, $this> */
+    public function currentRelease(): BelongsTo
+    {
+        return $this->belongsTo(CourseRelease::class, 'current_release_id');
+    }
 
     protected static function newFactory(): LmsCourseFactory
     {

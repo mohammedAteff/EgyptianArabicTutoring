@@ -3,9 +3,74 @@
 Date: 2026-10-07 (Africa/Cairo).
 
 
-## Stage 2 disposition — current implementation
+## Stage 3 disposition — current implementation
 
-**COMPLETE — backend foundation and all required local gates passed.** The separate owner Stage 2 instruction authorized the minimum backend foundation. Stage 1 remains completed and its historical verification below remains evidence for the pre-LMS application; it is not the Stage 2 release receipt. Stage 3 and production deployment have not begun.
+**COMPLETE — Course Studio is implemented and all required local gates passed.** Authorized Admin/Super Admin staff can list/filter, create, edit drafts, organize sections/lessons/content, reorder and move lessons, attach/reuse private files and Resources, securely preview, publish/unpublish, duplicate and archive/restore courses. Publication preserves selected child states and keeps pending edits separate from the current live Course. No Stage 4 or production deployment was started.
+
+The owner separately authorized Stage 3 after Stage 2 application commit `42c849796d9a540d0fa116fc3e985e18d678a5f7`. Plan section 13 records the actual authoring/schema/security contracts and supersedes matching Stage 1 proposals and Stage 2 deferrals. The existing CMS ContentRevision store holds draft and published bodies; two additive tables hold release anchors and private attachment metadata. Stage 2 remains the canonical structure/access engine. Course Studio reuses the existing admin layout, roles/policies, sanitizer, private-file service, canonical Student lifecycle and audit service. No dependency change, second Resource/file authority, tutoring finance change or whole-site redesign was made.
+
+### Stage 3 verification receipts
+
+| Gate | Actual final evidence |
+|---|---|
+| Focused authoring/security/access/lifecycle | PASS 59 tests / 357 assertions; CourseStudioTest, CourseStudioPublicationTest, CourseStudioAssetSecurityTest, LmsAccessOperationsTest and LmsLifecycleIntegrationTest |
+| New Course Studio behavior | PASS 37 tests / 252 assertions in final full run: authoring12/96, publication13/75, assets/security12/81 |
+| New simultaneous authoring races | PASS 4 tests / 24 assertions: same slug creation, stale same-version draft write, same-version publication and duplicate submission; actual independent MariaDB workers |
+| Full current-schema regression | PASS **1,129 tests / 9,445 assertions**, zero failures/errors/skips, approximately 377 seconds; includes all 37 new regular Course Studio tests and the 1,092-test Stage 2 application |
+| Full dedicated concurrency regression | PASS **35 tests / 203 assertions** across MariaDbConcurrencyVerificationTest, BusinessLifecycleConcurrencyTest, DevelopmentDataConcurrencyTest, LmsAccessConcurrencyTest and CourseStudioConcurrencyTest |
+| JavaScript | PASS **27 tests**, zero failures/skips; 20 existing plus 7 editor tests for submit sync, Unicode/plain paste, allowed formatting, safe URLs, selection isolation/current-selection precedence and link text retention |
+| Vite/frontend | PASS final production build; CSS 113.90 kB, application JS 8.37 kB; no new dependency |
+| Browser/rendered UI | PASS default 1280px desktop and 390px mobile layout review; page width equals viewport, visible Course Studio buttons meet 44px height, hierarchy/Arabic-English/attachment preview render; real editor replacement paste/formatting/safe plain-text paste/form synchronization checked; no warning/error logs |
+| Browser evidence boundary | Authenticated workflow actions/ownership are proven by isolated Laravel HTTP/domain tests. Browser review used their synthetic rendered Blade fixtures, actual built CSS/Livewire-Alpine scripts and local Herd; no business-account login or Student session impersonation. Submission/navigation was blocked in fixtures, which were removed afterward. Screenshots are review artifacts, not production evidence. |
+| PHPStan no-regression | PASS complete path/identifier/message diagnostic multiset **255 → 255**, exactly equal; zero new/removal diagnostics, no ignores/baseline/level/config weakening. PHPStan itself retains its existing nonzero baseline exit status. |
+| Pint/whitespace | PASS final required dirty-PHP agent formatter and both working/staged git diff --check; no later PHP edits |
+| Blade/routes | PASS compiled Blade and route caches, cleared afterward; 12 new staff Course Studio routes plus the existing access-list route under the prefix; existing CSRF/roles/throttles retained |
+| Dependency audits | PASS Composer 0 advisories/abandoned packages and npm 0 vulnerabilities |
+| Local migration | PASS only the new authoring migration on verified local bolt_landing / MariaDB 10.11.18, batch 20; no business-data seeding |
+| Local schema after migration | **118 application tables / 76 Ran migrations / 14 generated columns / same 4 typed guards**; Stage 3 delta +2 tables/+1 migration/+2 generated CMS keys |
+| Production | Not freshly inspected, backed up, deployed or retested in this stage; recorded accepted production application remains 4296b21 / MariaDB 11.8.9 |
+
+The established current-schema suite excludes historical MigrationACompatibilityTest and the five dedicated concurrency classes; the latter are run separately on the explicit MariaDB test database, without parallel database suites. Existing tests were not weakened. Normal-suite assertions remained the Stage 2 total plus all 252 new authoring assertions. Existing race assertion counts can depend on the legitimate winner branch; the executed combined receipt is 35/203.
+
+Initial new-fixture issues were corrected before final receipts: an invalid YouTube fixture ID, HTML source-encoding assertion, missing optional Resource revision inventory and nonrefreshed default version. Byte-level upload tests strengthened MIME verification rather than trusting fake/client-reported type. Browser review found a remembered-selection paste bug; the editor now prefers the current owned selection, with a permanent JS regression. Failed validation retains scoped state/access input. All corrected code is covered by the final full run/JS gate. No prior defect or test was hidden.
+
+### Stage 3 files and regression coverage
+
+| Files / area | Resulting behavior and coverage |
+|---|---|
+| app/Domains/Lms/Services/{CourseStudioService,LmsContentService}.php | Authorized bounded draft tree, scoped CRUD/order/move, optimistic conflicts/live fingerprint, canonical publication, safe provider/text/reference validation, eligible Draft duplication and retained lifecycle |
+| app/Domains/Lms/Models/{Course,LessonBlock,CourseRelease,LmsAsset}.php | Existing CMS revision/current-release relations, asset references/ownership, immutable release anchors and hidden private metadata |
+| database/migrations/2026_10_07_164547_add_course_studio_foundation.php; database/factories/LmsAssetFactory.php | Two additive tables, scoped CMS revision uniqueness, owned release pointer, supported-content CHECK and private metadata factory; prior migrations untouched |
+| app/Http/Controllers/Admin/CourseStudioController.php; routes/web.php | Current-staff list/filter/create/edit/actions/preview/download authorization, request allowlists, UTC normalization, private/no-store responses, conflict messages and twelve new routes |
+| resources/views/layouts/admin.blade.php; resources/views/admin/lms/courses/{index,create,edit,preview,_order,_block-form}.blade.php | Authorized navigation, complete responsive admin authoring/list/preview, server-order forms, preserved validation input, selected publication states and no unfinished later-stage controls |
+| app/View/Components/Lms/RichTextEditor.php; resources/views/components/lms/{input,state,button,rich-text-editor}.blade.php | Existing style conventions, labeled reusable form controls and sanitized mixed-language editor with local owned selection/plain-text paste |
+| app/Domains/Booking/Services/LessonMaterialService.php | Existing private-file authority extended for Course UUID assets, actual MIME/hash/size/path checks, private preview and postprivacy cleanup; Resource/lesson material behavior retained |
+| app/Domains/Lms/Services/{LmsAccessService,LmsStructureService,LmsStudentLifecycle}.php | Asset readiness/owner checks, guarded legacy structural writes, canonical merge-derived asset identity and private snapshot/filename/body/byte erasure |
+| app/Domains/System/Services/DevelopmentDataArchiveService.php | Resource archives cannot inject LMS Course revisions into a second restore authority; existing scoped export and unknown-LMS reset refusal remain |
+| tests/Feature/CourseStudioTest.php | Create/edit/form validation, role-aware nav/Student denial, complete hierarchy/order/move/archive, section/lesson/content foreign-key tampering, filters, stale conflict, UTC rules, retained failed state and read-only sanitized preview |
+| tests/Feature/CourseStudioPublicationTest.php | Selected states, draft/live isolation, retained owned release/hash, empty/broken/reserved publication denial, unpublish/archive/restore/discard, safe runtime-free copies/new IDs/Resource reuse, legacy bypass/live change conflicts, schema guards, URL swap identity and archive boundary |
+| tests/Feature/CourseStudioAssetSecurityTest.php | Actual byte-type checks, unsafe SVG/HTML/disguised uploads, private attachment/foreign/path denial, missing/modified bytes, Resource and duplicated-asset detachment reuse, private merge/privacy and controlled provider/sanitizer/XSS cases |
+| tests/Feature/CourseStudioConcurrencyTest.php; tests/Feature/Concurrency/booking_worker.php | Actual simultaneous create/write/publish/duplicate controlled losers, one durable draft/release/copy and no runtime duplication; existing worker actions retained |
+| tests/course-studio-editor.test.mjs | Actual component factory security and selection/form behavior; existing 20 JS tests retained |
+| LMS_IMPLEMENTATION_PLAN.md; LMS_IMPLEMENTATION_STATUS.md | Actual Stage 3 contracts, invariants, gates, deployment limits and deferred-stage handoff; historical Stage 1/2 receipts retained |
+
+Directly touched PRE_LMS_INVARIANTS: **I1–4, I10, I17, I19–21, I23–24 and I27**. Plan section 13.6 maps the contracts. Staff roles, Resource grants/reference reuse, private ownership/files, retained history, privacy/audit and destructive-tool boundaries have focused regressions. Tutoring type/credit/ledger/payment/booking semantics, availability/timezone and teaching sharing remain governed by their existing writers/full tests. All nine repaired defects were reviewed; this change specifically preserves Assistant navigation boundaries and selected publication states. No accepted capability ID or historical production PARTIAL branch is reclassified.
+
+### Stage 3 boundaries, limitations and delivery
+
+Authoring supports rich text, private images, PDF/file attachments or existing Resource files, published Resource references, safe external links, controlled YouTube and Vimeo/direct HTTPS video metadata. Provider availability is external; the stage does not download/proxy media or promise secure playback. Course duplicates reuse source file IDs/bytes only through compatible explicit references. Course kind/private owner remain fixed at creation. Uploads/detachments retain files until an explicit lifecycle cleanup; there is no unrequested destructive asset purge UI.
+
+Draft changes do not mutate live rows/access until publication. Course status closes access immediately on unpublish/archive; child states are preserved rather than forced Published. Released bodies are retained by normal authoring, with the existing private privacy-erasure exception. No learner release pin/upgrade or progress-reset policy is implemented. A private author preview is not learner impersonation and creates no learning facts. Member retains the documented authenticated verified Student assumption; owner-confirmed relative access is elapsed 24-hour days. There is no separate membership decision, grant engine or tutoring credit bridge in the editor.
+
+Reviewing/resetting/exporting/restoring LMS graphs is deferred; Resource-only exports exclude Course revisions and read rejects injected LMS bodies. CMS schema hashes change because of the two additive virtual fields, so pre-Stage-3 Resource revision archives require reviewed compatibility. Populated migration rollback refuses destructive history loss. Fresh production schema inventory, required recoverable backup, exact-SHA deployment and production retest remain separate future release work.
+
+Deferred: Stage 4 My Learning/student player/private notes/bookmarks; Stage 5 Bunny API/secure playback/devices/watermarking; Stage 6 progress/completion/prerequisites/drip/quizzes/graded assignments; Stage 7 tutor Assign Learning UI; Stage 8 learning analytics/localization/settings/export integration; AI/transcription/ecommerce and whole-site branding. No dead or misleading author controls for those stages are exposed. Stage 4 must not begin automatically.
+
+Local verified application code follows **test → commit → non-force push** on main. Only the task's code/tests and these two requested records are staged; the three pre-existing untracked Hostinger/proposal documents remain untouched. The final chat/review-copy receipt carries the exact new application SHA; this source record does not embed its own future hash. No production hot edit or documentation-only deployment is performed.
+
+## Stage 2 disposition — historical foundation receipt
+
+**COMPLETE — backend foundation and all required local gates passed.** The separate owner Stage 2 instruction authorized the minimum backend foundation. Stage 1 remains completed and its historical verification below remains evidence for the pre-LMS application; it is not the Stage 2 release receipt. At this checkpoint Stage 3 and production deployment had not begun; the separate Stage 3 instruction and current receipt above supersede that historical boundary.
 
 The additive foundation includes Course → Section → Lesson → ordered LessonBlock, nine lms_* tables, publication/version enforcement, one effective-access service, manual grant/enroll/revoke/regrant/extend/start/expiry operations, owner-safe private learning assignments, current staff policies and backend JSON/file endpoints. Student merge/privacy adapters and the existing Student proof/Resource delivery authorities are reused. Tutoring credit types, ledger/payment/booking semantics, UI, dependencies and notification/analytics writers are unchanged.
 
@@ -235,7 +300,7 @@ No invariant relaxation or material roadmap change is proposed. If any future de
 - [x] Actual available local gates executed and their results/limits documented.
 - [x] Stage 1 final fresh full current-schema gate all-green; initial heartbeat timing checkpoint retained separately.
 - [x] Stage 2 — foundation/schema/LMS access; current member assumption and confirmed elapsed windows documented; MariaDB/lifecycle/concurrency/full gates passed.
-- [ ] Stage 3 — Course Studio/mixed content/drafts/releases/preview.
+- [x] Stage 3 — Course Studio/mixed content/drafts/releases/preview; current authoring/access/file/lifecycle/concurrency/UI and full local gates passed.
 - [ ] Stage 4 — My Learning/For You/Continue/player/private notes and bookmarks.
 - [ ] Stage 5 — Bunny security/profiles/devices/leases/dynamic watermark, measured residual limits.
 - [ ] Stage 6 — progress/completion/prerequisites/drip/quizzes/submissions/reviews.

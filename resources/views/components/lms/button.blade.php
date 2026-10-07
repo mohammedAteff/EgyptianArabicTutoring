@@ -1,0 +1,3 @@
+@props(['tone'=>'primary'])
+@php $toneClass = match($tone) { 'danger'=>'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100', 'neutral'=>'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100', default=>'border border-amber-600 bg-amber-600 text-white hover:bg-amber-700' }; @endphp
+<button {{ $attributes->merge(['type'=>'submit','class'=>'inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:opacity-40 '.$toneClass]) }}>{{ $slot }}</button>
