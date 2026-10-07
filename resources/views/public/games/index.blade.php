@@ -50,7 +50,7 @@
 
                         <a href="{{ $cardUrl }}"
                            @if($isExternal) target="_blank" rel="noopener noreferrer" @endif
-                           onclick="if(window.vaTrack){ window.vaTrack('game_opened', { game_slug: '{{ $game->slug }}', game_title: '{{ addslashes($gameTitle) }}', target_url: '{{ $game->target_url ?? '' }}' }); @if($isExternal) window.vaTrack('outbound_link_clicked', { target: '{{ $game->target_url }}', url: '{{ $game->target_url }}', destination: '{{ addslashes($gameTitle) }}', text: '{{ addslashes($gameTitle) }}', placement: 'game_card' }); @endif }"
+                           @if($isExternal) onclick="if(window.vaTrack){ window.vaTrack('game_opened', { game_slug: '{{ $game->slug }}', game_title: '{{ addslashes($gameTitle) }}', target_url: '{{ $game->target_url }}' }); window.vaTrack('outbound_link_clicked', { target: '{{ $game->target_url }}', url: '{{ $game->target_url }}', destination: '{{ addslashes($gameTitle) }}', text: '{{ addslashes($gameTitle) }}', placement: 'game_card' }); }" @endif
                            class="group block bg-white rounded-3xl border border-stone-200/90 shadow-sm hover:shadow-xl hover:border-terracotta-300 transition-all duration-300 hover:-translate-y-1.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-terracotta-500/40 focus-visible:ring-offset-2 overflow-hidden flex flex-col"
                            aria-label="{{ $gameTitle }} - {{ $badgeLabel }}@if($isExternal) (opens in a new tab)@endif">
                             

@@ -21,6 +21,7 @@ use App\Domains\Resources\Services\EmailQualityService;
 use App\Livewire\BookingWizard;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\HasPublishedShortForm;
@@ -455,6 +456,20 @@ class PublicExperienceTest extends TestCase
         $gameResponse->assertDontSee('/arabictutor/arabictutor/', false);
     }
 
+    public function test_internal_game_card_leaves_open_tracking_to_the_destination_controller(): void
+    {
+        $game = Game::create(['title' => 'Internal tracking game', 'slug' => 'internal-tracking-game', 'status' => 'available', 'target_url' => null]);
+        $response = $this->get(route('games.index'))->assertOk();
+        $document = new \DOMDocument;
+        $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $links = (new \DOMXPath($document))->query('//a[@href="'.route('games.show', $game->slug).'"]');
+
+        $this->assertSame(1, $links->length);
+        $this->assertStringNotContainsString('game_opened', $links->item(0)->getAttribute('onclick'));
+        $this->get(route('games.show', $game->slug))->assertOk();
+        $this->assertSame(1, DB::table('analytics_events')->where('event_name', 'game_opened')->where('metadata->game_slug', $game->slug)->count());
+    }
+
     public function test_external_game_card_renders_with_preview_image_badge_and_clickable_link(): void
     {
         $externalGame = Game::create([
@@ -482,6 +497,12 @@ class PublicExperienceTest extends TestCase
         $response->assertSee('target="_blank"', false);
         $response->assertSee('rel="noopener noreferrer"', false);
         $response->assertSee('images/games/6-word-story.webp', false);
+
+        $document = new \DOMDocument;
+        $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $link = (new \DOMXPath($document))->query('//a[@href="'.$externalGame->target_url.'"]')->item(0);
+        $this->assertStringContainsString('game_opened', $link->getAttribute('onclick'));
+        $this->assertStringContainsString('outbound_link_clicked', $link->getAttribute('onclick'));
 
         // Assert show route redirects directly to external game and logs event
         $showResponse = $this->get(route('games.show', $externalGame->slug));
