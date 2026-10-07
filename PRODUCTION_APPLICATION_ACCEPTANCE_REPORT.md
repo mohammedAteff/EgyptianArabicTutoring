@@ -77,7 +77,7 @@ Review public booking/mobile flow and wording; Student next action/learning/form
 
 ## Evidence retention and notification
 
-Private evidence folder: `C:\Users\e\AppData\Local\Temp\pre-lms-acceptance-20261007-A`. JSON/JUnit/logs/screenshots/actual export/PDF/ZIP/ICS artifacts are retained outside Git; cookie/QA credential and protected backup secrets are never copied into this report. START notification attempted/succeeded: delivery9, message13,2026-10-06T22:00:31Z through the existing verified pathway. FINAL: not sent yet; send exactly once after reporting/publication, then append only safe receipt metadata. No progress deliveries.
+Private evidence folder: `C:\Users\e\AppData\Local\Temp\pre-lms-acceptance-20261007-A`. JSON/JUnit/logs/screenshots/actual export/PDF/ZIP/ICS artifacts are retained outside Git; cookie/QA credential and protected backup secrets are never copied into this report. START notification attempted/succeeded: delivery9, message13,2026-10-06T22:00:31Z through the existing verified pathway. FINAL attempted and sent once after acceptance documentation/tag publication: transport attempted true, success true, delivery 10, message 14, error category none, 2026-10-07T05:37:31Z. Existing verified TelegramDeliveryService pathway only; no configuration/polling/commands/progress/test delivery. This receipt-only documentation publication does not send again.
 
 ## Complete153-ID ledger
 
@@ -3610,3 +3610,9 @@ QA browser closeout: normal server logout succeeded at2026-10-07T05:21:50.162438
 ## Final exploratory closeout
 
 After all 153 IDs were reconciled, a final production server walkthrough revisited About/FAQ/Privacy/Terms/pricing, Student A dashboard/completed tutor feedback, and QA Peer Super Today/health/data-quality/default-off tools. All normal responses and expected 404 passed; the peer session was signed out. The stalled browser prevented a fresh final GUI replay, so this is explicitly server/API evidence and does not replace the earlier real browser walkthrough, screenshots and action receipts. A pricing assertion initially expected a literal USD label, while the accepted page presents dollar pricing/coaching text; the corrected semantic check passed. All three incorrect final page-text expectations remain tooling records, not application failures.
+
+## Publication and final status receipt
+
+Acceptance report publication SHA: `6f1d60df683c5095751824e0e7a44ef8b01fa1a2`. Published pre-lms-stable tag independently peels to application `4296b21368cbc9c564d0cb7a85e29b2ae408e0ee`. Final Documentation HEAD is the receipt-only commit identified in the Codex delivery response; runtime-relevant diff is NONE. Documentation is not redeployed.
+
+Exactly one START (delivery 9/message 13) and one FINAL (delivery 10/message 14) succeeded for this acceptance. Only safe attempt/success/ID/time/error metadata is recorded. No token, credential or destination configuration is stored. QA remains for owner manual review; no automatic cleanup, missing-feature implementation, LMS, redesign or operations handoff follows.
