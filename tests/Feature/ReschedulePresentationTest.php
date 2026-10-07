@@ -11,6 +11,7 @@ use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Livewire\BookingWizard;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -86,6 +87,32 @@ class ReschedulePresentationTest extends TestCase
         $this->portal($student);
 
         $this->get(route('student.bookings.reschedule', ['booking' => $lesson->id, 'timezone' => ['invalid'], 'date' => '2026-99-99']))->assertOk()->assertViewHas('timezone', 'Africa/Cairo');
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function confirmationInstants(): array
+    {
+        return [
+            'summer offset' => ['2026-10-21 13:15:00 UTC', '-04:00'],
+            'winter offset' => ['2027-01-12 14:15:00 UTC', '-05:00'],
+        ];
+    }
+
+    #[DataProvider('confirmationInstants')]
+    public function test_confirmation_display_timezone_labels_match_the_converted_time_without_rewriting_the_snapshot(string $startUtc, string $offset): void
+    {
+        [, $lesson] = $this->fixtures();
+        $start = CarbonImmutable::parse($startUtc);
+        $lesson->update(app(TimezoneService::class)->createBookingSnapshot($start, $start->addHour(), 'Africa/Cairo', 'Africa/Cairo'));
+        $snapshot = $lesson->only(['start_at_utc', 'end_at_utc', 'customer_timezone', 'customer_utc_offset_at_booking']);
+
+        $this->get(route('booking.confirmation', ['token' => $lesson->confirmation_token, 'timezone' => 'America/New_York']))
+            ->assertOk()
+            ->assertSee('9:15 AM')
+            ->assertSee('10:15 AM')
+            ->assertSee('New York · America/New_York (UTC'.$offset.')');
+
+        $this->assertEquals($snapshot, $lesson->fresh()->only(array_keys($snapshot)));
     }
 
     /** @return array{Student, Booking, SessionType} */

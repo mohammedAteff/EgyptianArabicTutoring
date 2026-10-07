@@ -78,7 +78,7 @@
                     {{ $customerEnd->format('g:i A') }}
                 </div>
                 <div class="text-xs text-stone-500 mt-1">
-                    {{ $customerTimezoneDisplay['city'] }} · {{ $booking->customer_timezone }} (UTC{{ $booking->customer_utc_offset_at_booking }})
+                    {{ $customerTimezoneDisplay['city'] }} · {{ $customerStart->timezoneName }} (UTC{{ $customerStart->format('P') }})
                 </div>
             </div>
 

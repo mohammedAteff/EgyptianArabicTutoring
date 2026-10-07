@@ -8,7 +8,6 @@ use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
-use App\Domains\Booking\Models\MeetingProvider;
 use App\Domains\Booking\Models\MeetingRoom;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingHoldService;
@@ -26,6 +25,7 @@ use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Database\Factories\AdministratorFactory;
+use Database\Factories\MeetingProviderFactory;
 use Database\Factories\TelegramBotFactory;
 use Database\Factories\TelegramDestinationFactory;
 use Database\Factories\TelegramRuleFactory;
@@ -803,7 +803,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
 
     public function test_concurrent_meeting_assignment_cannot_share_an_overlapping_room(): void
     {
-        $provider = MeetingProvider::where('is_default', true)->firstOrFail();
+        $provider = MeetingProviderFactory::new()->create();
         $url = 'https://example.org/race-'.Str::uuid();
         $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'Race room', 'url' => $url, 'url_hash' => hash('sha256', $url)]);
         $contact = Contact::create(['email' => 'room-race-'.Str::uuid().'@example.org', 'name' => 'Room race QA']);
@@ -820,6 +820,7 @@ class MariaDbConcurrencyVerificationTest extends TestCase
         } finally {
             DB::table('bookings')->whereIn('id', array_map(fn (Booking $booking): int => $booking->id, $bookings))->delete();
             $room->delete();
+            $provider->delete();
             $contact->forceDelete();
         }
     }
