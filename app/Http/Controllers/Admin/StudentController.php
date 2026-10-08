@@ -8,6 +8,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\MeetingProvider;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Lms\Services\LmsTutoringReadModel;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -56,7 +58,7 @@ class StudentController extends Controller
         return $exports->export('student_records', ['Student', 'Email', 'Phone', 'Status', 'Timezone', 'Sessions', 'Remaining Entitlements', 'Packages', 'Effective Expiry', 'Joined', 'Business Timezone'], $rows(), $filters['format'] ?? 'csv', 'Student Records');
     }
 
-    public function show(Request $request, int $student, StudentPackagePresentation $presentation, TimezoneService $timezones): View
+    public function show(Request $request, int $student, StudentPackagePresentation $presentation, TimezoneService $timezones, LmsTutoringReadModel $learning): View
     {
         $isAssistant = $request->user('web')?->role === 'assistant';
         $columns = ['id', 'first_name', 'last_name', 'email', 'phone', 'preferred_timezone', 'created_at', 'suspended_at', 'preferred_meeting_provider_id', 'operational_status'];
@@ -95,6 +97,8 @@ class StudentController extends Controller
         }
 
         return view('admin.students.show', [
+            'learningProfile' => ! $isAssistant && Gate::forUser($request->user('web'))->allows('manageTeaching', $studentRecord->fresh())
+                ? $learning->profile($request->user('web'), $studentRecord) : null,
             'operationalAlerts' => StudentOperationalAlert::query()->where('student_id', $studentRecord->id)->with('author')->orderByRaw("status = 'active' desc")->orderByDesc('updated_at')->get(),
             'student' => $studentRecord,
             'bookings' => $bookings,

@@ -2,7 +2,106 @@
 
 Date: 2026-10-08 (Africa/Cairo).
 
-## Stage 6 disposition — current implementation
+## Stage 7 disposition — completed implementation
+
+**COMPLETE — Stage 7 implementation and local verification.** The Student profile now offers Assign Learning for existing courses, lessons, Resources and targeted quizzes/assignments, plus a quick private item/video/quiz/assignment editor. Optional tutoring-session follow-up is independent of canonical session completion. Profile Learning, Student For You, current educational progress/review needs, eligible visit-synchronized notifications and a bounded pedagogical timeline reuse the existing Stage 2–6 authorities. No production deployment or Stage 8 work was performed. Live Bunny certification remains pending by the owner's explicit mock-verification choice.
+
+The mandatory 15-row overlap matrix was recorded before implementation in plan section 17.1: Lesson Workspace, profile progress, existing notifications and the read timeline are **EXTENDED**; Resource/private-file and LMS engines are **REUSED**; Homework, milestones, pronunciation/errors, tags, tutor preparation and post-lesson feedback are **KEPT SEPARATE**; learning plans, Educational Notes and the unchanged Student next-action priority are **LINKED**. No tutoring-only record is imported into private learning.
+
+### Stage 7 verification receipts
+
+| Gate | Actual evidence |
+|---|---|
+| Initial authority compatibility | PASS **82 tests / 529 assertions**, including teaching, Homework, Resources/private files and Stage 2–6 integration |
+| Final canonical evidence/security focus | PASS **72 tests / 548 assertions** including the 33 Stage 7 cases, current learning/watch/media guards, retakes and stable grade/review dates after merge |
+| Full current-schema regression | PASS **1,317 tests / 10,661 assertions**, all passed, direct runner exit 0, **374.944 seconds**; includes auth/MFA/roles, Student Portal, booking/reschedule/cancellation, typed entitlement/provenance, finance/installments, Resources/private files, notifications, privacy/lifecycle, Stage 5 security and Stage 6 evidence |
+| Full dedicated MariaDB concurrency/lifecycle | PASS **58 tests / 319 assertions**, all passed, direct runner exit 0, **61.296 seconds**; nine dedicated classes, including four new simultaneous assignment/private-create/reversed-bulk/merge races |
+| Final UI/Bunny authoring regression | PASS **58 tests / 368 assertions**, direct runner exit 0; rerun after the final private-video wording change. Earlier isolated UI export also passed **1 test / 13 assertions** |
+| JavaScript | PASS **41 tests**, zero failures/skips; explicit application test files, including protected video, learning progress/player, Resource access, editor, sidebar and telemetry regressions |
+| Final frontend build | PASS after disposable review files were removed; CSS **115.97 kB**, app JS **25.35 kB**, TUS **60.41 kB**, HLS **574.74 kB**. Existing HLS chunk-size warning remains nonblocking; no dependency or limit change |
+| Browser/responsive | PASS **1280px desktop / 390px mobile** on Assign Learning, private creation/editor, profile Learning and Student For You; Arabic/English readable, no horizontal overflow, Resource duration fields disabled, working private-quiz controls and timeline disclosure. Ten screenshots retained. Synthetic HTTP-rendered Blade/Alpine fixtures only; forms/navigation/network/telemetry disabled, no real login/provider/microphone use. Four HTML fixtures/runtime removed, temporary tab closed and viewport reset |
+| PHPStan no-regression | PASS exact **255 → 255** path/identifier/message diagnostic multiset, including duplicate diagnostics; zero added/removed entries. No ignores, baseline/configuration changes or new suppressions. Analyzer exit remains nonzero for the accepted existing baseline |
+| Blade/routes | PASS **247 compiled templates PHP-linted without errors**, view cache/clear and route cache/clear. All **12** new Admin/Super routes resolve within the existing guarded web pipeline, with canonical policies, CSRF and mutation throttles |
+| Pint/whitespace | PASS required dirty-PHP Pint and working/staged whitespace checks; no changed dependencies |
+| Dependency audits | PASS fresh Composer audit with cache disabled: **0 advisories / 0 abandoned packages**; npm **0 vulnerabilities**. A prior Packagist timeout was resolved by the fresh successful run |
+| Local additive migration | PASS verified local **bolt_landing / MariaDB 10.11.18**, **batch 24**, **131 tables / 80 Ran migrations**, six nullable columns, two paired CHECK constraints and a restricting block foreign key; **14 generated columns / 4 finance guards unchanged** |
+| Local data boundary | Existing **3 Student rows / 0 Course rows** unchanged; all learning content/grant/evidence tables remain empty and the four existing protection profiles remain. Synthetic fixtures exist only in the dedicated test workflow |
+| Release scope | Reviewed main commit is pushed without force; exact SHA and inventory are in the delivery receipt. No production schema/credentials/backup/hot edit/deployment/retest. Stage 8 remains outside scope |
+
+The ordinary suite excludes the historical intermediate-schema group and the nine dedicated concurrency classes. The dedicated classes run separately with phpunit.concurrency.xml. Every database suite runs serially against explicit bolt_landing_test; normal local DDL is applied only after bolt_landing identity/version and the pending SQL are verified. The accepted pre-LMS application baseline remains `4296b21368cbc9c564d0cb7a85e29b2ae408e0ee`; Stage 7 implementation starts from the complete Stage 6 commit `2809f9e29736b9ed8631b697b6fc650e76e0a102`.
+
+### Stage 7 architecture and ownership
+
+LmsTutoringAssignments authorizes fresh Admin/Super teaching and LMS capabilities, locks the verified Student, validates owned confirmed/completed Booking context and delegates to canonical writers. Original UUID/fingerprint retries preserve original terms; a different UUID for an existing active/scheduled assignment with the same scope/block/Booking returns that assignment. Expired/revoked rights require a new assignment or explicit versioned grant operation. Relative days are elapsed 24-hour periods, fixed wall times use Business Timezone with DST gap/fold rejection, UTC persists and Student display timezone remains authoritative for presentation.
+
+Targeted quizzes/assignments store a current block identity and navigate directly to the Stage 6 assessment, using the established lesson-scoped grant. They do not create block-only entitlement semantics. Resources reuse their existing published-source, owner/session visibility and delivery rules: timed LMS windows are refused, withdrawal hides only the owned assignment and the source survives. Bulk existing catalog/Resource assignment is bounded to 25 Students, locks them in order, creates canonical individual rights and rolls back on an ineligible member. Private learning cannot be bulk-shared to another owner.
+
+Quick private creation uses one automatically managed Course Studio section/lesson/release graph behind a single-item editor. Creation keys/fingerprints make simultaneous/replayed creation deterministic. Only explicit entered content/instructions are authored; preparation, Educational Notes, workspace private notes/material history and feedback are never imported. Bunny reuses direct resumable upload, Ready reconciliation and the strong Private profile; processing, failed and foreign media fail closed. Private defaults use Stage 6 manual completion, video 95%, quiz pass or assignment approval. No new dependency or media subsystem is introduced.
+
+Canonical Booking completion and its transaction/controller are unchanged. The optional follow-up link is exposed after delivery and remains available later. Tests cover completion without follow-up, immediate/later Course/Resource assignment, provider/validation failure without changing the delivered snapshot, and repeated public confirmation preserving Delivered with exactly one completion event. LMS access/progress cannot debit typed tutoring rights, deliver a session or write finance; nine existing tutoring/financial tables must remain byte-identical through the mixed assignment/private/revoke/profile scenario.
+
+Profile/For You projections use current Stage 6 completion and assessment evidence; a prior current-definition passing attempt keeps completion after a failed retake, while the latest result remains visible. Instructions/links require current canonical access. Scheduled and Unavailable states complement New/In Progress/Completed/Expired. Existing Homework/plan navigation and questionnaire → Homework → Resource → booking → teaching next-action priority remain unchanged.
+
+The timeline reads bounded canonical session, Resource, assignment, lesson/video completion, quiz pass, submission/review and course-completion facts. Semantic keys and canonical dates remain stable across merges; sorting uses time and a stable key tie-breaker. No audit/security/heartbeat log is imported, and no answers, submitted bodies, feedback bodies or tutor preparation are projected. Notifications retain existing authenticated-visit synchronization, owner/event keys, read state and mounted routes, with generic eligible learning/review messages. No proactive worker or aggregate analytics/attention architecture is added.
+
+Migration `2026_10_08_035746_add_tutoring_learning_context_to_lms` adds nullable private creation metadata to Course, nullable block ID/kind to LearningAssignment, graded_at to QuizAttempt and reviewed_at to AssignmentSubmission. Pair constraints fail closed for incomplete/unsupported context. New canonical grade/review dates avoid merge-induced timestamp drift. Legacy rows with null dates use their previous updated_at; no false historical instant is backfilled. Down migration deliberately requires a reviewed forward fix to retain history. Current private lifecycle merge/anonymization tests retain block context, move ownership and withdraw/redact erased private learning.
+
+### Stage 7 invariant dispositions
+
+All 27 meanings remain. “Exercised” identifies a directly used Stage 7 integration; “Preserved” identifies unchanged authority covered by the full regression gates. Existing production PARTIAL dispositions remain unchanged.
+
+| Invariant | Stage 7 disposition and evidence |
+|---|---|
+| I1 Student identity/normalization | **EXERCISED:** fresh verified canonical Student required; merged/unverified/suspended authority and authentication regressions retained |
+| I2 Student ownership | **EXERCISED:** Lucy/Sarah isolation and Student/session/course/lesson/Resource/private item/Bunny/assessment/file tampering fail closed |
+| I3 Authentication/session boundaries | **EXERCISED:** existing Student/web guards and session proof; no forged/extended session, native auth/Portal/playback tests pass |
+| I4 Staff roles | **EXERCISED:** Admin/Super policies on every writer/read; Assistant and suspended staff denied, no hidden-button authority |
+| I5 Super Admin security/TOTP | **PRESERVED:** existing guard/MFA pipeline and security workflow; full auth and dedicated concurrency tests pass |
+| I6 Canonical UTC Booking storage | **EXERCISED:** owned session instant is read only; delivered Booking snapshot survives assignment/provider failure |
+| I7 Business Timezone interpretation | **EXERCISED:** fixed LMS form instants use TimezoneService; both DST gap/fold cases rejected |
+| I8 Student timezone display | **EXERCISED:** learning dates use existing Student display timezone without rewriting Booking snapshots |
+| I9 Availability authority | **PRESERVED:** no slot/notice/buffer/rule writer; availability/booking regressions pass |
+| I10 Booking locking/concurrency | **EXERCISED:** Student → owned Booking → Course/target order; sorted bulk and merge races pass |
+| I11 BookingHold behavior | **PRESERVED:** no hold lifecycle edits; ordinary and dedicated booking races pass |
+| I12 Typed one_hour/two_hour separation | **EXERCISED:** learning creates no tutoring minutes/rights; byte-identical mixed-workflow proof and typed regressions pass |
+| I13 Exact funding provenance | **PRESERVED:** no ledger/provenance writer; 14 generated columns and four finance guards unchanged, funding regressions pass |
+| I14 No reschedule second debit | **PRESERVED:** reschedule authority unchanged; full ordinary/dedicated regression passes |
+| I15 Exact cancellation restoration | **PRESERVED:** cancellation/refund authority unchanged; completed public confirmation remains Delivered |
+| I16 Purchase/payment/refund reconciliation | **EXERCISED:** mixed workflow requires financial tables unchanged; full finance regression passes |
+| I17 Append-only history | **EXERCISED:** canonical access/audit facts and retained assessment evidence; expected-version retry/merge history preserved |
+| I18 Installments versus payments | **EXERCISED:** no installment/payment side effects; byte-identical table proof and finance/lifecycle regressions pass |
+| I19 Resource authority | **EXERCISED:** canonical published source assignment/private delivery; withdrawal never deletes source |
+| I20 Private lesson/material files | **EXERCISED:** reused containment/hash/ownership and secure upload/delivery; foreign attachment and Student access denied |
+| I21 Teaching ownership/sharing | **EXERCISED:** Homework/plans/preparation/feedback retain sharing and writers; private notes never imported |
+| I22 Student notification synchronization | **EXERCISED:** authenticated visits only; owner keys, eligibility and retained read state tested |
+| I23 Analytics/privacy | **EXERCISED:** no aggregates/raw log import; canonical merge/anonymization and private redaction pass |
+| I24 Audit expectations | **EXERCISED:** existing writer audits retained; timeline excludes audits/security/heartbeats and uses semantic facts |
+| I25 Manual meeting-room model | **PRESERVED:** no provider/room lifecycle changes; existing booking/workspace regressions pass |
+| I26 Manual recurrence/waitlist | **PRESERVED:** no recurrence/waitlist writes from learning; existing planning/lifecycle suites pass |
+| I27 Destructive-tools fail-closed boundary | **EXERCISED:** lifecycle privacy/merge and development-data safety/concurrency regressions pass; no reset/import/cleanup performed |
+
+### Stage 7 file inventory
+
+**43 task files:** 15 new and 28 modified, including only the two requested root documents. The three pre-existing untracked Hostinger/proposal documents are untouched and excluded from the commit.
+
+| Paths | Result |
+|---|---|
+| app/Domains/Lms/Services/{LmsTutoringAssignments,LmsTutoringReadModel,LmsTeachingTimeline,LmsLearningNotifications}.php | New integration facade and bounded canonical projections |
+| app/Domains/Lms/Services/{LmsAccessOperations,LmsAccessService,LmsProgressService,LmsQuizService,LmsAssignmentService}.php | Optional assessment target and stable current completion/grade/review dates |
+| app/Domains/Lms/Models/{Course,LearningAssignment,QuizAttempt,AssignmentSubmission}.php | Opaque creation context, block relationship and canonical date casts/properties |
+| app/Domains/Students/Services/{TeachingRecordService,StudentTeachingReadModel}.php; app/Domains/Students/Models/ResourceAssignment.php | Canonical Resource withdrawal/read reuse and eligible visit-notification extension |
+| app/Http/Controllers/Admin/{AssignLearningController,PrivateLearningController,StudentController,StudentTeachingController}.php; app/Http/Requests/AssignLearningRequest.php; app/Http/Controllers/Student/LearningController.php | Guarded profile/private/session workflow, Business Timezone normalization and Student For You |
+| database/migrations/2026_10_08_035746_add_tutoring_learning_context_to_lms.php; routes/web.php | Six nullable columns, context constraints/restricting FK and 12 guarded routes |
+| resources/views/admin/students/{assign-learning,private-learning,_learning,_learning-availability,show,teaching}.blade.php | Quick assignment/private editor, profile Learning and teaching links |
+| resources/views/admin/bookings/{show,lesson-workspace}.blade.php; resources/views/components/student-quick-actions.blade.php | Optional delivered-session follow-up and prominent authorized profile action |
+| resources/views/admin/lms/courses/{_block-form,_videos}.blade.php | Reused assessment/content/Bunny controls with optional private-item routes/copy; normal Studio retained |
+| resources/views/components/learning-timeline.blade.php; resources/views/student/learning/index.blade.php; resources/views/student/teaching.blade.php | Bounded timeline, For You and explicit Homework/plan navigation |
+| tests/Feature/{TutoringLearningIntegrationTest,TutoringLearningConcurrencyTest}.php; tests/Feature/Concurrency/booking_worker.php | 33 integration cases and four independently gated MariaDB races, using canonical services |
+| LMS_IMPLEMENTATION_PLAN.md; LMS_IMPLEMENTATION_STATUS.md | Pre-implementation overlap review, actual contracts, invariant mapping and final verification |
+
+The new Stage 7 cases add **37 tests / 261 assertions** across the ordinary and dedicated release suites. A real course-completion date-selection issue found during focused verification was corrected by selecting progress rows using lesson identity rather than Eloquent progress primary keys. Quiz retake projection and merge-induced grade/review date drift were also corrected and explicitly tested; no prior authorization, private-file, tutoring, funding or financial assertion was removed or weakened. Final wording changes were followed by the focused 58-test UI/Bunny run and all 247 compiled-template lints.
+
+## Stage 6 disposition — completed baseline
 
 **COMPLETE — Stage 6 implementation and local verification.** Canonical lesson/module/course completion, separate protected-video watched ranges/resume, prerequisite/drip gates, all six quiz types and five private assignment submission types are implemented. Course Studio authors the bounded rules and assessments; Students see current progress, assessment/revision states and a real Completed section. Existing tutoring Homework/progress, typed one_hour/two_hour rights, booking delivery and finance retain their authority. No Stage 7 or production deployment was started. Live Bunny certification remains pending by the owner's explicit mock-verification choice.
 

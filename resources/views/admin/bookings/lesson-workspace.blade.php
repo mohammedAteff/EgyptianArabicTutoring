@@ -4,6 +4,9 @@
     <a href="{{ route('admin.bookings.show', $booking) }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">&larr; Booking #{{ $booking->id }}</a>
     <div><h1 class="font-serif text-3xl font-bold text-slate-900">Lesson Workspace</h1><p class="mt-2 text-slate-500">Prepare and share learning materials for this lesson.</p></div>
     @if($booking->student)
+        @if($booking->status==='completed') @can('manageTeaching',$booking->student)
+            <div class="rounded-xl bg-emerald-50 p-4"><p class="text-sm font-semibold text-emerald-900">Session delivered. Follow-up learning is optional.</p><a href="{{ route('admin.students.learning.create',['student'=>$booking->student,'booking'=>$booking->id]) }}" class="mt-2 inline-flex min-h-11 items-center rounded-xl bg-amber-700 px-4 text-sm font-semibold text-white">Assign Follow-up Learning</a></div>
+        @endcan @endif
         <a href="{{ route('admin.students.teaching', ['student' => $booking->student, 'booking' => $booking->id]) }}" class="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white">Homework, learning plan and tutor preparation</a>
     @endif
     @foreach(['success' => 'bg-emerald-50 text-emerald-800', 'warning' => 'bg-amber-50 text-amber-900'] as $key => $style)

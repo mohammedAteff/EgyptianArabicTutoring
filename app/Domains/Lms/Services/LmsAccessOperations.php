@@ -10,6 +10,7 @@ use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Enrollment;
 use App\Domains\Lms\Models\LearningAssignment;
 use App\Domains\Lms\Models\Lesson;
+use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\TeachingRecordService;
@@ -73,6 +74,7 @@ class LmsAccessOperations
             'metadata.reference_id' => ['sometimes', 'integer', 'min:1'],
             'booking_id' => ['nullable', 'integer', 'min:1'],
             'instructions' => ['nullable', 'string', 'max:5000'],
+            'lesson_block_id' => ['nullable', 'integer', 'min:1'],
             'regranted_from_id' => ['nullable', 'integer', 'min:1'],
         ])->validate();
         if ($action !== 'assign' && (! empty($values['booking_id']) || isset($values['instructions']))) {
@@ -82,9 +84,18 @@ class LmsAccessOperations
         $sourceKey = isset($values['source_key']) ? hash('sha256', $values['source_key']) : $operationKey;
         $target = $target->newQuery()->findOrFail($target->id);
         $scope = $this->scope($target);
-        $fingerprint = hash('sha256', json_encode([$action, $student->id, $scope, $sourceKind, $sourceKey, $window,
+        if (! empty($values['lesson_block_id'])) {
+            abort_unless($action === 'assign' && $target instanceof Lesson, 422);
+            $block = $target->blocks()->where('status', 'ready')->whereIn('kind', ['quiz', 'assignment'])->findOrFail($values['lesson_block_id']);
+            $values['block_kind'] = $block->kind;
+        }
+        $identity = [$action, $student->id, $scope, $sourceKind, $sourceKey, $window,
             $values['reason'] ?? null, $values['metadata'] ?? null, $values['booking_id'] ?? null, $values['instructions'] ?? null,
-            $values['regranted_from_id'] ?? null], JSON_THROW_ON_ERROR));
+            $values['regranted_from_id'] ?? null];
+        if (! empty($values['lesson_block_id'])) {
+            $identity[] = ['lesson_block_id' => $values['lesson_block_id'], 'block_kind' => $values['block_kind']];
+        }
+        $fingerprint = hash('sha256', json_encode($identity, JSON_THROW_ON_ERROR));
 
         try {
             return DB::transaction(function () use ($actor, $student, $scope, $values, $sourceKind, $sourceKey, $window, $fingerprint, $operationKey, $action): AccessGrant {
@@ -93,6 +104,10 @@ class LmsAccessOperations
                 $course = Course::query()->lockForUpdate()->findOrFail($scope['course_id']);
                 Gate::forUser($actor)->authorize('manage', $course);
                 abort_if($course->kind === 'private' && (int) $course->owner_student_id !== (int) $lockedStudent->id, 404);
+                if (! empty($values['lesson_block_id'])) {
+                    LessonBlock::query()->where('lesson_id', $scope['lesson_id'])->where('kind', $values['block_kind'])->where('status', 'ready')
+                        ->lockForUpdate()->findOrFail($values['lesson_block_id']);
+                }
                 if ($event = $this->replay($operationKey, $fingerprint)) {
                     return AccessGrant::query()->findOrFail($event->access_grant_id);
                 }
@@ -121,7 +136,8 @@ class LmsAccessOperations
                 $assignment = null;
                 if ($action === 'assign') {
                     $assignment = new LearningAssignment;
-                    $assignment->forceFill(['access_grant_id' => $grant->id, 'booking_id' => $booking?->id, 'assigned_by' => $actor->id, 'instructions' => $values['instructions'] ?? null])->save();
+                    $assignment->forceFill(['access_grant_id' => $grant->id, 'booking_id' => $booking?->id, 'assigned_by' => $actor->id, 'instructions' => $values['instructions'] ?? null,
+                        'lesson_block_id' => $values['lesson_block_id'] ?? null, 'block_kind' => $values['block_kind'] ?? null])->save();
                 }
                 $this->record($actor, $lockedStudent, $grant, $operationKey, $fingerprint, $action, $enrollment, $assignment);
                 $this->audits->log('lms_access_'.$action, AccessGrant::class, $grant->id, null,

@@ -2,6 +2,8 @@
 
 namespace App\Domains\Lms\Models;
 
+use Illuminate\Support\Carbon;
+
 /** @property int $student_id
  * @property int $block_id
  * @property string $definition_hash
@@ -18,6 +20,9 @@ namespace App\Domains\Lms\Models;
  * @property int|null $byte_size
  * @property string|null $sha256
  * @property int $lock_version
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $reviewed_at
  */
 class AssignmentSubmission extends LmsModel
 {
@@ -29,6 +34,6 @@ class AssignmentSubmission extends LmsModel
 
     protected function casts(): array
     {
-        return ['definition' => 'array', 'number' => 'integer', 'byte_size' => 'integer', 'lock_version' => 'integer'];
+        return ['definition' => 'array', 'number' => 'integer', 'byte_size' => 'integer', 'lock_version' => 'integer', 'reviewed_at' => 'datetime'];
     }
 }

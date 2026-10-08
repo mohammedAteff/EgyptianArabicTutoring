@@ -28,6 +28,9 @@
             <a href="{{ route('admin.lessons.show', $booking) }}" class="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Lesson Workspace</a>
         @endcan
 
+        @if($booking->status==='completed' && $booking->student) @can('manageTeaching',$booking->student)
+            <a href="{{ route('admin.students.learning.create',['student'=>$booking->student,'booking'=>$booking->id]) }}" class="inline-flex min-h-11 items-center rounded-xl bg-amber-700 px-4 py-3 text-sm font-semibold text-white">Assign Follow-up Learning</a>
+        @endcan @endif
         <!-- Quick Status Actions -->
         @if($booking->status === 'confirmed')
             <div class="flex items-center gap-2">

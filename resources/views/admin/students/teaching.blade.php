@@ -6,7 +6,9 @@
     @if($bookingId)<a href="{{ route('admin.lessons.show', $bookingId) }}" class="mt-2 inline-block text-sm font-semibold text-amber-700 underline">Back to lesson materials</a>@endif
     @can('manageTeaching', $student)<a href="{{ route('admin.lms.video.devices', $student) }}" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-amber-700 underline">Authorized video browsers</a>@endcan</header>
     @if($errors->any())<div role="alert" class="rounded-xl bg-red-50 p-4 text-red-800"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-    <p class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Share selected teaching records with the student. Tutor preparation stays staff-only. Educational Notes remain in their existing area.</p>
+    <a href="{{ route('admin.students.learning.create',['student'=>$student,'booking'=>$bookingId]) }}" class="inline-flex min-h-11 items-center rounded-xl bg-amber-700 px-5 py-3 text-sm font-semibold text-white">Assign Learning</a>
+    @include('components.learning-timeline',['timelineId'=>'teaching-learning-timeline','timelineItems'=>$learningTimeline,'timelineTimezone'=>app(\App\Domains\Timezone\Services\TimezoneService::class)->getBusinessTimezone()])
+    <p class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Share selected teaching records with the student. Tutor preparation stays staff-only. Educational Notes remain in their existing area. <a href="{{ route('admin.students.show',$student) }}#student-learning" class="font-semibold text-amber-800 underline">View LMS learning & progress</a></p>
     @foreach(['homework' => 'Homework', 'plan' => 'Learning plans', 'preparation' => 'Tutor preparation · Staff only', 'resource' => 'Assigned resources', 'error' => 'Pronunciation and error log', 'tag' => 'Student and lesson tags'] as $kind => $heading)
     <section id="teaching-{{ $kind }}" aria-label="{{ $heading }}" class="space-y-3">
         <h2 class="text-xl font-bold text-slate-900">{{ $heading }}</h2>

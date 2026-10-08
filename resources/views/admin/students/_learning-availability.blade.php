@@ -1,0 +1,14 @@
+@php
+    $availability = $availability ?? ['access_mode'=>'permanent','starts_at'=>null,'expires_at'=>null,'relative_days'=>null];
+    $mode = old('access_mode', $availability['access_mode']);
+    $local = fn($value) => $value ? \Carbon\CarbonImmutable::parse($value,'UTC')->timezone($businessTz)->format('Y-m-d\TH:i') : '';
+@endphp
+<div class="space-y-4" x-data="{accessMode:@js($mode)}" @if($resourceChoice ?? false) x-show="kind!=='resource'" @endif>
+    <div><label for="{{ $prefix }}-mode" class="mb-2 block text-sm font-semibold">Access duration</label><select id="{{ $prefix }}-mode" name="access_mode" x-model="accessMode" @if($resourceChoice ?? false) :disabled="kind==='resource'" @endif class="min-h-11 w-full rounded-xl border border-slate-300 px-3">@foreach(['permanent'=>'No scheduled expiry','relative'=>'Elapsed days from start','fixed'=>'Fixed end date'] as $value=>$label)<option value="{{ $value }}" @selected($mode===$value)>{{ $label }}</option>@endforeach</select></div>
+    <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-semibold" for="{{ $prefix }}-start">Available from ({{ $businessTz }})<input id="{{ $prefix }}-start" name="starts_local" type="datetime-local" value="{{ old('starts_local',$local($availability['starts_at'])) }}" :required="accessMode==='fixed'" @if($resourceChoice ?? false) :disabled="kind==='resource'" @endif class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3"><span class="mt-1 block text-xs font-normal text-slate-500">Leave blank to start now, except with a fixed end date.</span></label>
+        <label x-show="accessMode==='fixed'" class="block text-sm font-semibold" for="{{ $prefix }}-end">Expires at ({{ $businessTz }})<input id="{{ $prefix }}-end" name="expires_local" type="datetime-local" value="{{ old('expires_local',$local($availability['expires_at'])) }}" :disabled="accessMode!=='fixed'{{ ($resourceChoice ?? false) ? '||kind===\'resource\'' : '' }}" :required="accessMode==='fixed'" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3"></label>
+        <label x-show="accessMode==='relative'" class="block text-sm font-semibold" for="{{ $prefix }}-days">Elapsed days<input id="{{ $prefix }}-days" name="relative_days" type="number" min="1" max="36500" value="{{ old('relative_days',$availability['relative_days']??7) }}" :disabled="accessMode!=='relative'{{ ($resourceChoice ?? false) ? '||kind===\'resource\'' : '' }}" :required="accessMode==='relative'" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3"><span class="mt-1 block text-xs font-normal text-slate-500">Each day is 24 hours from this grant’s start.</span></label>
+    </div>
+</div>
+@if($resourceChoice ?? false)<p x-show="kind==='resource'" class="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Resources use existing sharing and withdrawal controls. Timed access applies to LMS learning.</p>@endif

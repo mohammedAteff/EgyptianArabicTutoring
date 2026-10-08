@@ -27,6 +27,7 @@
 @endif
 
 <div class="mx-auto max-w-7xl space-y-6">
+    @if($learningProfile) @include('admin.students._learning') @endif
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <a href="{{ route('admin.students.index') }}" class="text-sm font-semibold text-amber-800 hover:text-amber-950">← Student Records</a>

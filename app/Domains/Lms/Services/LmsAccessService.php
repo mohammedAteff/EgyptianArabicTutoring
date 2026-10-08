@@ -72,7 +72,15 @@ class LmsAccessService
                 || ($target->booking_id !== null && (int) $target->booking?->student_id !== (int) $student->id)) {
                 return ['allowed' => false, 'sources' => []];
             }
-            $target = $grant->lesson ?? $grant->section ?? $grant->course;
+            if ($target->lesson_block_id !== null) {
+                $block = $target->lessonBlock;
+                if (! $block || (int) $block->lesson_id !== (int) $grant->lesson_id || $block->kind !== $target->block_kind) {
+                    return ['allowed' => false, 'sources' => []];
+                }
+                $target = $block;
+            } else {
+                $target = $grant->lesson ?? $grant->section ?? $grant->course;
+            }
         }
         if ($target instanceof LessonBlock) {
             if (! $this->readyBlock($target) || ! app(LmsLearningGate::class)->decision($student, $target->lesson)['allowed']) {

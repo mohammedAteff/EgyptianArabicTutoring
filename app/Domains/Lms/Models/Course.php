@@ -19,12 +19,16 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $published_at
  * @property int $lock_version
  * @property int|null $protection_profile_id
+ * @property string|null $private_learning_key
+ * @property string|null $private_learning_fingerprint
  */
 class Course extends LmsModel
 {
     use HasFactory;
 
     protected $table = 'lms_courses';
+
+    protected $hidden = ['private_learning_key', 'private_learning_fingerprint'];
 
     /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany

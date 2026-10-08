@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** @property int $access_grant_id
  * @property int|null $booking_id
  * @property string $status
+ * @property int|null $lesson_block_id
+ * @property string|null $block_kind
  */
 class LearningAssignment extends LmsModel
 {
@@ -25,5 +27,11 @@ class LearningAssignment extends LmsModel
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    /** @return BelongsTo<LessonBlock, $this> */
+    public function lessonBlock(): BelongsTo
+    {
+        return $this->belongsTo(LessonBlock::class, 'lesson_block_id');
     }
 }

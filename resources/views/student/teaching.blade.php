@@ -2,6 +2,7 @@
 @section('content')
 <h1 class="text-3xl font-semibold text-nile-900">My learning</h1>
 <p class="mt-2 text-stone-600">Your tutor’s goals, homework and practice resources.</p>
+<a href="{{ route('student.learning.index') }}#for-you" class="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">Courses & personal learning · For You</a>
 @if(session('success'))<p role="status" class="mt-4 rounded-xl bg-green-50 p-4 text-green-800">{{ session('success') }}</p>@endif
 @if($errors->any())<p role="alert" class="mt-4 rounded-xl bg-rose-50 p-4 text-rose-800">{{ $errors->first() }}</p>@endif
 <x-student-progress :progress="$progress" />

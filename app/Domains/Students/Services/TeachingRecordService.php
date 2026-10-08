@@ -105,6 +105,18 @@ class TeachingRecordService
         }, 3);
     }
 
+    public function withdrawResource(Student $student, ResourceAssignment $assignment, int $actorId): void
+    {
+        DB::transaction(function () use ($student, $assignment, $actorId): void {
+            $student = $this->lockStudent($student->id);
+            $record = ResourceAssignment::query()->where('student_id', $student->id)->lockForUpdate()->findOrFail($assignment->id);
+            if ($record->student_visible) {
+                $record->update(['student_visible' => false]);
+                $this->audits->log('student_teaching_resource_withdrawn', Student::class, $student->id, null, ['record_id' => $record->id], $actorId);
+            }
+        }, 3);
+    }
+
     /** Student and Booking locks are held by privacy/merge services. */
     public function erase(int $studentId): void
     {

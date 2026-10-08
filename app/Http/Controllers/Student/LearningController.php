@@ -12,6 +12,8 @@ use App\Domains\Lms\Models\LessonNote;
 use App\Domains\Lms\Services\LmsAccessService;
 use App\Domains\Lms\Services\LmsLearningGate;
 use App\Domains\Lms\Services\LmsProgressService;
+use App\Domains\Lms\Services\LmsTeachingTimeline;
+use App\Domains\Lms\Services\LmsTutoringReadModel;
 use App\Domains\Lms\Services\StudentLearningService;
 use App\Domains\Lms\Services\StudentLearningStateService;
 use App\Domains\Students\Models\Student;
@@ -26,9 +28,11 @@ class LearningController extends Controller
 {
     public function __construct(private StudentSessionContext $students, private StudentPortalService $portal, private StudentLearningService $learning, private StudentLearningStateService $state, private LmsAccessService $access) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request, LmsTutoringReadModel $tutoring, LmsTeachingTimeline $timeline): Response
     {
-        return $this->page($request, 'student.learning.index', $this->learning->hub($this->student($request)));
+        $student = $this->student($request);
+
+        return $this->page($request, 'student.learning.index', ['forYou' => $tutoring->assignments($student), 'learningTimeline' => $timeline->student($student)] + $this->learning->hub($student));
     }
 
     public function course(Request $request, Course $course): Response
@@ -70,6 +74,9 @@ class LearningController extends Controller
         $assignment = LearningAssignment::query()->whereHas('accessGrant', fn ($query) => $query->where('student_id', $student->id))->findOrFail($assignment);
         abort_unless($this->access->canAccess($student, $assignment), 404);
         $course = $assignment->accessGrant->course;
+        if ($assignment->lesson_block_id !== null) {
+            return redirect()->route('student.evidence.show', [$course, $assignment->accessGrant->lesson, $assignment->lessonBlock]);
+        }
         $data = $this->learning->course($student, $course);
         abort_unless($data !== null, 404);
         $this->state->visit($student, $course);

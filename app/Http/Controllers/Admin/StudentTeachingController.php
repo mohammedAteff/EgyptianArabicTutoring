@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
+use App\Domains\Lms\Services\LmsTeachingTimeline;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Models\LessonFeedback;
 use App\Domains\Students\Models\Student;
@@ -17,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class StudentTeachingController extends Controller
 {
-    public function show(Request $request, Student $student): Response
+    public function show(Request $request, Student $student, LmsTeachingTimeline $timeline): Response
     {
         Gate::authorize('manageTeaching', $student);
         $bookingId = $request->integer('booking') ?: null;
@@ -41,7 +42,7 @@ class StudentTeachingController extends Controller
         $materials = LessonMaterial::query()->whereIn('booking_id', $bookings->modelKeys())->whereNull('withdrawn_at')->get(['id', 'booking_id', 'title']);
         $feedback = LessonFeedback::query()->where('student_id', $student->id)->with('booking:id,start_at_utc')->orderByDesc('id')->get();
 
-        return response()->view('admin.students.teaching', compact('student', 'bookings', 'bookingId', 'records', 'resources', 'materials', 'feedback'))->header('Cache-Control', 'private, no-store');
+        return response()->view('admin.students.teaching', compact('student', 'bookings', 'bookingId', 'records', 'resources', 'materials', 'feedback') + ['learningTimeline' => $timeline->staff($request->user('web'), $student)])->header('Cache-Control', 'private, no-store');
     }
 
     public function store(SaveTeachingRecordRequest $request, Student $student, string $kind, TeachingRecordService $records): RedirectResponse

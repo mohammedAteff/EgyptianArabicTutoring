@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AccountSuspensionController;
 use App\Http\Controllers\Admin\AdministratorController;
 use App\Http\Controllers\Admin\AnalyticsDashboardController;
+use App\Http\Controllers\Admin\AssignLearningController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BackupController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Admin\OperationsController;
 use App\Http\Controllers\Admin\PackageLifecycleController;
 use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\PaymentMethodController;
+use App\Http\Controllers\Admin\PrivateLearningController;
 use App\Http\Controllers\Admin\PromotionController;
 use App\Http\Controllers\Admin\ReceivablesController;
 use App\Http\Controllers\Admin\RecurringLessonController;
@@ -396,6 +398,20 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/bookings/{booking}', [App\Http\Controllers\Admin\BookingController::class, 'show'])->name('bookings.show');
         Route::get('/bookings/{booking}/lesson', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'show'])->name('lessons.show');
         Route::get('/students/{student}/teaching', [StudentTeachingController::class, 'show'])->name('students.teaching');
+        Route::middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/students/{student}/assign-learning', [AssignLearningController::class, 'create'])->whereNumber('student')->name('students.learning.create');
+            Route::post('/students/{student}/assign-learning', [AssignLearningController::class, 'store'])->whereNumber('student')->middleware('throttle:30,1')->name('students.learning.store');
+            Route::post('/students/{student}/private-learning', [AssignLearningController::class, 'private'])->whereNumber('student')->middleware('throttle:20,1')->name('students.private-learning.store');
+            Route::patch('/students/{student}/learning-access/{grant}', [AssignLearningController::class, 'change'])->whereNumber(['student', 'grant'])->middleware('throttle:30,1')->name('students.learning.change');
+            Route::delete('/students/{student}/learning-resources/{assignment}', [AssignLearningController::class, 'withdraw'])->whereNumber(['student', 'assignment'])->middleware('throttle:30,1')->name('students.learning.resources.withdraw');
+            Route::get('/students/{student}/private-learning/{course}', [PrivateLearningController::class, 'edit'])->whereNumber(['student', 'course'])->name('students.private-learning.edit');
+            Route::patch('/students/{student}/private-learning/{course}', [PrivateLearningController::class, 'update'])->whereNumber(['student', 'course'])->middleware('throttle:60,1')->name('students.private-learning.update');
+            Route::post('/students/{student}/private-learning/{course}/attachments', [PrivateLearningController::class, 'upload'])->whereNumber(['student', 'course'])->middleware('throttle:20,1')->name('students.private-learning.upload');
+            Route::post('/students/{student}/private-learning/{course}/share', [PrivateLearningController::class, 'share'])->whereNumber(['student', 'course'])->middleware('throttle:20,1')->name('students.private-learning.share');
+            Route::post('/students/{student}/private-learning/{course}/video', [PrivateLearningController::class, 'video'])->whereNumber(['student', 'course'])->middleware('throttle:20,1')->name('students.private-learning.video');
+            Route::post('/students/{student}/private-learning/{course}/video/{asset}/upload', [PrivateLearningController::class, 'videoUpload'])->whereNumber(['student', 'course', 'asset'])->middleware('throttle:30,1')->name('students.private-learning.video.upload');
+            Route::post('/students/{student}/private-learning/{course}/video/{asset}/status', [PrivateLearningController::class, 'videoStatus'])->whereNumber(['student', 'course', 'asset'])->middleware('throttle:60,1')->name('students.private-learning.video.status');
+        });
         Route::post('/students/{student}/teaching/{kind}', [StudentTeachingController::class, 'store'])->whereIn('kind', ['homework', 'plan', 'milestone', 'preparation', 'resource', 'error', 'tag'])->name('students.teaching.store');
         Route::post('/bookings/{booking}/lesson/materials', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'store'])->name('lessons.materials.store');
         Route::patch('/bookings/{booking}/lesson/materials/{material}', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'update'])->name('lessons.materials.update');

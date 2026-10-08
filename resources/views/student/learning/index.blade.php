@@ -4,6 +4,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-2"><p class="text-xs font-semibold uppercase tracking-widest text-nile-700">Your learning space</p><h1 class="text-3xl font-bold tracking-tight sm:text-4xl">My Learning</h1><p class="text-stone-600">Make a little room for Arabic today.</p></div>
         <div class="flex flex-wrap gap-3">
+            <a href="{{ route('student.teaching.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-nile-900">Homework & learning plans</a>
             <a href="{{ route('student.learning.notes.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-nile-900">Private notes · {{ $privateNoteCount }}</a>
             <a href="{{ route('student.video.devices') }}" class="inline-flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-semibold text-nile-900">Authorized browsers</a>
         </div>
@@ -50,19 +51,26 @@
     </section>
     <section aria-labelledby="for-you" class="space-y-4">
         <h2 id="for-you" class="text-xl font-semibold">For You</h2>
-        @forelse($learningAssignments as $assignment)
+        @foreach(['New','In Progress','Completed','Expired','Scheduled','Unavailable'] as $group)
+        @php($groupItems=$forYou->where('group',$group))
+        @if($groupItems->isNotEmpty())<div class="space-y-3"><h3 class="text-sm font-semibold text-stone-600">{{ $group }} <span class="font-normal">({{ $groupItems->count() }})</span></h3>
+        @foreach($groupItems as $item)
             <article class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-stone-200 bg-white p-5">
-                <div class="min-w-0 flex-1"><p class="text-xs font-semibold uppercase tracking-wide text-nile-700">Personal learning</p><h3 dir="auto" class="mt-2 break-words font-semibold">{{ $assignment->accessGrant->course->title }}</h3>@if($assignment->instructions)<p dir="auto" class="mt-2 whitespace-pre-wrap break-words text-sm text-stone-600">{{ $assignment->instructions }}</p>@endif</div>
-                <a href="{{ route('student.learning.assignments.show', $assignment) }}" class="inline-flex min-h-11 items-center rounded-xl border border-nile-100 px-4 text-sm font-semibold text-nile-900">Open learning →</a>
+                <div class="min-w-0 flex-1"><p class="text-xs font-semibold uppercase tracking-wide text-nile-700">{{ ucfirst($item['kind']) }}@if($item['booking_id']) · Session #{{ $item['booking_id'] }}@endif</p><h3 dir="auto" class="mt-2 break-words font-semibold">{{ $item['title'] }}</h3><p class="mt-2 text-sm text-stone-600">{{ $item['assessment']??$item['state'] }}</p>@if($item['instructions'])<p dir="auto" class="mt-2 whitespace-pre-wrap break-words text-sm text-stone-600">{{ $item['instructions'] }}</p>@endif<p class="mt-2 text-xs text-stone-500">@if($item['group']==='Scheduled')Available {{ $item['starts_at']->copy()->timezone($timezone)->format('j M Y, H:i T') }} · @endif @if($item['expires_at'])Access ends {{ $item['expires_at']->copy()->timezone($timezone)->format('j M Y, H:i T') }}@else No scheduled expiry @endif</p>@if($item['reason'])<p class="mt-2 text-xs text-stone-500">{{ $item['reason'] }}</p>@endif</div>
+                @if($item['url'])<a href="{{ $item['url'] }}" class="inline-flex min-h-11 items-center rounded-xl border border-nile-100 px-4 text-sm font-semibold text-nile-900">{{ $group==='Completed'?'Review learning':'Open learning' }} →</a>@endif
             </article>
-        @empty
+        @endforeach</div>@endif
+        @endforeach
+        @if($forYou->isEmpty())
             <p class="rounded-2xl border border-dashed border-stone-300 p-6 text-sm text-stone-600">Personal learning shared with you will appear here.</p>
-        @endforelse
+        @endif
+        @if($assignedResources->isNotEmpty())<a href="{{ route('student.teaching.index') }}#resources" class="inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">Assigned Resources · {{ $assignedResources->count() }}</a>@endif
     </section>
     <section aria-labelledby="completed-learning" class="space-y-3 rounded-2xl bg-stone-100 p-6">
         <h2 id="completed-learning" class="text-xl font-semibold">Completed</h2>
         @forelse($completedCards as $card)<a href="{{ $card['url'] }}" dir="auto" class="block min-h-11 rounded-xl bg-white p-4 text-sm font-semibold text-nile-800">{{ $card['course']->title }} · 100%</a>@empty<p class="text-sm text-stone-600">Complete the required lessons in a course to see it here.</p>@endforelse
     </section>
+    @include('components.learning-timeline',['timelineId'=>'learning-timeline','timelineItems'=>$learningTimeline,'timelineTimezone'=>$timezone])
     <p class="text-xs text-stone-500">Times shown in {{ $timezone }}.</p>
 </div>
 @endsection

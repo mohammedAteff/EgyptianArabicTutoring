@@ -7,15 +7,16 @@
     $kind=$isOld?old('kind',$kind):$kind;
     $source=$isOld?old('source',!empty($block['resource_id'])?'resource':'asset'):(!empty($block['resource_id'])?'resource':'asset');
 @endphp
-<form method="POST" action="{{ route('admin.lms.courses.update',$course) }}" class="space-y-4"
+<form method="POST" action="{{ $blockAction ?? route('admin.lms.courses.update',$course) }}" class="space-y-4"
     x-data="{kind:@js($kind), source:@js($source)}">
     @csrf
+    @if(isset($blockAction)) @method('PATCH') <input type="hidden" name="booking_id" value="{{ $bookingId ?? '' }}"> @endif
     <input type="hidden" name="version" value="{{ $course->lock_version }}">
     <input type="hidden" name="operation" value="{{ $block?'edit_block':'add_block' }}">
     <input type="hidden" name="{{ $block?'key':'parent_key' }}" value="{{ $block?$blockKey:$lesson['key'] }}">
     <div><label for="{{ $formId }}-kind" class="mb-1.5 block text-sm font-semibold text-slate-700">Content type</label>
         <select id="{{ $formId }}-kind" name="kind" x-model="kind" class="min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-sm">
-            @foreach(['rich_text'=>'Rich text','image'=>'Image','file'=>'PDF / file','resource'=>'Resource library reference','external_link'=>'External link','youtube_video'=>'YouTube video','external_video'=>'Vimeo / direct video','video'=>'Protected video asset','quiz'=>'Quiz','assignment'=>'Course assignment'] as $value=>$label)
+            @foreach($allowedKinds ?? ['rich_text'=>'Rich text','image'=>'Image','file'=>'PDF / file','resource'=>'Resource library reference','external_link'=>'External link','youtube_video'=>'YouTube video','external_video'=>'Vimeo / direct video','video'=>'Protected video asset','quiz'=>'Quiz','assignment'=>'Course assignment'] as $value=>$label)
                 <option value="{{ $value }}" @selected($kind===$value)>{{ $label }}</option>
             @endforeach
         </select>

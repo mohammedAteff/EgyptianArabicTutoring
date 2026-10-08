@@ -185,7 +185,7 @@ class LmsQuizService
         }
         $maximum = array_sum(array_column($attempt->definition['questions'], 'points'));
         $score = round(100 * array_sum($attempt->marks) / $maximum, 2);
-        $attempt->forceFill(['status' => 'graded', 'score' => $score, 'passed' => $score >= $attempt->definition['passing_score']]);
+        $attempt->forceFill(['status' => 'graded', 'score' => $score, 'passed' => $score >= $attempt->definition['passing_score'], 'graded_at' => now('UTC')]);
     }
 
     /** Explicit learner projection: no answer keys before the stored review policy permits.

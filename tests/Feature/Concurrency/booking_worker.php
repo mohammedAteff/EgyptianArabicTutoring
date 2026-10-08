@@ -30,6 +30,7 @@ use App\Domains\Lms\Services\LmsAccessOperations;
 use App\Domains\Lms\Services\LmsAssignmentService;
 use App\Domains\Lms\Services\LmsProgressService;
 use App\Domains\Lms\Services\LmsQuizService;
+use App\Domains\Lms\Services\LmsTutoringAssignments;
 use App\Domains\Lms\Services\LmsVideoService;
 use App\Domains\Lms\Services\ProtectedPlaybackService;
 use App\Domains\Lms\Services\StudentLearningStateService;
@@ -90,6 +91,23 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['tutoring_assign', 'tutoring_private', 'tutoring_bulk'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Tutoring learning races require the dedicated test database.');
+        }
+        $actor = Administrator::query()->findOrFail($data['administrator_id']);
+        $service = app(LmsTutoringAssignments::class);
+        if ($action === 'tutoring_bulk') {
+            $rows = $service->bulk($actor, $data['student_ids'], $data['assignment']);
+            echo 'RESULT:SUCCESS:'.count($rows)."\n";
+        } else {
+            $student = Student::query()->findOrFail($data['student_id']);
+            $record = $action === 'tutoring_private' ? $service->createPrivate($actor, $student, $data['assignment'])
+                : $service->assign($actor, $student, $data['assignment'])['record'];
+            echo 'RESULT:SUCCESS:'.$record->id."\n";
+        }
+        exit(0);
+    }
     if (in_array($action, ['evidence_manual', 'evidence_quiz_begin', 'evidence_quiz_submit', 'evidence_assignment_submit', 'evidence_assignment_review', 'evidence_watch'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Learning evidence races require the dedicated test database.');

@@ -2,6 +2,8 @@
 
 namespace App\Domains\Lms\Models;
 
+use Illuminate\Support\Carbon;
+
 /** @property int $student_id
  * @property int $block_id
  * @property string $definition_hash
@@ -16,6 +18,8 @@ namespace App\Domains\Lms\Models;
  * @property bool|null $passed
  * @property int $lock_version
  * @property string|null $feedback
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $graded_at
  */
 class QuizAttempt extends LmsModel
 {
@@ -27,6 +31,6 @@ class QuizAttempt extends LmsModel
 
     protected function casts(): array
     {
-        return ['definition' => 'array', 'answers' => 'array', 'marks' => 'array', 'score' => 'float', 'passed' => 'boolean', 'number' => 'integer', 'lock_version' => 'integer', 'submitted_at' => 'datetime'];
+        return ['definition' => 'array', 'answers' => 'array', 'marks' => 'array', 'score' => 'float', 'passed' => 'boolean', 'number' => 'integer', 'lock_version' => 'integer', 'submitted_at' => 'datetime', 'graded_at' => 'datetime'];
     }
 }

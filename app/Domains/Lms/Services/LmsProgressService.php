@@ -138,9 +138,12 @@ class LmsProgressService
         $required = $states->filter(fn (array $state): bool => $state['required']);
         $completed = $required->filter(fn (array $state): bool => $state['completed'])->count();
         $done = $required->isNotEmpty() && $completed === $required->count();
+        $requiredRows = $current->filter(fn (?LessonProgress $row, int $lessonId): bool => $required->has($lessonId));
 
         return ['status' => $done ? 'Completed' : ($states->contains(fn (array $s): bool => $s['status'] !== 'Not Started') ? 'In Progress' : 'Not Started'),
             'percent' => $required->isEmpty() ? 0 : (int) floor(100 * $completed / $required->count()), 'completed' => $completed, 'required' => $required->count(),
+            'completed_at' => $done ? $requiredRows->max('completed_at') : null,
+            'completion_key' => $done ? hash('sha256', json_encode($requiredRows->map(fn (LessonProgress $row): string => $row->requirement_hash)->all(), JSON_THROW_ON_ERROR)) : null,
             'lessons' => $states, 'next' => $lessons->first(fn (Lesson $l): bool => $states[$l->id]['allowed'] && ! $states[$l->id]['completed'])];
     }
 

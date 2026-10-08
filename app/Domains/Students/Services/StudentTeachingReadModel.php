@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Lms\Services\LmsLearningNotifications;
 use App\Domains\Students\Models\Homework;
 use App\Domains\Students\Models\LearningPlan;
 use App\Domains\Students\Models\ResourceAssignment;
@@ -21,7 +22,7 @@ use Illuminate\Support\Collection;
 
 class StudentTeachingReadModel
 {
-    public function __construct(private StudentNotificationService $notifications, private EntitlementService $entitlements, private TimezoneService $timezones) {}
+    public function __construct(private StudentNotificationService $notifications, private EntitlementService $entitlements, private TimezoneService $timezones, private LmsLearningNotifications $learningNotifications) {}
 
     /** @template T of \Illuminate\Database\Eloquent\Model
      * @param  Builder<T>  $query
@@ -50,8 +51,7 @@ class StudentTeachingReadModel
             'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
         ])->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('id')->get();
         $plans = $this->shared(LearningPlan::query(), $student, false)->with('milestones')->orderByDesc('id')->get();
-        $resources = $this->shared(ResourceAssignment::query(), $student)->whereHas('resource', fn (Builder $query) => $query->published())
-            ->with('resource:id,title,short_description')->orderByDesc('id')->get();
+        $resources = $this->resources($student);
         $errors = $this->shared(StudentErrorLog::query(), $student)->orderByDesc('id')->get();
         $tags = $this->shared(TeachingTag::query(), $student)->orderBy('label')->orderBy('id')->get();
         $notesCount = StudentBin::query()->where('student_id', $student->id)->where('student_visible', true)->count();
@@ -102,7 +102,7 @@ class StudentTeachingReadModel
                 $events[] = ['key' => 'material:'.$material->id, 'type' => 'material', 'title' => 'Lesson material published', 'message' => 'Shared material is available in your lesson workspace.', 'link' => route('student.lessons.show', $booking->id, false)];
             }
         }
-        $this->notifications->synchronize($student, $events);
+        $this->notifications->synchronize($student, array_merge($events, $this->learningNotifications->facts($student)));
         $action = $outstandingForm ? ['label' => 'Finish your questionnaire', 'detail' => $outstandingForm->title, 'url' => route('student.forms.show', $outstandingForm->slug)]
             : ($openHomework ? ['label' => 'Continue your homework', 'detail' => $openHomework->title, 'url' => route('student.teaching.index').'#homework-'.$openHomework->id]
             : ($unreviewed ? ['label' => 'Review your assigned resource', 'detail' => $unreviewed->resource->title, 'url' => route('student.teaching.index').'#resources']
@@ -116,5 +116,12 @@ class StudentTeachingReadModel
             'canBookWithPackage' => $canBook,
             'unreadNotifications' => StudentNotification::query()->where('student_id', $student->id)->whereNull('read_at')->count(),
         ];
+    }
+
+    /** @return Collection<int, ResourceAssignment> */
+    public function resources(Student $student): Collection
+    {
+        return $this->shared(ResourceAssignment::query(), $student)->whereHas('resource', fn (Builder $query) => $query->published())
+            ->with('resource:id,title,short_description')->orderByDesc('id')->get();
     }
 }

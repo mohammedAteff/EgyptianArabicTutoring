@@ -97,7 +97,7 @@ class LmsAssignmentService
             if ($status === 'needs_revision' && trim($feedback ?? '') === '') {
                 $this->invalid('Explain the requested revision.');
             }
-            $submission->forceFill(['status' => $status, 'reviewed_by' => $actor->id, 'feedback' => $feedback, 'lock_version' => $submission->lock_version + 1])->save();
+            $submission->forceFill(['status' => $status, 'reviewed_by' => $actor->id, 'reviewed_at' => now('UTC'), 'feedback' => $feedback, 'lock_version' => $submission->lock_version + 1])->save();
             $this->progress->evaluate($student, $lesson);
             $this->audits->log('lms_assignment_reviewed', AssignmentSubmission::class, $submission->id, null, ['status' => $status, 'version' => $submission->lock_version], $actor->id);
 
