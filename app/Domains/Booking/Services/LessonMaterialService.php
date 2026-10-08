@@ -366,10 +366,13 @@ class LessonMaterialService
         $file = $this->privatePath($path, 'lms-submissions');
         abort_unless($file && hash_equals($sha256, hash_file('sha256', $file)), 404);
 
-        return response()->download($file, 'learning-submission.'.pathinfo($path, PATHINFO_EXTENSION), [
+        $response = response()->download($file, 'learning-submission.'.pathinfo($path, PATHINFO_EXTENSION), [
             'Content-Type' => 'application/octet-stream', 'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store', 'Referrer-Policy' => 'no-referrer',
         ]);
+        $response->setPrivate();
+
+        return $response;
     }
 
     public function discardLearningSubmission(string $path): bool

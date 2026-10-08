@@ -238,7 +238,7 @@ class LmsLearningEvidenceTest extends TestCase
         $this->assertNotNull(LessonProgress::query()->firstOrFail()->completed_at);
         if ($file) {
             Storage::disk('local')->assertExists($row->path);
-            $this->get(route('student.evidence.file', $row))->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
+            $this->get(route('student.evidence.file', $row))->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff')->assertHeader('Cache-Control', 'no-store, private');
             $this->signIn(Student::factory()->verified()->create())->get(route('student.evidence.file', $row))->assertNotFound();
         }
     }
