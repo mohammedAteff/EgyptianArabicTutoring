@@ -7,10 +7,17 @@
         @include('student.learning.curriculum')
         <div class="min-w-0 space-y-6">
             <header class="space-y-2"><p class="text-xs font-semibold uppercase tracking-widest text-nile-700">Lesson</p><h1 dir="auto" class="break-words text-3xl font-bold tracking-tight">{{ $lesson->title }}</h1></header>
+            <div class="space-y-3 rounded-2xl border border-nile-100 bg-nile-50 p-5"><p class="text-sm font-semibold">{{ $progress['lessons'][$lesson->id]['status'] }} · {{ $progress['percent'] }}% of required course lessons complete</p>
+                @if(in_array('manual',($lesson->learning_rules['methods'] ?? ['manual']),true))<form method="POST" action="{{ route('student.evidence.manual',[$course,$lesson]) }}">@csrf<button class="min-h-11 rounded-xl bg-nile-800 px-4 text-sm font-semibold text-white">Mark my learning complete</button></form>@endif
+            </div>
             <div class="space-y-5">
                 @forelse($blocks as $block)
                     <section class="overflow-hidden rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
                         @switch($block['kind'])
+                            @case('quiz')
+                            @case('assignment')
+                                <h2 dir="auto" class="font-semibold">{{ $block['title'] }}</h2><p class="mt-2 text-sm text-stone-600">{{ $block['state'] }}</p><a href="{{ $block['url'] }}" class="mt-3 inline-flex min-h-11 items-center rounded-xl border border-nile-100 px-4 text-sm font-semibold text-nile-800">Open {{ $block['kind']==='quiz' ? 'quiz' : 'assignment' }} →</a>
+                                @break
                             @case('video')
                                 @include('student.learning.protected-video')
                                 @break

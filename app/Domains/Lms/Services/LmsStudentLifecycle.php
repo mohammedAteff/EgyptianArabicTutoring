@@ -9,6 +9,8 @@ use App\Domains\Lms\Models\Enrollment;
 use App\Domains\Lms\Models\LearningVisit;
 use App\Domains\Lms\Models\LmsAsset;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use LogicException;
 
 class LmsStudentLifecycle
@@ -47,6 +49,46 @@ class LmsStudentLifecycle
         }
         DB::table('lms_lesson_notes')->where('student_id', $secondaryId)->update(['student_id' => $primaryId, 'lock_version' => DB::raw('lock_version + 1')]);
         DB::table('lms_lesson_bookmarks')->where('student_id', $secondaryId)->update(['student_id' => $primaryId]);
+        foreach (DB::table('lms_lesson_progress')->where('student_id', $secondaryId)->get() as $source) {
+            $target = DB::table('lms_lesson_progress')->where('student_id', $primaryId)->where('lesson_id', $source->lesson_id)->where('requirement_hash', $source->requirement_hash)->first();
+            if ($target) {
+                DB::table('lms_lesson_progress')->where('id', $target->id)->update([
+                    'started_at' => min($target->started_at, $source->started_at),
+                    'manual_completed_at' => $target->manual_completed_at ?? $source->manual_completed_at,
+                    'completed_at' => $target->completed_at ?? $source->completed_at,
+                ]);
+                DB::table('lms_lesson_progress')->where('id', $source->id)->delete();
+            } else {
+                DB::table('lms_lesson_progress')->where('id', $source->id)->update(['student_id' => $primaryId]);
+            }
+        }
+        foreach (DB::table('lms_video_progress')->where('student_id', $secondaryId)->get() as $source) {
+            $target = DB::table('lms_video_progress')->where('student_id', $primaryId)->where('block_id', $source->block_id)->where('media_hash', $source->media_hash)->first();
+            if ($target) {
+                $ranges = array_merge(json_decode($target->watched_ranges, true, 16, JSON_THROW_ON_ERROR), json_decode($source->watched_ranges, true, 16, JSON_THROW_ON_ERROR));
+                usort($ranges, fn (array $a, array $b): int => $a[0] <=> $b[0]);
+                $merged = [];
+                foreach ($ranges as $range) {
+                    $last = count($merged) - 1;
+                    if ($last >= 0 && $range[0] <= $merged[$last][1]) {
+                        $merged[$last][1] = max($range[1], $merged[$last][1]);
+                    } else {
+                        $merged[] = $range;
+                    }
+                }
+                DB::table('lms_video_progress')->where('id', $target->id)->update(['watched_ranges' => json_encode($merged, JSON_THROW_ON_ERROR)]);
+                DB::table('lms_video_progress')->where('id', $source->id)->delete();
+            } else {
+                DB::table('lms_video_progress')->where('id', $source->id)->update(['student_id' => $primaryId]);
+            }
+        }
+        DB::table('lms_video_progress')->where('student_id', $primaryId)->update(['watch_token_hash' => null, 'lease_id' => null, 'playing' => false]);
+        foreach (['lms_quiz_attempts', 'lms_assignment_submissions'] as $table) {
+            foreach (DB::table($table)->where('student_id', $secondaryId)->orderBy('number')->get() as $source) {
+                $number = 1 + (int) DB::table($table)->where('student_id', $primaryId)->where('block_id', $source->block_id)->where('definition_hash', $source->definition_hash)->max('number');
+                DB::table($table)->where('id', $source->id)->update(['student_id' => $primaryId, 'number' => $number, 'request_key' => (string) Str::uuid(), 'lock_version' => $source->lock_version + 1]);
+            }
+        }
     }
 
     /** The existing privacy service owns authorization, locks and structural retention. */
@@ -54,6 +96,20 @@ class LmsStudentLifecycle
     {
         $this->requireTransaction();
         DB::table('lms_playback_leases')->where('student_id', $studentId)->delete();
+        DB::table('lms_video_progress')->where('student_id', $studentId)->delete();
+        foreach (DB::table('lms_assignment_submissions')->where('student_id', $studentId)->whereNotNull('path')->get(['id', 'path']) as $submission) {
+            DB::afterCommit(function () use ($submission): void {
+                if (! $this->files->discardLearningSubmission($submission->path)) {
+                    Log::warning('LMS submission file cleanup requires review.', ['submission_id' => $submission->id]);
+
+                    return;
+                }
+                DB::table('lms_assignment_submissions')->where('id', $submission->id)->where('status', 'erased')->where('path', $submission->path)
+                    ->update(['path' => null, 'mime_type' => null, 'byte_size' => null, 'sha256' => null]);
+            });
+        }
+        DB::table('lms_quiz_attempts')->where('student_id', $studentId)->update(['definition' => '[]', 'answers' => null, 'marks' => null, 'feedback' => null, 'status' => 'erased', 'lock_version' => DB::raw('lock_version + 1')]);
+        DB::table('lms_assignment_submissions')->where('student_id', $studentId)->update(['definition' => '[]', 'body' => null, 'url' => null, 'feedback' => null, 'status' => 'erased', 'lock_version' => DB::raw('lock_version + 1')]);
         DB::table('lms_authorized_devices')->where('student_id', $studentId)->delete();
         foreach (['lms_lesson_notes', 'lms_lesson_bookmarks', 'lms_learning_visits'] as $table) {
             DB::table($table)->where('student_id', $studentId)->delete();

@@ -8,3 +8,4 @@ import './staff-quick-actions.js';
 import './learning-player.js';
 import './protected-video.js';
 import './bunny-upload.js';
+import './learning-progress.js';

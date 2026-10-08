@@ -140,7 +140,7 @@ class LmsFoundationTest extends TestCase
         DB::table('lms_lessons')->insert(['course_id' => $course->id, 'section_id' => $section->id, 'title' => 'Bad', 'slug' => 'bad']);
     }
 
-    public function test_unimplemented_content_cannot_be_marked_ready_at_database_boundary(): void
+    public function test_malformed_assessment_cannot_be_marked_ready_at_database_boundary(): void
     {
         $lesson = $this->lesson();
         $this->expectException(QueryException::class);

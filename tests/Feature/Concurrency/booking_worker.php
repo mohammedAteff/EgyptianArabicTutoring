@@ -27,6 +27,9 @@ use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\VideoAsset;
 use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsAccessOperations;
+use App\Domains\Lms\Services\LmsAssignmentService;
+use App\Domains\Lms\Services\LmsProgressService;
+use App\Domains\Lms\Services\LmsQuizService;
 use App\Domains\Lms\Services\LmsVideoService;
 use App\Domains\Lms\Services\ProtectedPlaybackService;
 use App\Domains\Lms\Services\StudentLearningStateService;
@@ -87,6 +90,36 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['evidence_manual', 'evidence_quiz_begin', 'evidence_quiz_submit', 'evidence_assignment_submit', 'evidence_assignment_review', 'evidence_watch'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Learning evidence races require the dedicated test database.');
+        }
+        $student = Student::query()->findOrFail((int) $data['student_id']);
+        $course = Course::query()->findOrFail((int) $data['course_id']);
+        $lesson = Lesson::query()->findOrFail((int) $data['lesson_id']);
+        $block = isset($data['block_id']) ? LessonBlock::query()->findOrFail((int) $data['block_id']) : null;
+        if ($action === 'evidence_watch') {
+            $request = Request::create('/student/synthetic-progress-race', 'POST', $data['sample'], [VideoDeviceService::COOKIE => $data['device_token']]);
+            $session = new Store('evidence-race', new ArraySessionHandler(120));
+            $session->setId($data['session_id']);
+            $session->start();
+            $session->put(['student_id' => $student->id, 'student_auth_expires_at' => now('UTC')->addHour()->toIso8601String()]);
+            $request->setLaravelSession($session);
+            Auth::guard('student')->setUser($student);
+            $result = app(LmsProgressService::class)->sampleWatch($request, $student, $course, $lesson, $block, (int) $data['watch_id']);
+            echo 'RESULT:SUCCESS:'.json_encode($result, JSON_THROW_ON_ERROR)."\n";
+        } else {
+            $result = match ($action) {
+                'evidence_manual' => app(LmsProgressService::class)->manual($student, $course, $lesson),
+                'evidence_quiz_begin' => app(LmsQuizService::class)->begin($student, $course, $lesson, $block, $data['request_key']),
+                'evidence_quiz_submit' => app(LmsQuizService::class)->submit($student, $course, $lesson, $block, (int) $data['attempt_id'], $data['answers']),
+                'evidence_assignment_submit' => app(LmsAssignmentService::class)->submit($student, $course, $lesson, $block, $data['submission'], null),
+                'evidence_assignment_review' => app(LmsAssignmentService::class)->review(Administrator::query()->findOrFail($data['administrator_id']), (int) $data['submission_id'], (int) $data['version'], $data['status'], $data['feedback']),
+            };
+            echo 'RESULT:SUCCESS:'.$result->id."\n";
+        }
+        exit(0);
+    }
     if (in_array($action, ['video_issue', 'video_renew', 'video_register', 'video_device_revoke', 'video_grant_revoke', 'video_reconcile'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Video races require the dedicated test database.');

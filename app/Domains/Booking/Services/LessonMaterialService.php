@@ -339,6 +339,44 @@ class LessonMaterialService
         return str_starts_with($normalizedFile, $normalizedRoot) ? $file : null;
     }
 
+    /** @return array{path:string,mime_type:string,byte_size:int,sha256:string} */
+    public function storeLearningSubmission(UploadedFile $file, string $kind): array
+    {
+        $allowed = match ($kind) {
+            'file' => ['application/pdf' => 'pdf', 'image/jpeg' => 'jpg', 'image/png' => 'png', 'text/plain' => 'txt'],
+            'audio' => ['audio/mpeg' => 'mp3', 'audio/x-wav' => 'wav', 'audio/wav' => 'wav', 'audio/ogg' => 'ogg', 'audio/mp4' => 'm4a', 'video/webm' => 'webm', 'audio/webm' => 'webm'],
+            'video' => ['video/mp4' => 'mp4', 'video/webm' => 'webm'],
+            default => [],
+        };
+        Validator::make(['file' => $file], ['file' => ['required', 'file', 'extensions:'.implode(',', array_unique(array_values($allowed))), 'max:'.($kind === 'file' ? 10240 : ($kind === 'audio' ? 25600 : 51200))]])->validate();
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($file->getRealPath());
+        if (! isset($allowed[$mime])) {
+            throw ValidationException::withMessages(['file' => 'This file content type is not supported.']);
+        }
+        $path = $file->storeAs('lms-submissions', Str::uuid().'.'.$allowed[$mime], 'local');
+        if (! is_string($path)) {
+            throw ValidationException::withMessages(['file' => 'The private file could not be stored.']);
+        }
+
+        return ['path' => $path, 'mime_type' => $mime, 'byte_size' => (int) $file->getSize(), 'sha256' => hash_file('sha256', Storage::disk('local')->path($path))];
+    }
+
+    public function openLearningSubmission(string $path, string $sha256): BinaryFileResponse
+    {
+        $file = $this->privatePath($path, 'lms-submissions');
+        abort_unless($file && hash_equals($sha256, hash_file('sha256', $file)), 404);
+
+        return response()->download($file, 'learning-submission.'.pathinfo($path, PATHINFO_EXTENSION), [
+            'Content-Type' => 'application/octet-stream', 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store', 'Referrer-Policy' => 'no-referrer',
+        ]);
+    }
+
+    public function discardLearningSubmission(string $path): bool
+    {
+        return $this->privatePath($path, 'lms-submissions') !== null && Storage::disk('local')->delete($path);
+    }
+
     private function lockedMaterial(Booking $booking, LessonMaterial $material): LessonMaterial
     {
         return $booking->lessonMaterials()->whereKey($material->id)->lockForUpdate()->firstOrFail();

@@ -10,6 +10,8 @@ use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\LessonBookmark;
 use App\Domains\Lms\Models\LessonNote;
 use App\Domains\Lms\Services\LmsAccessService;
+use App\Domains\Lms\Services\LmsLearningGate;
+use App\Domains\Lms\Services\LmsProgressService;
 use App\Domains\Lms\Services\StudentLearningService;
 use App\Domains\Lms\Services\StudentLearningStateService;
 use App\Domains\Students\Models\Student;
@@ -50,6 +52,9 @@ class LearningController extends Controller
             return $this->unavailable($request, $student, $course, $lesson);
         }
         $this->state->visit($student, $data['course'], $data['lesson']);
+        app(LmsProgressService::class)->start($student, $data['course'], $data['lesson']);
+        $data = $this->learning->lesson($student, $data['course'], $data['lesson']);
+        abort_unless($data !== null, 404);
 
         $response = $this->page($request, 'student.learning.lesson', $data);
         if ($data['blocks']->contains('kind', 'video')) {
@@ -144,6 +149,13 @@ class LearningController extends Controller
 
     private function unavailable(Request $request, Student $student, Course $course, ?Lesson $lesson = null): Response
     {
+        if ($lesson && $this->access->canAccess($student, $lesson)) {
+            $lock = app(LmsLearningGate::class)->decision($student, $lesson);
+            if (! $lock['allowed']) {
+                return $this->page($request, 'student.learning.unavailable', ['message' => $lock['reason'], 'at' => $lock['unlocks_at']], 404);
+            }
+        }
+
         return $this->page($request, 'student.learning.unavailable', $this->access->unavailable($student, $course, $lesson), 404);
     }
 

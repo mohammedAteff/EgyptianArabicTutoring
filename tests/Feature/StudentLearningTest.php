@@ -62,7 +62,8 @@ class StudentLearningTest extends TestCase
         $this->grant($student, $lesson->course);
         $this->grant($student, $lesson);
         $response = $this->signIn($student)->get(route('student.learning.index'));
-        $response->assertOk()->assertViewHas('cards', fn ($cards) => $cards->count() === 1)->assertSee('My Learning')->assertSee('Continue Learning')->assertSee('Completed')->assertSee('Tutoring work')->assertSee(route('student.teaching.index'), false)->assertDontSee('0%')->assertHeader('Cache-Control', 'no-store, private');
+        $response->assertOk()->assertViewHas('cards', fn ($cards) => $cards->count() === 1)->assertSee('My Learning')->assertSee('Continue Learning')->assertSee('Completed')->assertSee('Tutoring work')->assertSee(route('student.teaching.index'), false)->assertSee('0%')->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertDatabaseCount('lms_lesson_progress', 0);
         $this->assertDatabaseCount('lms_learning_visits', 0);
         $this->assertDatabaseCount('student_notifications', 0);
     }

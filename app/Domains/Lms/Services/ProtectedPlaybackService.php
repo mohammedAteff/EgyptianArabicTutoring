@@ -142,6 +142,21 @@ class ProtectedPlaybackService
         abort_unless(preg_match('/^[a-f0-9]{64}$/D', $token) && hash_equals($lease->lease_token_hash, hash('sha256', $token)) && hash_equals($lease->session_hash, $this->sessionHash($request)), 404);
     }
 
+    /** Security proof only: this method does not record or renew watching. */
+    public function learningProof(Request $request, Student $student, LessonBlock $block): PlaybackLease
+    {
+        $current = $this->sessions->current($request);
+        abort_unless($current && $current->id === $student->id, 404);
+        abort_unless($this->access->canAccess($student, $block), 404);
+        $lease = PlaybackLease::query()->where('student_id', $student->id)->where('block_id', $block->id)->lockForUpdate()->findOrFail((int) $request->input('lease_id'));
+        $this->proof($request, $lease, (string) $request->input('lease_token'));
+        $device = $this->devices->current($request, $student, null, false);
+        abort_unless($device->id === $lease->device_id && $lease->status === 'active' && $lease->expires_at->isFuture()
+            && $lease->authorized_until->isFuture() && (int) $lease->video_asset_id === (int) $block->video_asset_id, 404);
+
+        return $lease;
+    }
+
     private function sessionHash(Request $request): string
     {
         return hash_hmac('sha256', $request->session()->getId(), config('app.key'));

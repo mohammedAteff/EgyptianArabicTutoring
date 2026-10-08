@@ -189,11 +189,11 @@ class CourseStudioAssetSecurityTest extends TestCase
         $this->actingAs($actor, 'web')->get(route('admin.lms.courses.preview', $course))->assertOk()->assertSee('youtube-nocookie.com/embed/dQw4w9WgXcQ', false)->assertSee('player.vimeo.com/video/123456789', false)->assertSee('أهلاً')->assertDontSee('alert(1)', false)->assertDontSee('https://evil.test', false);
     }
 
-    public function test_unsupported_authoring_controls_are_absent_and_server_rejects_their_submission(): void
+    public function test_current_assessment_controls_are_visible_and_retired_placeholder_type_is_rejected(): void
     {
         [$actor,$course,$key] = $this->draft();
-        $this->actingAs($actor, 'web')->get(route('admin.lms.courses.edit', $course))->assertDontSee('value="bunny_video"', false)->assertDontSee('value="quiz"', false)->assertDontSee('value="assignment"', false);
-        $this->postJson(route('admin.lms.courses.update', $course), ['operation' => 'add_block', 'version' => $course->fresh()->lock_version, 'parent_key' => $key, 'kind' => 'quiz'])->assertUnprocessable()->assertJsonValidationErrors('kind');
+        $this->actingAs($actor, 'web')->get(route('admin.lms.courses.edit', $course))->assertDontSee('value="bunny_video"', false)->assertSee('value="quiz"', false)->assertSee('value="assignment"', false);
+        $this->postJson(route('admin.lms.courses.update', $course), ['operation' => 'add_block', 'version' => $course->fresh()->lock_version, 'parent_key' => $key, 'kind' => 'bunny_video'])->assertUnprocessable()->assertJsonValidationErrors('kind');
     }
 
     public function test_missing_or_modified_bytes_fail_closed_in_preview_and_publication(): void
@@ -201,11 +201,11 @@ class CourseStudioAssetSecurityTest extends TestCase
         Storage::fake('local');
         [$actor,$course,$key] = $this->draft();
         $studio = app(CourseStudioService::class);
-        $asset = $studio->upload($actor,$course,$this->pdf(),'file',$course->fresh()->lock_version);
-        $this->write($actor,$course,'add_block',['parent_key' => $key, 'kind' => 'file', 'asset_id' => $asset->id]);
-        Storage::disk('local')->put($asset->path,'REPLACED BYTES');
-        $this->actingAs($actor,'web')->get(route('admin.lms.courses.assets',[$course, $asset]))->assertNotFound();
-        $this->postJson(route('admin.lms.courses.lifecycle',$course),['status' => 'published', 'version' => $course->fresh()->lock_version])->assertUnprocessable()->assertJsonValidationErrors('publication');
-        $this->assertSame('draft',$course->fresh()->status);
+        $asset = $studio->upload($actor, $course, $this->pdf(), 'file', $course->fresh()->lock_version);
+        $this->write($actor, $course, 'add_block', ['parent_key' => $key, 'kind' => 'file', 'asset_id' => $asset->id]);
+        Storage::disk('local')->put($asset->path, 'REPLACED BYTES');
+        $this->actingAs($actor, 'web')->get(route('admin.lms.courses.assets', [$course, $asset]))->assertNotFound();
+        $this->postJson(route('admin.lms.courses.lifecycle', $course), ['status' => 'published', 'version' => $course->fresh()->lock_version])->assertUnprocessable()->assertJsonValidationErrors('publication');
+        $this->assertSame('draft', $course->fresh()->status);
     }
 }

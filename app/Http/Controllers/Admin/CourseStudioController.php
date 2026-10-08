@@ -12,6 +12,9 @@ use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsContentService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Models\Student;
+use App\Domains\Timezone\Exceptions\DstFoldAmbiguityException;
+use App\Domains\Timezone\Exceptions\DstGapException;
+use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -93,9 +96,18 @@ class CourseStudioController extends Controller
     public function update(Request $request, Course $course): RedirectResponse
     {
         $actor = $this->actor($request);
-        $values = $request->validate(['operation' => ['required', Rule::in(['protection', 'metadata', 'access', 'add_section', 'edit_section', 'add_lesson', 'edit_lesson', 'move_lesson', 'add_block', 'edit_block', 'remove_block', 'reorder_section', 'reorder_lesson', 'reorder_block'])],
+        $values = $request->validate(['operation' => ['required', Rule::in(['learning', 'protection', 'metadata', 'access', 'add_section', 'edit_section', 'add_lesson', 'edit_lesson', 'move_lesson', 'add_block', 'edit_block', 'remove_block', 'reorder_section', 'reorder_lesson', 'reorder_block'])],
             'version' => ['required', 'integer', 'min:1']]);
-        $data = $request->only(['protection_profile_id', 'video_asset_id', 'title', 'slug', 'status', 'key', 'parent_key', 'destination', 'direction', 'audience', 'access_mode', 'starts_at', 'expires_at', 'relative_days', 'kind', 'html', 'url', 'resource_id', 'asset_id', 'source', 'alt', 'label']);
+        $data = $request->only(['definition', 'required', 'methods', 'video_threshold', 'prerequisite_key', 'drip_mode', 'drip_days', 'drip_at', 'protection_profile_id', 'video_asset_id', 'title', 'slug', 'status', 'key', 'parent_key', 'destination', 'direction', 'audience', 'access_mode', 'starts_at', 'expires_at', 'relative_days', 'kind', 'html', 'url', 'resource_id', 'asset_id', 'source', 'alt', 'label']);
+        if ($values['operation'] === 'learning' && ($data['drip_mode'] ?? null) === 'fixed' && $request->filled('drip_local')) {
+            $request->validate(['drip_local' => ['required', 'date_format:Y-m-d\TH:i']]);
+            $timezones = app(TimezoneService::class);
+            try {
+                $data['drip_at'] = $timezones->resolveLocalWallTime($request->string('drip_local')->toString(), $timezones->getBusinessTimezone(), 'reject')->toIso8601String();
+            } catch (DstGapException|DstFoldAmbiguityException $exception) {
+                throw ValidationException::withMessages(['drip_local' => 'This local time is missing or repeated at a clock change. Choose an unambiguous time.']);
+            }
+        }
         if ($values['operation'] === 'access') {
             foreach (['starts_at', 'expires_at'] as $field) {
                 if (! empty($data[$field])) {

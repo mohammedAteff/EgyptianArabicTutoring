@@ -1,5 +1,6 @@
-<div data-protected-player data-authorize-url="{{ $block['authorizationUrl'] }}" class="space-y-3">
+<div data-protected-player data-authorize-url="{{ $block['authorizationUrl'] }}" data-watch-url="{{ route('student.evidence.watch.begin', [$course,$lesson,$block['id']]) }}" class="space-y-3">
     <h2 dir="auto" class="font-semibold">{{ $block['label'] }}</h2>
+    <p data-watch-status role="status" class="text-xs text-stone-500">Watch progress is saved while this video plays.</p>
     <div data-video-container class="relative overflow-hidden rounded-xl bg-stone-950">
         <video data-lms-video="{{ $block['id'] }}" playsinline preload="none" disablepictureinpicture disableremoteplayback controlslist="nodownload noremoteplayback nofullscreen" class="aspect-video w-full"></video>
         <span data-video-watermark hidden aria-hidden="true" class="pointer-events-none absolute z-10 max-w-[85%] rounded bg-black/30 px-2 py-1 text-xs font-semibold text-white/80"></span>

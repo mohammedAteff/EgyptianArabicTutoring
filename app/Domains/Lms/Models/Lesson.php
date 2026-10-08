@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $published_at
  * @property int $lock_version
  * @property int|null $protection_profile_id
+ * @property array<string,mixed>|null $learning_rules
  */
 class Lesson extends LmsModel
 {
@@ -28,7 +29,7 @@ class Lesson extends LmsModel
 
     protected function casts(): array
     {
-        return ['published_at' => 'datetime', 'lock_version' => 'integer'];
+        return ['published_at' => 'datetime', 'lock_version' => 'integer', 'learning_rules' => 'array'];
     }
 
     /** @return BelongsTo<Course, $this> */

@@ -39,7 +39,8 @@
                     <div class="flex flex-1 flex-col gap-4 p-5">
                         <div><p class="text-xs font-semibold uppercase tracking-wide text-stone-500">{{ $card['course']->kind === 'private' ? 'Personal learning' : 'Course' }}</p><h3 dir="auto" class="mt-2 break-words text-lg font-semibold">{{ $card['course']->title }}</h3></div>
                         <p class="text-xs leading-relaxed text-stone-500">@if($accessEndings[$card['course']->id])Current access available until {{ $accessEndings[$card['course']->id]->timezone($timezone)->format('j M Y, H:i T') }}@else Current access has no scheduled end.@endif</p>
-                        <a href="{{ $card['url'] }}" class="mt-auto inline-flex min-h-11 items-center justify-center rounded-xl bg-nile-800 px-4 text-sm font-semibold text-white hover:bg-nile-900">{{ $card['visited'] ? 'Continue' : 'Start learning' }}</a>
+                        <p class="text-sm font-semibold text-nile-800">{{ $card['progress']['status'] }} · {{ $card['progress']['percent'] }}% complete</p>
+                        <a href="{{ $card['url'] }}" class="mt-auto inline-flex min-h-11 items-center justify-center rounded-xl bg-nile-800 px-4 text-sm font-semibold text-white hover:bg-nile-900">{{ $card['progress']['status'] === 'Completed' ? 'Review course' : ($card['visited'] ? 'Continue' : 'Start learning') }}</a>
                     </div>
                 </article>
             @empty
@@ -59,7 +60,8 @@
         @endforelse
     </section>
     <section aria-labelledby="completed-learning" class="space-y-3 rounded-2xl bg-stone-100 p-6">
-        <h2 id="completed-learning" class="text-xl font-semibold">Completed</h2><p class="text-sm text-stone-600">Course completion is not tracked yet. Opening a lesson does not mark it complete.</p>
+        <h2 id="completed-learning" class="text-xl font-semibold">Completed</h2>
+        @forelse($completedCards as $card)<a href="{{ $card['url'] }}" dir="auto" class="block min-h-11 rounded-xl bg-white p-4 text-sm font-semibold text-nile-800">{{ $card['course']->title }} · 100%</a>@empty<p class="text-sm text-stone-600">Complete the required lessons in a course to see it here.</p>@endforelse
     </section>
     <p class="text-xs text-stone-500">Times shown in {{ $timezone }}.</p>
 </div>

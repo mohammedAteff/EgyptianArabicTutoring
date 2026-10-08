@@ -9,6 +9,7 @@ use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
 use App\Domains\Lms\Services\LmsAccessService;
+use App\Domains\Lms\Services\LmsLearningGate;
 use App\Domains\Students\Services\StudentSessionContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,11 +35,15 @@ class LmsFoundationController extends Controller
         abort_unless((int) $lesson->course_id === (int) $course->id, 404);
         $student = $this->students->current($request);
         abort_unless($this->access->canAccess($student, $lesson), 404);
+        abort_unless(app(LmsLearningGate::class)->decision($student, $lesson)['allowed'], 404);
         $blocks = $this->access->lessonBlocks($student, $lesson)
             ->map(function (LessonBlock $block) use ($student, $course, $lesson): array {
                 $data = $block->only(['id', 'kind', 'sort_order']);
                 if ($block->kind === 'video') {
                     $data['authorization_url'] = $student ? route('student.video.authorize', [$course, $lesson, $block]) : null;
+                } elseif (in_array($block->kind, ['quiz', 'assignment'], true)) {
+                    $data['title'] = $block->payload['title'];
+                    $data['url'] = $student ? route('student.evidence.show', [$course, $lesson, $block]) : null;
                 } elseif ($block->kind === 'resource') {
                     $data['url'] = $student ? route('student.lms.resources.open', [$course, $lesson, $block]) : route('resources.show', $block->resource->slug);
                 } else {

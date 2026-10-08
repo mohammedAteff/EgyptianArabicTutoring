@@ -51,7 +51,7 @@ class LmsAccessService
     /** @return Collection<int, LessonBlock> */
     public function lessonBlocks(?Student $student, Lesson $lesson): Collection
     {
-        if (! $this->canAccess($student, $lesson)) {
+        if (! $this->canAccess($student, $lesson) || ! app(LmsLearningGate::class)->decision($student, $lesson)['allowed']) {
             return collect();
         }
 
@@ -75,7 +75,7 @@ class LmsAccessService
             $target = $grant->lesson ?? $grant->section ?? $grant->course;
         }
         if ($target instanceof LessonBlock) {
-            if (! $this->readyBlock($target)) {
+            if (! $this->readyBlock($target) || ! app(LmsLearningGate::class)->decision($student, $target->lesson)['allowed']) {
                 return ['allowed' => false, 'sources' => []];
             }
             $target = $target->lesson;

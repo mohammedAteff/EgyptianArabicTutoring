@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class LmsContentService
 {
-    public const AUTHORABLE = ['rich_text', 'image', 'file', 'resource', 'external_link', 'youtube_video', 'external_video', 'video'];
+    public const AUTHORABLE = ['rich_text', 'image', 'file', 'resource', 'external_link', 'youtube_video', 'external_video', 'video', 'quiz', 'assignment'];
 
     public function __construct(private RichTextSanitizer $sanitizer) {}
 
@@ -31,6 +31,22 @@ class LmsContentService
      */
     public function normalize(Course $course, array $data, array $allowedAssetIds = [], array $allowedVideoIds = []): array
     {
+        if (in_array($data['kind'] ?? null, ['quiz', 'assignment'], true)) {
+            $definition = $data['definition'] ?? [];
+            if (is_string($definition)) {
+                try {
+                    $definition = json_decode($definition, true, 16, JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    $this->invalid('definition', 'Use a valid assessment definition.');
+                }
+            }
+            if (! is_array($definition)) {
+                $this->invalid('definition', 'Use an assessment definition object.');
+            }
+
+            return ['kind' => $data['kind'], 'status' => 'ready', 'resource_id' => null, 'asset_id' => null,
+                'video_asset_id' => null, 'payload' => app(LmsLearningDefinition::class)->assessment($data['kind'], $definition)];
+        }
         $values = Validator::make($data, ['kind' => ['required', Rule::in(self::AUTHORABLE)],
             'html' => ['nullable', 'string', 'max:50000'], 'url' => ['nullable', 'string', 'max:2000'],
             'resource_id' => ['nullable', 'integer', 'min:1'], 'asset_id' => ['nullable', 'integer', 'min:1'],
@@ -115,7 +131,8 @@ class LmsContentService
 
         return ['kind' => $block['kind'], 'resource_id' => $block['resource_id'] ?? null, 'asset_id' => $block['asset_id'] ?? null, 'video_asset_id' => $block['video_asset_id'] ?? null,
             'source' => ! empty($block['resource_id']) ? 'resource' : 'asset', 'html' => $payload['html'] ?? null,
-            'url' => $payload['url'] ?? null, 'alt' => $payload['alt'] ?? null, 'label' => $payload['label'] ?? null];
+            'url' => $payload['url'] ?? null, 'alt' => $payload['alt'] ?? null, 'label' => $payload['label'] ?? null,
+            'definition' => $payload];
     }
 
     /** @return array{url:string,provider:string,embed_url:string} */

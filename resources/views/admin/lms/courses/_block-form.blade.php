@@ -15,7 +15,7 @@
     <input type="hidden" name="{{ $block?'key':'parent_key' }}" value="{{ $block?$blockKey:$lesson['key'] }}">
     <div><label for="{{ $formId }}-kind" class="mb-1.5 block text-sm font-semibold text-slate-700">Content type</label>
         <select id="{{ $formId }}-kind" name="kind" x-model="kind" class="min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-sm">
-            @foreach(['rich_text'=>'Rich text','image'=>'Image','file'=>'PDF / file','resource'=>'Resource library reference','external_link'=>'External link','youtube_video'=>'YouTube video','external_video'=>'Vimeo / direct video','video'=>'Protected video asset'] as $value=>$label)
+            @foreach(['rich_text'=>'Rich text','image'=>'Image','file'=>'PDF / file','resource'=>'Resource library reference','external_link'=>'External link','youtube_video'=>'YouTube video','external_video'=>'Vimeo / direct video','video'=>'Protected video asset','quiz'=>'Quiz','assignment'=>'Course assignment'] as $value=>$label)
                 <option value="{{ $value }}" @selected($kind===$value)>{{ $label }}</option>
             @endforeach
         </select>
@@ -47,5 +47,6 @@
     </div>
     <div x-show="kind==='image'"><x-lms.input label="Image description" name="alt" :id="$formId.'-alt'" :value="$isOld?old('alt',$payload['alt']??''):($payload['alt']??'')" maxlength="300" hint="Describe what the image teaches for readers who cannot see it."/></div>
     <div x-show="kind==='file'"><x-lms.input label="Download button text" name="label" :id="$formId.'-label'" :value="$payload['label']??'Download file'" maxlength="300"/></div>
+    @include('admin.lms.courses._assessment')
     <x-lms.button tone="neutral">{{ $block?'Save content draft':'Add content' }}</x-lms.button>
 </form>

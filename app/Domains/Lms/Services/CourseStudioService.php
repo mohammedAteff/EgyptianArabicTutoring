@@ -13,6 +13,7 @@ use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\LmsAsset;
 use App\Domains\Lms\Models\ProtectionProfile;
 use App\Domains\Lms\Models\Section;
+use App\Domains\Lms\Models\VideoAsset;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Services\TeachingRecordService;
 use Carbon\CarbonImmutable;
@@ -72,6 +73,11 @@ class CourseStudioService
                     break;
                 case 'access':
                     $graph['access'] = $this->access($course, $data);
+                    break;
+                case 'learning':
+                    [$section, $lesson] = $this->lessonIndex($graph, (string) ($data['key'] ?? ''));
+                    $graph['sections'][$section]['lessons'][$lesson]['learning_rules'] = app(LmsLearningDefinition::class)->rules($data);
+                    $this->validateLearningGraph($graph);
                     break;
                 case 'protection':
                     app(LmsVideoSettings::class)->authorize($actor);
@@ -225,12 +231,22 @@ class CourseStudioService
             $target = $this->structure->createCourse($actor, ['title' => $title, 'slug' => $slug, 'kind' => $source->kind, 'owner_student_id' => $source->owner_student_id]);
             $graph['title'] = $title;
             $graph['slug'] = $slug;
+            $lessonKeys = [];
+            foreach ($graph['sections'] as $section) {
+                foreach ($section['lessons'] as $lesson) {
+                    $lessonKeys[$lesson['key']] = 'lesson:'.Str::uuid();
+                }
+            }
             foreach ($graph['sections'] as &$section) {
                 $section['id'] = null;
                 $section['key'] = 'section:'.Str::uuid();
                 foreach ($section['lessons'] as &$lesson) {
                     $lesson['id'] = null;
-                    $lesson['key'] = 'lesson:'.Str::uuid();
+                    $oldKey = $lesson['key'];
+                    $lesson['key'] = $lessonKeys[$oldKey];
+                    if (! empty($lesson['learning_rules']['prerequisite_key'])) {
+                        $lesson['learning_rules']['prerequisite_key'] = $lessonKeys[$lesson['learning_rules']['prerequisite_key']] ?? null;
+                    }
                     $lesson['blocks'] = array_values(array_filter($lesson['blocks'], fn (array $block): bool => $block['status'] === 'ready' && in_array($block['kind'], LmsContentService::AUTHORABLE, true)));
                     foreach ($lesson['blocks'] as &$block) {
                         $block['id'] = null;
@@ -273,6 +289,7 @@ class CourseStudioService
                 'starts_at' => $rule?->starts_at?->toIso8601String(), 'expires_at' => $rule?->expires_at?->toIso8601String(), 'relative_days' => $rule?->relative_days],
             'sections' => $course->sections->map(fn (Section $section): array => ['key' => 'section:'.$section->id, 'id' => $section->id, 'title' => $section->title, 'status' => $section->status,
                 'lessons' => $section->lessons->map(fn (Lesson $lesson): array => ['key' => 'lesson:'.$lesson->id, 'id' => $lesson->id, 'title' => $lesson->title, 'slug' => $lesson->slug, 'status' => $lesson->status,
+                    ...($lesson->learning_rules !== null ? ['learning_rules' => $lesson->learning_rules] : []),
                     ...($lesson->protection_profile_id !== null ? ['protection_profile_id' => $lesson->protection_profile_id] : []),
                     'blocks' => $lesson->blocks->map(fn (LessonBlock $block): array => ['key' => 'block:'.$block->id, 'id' => $block->id, 'kind' => $block->kind, 'status' => $block->status,
                         'resource_id' => $block->resource_id, 'asset_id' => $block->asset_id, ...($block->video_asset_id !== null ? ['video_asset_id' => $block->video_asset_id] : []), 'payload' => $block->payload])->all()])->all()])->all()];
@@ -440,6 +457,7 @@ class CourseStudioService
      * @return array<string,mixed> */
     private function validatePublication(Course $course, array $graph): array
     {
+        $this->validateLearningGraph($graph, true);
         if (isset($graph['base_fingerprint']) && ! hash_equals($graph['base_fingerprint'], hash('sha256', json_encode($this->liveGraph($course), JSON_THROW_ON_ERROR)))) {
             abort(409, 'The published structure changed outside this draft. Review it and rebuild the draft before publishing.');
         }
@@ -525,6 +543,7 @@ class CourseStudioService
         $seenSections = [];
         $seenLessons = [];
         $seenBlocks = [];
+        $lessonKeys = [];
         foreach ($graph['sections'] as $section) {
             foreach ($section['lessons'] as $lesson) {
                 $existing = ! empty($lesson['id']) ? $lessons->get($lesson['id']) : null;
@@ -545,8 +564,10 @@ class CourseStudioService
                 $node = ! empty($lesson['id']) ? $lessons->get($lesson['id']) : new Lesson;
                 abort_unless($node instanceof Lesson, 404);
                 $node->forceFill(['course_id' => $course->id, 'section_id' => $model->id, 'title' => $lesson['title'], 'slug' => $lesson['slug'], 'status' => $lesson['status'], 'sort_order' => $lessonOrder,
+                    'learning_rules' => $lesson['learning_rules'] ?? null,
                     'protection_profile_id' => $lesson['protection_profile_id'] ?? null,
                     'published_at' => $lesson['status'] === 'published' ? ($node->published_at ?? now('UTC')) : $node->published_at, 'lock_version' => ($node->lock_version ?? 0) + 1])->save();
+                $lessonKeys[$lesson['key']] = 'lesson:'.$node->id;
                 $lesson['id'] = $node->id;
                 $lesson['key'] = 'lesson:'.$node->id;
                 $seenLessons[] = $node->id;
@@ -564,8 +585,64 @@ class CourseStudioService
         Section::query()->where('course_id', $course->id)->whereNotIn('id', $seenSections)->update(['status' => 'archived']);
         Lesson::query()->where('course_id', $course->id)->whereNotIn('id', $seenLessons)->update(['status' => 'archived']);
         LessonBlock::query()->whereIn('lesson_id', $lessons->modelKeys())->whereNotIn('id', $seenBlocks)->update(['status' => 'withdrawn', 'resource_id' => null, 'asset_id' => null, 'video_asset_id' => null, 'payload' => null]);
+        foreach ($graph['sections'] as &$section) {
+            foreach ($section['lessons'] as &$lesson) {
+                if (! empty($lesson['learning_rules']['prerequisite_key'])) {
+                    $lesson['learning_rules']['prerequisite_key'] = $lessonKeys[$lesson['learning_rules']['prerequisite_key']];
+                    Lesson::query()->whereKey($lesson['id'])->update(['learning_rules' => $lesson['learning_rules']]);
+                }
+            }
+            unset($lesson);
+        }
+        unset($section);
 
         return $graph;
+    }
+
+    /** @param array<string,mixed> $graph */
+    private function validateLearningGraph(array $graph, bool $publishing = false): void
+    {
+        $nodes = [];
+        foreach ($graph['sections'] as $section) {
+            foreach ($section['lessons'] as $lesson) {
+                $nodes[$lesson['key']] = $lesson + ['section_status' => $section['status']];
+            }
+        }
+        foreach ($nodes as $key => $lesson) {
+            $rules = isset($lesson['learning_rules']) ? app(LmsLearningDefinition::class)->rules($lesson['learning_rules']) : null;
+            $seen = [$key];
+            $next = $rules['prerequisite_key'] ?? null;
+            while ($next) {
+                if (! isset($nodes[$next]) || in_array($next, $seen, true)) {
+                    $this->invalid('prerequisite_key', 'Choose a lesson in this course without creating a prerequisite cycle.');
+                }
+                if ($publishing && $lesson['status'] === 'published' && $lesson['section_status'] === 'published'
+                    && ($nodes[$next]['status'] !== 'published' || $nodes[$next]['section_status'] !== 'published')) {
+                    $this->invalid('prerequisite_key', 'Published lessons need published prerequisites.');
+                }
+                $seen[] = $next;
+                $next = $nodes[$next]['learning_rules']['prerequisite_key'] ?? null;
+            }
+            if (! $publishing || ! $rules || $lesson['status'] !== 'published' || $lesson['section_status'] !== 'published') {
+                continue;
+            }
+            $blocks = collect($lesson['blocks'])->where('status', 'ready');
+            foreach ($rules['methods'] as $method) {
+                $kind = match ($method) {
+                    'video' => 'video', 'quiz_complete', 'quiz_pass' => 'quiz', 'assignment_submit', 'assignment_approve' => 'assignment', default => null
+                };
+                if ($kind && $blocks->where('kind', $kind)->isEmpty()) {
+                    $this->invalid('methods', 'Add the content needed by the completion method for '.$lesson['title'].'.');
+                }
+                if ($kind === 'video') {
+                    foreach ($blocks->where('kind', 'video') as $block) {
+                        if (VideoAsset::query()->whereKey($block['video_asset_id'])->where('provider', 'bunny')->where('duration_seconds', '>', 0)->doesntExist()) {
+                            $this->invalid('methods', 'Video completion requires protected Bunny media with a verified duration.');
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private function invalid(string $field, string $message): never

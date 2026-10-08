@@ -44,14 +44,17 @@ function initialize() {
         const seek = root.querySelector('[data-video-seek]');
         let requestKey, proof, authorization, hls, renewal, expiry, movement, busy = false, generation = 0;
         const stop = (message, release = true) => {
+            const progress = {pending: []};
+            root.dispatchEvent(new CustomEvent('lms:stopping', {detail: progress}));
             generation++;
             clearTimeout(renewal); clearTimeout(expiry); clearInterval(movement);
             video.pause(); hls?.destroy(); hls = null;
             video.removeAttribute('src'); video.load(); watermark.hidden = true;
             seek.disabled = true; play.textContent = 'Play video'; status.textContent = message;
             const old = authorization;
+            const oldProof = proof;
             authorization = null;
-            if (release && old) protectedPost(old.close_url, {lease_token: proof}, {keepalive: true}).catch(() => {});
+            if (release && old) Promise.allSettled(progress.pending).then(() => protectedPost(old.close_url, {lease_token: oldProof}, {keepalive: true})).catch(() => {});
         };
         const applyPolicy = data => {
             authorizationDelay(data);
@@ -99,6 +102,10 @@ function initialize() {
                 const data = await protectedPost(root.dataset.authorizeUrl, {request_key: requestKey, lease_token: proof});
                 if (turn !== generation) { protectedPost(data.close_url, {lease_token: proof}).catch(() => {}); return; }
                 applyPolicy(data);
+                const progress = {lease_id: data.lease_id, lease_token: proof, pending: []};
+                root.dispatchEvent(new CustomEvent('lms:authorized', {detail: progress}));
+                await Promise.allSettled(progress.pending);
+                if (turn !== generation) return;
                 if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = data.url;
                     await video.play();
