@@ -1,3 +1,19 @@
+## Current acceptance — Stage 9 completed, 2026-10-08
+
+**READY WITH DOCUMENTED NON-BLOCKING LIMITATIONS.** Whole tutoring + LMS application `094b2c45375d5b221d9a6a132af670b580dd4d05` was non-force pushed, protected-backed-up, deployed and production-retested at 2026-10-08T14:55:53Z. Pre-LMS reference `4296b21368cbc9c564d0cb7a85e29b2ae408e0ee`.
+
+- Original 153 IDs: 105 PASS / 48 legitimate PARTIAL, zero observed regression.
+- New 72 LMS IDs: 54 PASS / 18 constrained PARTIAL; all 72 pass current local evidence.
+- Whole app: 225 / 159 PASS / 66 PARTIAL / 0 FAIL / 0 NOT TESTABLE.
+- PHP: 1,364 tests / 11,183 assertions; dedicated MariaDB: 61 checks / 340 assertions; combined 1,425 / 11,523.
+- JavaScript 43 pass; frontend/routes/Pint/diff pass; 256 compiled views lint clean; Composer/npm advisories zero.
+- PHPStan unchanged exact 255-diagnostic multiset including multiplicity; existing debt retained.
+- Production: 181 established HTTP contracts, 12 reconciled metrics, 8 unique owned learning notifications, private bytes/headers, 25 unchanged preview fact tables and original financial/data preservation.
+- One Medium private download directive fixed; one Low historical evidence mapping weakness corrected; no unresolved material runtime defect.
+- Live Bunny/media certification pending under owner-approved mocks; old external/destructive/timing/recovery limits retain their meaning.
+
+See `LMS_FINAL_AUDIT.md` and the final capability ledger. Historical Stage 1–8 sections remain delivery history and do not override this acceptance. Next separately planned work: whole-system architecture review; it was not performed here. Later report-only commits are not the production application release.
+
 # LMS V1 Implementation Status
 
 Date: 2026-10-08 (Africa/Cairo).
