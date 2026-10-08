@@ -19,6 +19,7 @@ use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
 use App\Domains\Lms\Services\BunnyStreamProvider;
+use App\Domains\Lms\Services\LmsSettings;
 use App\Domains\Lms\Services\VideoDeliveryProvider;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
@@ -56,6 +57,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(VideoDeliveryProvider::class, BunnyStreamProvider::class);
         $this->app->scoped(DevelopmentDataSchema::class);
         $this->app->scoped(AnalyticsLifecycle::class);
+        $this->app->scoped(LmsSettings::class);
         ini_set('unserialize_callback_func', 'spl_autoload_call');
         $serializable = config('cache.serializable_classes');
         if (is_array($serializable)) {

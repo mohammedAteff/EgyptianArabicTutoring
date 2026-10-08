@@ -28,8 +28,10 @@ use App\Domains\Lms\Models\VideoAsset;
 use App\Domains\Lms\Services\CourseStudioService;
 use App\Domains\Lms\Services\LmsAccessOperations;
 use App\Domains\Lms\Services\LmsAssignmentService;
+use App\Domains\Lms\Services\LmsLearningNotifications;
 use App\Domains\Lms\Services\LmsProgressService;
 use App\Domains\Lms\Services\LmsQuizService;
+use App\Domains\Lms\Services\LmsSettings;
 use App\Domains\Lms\Services\LmsTutoringAssignments;
 use App\Domains\Lms\Services\LmsVideoService;
 use App\Domains\Lms\Services\ProtectedPlaybackService;
@@ -44,6 +46,7 @@ use App\Domains\Students\Services\PackageRenewalService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
+use App\Domains\Students\Services\StudentNotificationService;
 use App\Domains\Students\Services\StudentPrivacyService;
 use App\Domains\System\Services\DevelopmentToolsService;
 use App\Http\Controllers\Admin\AccountSuspensionController;
@@ -91,6 +94,31 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['learning_settings_save', 'learning_semantic_manual', 'learning_notifications_sync'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Learning operations races require the dedicated test database.');
+        }
+        if ($action === 'learning_settings_save') {
+            app(LmsSettings::class)->save(Administrator::query()->findOrFail((int) $data['administrator_id']), $data['values'], (int) $data['version']);
+        } else {
+            $student = Student::query()->findOrFail((int) $data['student_id']);
+            $request = Request::create('/student/learn/operations-race', 'POST', [], [], [], ['HTTP_USER_AGENT' => 'Mozilla/5.0 controlled learning race']);
+            $session = new Store('learning-operations-race', new ArraySessionHandler(120));
+            $session->start();
+            $session->put(['student_id' => $student->id, 'student_auth_expires_at' => now('UTC')->addHour()->toIso8601String()]);
+            $request->setLaravelSession($session);
+            $request->setUserResolver(fn ($guard = null) => $guard === 'student' ? $student : null);
+            Auth::guard('student')->setUser($student);
+            $app->instance('request', $request);
+            if ($action === 'learning_semantic_manual') {
+                app(LmsProgressService::class)->manual($student, Course::query()->findOrFail((int) $data['course_id']), Lesson::query()->findOrFail((int) $data['lesson_id']));
+            } else {
+                app(StudentNotificationService::class)->synchronize($student, app(LmsLearningNotifications::class)->facts($student));
+            }
+        }
+        echo "RESULT:SUCCESS:learning-operations\n";
+        exit(0);
+    }
     if (in_array($action, ['tutoring_assign', 'tutoring_private', 'tutoring_bulk'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Tutoring learning races require the dedicated test database.');

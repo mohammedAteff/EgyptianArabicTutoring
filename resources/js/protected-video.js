@@ -1,3 +1,13 @@
+export function secureRequestUUID(cryptoApi = globalThis.crypto) {
+    if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+    if (typeof cryptoApi?.getRandomValues !== 'function') throw new Error('Secure browser randomness is unavailable. Try a current browser.');
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
 export function scopedHlsUrl(candidate, authorizationUrl) {
     const signed = new URL(authorizationUrl);
     const marker = signed.pathname.match(/^(\/bcdn_token=HS256-[A-Za-z0-9_-]+&expires=\d+&token_path=%2F([a-f0-9-]{36})%2F)\/\2\/playlist\.m3u8$/);
@@ -96,9 +106,9 @@ function initialize() {
                 return;
             }
             busy = true; play.disabled = true; const turn = generation;
-            requestKey = crypto.randomUUID(); proof = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
             status.textContent = 'Checking video access…';
             try {
+                requestKey = secureRequestUUID(); proof = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
                 const data = await protectedPost(root.dataset.authorizeUrl, {request_key: requestKey, lease_token: proof});
                 if (turn !== generation) { protectedPost(data.close_url, {lease_token: proof}).catch(() => {}); return; }
                 applyPolicy(data);

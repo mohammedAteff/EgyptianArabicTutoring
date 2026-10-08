@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Gate;
 
 class LmsTeachingTimeline
 {
-    public function __construct(private LmsAccessService $access, private LmsProgressService $progress, private LmsLearningDefinition $definitions) {}
+    public function __construct(private LmsProgressService $progress, private LmsLearningDefinition $definitions, private StudentLearningService $learning) {}
 
     /** @return Collection<int,array{key:string,at:CarbonImmutable,label:string,detail:string}> */
     public function staff(Administrator $actor, Student $student): Collection
@@ -75,10 +75,12 @@ class LmsTeachingTimeline
             ->whereHas('course', fn ($query) => $query->where(fn ($query) => $query->where('kind', 'catalog')->orWhere('owner_student_id', $student->id)))
             ->with(['blocks.videoAsset', 'course', 'section'])->orderBy('sort_order')->orderBy('id')->get();
         $blocks = $lessons->flatMap(fn (Lesson $lesson) => $lesson->blocks)->keyBy('id');
-        $rows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $lessons->pluck('id'))->whereNotNull('completed_at')->orderByDesc('completed_at')->limit(50)->get();
+        $retainedRows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $lessons->pluck('id'))->get()->toBase();
+        $rows = $retainedRows->whereNotNull('completed_at')->sortByDesc('completed_at')->take(50);
+        $overview = $staff ? null : $this->learning->overview($student);
         foreach ($rows as $row) {
             $lesson = $lessons->firstWhere('id', $row->lesson_id);
-            if ($lesson && $row->requirement_hash === $this->definitions->requirementHash($lesson) && ($staff || $this->access->canAccess($student, $lesson))) {
+            if ($lesson && $row->requirement_hash === $this->definitions->requirementHash($lesson) && ($staff || isset($overview['states'][$lesson->id]))) {
                 $video = in_array('video', $this->definitions->lessonRules($lesson)['methods'], true);
                 $add('lesson:'.$row->id.':completed', $row->completed_at, $video ? 'Video learning completed' : 'Lesson completed', $lesson->title);
             }
@@ -88,7 +90,7 @@ class LmsTeachingTimeline
         foreach ($quizzes->concat($submissions) as $evidence) {
             $block = $blocks->get($evidence->block_id);
             $kind = $evidence instanceof QuizAttempt ? 'quiz' : 'assignment';
-            if (! $block || $block->kind !== $kind || $evidence->definition_hash !== $this->definitions->hash($block->payload ?? []) || (! $staff && ! $this->access->canAccess($student, $block))) {
+            if (! $block || $block->kind !== $kind || $evidence->definition_hash !== $this->definitions->hash($block->payload ?? []) || (! $staff && ($block->status !== 'ready' || ! ($overview['states'][$block->lesson_id]['allowed'] ?? false)))) {
                 continue;
             }
             $detail = $block->payload['title'] ?? ucfirst($kind);
@@ -103,9 +105,9 @@ class LmsTeachingTimeline
             }
         }
         foreach ($lessons->groupBy('course_id') as $group) {
-            $summary = $this->progress->summary($student, $group);
+            $summary = $this->progress->cohortSummary($group, $retainedRows);
             $course = $group->first()->course;
-            if ($summary['completed_at'] && ($staff || $this->access->canAccess($student, $course))) {
+            if ($summary['completed_at'] && ($staff || isset($overview['outlines'][$course->id]))) {
                 $add('course:'.$course->id.':completed:'.$summary['completion_key'], $summary['completed_at'], 'Course completed', $course->title);
             }
         }

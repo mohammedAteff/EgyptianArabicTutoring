@@ -26,7 +26,7 @@ use Illuminate\Validation\ValidationException;
 class LmsTutoringAssignments
 {
     public function __construct(private TeachingRecordService $teaching, private LmsAccessOperations $operations,
-        private LmsAccessWindow $windows, private CourseStudioService $studio, private LmsVideoProfiles $profiles) {}
+        private LmsAccessWindow $windows, private CourseStudioService $studio, private LmsVideoProfiles $profiles, private LmsSettings $settings) {}
 
     public function authorize(Administrator $actor, Student $student): void
     {
@@ -196,7 +196,7 @@ class LmsTutoringAssignments
             $method = match ($values['kind']) {
                 'video' => 'video', 'quiz' => 'quiz_pass', 'assignment' => 'assignment_approve', default => 'manual'
             };
-            $course = $this->studio->write($actor, $course, 'learning', ['key' => $lesson['key'], 'required' => true, 'methods' => [$method], 'video_threshold' => 95,
+            $course = $this->studio->write($actor, $course, 'learning', ['key' => $lesson['key'], 'required' => true, 'methods' => [$method], 'video_threshold' => $this->settings->values()['video_threshold'],
                 'prerequisite_key' => null, 'drip_mode' => 'immediate'], $course->lock_version);
             $course = $this->studio->write($actor, $course, 'access', $this->windowInput($window) + ['audience' => 'selected_students'], $course->lock_version);
             if (($values['share_now'] ?? false) && $values['kind'] !== 'video') {

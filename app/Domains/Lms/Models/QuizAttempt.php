@@ -2,6 +2,8 @@
 
 namespace App\Domains\Lms\Models;
 
+use App\Domains\Students\Models\Student;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /** @property int $student_id
@@ -20,6 +22,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $feedback
  * @property Carbon|null $updated_at
  * @property Carbon|null $graded_at
+ * @property Carbon|null $submitted_at
+ * @property Carbon|null $created_at
+ * @property Student|null $student
+ * @property LessonBlock|null $block
  */
 class QuizAttempt extends LmsModel
 {
@@ -32,5 +38,17 @@ class QuizAttempt extends LmsModel
     protected function casts(): array
     {
         return ['definition' => 'array', 'answers' => 'array', 'marks' => 'array', 'score' => 'float', 'passed' => 'boolean', 'number' => 'integer', 'lock_version' => 'integer', 'submitted_at' => 'datetime', 'graded_at' => 'datetime'];
+    }
+
+    /** @return BelongsTo<Student,$this> */
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
+    }
+
+    /** @return BelongsTo<LessonBlock,$this> */
+    public function block(): BelongsTo
+    {
+        return $this->belongsTo(LessonBlock::class, 'block_id');
     }
 }

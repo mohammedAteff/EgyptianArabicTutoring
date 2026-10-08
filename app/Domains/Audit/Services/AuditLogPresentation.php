@@ -14,6 +14,19 @@ class AuditLogPresentation
         $after = $log->new_values ?? $log->new_data ?? [];
         $rows = [];
         foreach (array_unique([...array_keys($before), ...array_keys($after)]) as $field) {
+            if (str_starts_with($log->action, 'lms_') && is_string($field) && in_array($field, [
+                'course_id', 'lesson_id', 'block_id', 'profile_id', 'version', 'lock_version', 'device_limit', 'stream_limit', 'token_seconds', 'heartbeat_seconds',
+                'video_threshold', 'default_catalog_profile_id', 'inactivity_days', 'stalled_days', 'quiz_failures', 'expiry_days', 'low_progress_percent', 'private_unopened_days',
+                'secure_playback', 'downloads_allowed', 'watermark', 'expiry_notifications', 'drip_notifications',
+            ], true)) {
+                $old = $this->boundedLmsValue($before[$field] ?? null);
+                $new = $this->boundedLmsValue($after[$field] ?? null);
+                if ($old !== $new) {
+                    $rows[] = ['field' => str_replace('_', ' ', $field), 'before' => $old, 'after' => $new];
+                }
+
+                continue;
+            }
             if (! is_string($field) || ! preg_match('/^(status|operational_status|active|enabled|funding_mode|outcome|reason_code|cancellation_cutoff_hours|late_cancellation|staff_cancellation|no_show|student_id|booking_id|session_type_id|previous_package_id|new_package_id|primary_student_id|secondary_student_id|merged_student_id|surviving_student_id|installment_count|expiration_date|date|start_at_utc|end_at_utc)$/', $field)) {
                 continue;
             }
@@ -25,6 +38,18 @@ class AuditLogPresentation
         }
 
         return $rows;
+    }
+
+    private function boundedLmsValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '—';
+        }
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        return is_int($value) && $value >= 0 && $value <= 2147483647 ? (string) $value : '[hidden]';
     }
 
     private function value(string $field, mixed $value): string

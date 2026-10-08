@@ -1,0 +1,6 @@
+<nav aria-label="Learning operations" class="flex flex-wrap gap-2">
+    @foreach(['admin.lms.operations'=>'Learning analytics','admin.lms.attention'=>'Students needing attention','admin.lms.reviews'=>'Review queues','admin.lms.permissions'=>'Permissions'] as $route=>$label)<a href="{{ route($route) }}" @if(request()->routeIs($route)) aria-current="page" @endif class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-amber-800">{{ $label }}</a>@endforeach
+    @can('manageSettings',\App\Domains\Lms\Models\Course::class)<a href="{{ route('admin.lms.settings') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-amber-800">LMS settings</a><a href="{{ route('admin.lms.security') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-amber-800">Security & audit</a>@endcan
+</nav>
+@if(session('success'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('success') }}</p>@endif
+@if($errors->any())<div role="alert" class="rounded-xl bg-rose-50 p-4 text-sm text-rose-900"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif

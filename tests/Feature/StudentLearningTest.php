@@ -411,7 +411,9 @@ class StudentLearningTest extends TestCase
         $this->get(route('student.learning.index'))->assertOk();
         $this->assertSame(1, StudentNotification::query()->where('student_id', $student->id)->count());
         $this->assertSame($readAt, $notification->fresh()->read_at->format('Y-m-d H:i:s'));
-        $this->assertSame(0, DB::table('analytics_events')->where('event_name', 'like', 'lms_%')->count());
+        // Stage 8 records the first canonical start once; repeated visits create no additional semantic facts.
+        $this->assertSame(1, DB::table('analytics_events')->where('event_name', 'lms_course_started')->count());
+        $this->assertSame(1, DB::table('analytics_events')->where('event_name', 'like', 'lms_%')->count());
     }
 
     public function test_pdf_asset_uses_private_delivery_and_expired_content_refuses_files_and_bookmarks(): void

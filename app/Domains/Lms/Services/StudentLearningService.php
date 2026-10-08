@@ -4,12 +4,14 @@ namespace App\Domains\Lms\Services;
 
 use App\Domains\Lms\Models\AssignmentSubmission;
 use App\Domains\Lms\Models\Course;
+use App\Domains\Lms\Models\Enrollment;
 use App\Domains\Lms\Models\LearningAssignment;
 use App\Domains\Lms\Models\LearningVisit;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\LessonBookmark;
 use App\Domains\Lms\Models\LessonNote;
+use App\Domains\Lms\Models\LessonProgress;
 use App\Domains\Lms\Models\QuizAttempt;
 use App\Domains\Lms\Models\Section;
 use App\Domains\Students\Models\Student;
@@ -23,17 +25,16 @@ class StudentLearningService
     /** @return array<string,mixed> */
     public function hub(Student $student): array
     {
-        $courses = $this->access->activeForStudent($student);
+        $overview = $this->overview($student);
+        $courses = collect($overview['outlines'])->pluck('course');
         $visits = LearningVisit::query()->where('student_id', $student->id)->whereIn('course_id', $courses->pluck('id'))->orderByDesc('accessed_at')->orderByDesc('id')->get()->keyBy('course_id');
-        $cards = $courses->map(function (Course $course) use ($student, $visits): array {
-            $outline = $this->access->outline($student, $course);
-
+        $cards = $courses->map(function (Course $course) use ($overview, $visits): array {
             return ['course' => $course, 'visited' => $visits->has($course->id), 'url' => route('student.learning.courses.show', $course),
-                'progress' => $this->progressData($student, $course, $outline['sections']->flatMap(fn (Section $section) => $section->lessons))['progress']];
+                'progress' => $overview['progress'][$course->id]];
         });
-        $continue = $visits->filter(fn (LearningVisit $visit): bool => $cards->firstWhere('course.id', $visit->course_id)['progress']['status'] !== 'Completed')->take(6)->map(function (LearningVisit $visit) use ($student, $courses, $cards): array {
+        $continue = $visits->filter(fn (LearningVisit $visit): bool => $cards->firstWhere('course.id', $visit->course_id)['progress']['status'] !== 'Completed')->take(6)->map(function (LearningVisit $visit) use ($overview, $courses, $cards): array {
             $course = $courses->firstWhere('id', $visit->course_id);
-            $outline = $this->access->outline($student, $course);
+            $outline = $overview['outlines'][$course->id];
             $lessons = $outline ? $outline['sections']->flatMap(fn (Section $section) => $section->lessons) : collect();
             $lesson = $lessons->firstWhere('id', $visit->lesson_id);
             $progress = $cards->firstWhere('course.id', $visit->course_id)['progress'];
@@ -45,12 +46,36 @@ class StudentLearningService
                 'url' => $lesson ? route('student.learning.lessons.show', [$course, $lesson]) : route('student.learning.courses.show', $course)];
         })->values();
         $assignments = LearningAssignment::query()->where('status', 'assigned')->whereHas('accessGrant', fn ($query) => $query->where('student_id', $student->id))
-            ->with(['accessGrant.course', 'accessGrant.lesson', 'accessGrant.section', 'booking:id,student_id'])->orderByDesc('id')->get()
-            ->filter(fn (LearningAssignment $assignment): bool => $this->access->canAccess($student, $assignment))->values();
+            ->with(['accessGrant', 'booking:id,student_id'])->orderByDesc('id')->get()
+            ->filter(fn (LearningAssignment $assignment): bool => $this->access->assignmentInOutline($student, $assignment, $overview['outlines'], $overview['states']))->values();
+        foreach ($assignments as $assignment) {
+            $assignment->accessGrant->setRelation('course', $overview['outlines'][$assignment->accessGrant->course_id]['course']);
+        }
 
         return ['cards' => $cards, 'completedCards' => $cards->filter(fn (array $card): bool => $card['progress']['status'] === 'Completed'), 'continueLearning' => $continue, 'learningAssignments' => $assignments,
             'accessEndings' => $this->access->accessEndings($student, $courses),
             'privateNoteCount' => LessonNote::query()->where('student_id', $student->id)->count()];
+    }
+
+    /** One fresh, read-only curriculum/evidence projection reused within a page; no entitlement cache.
+     * @return array<string,mixed> */
+    public function overview(Student $student): array
+    {
+        $projection = $this->access->studentOutlines($student);
+        $rows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $projection['canonical']->pluck('id'))->get()->toBase();
+        $progress = [];
+        $states = [];
+        foreach ($projection['outlines'] as $id => $outline) {
+            $canonical = $projection['canonical']->where('course_id', $id)->values();
+            $visible = $outline['sections']->flatMap(fn (Section $section) => $section->lessons);
+            $summary = $this->progress->summary($student, $canonical, $rows, $projection['anchors']);
+            $summary['lessons'] = $summary['lessons']->only($visible->pluck('id')->all());
+            $summary['next'] = $visible->first(fn (Lesson $lesson): bool => $summary['lessons'][$lesson->id]['allowed'] && ! $summary['lessons'][$lesson->id]['completed']);
+            $progress[$id] = $summary;
+            $states += $summary['lessons']->all();
+        }
+
+        return $projection + ['progress' => $progress, 'states' => $states];
     }
 
     /** @return array<string,mixed>|null */
@@ -75,11 +100,14 @@ class StudentLearningService
         $canonical = Lesson::query()->where('course_id', $course->id)->where('status', 'published')->where('published_at', '<=', now('UTC'))
             ->whereHas('section', fn ($query) => $query->where('status', 'published')->where('published_at', '<=', now('UTC')))
             ->with(['section', 'blocks.videoAsset'])->orderBy('sort_order')->orderBy('id')->get();
-        $summary = $this->progress->summary($student, $canonical);
+        $rows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $canonical->pluck('id'))->get()->toBase();
+        $anchors = Enrollment::query()->where('student_id', $student->id)->where('course_id', $course->id)->get()->groupBy('course_id')
+            ->filter(fn (Collection $group): bool => $group->contains('status', 'enrolled'))->map(fn (Collection $group) => $group->sortBy('enrolled_at')->first()->enrolled_at)->all();
+        $summary = $this->progress->summary($student, $canonical, $rows, $anchors);
         $summary['lessons'] = $summary['lessons']->only($visible->pluck('id')->all());
         $summary['next'] = $visible->first(fn (Lesson $lesson): bool => $summary['lessons'][$lesson->id]['allowed'] && ! $summary['lessons'][$lesson->id]['completed']);
 
-        return ['progress' => $summary, 'moduleProgress' => $course->sections->mapWithKeys(fn (Section $section): array => [$section->id => $this->progress->summary($student, $canonical->where('section_id', $section->id))])];
+        return ['progress' => $summary, 'moduleProgress' => $course->sections->mapWithKeys(fn (Section $section): array => [$section->id => $this->progress->summary($student, $canonical->where('section_id', $section->id), $rows, $anchors)])];
     }
 
     /** @return array<string,mixed>|null */

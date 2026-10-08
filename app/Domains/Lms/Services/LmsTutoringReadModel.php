@@ -8,6 +8,7 @@ use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\LearningAssignment;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
+use App\Domains\Lms\Models\LessonProgress;
 use App\Domains\Lms\Models\QuizAttempt;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentTeachingReadModel;
@@ -30,7 +31,9 @@ class LmsTutoringReadModel
         $lessons = Lesson::query()->whereIn('course_id', $courseIds)->where('status', 'published')->where('published_at', '<=', now('UTC'))
             ->whereHas('section', fn ($query) => $query->where('status', 'published')->where('published_at', '<=', now('UTC')))
             ->with(['section', 'blocks.videoAsset'])->orderBy('sort_order')->orderBy('id')->get();
-        $summaries = $lessons->groupBy('course_id')->map(fn (Collection $group): array => $this->progress->summary($student, $group));
+        $retainedRows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $lessons->pluck('id'))->get()->toBase();
+        $summaries = $lessons->groupBy('course_id')->map(fn (Collection $group): array => $this->progress->cohortSummary($group, $retainedRows));
+        $overview = $this->learning->overview($student);
         $blockIds = $lessons->flatMap(fn (Lesson $lesson) => $lesson->blocks)->pluck('id');
         $quizzes = QuizAttempt::query()->where('student_id', $student->id)->whereIn('block_id', $blockIds)->where('status', '!=', 'erased')->orderByDesc('number')->get()->toBase()->groupBy('block_id');
         $submissions = AssignmentSubmission::query()->where('student_id', $student->id)->whereIn('block_id', $blockIds)->where('status', '!=', 'erased')->orderByDesc('number')->get()->toBase()->groupBy('block_id');
@@ -40,14 +43,14 @@ class LmsTutoringReadModel
 
             return $course && ($course->kind !== 'private' || (int) $course->owner_student_id === (int) $student->id)
                 && (! $row->booking_id || (int) $row->booking?->student_id === (int) $student->id);
-        })->map(fn (LearningAssignment $row): array => $this->projection($row, $student, $summaries, $quizzes, $submissions))->values();
+        })->map(fn (LearningAssignment $row): array => $this->projection($row, $student, $summaries, $quizzes, $submissions, $overview))->values();
     }
 
     /** @param Collection<int,array<string,mixed>> $summaries
      * @param Collection<int|string,Collection<int,QuizAttempt>> $quizzes
      * @param Collection<int|string,Collection<int,AssignmentSubmission>> $submissions
      * @return array<string,mixed> */
-    private function projection(LearningAssignment $row, Student $student, Collection $summaries, Collection $quizzes, Collection $submissions): array
+    private function projection(LearningAssignment $row, Student $student, Collection $summaries, Collection $quizzes, Collection $submissions, array $overview): array
     {
         $grant = $row->accessGrant;
         $course = $grant->course;
@@ -69,7 +72,7 @@ class LmsTutoringReadModel
                 ? $item->status === 'graded' && $item->passed === true : $item->status === 'approved');
             $state = $completed ? 'Completed' : (in_array($assessment, ['Not Started', 'Not Submitted'], true) ? 'Not Started' : 'In Progress');
         }
-        $allowed = $this->access->canAccess($student, $row);
+        $allowed = $this->access->assignmentInOutline($student, $row, $overview['outlines'], $overview['states']);
         $expired = $row->status !== 'assigned' || $grant->status !== 'active' || ($grant->expires_at && $grant->expires_at->lte(now('UTC')));
         $group = $expired ? 'Expired' : ($grant->starts_at->isFuture() ? 'Scheduled' : ($allowed ? ($state === 'Not Started' ? 'New' : $state) : 'Unavailable'));
         $reason = $expired ? ($grant->status === 'revoked' ? 'Access revoked' : 'Access ended')

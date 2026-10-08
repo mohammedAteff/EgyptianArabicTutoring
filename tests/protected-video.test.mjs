@@ -1,8 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {scopedHlsUrl, authorizationDelay} from '../resources/js/protected-video.js';
+import {scopedHlsUrl, authorizationDelay, secureRequestUUID} from '../resources/js/protected-video.js';
+import {webcrypto} from 'node:crypto';
 const id='657bb740-a71b-4529-a012-528021c31a92';
 const signed=`https://test-library.b-cdn.net/bcdn_token=HS256-TEST_123&expires=1791374520&token_path=%2F${id}%2F/${id}/playlist.m3u8`;
+
+test('local HTTP playback creates proper random request UUIDs when native randomUUID is unavailable',()=>{
+    let calls=0;
+    const api={getRandomValues(bytes){calls++;return webcrypto.getRandomValues(bytes);}};
+    const first=secureRequestUUID(api),second=secureRequestUUID(api);
+    assert.match(first,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+    assert.match(second,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+    assert.notEqual(first,second);assert.equal(calls,2);
+});
+test('native UUID support preserves its receiver and missing secure randomness fails closed',()=>{
+    const api={randomUUID(){assert.equal(this,api);return id;}};
+    assert.equal(secureRequestUUID(api),id);
+    assert.throws(()=>secureRequestUUID({}),/Secure browser randomness/);
+    assert.throws(()=>secureRequestUUID(null),/Secure browser randomness/);
+});
 test('HLS master, segment and key requests retain the latest narrow directory capability',()=>{
     for(const path of ['720p/playlist.m3u8','720p/segment.ts','encryption.key','audio/fragment.m4s']) {
         const expected=signed.replace('playlist.m3u8',path);

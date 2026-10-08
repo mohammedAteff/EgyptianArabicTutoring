@@ -120,6 +120,76 @@ class LmsAccessService
         return $courses->filter(fn (Course $course): bool => $this->decision($student, $course, $course, $enrollments->get($course->id))['allowed'])->values();
     }
 
+    /** Fresh read projection for one page, with one graph for all courses. Delivery and writes still resolve independently.
+     * @return array{outlines:array<int,array{course:Course,sections:Collection<int,Section>}>,canonical:Collection<int,Lesson>,anchors:array<int,mixed>}
+     */
+    public function studentOutlines(Student $student): array
+    {
+        $courses = $this->activeForStudent($student);
+        (new \Illuminate\Database\Eloquent\Collection($courses->all()))->loadMissing('sections.lessons.blocks.videoAsset.course');
+        $anchors = $this->anchors(Enrollment::query()->where('student_id', $student->id)->whereIn('course_id', $courses->pluck('id'))->get(), 'course_id');
+        $outlines = [];
+        $canonical = collect();
+        foreach ($courses as $course) {
+            $sections = collect();
+            foreach ($course->sections as $section) {
+                if (! $this->published($section)) {
+                    continue;
+                }
+                $published = $section->lessons->filter(fn (Lesson $lesson): bool => $this->published($lesson));
+                foreach ($published as $lesson) {
+                    $lesson->setRelation('section', $section);
+                    $lesson->setRelation('course', $course);
+                    foreach ($lesson->blocks as $block) {
+                        $block->setRelation('lesson', $lesson);
+                    }
+                    $canonical->push($lesson);
+                }
+                $anchor = $anchors->get($course->id);
+                if ($this->decision($student, $course, $section, $anchor)['allowed']) {
+                    $visible = clone $section;
+                    $visible->setRelation('lessons', $published->filter(fn (Lesson $lesson): bool => $this->decision($student, $course, $lesson, $anchor)['allowed'])->values());
+                    $sections->push($visible);
+                }
+            }
+            $outlines[$course->id] = ['course' => $course, 'sections' => $sections];
+        }
+
+        return ['outlines' => $outlines, 'canonical' => $canonical, 'anchors' => $anchors->map(fn (Enrollment $row) => $row->enrolled_at)->all()];
+    }
+
+    /** Same assignment ownership/window/content rules on an already fresh page projection.
+     * @param  array<int,array{course:Course,sections:Collection<int,Section>}>  $outlines
+     * @param  array<int,array<string,mixed>>  $states
+     */
+    public function assignmentInOutline(Student $student, LearningAssignment $assignment, array $outlines, array $states): bool
+    {
+        $grant = $assignment->accessGrant;
+        if (! $grant || (int) $grant->student_id !== (int) $student->id || $assignment->status !== 'assigned' || ! $this->windows->active($grant)
+            || ($assignment->booking_id !== null && (int) $assignment->booking?->student_id !== (int) $student->id)) {
+            return false;
+        }
+        $outline = $outlines[$grant->course_id] ?? null;
+        if (! $outline) {
+            return false;
+        }
+        if ($grant->lesson_id !== null) {
+            $lesson = $outline['sections']->flatMap(fn (Section $section) => $section->lessons)->firstWhere('id', $grant->lesson_id);
+            if (! $lesson) {
+                return false;
+            }
+            if ($assignment->lesson_block_id !== null) {
+                $block = $lesson->blocks->firstWhere('id', $assignment->lesson_block_id);
+
+                return $block && $block->kind === $assignment->block_kind && ($states[$lesson->id]['allowed'] ?? false) && $this->readyBlock($block);
+            }
+
+            return true;
+        }
+
+        return $grant->section_id === null || $outline['sections']->contains('id', $grant->section_id);
+    }
+
     /** @return Collection<int, Student> */
     public function studentsWithCourseAccess(Course $course): Collection
     {
@@ -131,6 +201,35 @@ class LmsAccessService
         $enrollments = $this->anchors(Enrollment::query()->where('course_id', $course->id)->get(), 'student_id');
 
         return $students->filter(fn (Student $student): bool => $this->decision($student, $course, $course, $enrollments->get($student->id))['allowed'])->values();
+    }
+
+    /** Reporting projection of a fresh cohort; direct delivery still resolves fresh targets and locks.
+     * @param Collection<int,Student> $students
+     * @param Collection<int,Enrollment> $enrollments
+     * @param Collection<int,AccessGrant> $grants
+     * @return array<int,array{allowed:bool,ends_at:?CarbonImmutable}> */
+    public function cohortDecisions(Course $course, Collection $students, Collection $enrollments, Collection $grants): array
+    {
+        $anchors = $this->anchors($enrollments, 'student_id');
+        $result = [];
+        foreach ($students as $student) {
+            $graph = clone $course;
+            $graph->setRelation('grants', $grants->where('student_id', $student->id));
+            $anchor = $anchors->get($student->id);
+            $decision = $this->decision($student, $graph, $graph, $anchor);
+            $ends = [];
+            if ($decision['allowed'] && $graph->accessRule && in_array('rule:'.$graph->accessRule->id, $decision['sources'], true)) {
+                $ends[] = $this->windows->bounds($graph->accessRule, $anchor ? CarbonImmutable::instance($anchor->enrolled_at)->utc() : null)['end'];
+            }
+            foreach ($graph->grants as $grant) {
+                if (in_array('grant:'.$grant->id, $decision['sources'], true)) {
+                    $ends[] = $this->windows->bounds($grant)['end'];
+                }
+            }
+            $result[$student->id] = ['allowed' => $decision['allowed'], 'ends_at' => in_array(null, $ends, true) ? null : collect($ends)->sort()->last()];
+        }
+
+        return $result;
     }
 
     /** Display the union of effective sources, using the same decision and elapsed-day bounds.

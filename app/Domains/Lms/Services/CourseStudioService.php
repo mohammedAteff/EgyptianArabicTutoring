@@ -31,7 +31,7 @@ class CourseStudioService
 {
     public function __construct(private LmsStructureService $structure, private LmsContentService $content,
         private LmsAccessWindow $windows, private LessonMaterialService $files,
-        private TeachingRecordService $students, private AuditLogService $audits) {}
+        private TeachingRecordService $students, private AuditLogService $audits, private LmsSettings $settings) {}
 
     /** @param array<string,mixed> $data */
     public function create(Administrator $actor, array $data): Course
@@ -101,7 +101,9 @@ class CourseStudioService
                     $index = $this->sectionIndex($graph, (string) ($data['parent_key'] ?? ''));
                     $values = $this->nodeValues($data, true);
                     $this->uniqueSlug($graph, $values['slug']);
-                    $graph['sections'][$index]['lessons'][] = ['key' => 'lesson:'.Str::uuid(), 'id' => null, 'blocks' => []] + $values;
+                    $graph['sections'][$index]['lessons'][] = ['key' => 'lesson:'.Str::uuid(), 'id' => null, 'blocks' => [],
+                        'learning_rules' => ['required' => true, 'methods' => ['manual'], 'video_threshold' => $this->settings->values()['video_threshold'],
+                            'prerequisite_key' => null, 'drip_mode' => 'immediate', 'drip_days' => null, 'drip_at' => null]] + $values;
                     break;
                 case 'edit_lesson':
                     [$section, $lesson] = $this->lessonIndex($graph, (string) ($data['key'] ?? ''));

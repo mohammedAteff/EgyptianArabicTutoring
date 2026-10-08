@@ -16,6 +16,14 @@
         </div>
     </div>
     <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Draft editing:</strong> save each form as you work. Learners keep the current live course until you publish. Section and lesson states are preserved; only Published sections and lessons become available.</div>
+    @if($course->status==='published')
+    <form method="POST" action="{{ route('admin.lms.preview.start',$course) }}" class="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+        @csrf<input type="hidden" name="request_key" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
+        <label for="preview-student" class="min-w-0 flex-1 text-sm font-semibold">Preview published learning<select id="preview-student" name="student_id" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3"><option value="">Generic learner</option>@foreach($previewStudents as $previewStudent)<option value="{{ $previewStudent->id }}">{{ $previewStudent->name }}</option>@endforeach</select></label>
+        <x-lms.button tone="neutral">Open read-only preview</x-lms.button>
+        <p class="w-full text-xs text-slate-500">Specific Student previews show current access, progress and lesson locks. Preview creates no Student learning activity.</p>
+    </form>
+    @endif
     <fieldset @disabled($course->status==='archived') class="min-w-0 space-y-6">
         <a href="{{ route('admin.lms.reviews.index', $course) }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">Review quizzes & assignments →</a>
         @include('admin.lms.courses._videos')

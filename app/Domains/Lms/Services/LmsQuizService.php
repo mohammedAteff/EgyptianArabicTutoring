@@ -3,6 +3,7 @@
 namespace App\Domains\Lms\Services;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Lesson;
@@ -79,6 +80,8 @@ class LmsQuizService
             $attempt->save();
             $this->progress->evaluate($student, $lesson);
             $this->audits->logStudent($student->id, 'lms_quiz_submitted', QuizAttempt::class, $attempt->id, null, ['block_id' => $block->id, 'number' => $attempt->number, 'status' => $attempt->status]);
+            app(AnalyticsService::class)->recordLearning($student, 'lms_quiz_submitted', 'attempt:'.$attempt->id,
+                ['course_id' => (int) $course->id, 'lesson_id' => (int) $lesson->id, 'block_id' => (int) $block->id, 'attempt_id' => (int) $attempt->id], $attempt->submitted_at);
 
             return $attempt;
         }, 3);

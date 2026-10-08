@@ -845,3 +845,77 @@ Migration `2026_10_08_035746_add_tutoring_learning_context_to_lms` adds six null
 All 27 pre-LMS contracts retain their meaning. Stage 7 directly exercises identity/ownership, staff/guard/MFA enforcement, Business/Student timezones, ordered locks, Resource/private-file/sharing, visit notifications, privacy/audit and lifecycle boundaries. The full current-schema and dedicated MariaDB suites cover booking/reschedule/cancellation, typed one_hour/two_hour rights, provenance, installments and finance. A focused test compares nine existing tutoring/financial tables before/after assignment/private creation/revocation/profile reads and requires byte-identical data. LMS completion cannot deliver a Booking, consume package entitlement or record money. Existing production PARTIAL findings are not upgraded by local evidence.
 
 Final tests, responsive review, unchanged static-analysis diagnostic multiset, build/cache/audit/format checks and local additive DDL receipts are recorded in LMS_IMPLEMENTATION_STATUS.md. Database suites run serially against explicit bolt_landing_test. Synthetic review pages use only test fixtures, guarded forms/navigation and built assets; they are removed before release. The three pre-existing untracked Hostinger/proposal documents remain untouched. Final reviewed main commit is pushed without force; no production inspection, credentials, backup, hot edit, deployment or retest is performed. Do not start Stage 8 automatically.
+
+## 18. Stage 8 — operational integration implemented
+
+Stage 8 extends complete Stage 7 commit `02bc5071cb0bc638e5a6ee493bcb190e44c3bf90`. The discovery/design recorded before code was checked against first-party AnalyticsService/client ingestion, ReportPeriod, canonical Stage 2–7 learning/access/evidence, authenticated-visit notifications, current staff policies, encrypted Bunny/profile settings, audit presentation, localization and Student Portal. No stop-condition conflict required an owner decision. The completed design below supersedes the candidate wording recorded during discovery. Evidence and final disposition are in LMS_IMPLEMENTATION_STATUS.md. Independent Stage 9 acceptance and production deployment remain separate, unperformed work.
+
+### 18.1 First-party semantic ownership and canonical reports
+
+AnalyticsService/AnalyticsEvent remain the only analytics recorder/storage. No frontend emits the new semantic events. Client ingestion and generic track calls refuse them. Each event receives a stable server-derived UUID, and existing unique event identity collapses retries, including simultaneous canonical completion.
+
+| Semantic event | Sole recorder | Deduplication identity |
+|---|---|---|
+| Course Started | LmsProgressService creates the first canonical Student/course progress row | Student opaque key + course |
+| Lesson Completed | LmsProgressService performs the first completion of the current requirement row | Student opaque key + progress row |
+| Course Completed | LmsProgressService observes canonical completion of current required lessons | Student opaque key + course + sorted requirement-generation completion key |
+| Quiz Submitted | LmsQuizService persists the first submission | Student opaque key + attempt |
+| Assignment Submitted | LmsAssignmentService persists the first submission | Student opaque key + submission |
+
+A fresh actual Student guard/session proof is required for recording. Staff, preview, bot, synthetic and internal traffic are excluded; direct staff grading still updates canonical educational state. Only finite canonical IDs, opaque HMAC learner identity and generation hashes are added to metadata. Existing server-derived country and IP-hash handling remain; no permanent raw IP, answers, feedback, private titles, lesson URL/referrer, device heartbeat or watch-token payload is added.
+
+AnalyticsService.learningReport delegates a read projection within the existing analytics domain. LmsProgressService shares its completion assembly with the batch projection: optional lessons remain outside the denominator, all required lessons must complete, current requirement generations and sorted completion keys are authoritative. No alternative completion writer or analytics schema exists.
+
+Reports use ReportPeriod and the Business Timezone. Their explicitly labeled cohort is current verified, non-suspended, non-merged retained enrolled Students on currently published, owned courses, through the selected end; multiple grants do not duplicate a Student/course. Current accessibility is separate from retained enrollment. Open-access learning without a retained enrollment is deliberately outside this enrolled cohort, while normal Student progress remains available in the hub/profile. Latest-visit counts use the retained Student/course visit row and cannot reconstruct overwritten historical visits. Quiz/assignment submission cohorts use period timestamps and canonical outcomes; review/pass numerators remain subsets of submissions. Reports are current-curriculum projections, not historical enrollment/release snapshots.
+
+Trusted Bunny placement coverage selects the current media hash and safely Ready asset. Stored verified ranges support started, 25/50/75/lesson-threshold, averaged covered percentage and covered seconds. Coverage is current for placements started in the selected period, since watch rows do not preserve historical range snapshots. Security heartbeats, external-video attention, total learning time, completion-time precision and heatmaps are deliberately excluded.
+
+### 18.2 Operational dashboard, attention and review
+
+Admin/Super learning operations provide date/course/Student filters, 20-row course/video pagination, a 20-Student attention list, separately paged quiz/assignment/media queues, a permission matrix, and Super-only settings/security audit. Review links reuse the canonical course grading/review routes. Ordinary report/queue/profile/preview reads make no Bunny requests; only explicit media checking/play/renew invokes the provider.
+
+Attention is a deterministic current-state projection, deduplicated by Student. It uses editable defaults: inactive 14 elapsed days; no new completion for 14 days after starting; three current-definition graded failures with no current pass; union access ending within five days with progress below 30%; private follow-up neither visited nor canonically started for seven days from the later of assignment creation and access start. Current visits, progress starts/completions and quiz/assignment submissions count as supported activity. Completed or inaccessible courses are excluded. A pass, actual learning start/visit, completion, stronger permanent access source, expiry or withdrawal resolves the corresponding facts automatically. There is no persisted second alert writer, AI, invented assignment due date or Student early-drip override.
+
+### 18.3 Visit notifications and settings precedence
+
+LmsLearningNotifications extends existing StudentNotificationService synchronization on authenticated visits. Assignment/review keys and read state remain. Private assignment wording, private Ready-video facts, Needs Revision wording, union-access expiry and genuinely unlocked scheduled lessons use finite owner-scoped keys. A video is deduplicated across multiple assignments; expiry identity includes the actual end; drip identity includes lesson/generation/unlock instant. Unpublished, foreign, future-start, expired, revoked or locked targets are ineligible. Text excludes answers, bodies, feedback, provider IDs and private labels. Assignment facts are bounded to 50, reviews to 30+30, Ready videos to 50, expiry courses to 50 and scheduled unlocks to 50. Existing read notifications remain history after a fact stops being eligible. There is no proactive worker, email/SMS/Telegram replacement or background notification architecture.
+
+Private Setting key `lms.options` contains bounded learning/attention defaults and two visit-notification switches. Super Admin writes validate finite keys, lock fresh authority, enforce expected versions and audit non-secret fields. Competing saves have one winner. New Studio/private content captures the configured video threshold; existing explicit rules and requirement evidence retain their values.
+
+Protection precedence is explicit lesson profile → explicit course profile → safe optional global catalog fallback → existing Member default. Private learning keeps its strong Private fallback and never adopts the catalog fallback. Inactive/unsafe defaults fail closed. Existing protection profiles retain device/stream/token limits; existing encrypted provider records retain Bunny keys/configuration. No duplicated credential/limit storage or Student-specific security override is introduced.
+
+### 18.4 Final authority matrix
+
+| Capability | Super Admin | Admin | Assistant | Enforcement |
+|---|---|---|---|---|
+| Learning analytics | Allow | Allow | Deny | Fresh LmsPolicy.viewAnalytics + guarded routes |
+| Student progress/profile learning | Allow | Allow | Deny | LmsPolicy.viewProgress/manage + existing manageTeaching |
+| Course create/edit/publish/archive/duplicate | Allow | Allow | Deny | Existing CourseStudioService + LmsPolicy.manage |
+| Assign/revoke/extend learning and private creation | Allow | Allow | Deny | Existing teaching/LMS policy + canonical operations |
+| Quiz/assignment review | Allow | Allow | Deny | Canonical evidence review policy and locks |
+| Generic/specific learner preview | Allow | Allow | Deny | LmsPolicy.preview; specific subject also manageTeaching/ownership |
+| Student browser/session administration | Allow | Allow | Deny | Preserve existing explicit manageTeaching delegation |
+| Global device/stream limits and profiles | Allow | Deny | Deny | Existing protected video settings authority |
+| Bunny configuration | Allow | Deny | Deny | Existing protected video settings authority |
+| LMS defaults/attention settings | Allow | Deny | Deny | Fresh LmsPolicy.manageSettings + versioned writer |
+| LMS security/audit | Allow | Deny | Deny | LmsPolicy.viewSecurity + existing protected audit presentation |
+
+Student actions keep actual owner/session proof and canonical entitlement/gate/file checks. Staff capabilities do not impersonate a Student. Existing authentication, account activity and MFA policy remain. Assistant navigation omits LMS destinations; crafted requests, fresh demotion and suspension are denied. The existing Admin browser delegation is preserved, not silently revoked.
+
+### 18.5 Read-only preview and secure media
+
+Preview retains the real authenticated web Administrator and a 15-minute actor/session-bound server context. Generic preview reads published content; specific preview repeats the Student's actual entitlement, prerequisites, drip and current progress. Draft author preview remains separate. Persistent subject/actor/exit UI is present on preview pages and authorized admin navigation. Initiation, valid replacement and valid exit are audited without secrets or raw IP. Invalid contexts from another actor or a regenerated session can be discarded/restarted/exited in the caller's own session without attributing an unauthorized exit to the old actor. Old capabilities still fail binding checks.
+
+Preview never logs in a Student or creates/mutates visits, enrollment, grants, progress, attempts, submissions, notes, bookmarks, Student notifications, devices, Student playback leases or normal analytics. The read-only middleware blocks Student-area actions while preview is active, including dual authenticated guards, without rewriting actual Student session proof. Personal notes/bookmarks, actual answers/submission bodies/feedback and tutor preparation are absent.
+
+Dedicated material routes repeat context/target/ownership/source checks and retain private delivery. Bunny play/renew verifies provider protections and reconciles explicitly outside transactions, then locks/rechecks Student if specific, course, profile, connection and asset before pure signing. Secure, no-download compatible policy is required. Tokens last at most 120 seconds, further clipped by profile, context and actual Student access end. Session storage keeps only bounded proof/policy identity for at most 16 placements. No Student quota/device/watch row is reserved. Minted tokens cannot renew after proof closure, policy/provider/media changes or lost access. Exit stops new authorization; already issued CDN capabilities retain their bounded residual lifetime. The existing HLS player has no watch-progress URL in preview. Live Bunny certification remains pending under the owner's explicit mock-verification choice.
+
+### 18.6 Performance, functional UI and release
+
+Fresh read projections batch graph, enrollment, grant, evidence and gate reads for the hub, curriculum modules, profile/For You, timeline and notification facts. There is no cross-request entitlement cache and no weakened direct-path/locked authorization. Reporting streams courses and 200-Student batches; attention uses aggregate evidence rather than materializing attempt bodies. Queues and audits are paginated. Controlled hub reads remain 15 queries for one or 20 courses; a course report remains 15 queries for one or 20 Students. Existing enrollment/progress and quiz/assignment status/block indexes remain.
+
+The one additive non-unique `lms_video_operations(provider,status,id)` index supports the new global Bunny queue; the prior Stage 5 index begins with course_id. Controlled MariaDB EXPLAIN selects this index with range access, not ALL; the small pending subset may still use a filesort. No new table, analytics rollup, permanent attention state, backfill or pre-LMS schema rewrite is added.
+
+Functional checks cover empty/locked/error states, accessible names and table captions, mixed Arabic/English direction, persistent preview identity, desktop/mobile navigation and controls. The mobile course/Student filters were widened after inspection. Protected playback uses a cryptographically random UUID fallback where native randomUUID is unavailable on local HTTP, with failures handled inside the recoverable player path; upload preflight explains its existing secure-context/HTTPS requirement. No dependency was changed, TLS protection reduced or visual rebrand started. Screens use isolated synthetic feature-test HTML with mutations/telemetry disabled; screenshots do not certify a live provider or a production browser workflow.
+
+All 27 pre-LMS meanings remain. Booking/funding/availability/hold/reschedule/cancellation/payment/refund/package/recurrence/waitlist/meeting-room/destructive-tool writers are unchanged and covered by regression/concurrency gates. Direct integration touches identity/ownership/session/role/timezone/history/resource/private-material/teaching/notification/privacy/audit invariants without reinterpreting them. The established test → commit → non-force push workflow is retained. Local additive DDL is separate from production deployment. Independent Stage 9 acceptance is required before calling the full application verified.

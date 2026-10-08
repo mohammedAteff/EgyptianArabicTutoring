@@ -8,6 +8,7 @@ use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
+use App\Domains\Lms\Services\LmsSettings;
 use App\Domains\Lms\Services\LmsTutoringAssignments;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Models\ResourceAssignment;
@@ -48,7 +49,8 @@ class AssignLearningController extends Controller
         $resources = Resource::query()->published()->where('title', 'like', $search)->orderBy('title')->limit(100)->get(['id', 'title']);
         $students = Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->where('id', '!=', $student->id)->orderBy('first_name')->limit(100)->get(['id', 'first_name', 'last_name']);
 
-        return response()->view('admin.students.assign-learning', compact('student', 'bookings', 'bookingId', 'courses', 'lessons', 'assessments', 'resources', 'students', 'filters') + ['businessTz' => $timezones->getBusinessTimezone()])->header('Cache-Control', 'private, no-store');
+        return response()->view('admin.students.assign-learning', compact('student', 'bookings', 'bookingId', 'courses', 'lessons', 'assessments', 'resources', 'students', 'filters') + ['businessTz' => $timezones->getBusinessTimezone(),
+            'defaultVideoThreshold' => app(LmsSettings::class)->values()['video_threshold']])->header('Cache-Control', 'private, no-store');
     }
 
     public function store(AssignLearningRequest $request, Student $student): RedirectResponse

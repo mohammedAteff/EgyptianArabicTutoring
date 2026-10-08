@@ -90,6 +90,8 @@ class CourseStudioController extends Controller
             'assets' => LmsAsset::query()->where('status', 'active')->where(fn ($query) => $query->where('course_id', $course->id)->orWhereIn('id', $ids))->orderBy('id')->get(),
             'videoAssets' => VideoAsset::query()->where(fn ($query) => $query->where('course_id', $course->id)->orWhereIn('id', $this->assetIds($graph, 'video_asset_id')))->whereNot('status', 'deleted')->orderBy('id')->get(),
             'profiles' => ProtectionProfile::query()->where('active', true)->orderBy('id')->get(),
+            'previewStudents' => Student::verified()->whereNull('suspended_at')->whereNull('merged_into_student_id')
+                ->when($course->kind === 'private', fn ($query) => $query->whereKey($course->owner_student_id))->orderBy('first_name')->limit(100)->get(['id', 'first_name', 'last_name']),
             'hasDraft' => $course->revisions()->where('status', 'draft')->exists()]);
     }
 

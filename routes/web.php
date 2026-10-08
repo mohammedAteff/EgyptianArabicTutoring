@@ -17,7 +17,10 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
 use App\Http\Controllers\Admin\DevelopmentToolsController;
 use App\Http\Controllers\Admin\FormController;
+use App\Http\Controllers\Admin\LearningOperationsController;
+use App\Http\Controllers\Admin\LearningPreviewController;
 use App\Http\Controllers\Admin\LearningReviewController;
+use App\Http\Controllers\Admin\LearningSettingsController;
 use App\Http\Controllers\Admin\LmsAccessController;
 use App\Http\Controllers\Admin\MaintenanceAnalyticsController;
 use App\Http\Controllers\Admin\MediaController;
@@ -109,7 +112,7 @@ Route::get('/_arabictutor-landing', [HomeController::class, 'index'])->name('hom
 Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders::class)->group(function () {
     Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
-    Route::middleware('student.auth')->group(function () {
+    Route::middleware(['lms.preview.readonly', 'student.auth'])->group(function () {
         Route::get('/my-learning', [LearningController::class, 'index'])->name('learning.index');
         Route::post('/learn/courses/{course}/lessons/{lesson}/complete', [LearningEvidenceController::class, 'manual'])->whereNumber(['course', 'lesson'])->middleware('throttle:30,1')->name('evidence.manual');
         Route::get('/learn/courses/{course}/lessons/{lesson}/assessments/{block}', [LearningEvidenceController::class, 'show'])->whereNumber(['course', 'lesson', 'block'])->name('evidence.show');
@@ -316,6 +319,13 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
         Route::prefix('lms')->name('lms.')->middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/operations', [LearningOperationsController::class, 'index'])->name('operations');
+            Route::get('/attention', [LearningOperationsController::class, 'attention'])->name('attention');
+            Route::get('/reviews', [LearningOperationsController::class, 'reviews'])->name('reviews');
+            Route::get('/permissions', [LearningOperationsController::class, 'permissions'])->name('permissions');
+            Route::get('/security', [LearningOperationsController::class, 'security'])->middleware('role:super_admin')->name('security');
+            Route::get('/settings', [LearningSettingsController::class, 'index'])->middleware('role:super_admin')->name('settings');
+            Route::post('/settings', [LearningSettingsController::class, 'update'])->middleware(['role:super_admin', 'throttle:10,1'])->name('settings.update');
             Route::get('/video/settings', [VideoSettingsController::class, 'index'])->middleware('role:super_admin')->name('video.settings');
             Route::post('/video/settings', [VideoSettingsController::class, 'update'])->middleware(['role:super_admin', 'throttle:10,1'])->name('video.settings.update');
             Route::post('/video/verify', [VideoSettingsController::class, 'verify'])->middleware(['role:super_admin', 'throttle:10,1'])->name('video.settings.verify');
@@ -341,6 +351,14 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/courses/{course}/discard', [CourseStudioController::class, 'discard'])->whereNumber('course')->middleware('throttle:30,1')->name('courses.discard');
             Route::post('/courses/{course}/attachments', [CourseStudioController::class, 'upload'])->whereNumber('course')->middleware('throttle:20,1')->name('courses.upload');
             Route::get('/courses/{course}/preview', [CourseStudioController::class, 'preview'])->whereNumber('course')->name('courses.preview');
+            Route::post('/courses/{course}/learner-preview', [LearningPreviewController::class, 'store'])->whereNumber('course')->middleware('throttle:20,1')->block(10, 10)->name('preview.start');
+            Route::get('/preview/{preview}', [LearningPreviewController::class, 'show'])->whereUuid('preview')->name('preview.show');
+            Route::get('/preview/{preview}/lessons/{lesson}', [LearningPreviewController::class, 'show'])->whereUuid('preview')->whereNumber('lesson')->name('preview.lesson');
+            Route::post('/preview/{preview}/exit', [LearningPreviewController::class, 'destroy'])->whereUuid('preview')->block(10, 10)->name('preview.exit');
+            Route::get('/preview/{preview}/lessons/{lesson}/materials/{block}', [LearningPreviewController::class, 'material'])->whereUuid('preview')->whereNumber(['lesson', 'block'])->name('preview.material');
+            Route::post('/preview/{preview}/lessons/{lesson}/videos/{block}', [LearningPreviewController::class, 'video'])->whereUuid('preview')->whereNumber(['lesson', 'block'])->middleware('throttle:30,1')->block(10, 10)->name('preview.video');
+            Route::post('/preview/{preview}/lessons/{lesson}/videos/{block}/renew', [LearningPreviewController::class, 'renew'])->whereUuid('preview')->whereNumber(['lesson', 'block'])->middleware('throttle:30,1')->block(10, 10)->name('preview.video.renew');
+            Route::post('/preview/{preview}/videos/{block}/close', [LearningPreviewController::class, 'close'])->whereUuid('preview')->whereNumber('block')->middleware('throttle:30,1')->block(10, 10)->name('preview.video.close');
             Route::get('/courses/{course}/preview/assets/{asset}', [CourseStudioController::class, 'asset'])->whereNumber(['course', 'asset'])->name('courses.assets');
             Route::get('/courses/{course}/preview/resources/{resource}', [CourseStudioController::class, 'resource'])->whereNumber(['course', 'resource'])->name('courses.resources');
             Route::post('/students/{student}/courses/{course}/access', [LmsAccessController::class, 'issue'])->whereNumber(['student', 'course'])->middleware('throttle:30,1')->name('access.issue');

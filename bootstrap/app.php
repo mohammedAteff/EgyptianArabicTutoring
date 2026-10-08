@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsureAdministratorSecondFactor;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
 use App\Http\Middleware\EnsureAdminRole;
+use App\Http\Middleware\EnsureLmsPreviewReadOnly;
 use App\Http\Middleware\EnsureNotUnderMaintenance;
 use App\Http\Middleware\EnsureStudentAuthenticated;
 use App\Http\Middleware\NormalizeTrailingSlash;
@@ -43,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.preview' => EnsureAdminPreviewAccess::class,
             'account.active' => EnsureAccountActive::class,
             'student.auth' => EnsureStudentAuthenticated::class,
+            'lms.preview.readonly' => EnsureLmsPreviewReadOnly::class,
         ]);
         $middleware->web(append: [
             NormalizeTrailingSlash::class,

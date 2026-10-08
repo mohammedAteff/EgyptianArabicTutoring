@@ -9,10 +9,13 @@ use App\Exceptions\VideoProviderUnavailable;
 
 class LmsVideoProfiles
 {
+    public function __construct(private LmsSettings $settings) {}
+
     public function effective(Course $course, ?Lesson $lesson = null): ProtectionProfile
     {
         $id = $lesson !== null ? $lesson->protection_profile_id : null;
         $id ??= $course->protection_profile_id;
+        $id ??= $course->kind === 'catalog' ? $this->settings->catalogProfileId() : null;
         $profile = $id ? ProtectionProfile::query()->find($id) : ProtectionProfile::query()->where('name', $course->kind === 'private' ? 'Private' : 'Member')->first();
         if (! $profile || ! $profile->active || (in_array($profile->name, ['Private', 'Premium'], true) && ($profile->device_limit === null || $profile->stream_limit === null || ! $profile->watermark))) {
             throw new VideoProviderUnavailable;

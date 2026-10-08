@@ -34,7 +34,7 @@
             <label for="private-session" class="block text-sm font-semibold">Tutoring session (optional)<select id="private-session" name="booking_id" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3"><option value="">No session relationship</option>@foreach($bookings as $booking)<option value="{{ $booking->id }}" @selected((int)old('booking_id',$bookingId)===(int)$booking->id)>#{{ $booking->id }} · {{ $booking->start_at_utc->copy()->timezone($businessTz)->format('j M Y, H:i') }} · {{ $booking->studentStatusLabel() }}</option>@endforeach</select></label>
             @include('admin.students._learning-availability',['prefix'=>'private','resourceChoice'=>false])
             <div class="flex flex-wrap gap-3"><x-lms.button name="share_now" value="0" tone="neutral">Create draft & add content</x-lms.button><button x-show="kind!=='video'" type="submit" name="share_now" value="1" class="min-h-11 rounded-xl bg-amber-700 px-5 text-sm font-semibold text-white">Create & share</button></div>
-            <p x-show="kind==='video'" class="text-xs text-slate-500">Create the draft, upload directly to Bunny, check Ready, then share. Private protection and the 95% watch requirement apply by default.</p>
+            <p x-show="kind==='video'" class="text-xs text-slate-500">Create the draft, upload directly to Bunny, check Ready, then share. Private protection and the {{ $defaultVideoThreshold }}% watch requirement apply by default.</p>
         </form>
     </section>
 </div>

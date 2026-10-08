@@ -9,6 +9,8 @@ use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ReportService;
+use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentSessionContext;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -232,9 +234,9 @@ class AnalyticsService
         Visitor::query()->where('visitor_token', $token)->whereNull('student_id')->whereHas('sessions', fn ($query) => $query->where('session_token', $sessionToken))->update(['student_id' => $studentId]);
     }
 
-    public function excluded(Request $request): bool
+    public function excluded(Request $request, bool $learning = false): bool
     {
-        if ($request->routeIs('student.video.*', 'bunny-stream.webhook')) {
+        if ((! $learning && $request->routeIs('student.video.*')) || $request->routeIs('bunny-stream.webhook')) {
             return true;
         }
         if ($request->user('web') || $request->is('admin*', 'preview*', '*/preview', 'build/*', 'assets/*', 'up') || $request->header('X-Analytics-Synthetic') === '1') {
@@ -246,6 +248,7 @@ class AnalyticsService
     }
 
     public const ALLOWED_EVENTS = [
+        'lms_course_started', 'lms_lesson_completed', 'lms_course_completed', 'lms_quiz_submitted', 'lms_assignment_submitted',
         'page_view',
         'session_started',
         'booking_cta_clicked',
@@ -276,6 +279,7 @@ class AnalyticsService
     ];
 
     public const SERVER_ONLY_EVENTS = [
+        'lms_course_started', 'lms_lesson_completed', 'lms_course_completed', 'lms_quiz_submitted', 'lms_assignment_submitted',
         'booking_completed',
         'booking_cancelled',
         'booking_rescheduled',
@@ -327,10 +331,52 @@ class AnalyticsService
         'section_dwell' => ['section_id', 'page_template', 'dwell_seconds', 'path'],
     ];
 
+    private bool $recordingLearning = false;
+
     public function __construct(
         protected ?FunnelProgressionService $funnelProgressionService = null
     ) {
         $this->funnelProgressionService = $funnelProgressionService ?? app(FunnelProgressionService::class);
+    }
+
+    /** Only canonical learning writers call this recorder; the browser cannot supply these facts.
+     * @param array<string,mixed> $metadata */
+    public function recordLearning(Student $student, string $event, string $identity, array $metadata, ?CarbonInterface $at): ?AnalyticsEvent
+    {
+        $req = request();
+        if ($at === null || ! in_array($event, ['lms_course_started', 'lms_lesson_completed', 'lms_course_completed', 'lms_quiz_submitted', 'lms_assignment_submitted'], true)
+            || $this->excluded($req, true) || $req->attributes->get('analytics_is_bot', false)
+            || preg_match('/bot|crawler|spider/i', (string) $req->userAgent())
+            || app(StudentSessionContext::class)->current($req)?->id !== $student->id) {
+            return null;
+        }
+        $learner = hash_hmac('sha256', 'learning:'.$student->id, (string) config('app.key'));
+        $safe = ['learner_key' => $learner];
+        foreach (['course_id', 'lesson_id', 'block_id', 'attempt_id', 'submission_id'] as $key) {
+            if (isset($metadata[$key]) && is_int($metadata[$key]) && $metadata[$key] > 0) {
+                $safe[$key] = $metadata[$key];
+            }
+        }
+        foreach (['requirement_hash', 'completion_key'] as $key) {
+            if (isset($metadata[$key]) && is_string($metadata[$key]) && preg_match('/^[a-f0-9]{64}$/D', $metadata[$key])) {
+                $safe[$key] = $metadata[$key];
+            }
+        }
+        $hash = hash('sha256', $learner.'|'.$event.'|'.$identity);
+        $uuid = substr($hash, 0, 8).'-'.substr($hash, 8, 4).'-5'.substr($hash, 13, 3).'-a'.substr($hash, 17, 3).'-'.substr($hash, 20, 12);
+        $this->recordingLearning = true;
+        try {
+            return $this->track($event, $safe, $req, page: '/student/learn', occurredAt: $at, eventUuid: $uuid);
+        } finally {
+            $this->recordingLearning = false;
+        }
+    }
+
+    /** @param array<string,mixed> $filters
+     * @return array<string,mixed> */
+    public function learningReport(CarbonInterface $start, CarbonInterface $end, array $filters = []): array
+    {
+        return app(LearningAnalyticsService::class)->report($start, $end, $filters);
     }
 
     public function trackEvent(
@@ -401,7 +447,7 @@ class AnalyticsService
         ?CarbonInterface $occurredAt = null,
         ?string $eventUuid = null
     ): ?AnalyticsEvent {
-        if (! in_array($eventName, self::ALLOWED_EVENTS, true)) {
+        if ((str_starts_with($eventName, 'lms_') && ! $this->recordingLearning) || ! in_array($eventName, self::ALLOWED_EVENTS, true)) {
             Log::warning("AnalyticsService: rejected unauthorized event '{$eventName}'");
 
             return null;
@@ -409,7 +455,7 @@ class AnalyticsService
 
         try {
             $req = $request ?? request();
-            if ($req && $this->excluded($req)) {
+            if ($req && $this->excluded($req, $this->recordingLearning)) {
                 return null;
             }
 
@@ -447,6 +493,9 @@ class AnalyticsService
 
             $pageUrl = $page ?? ($req ? substr($req->fullUrl(), 0, 500) : '/');
             $referrer = $req ? substr((string) $req->header('referer', ''), 0, 500) : null;
+            if ($this->recordingLearning) {
+                $referrer = null;
+            }
             $isBot = $req ? (bool) ($req->attributes->get('analytics_is_bot', false)) : false;
 
             $visSession = null;
@@ -465,6 +514,9 @@ class AnalyticsService
                 }
             }
 
+            if ($this->recordingLearning && $isBot) {
+                return null;
+            }
             $utmSource = $req ? $req->query('utm_source') : null;
             $utmMedium = $req ? $req->query('utm_medium') : null;
             $utmCampaign = $req ? $req->query('utm_campaign') : null;

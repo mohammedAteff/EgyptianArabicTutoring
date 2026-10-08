@@ -201,6 +201,7 @@
                             <svg aria-hidden="true" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.6" d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>
                             Courses
                         </a>
+                        <a href="{{ route('admin.lms.operations') }}" class="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 {{ request()->routeIs('admin.lms.operations','admin.lms.attention','admin.lms.reviews','admin.lms.permissions','admin.lms.settings*','admin.lms.security') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">Learning operations</a>
                         <a href="{{ route('admin.resources.index') }}" 
                            class="flex min-h-11 items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ request()->routeIs('admin.resources.index', 'admin.resources.create', 'admin.resources.edit') ? 'bg-amber-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                             <svg class="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
@@ -499,6 +500,13 @@
 
             <!-- Main Page Content -->
             <main class="ml-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+                @php($activeLearningPreview = session(\App\Domains\Lms\Services\LmsPreviewService::SESSION_KEY))
+                @if(is_array($activeLearningPreview) && ($activeLearningPreview['actor_id']??null)===auth('web')->id() && auth('web')->user()?->can('preview', \App\Domains\Lms\Models\Course::class) && !request()->routeIs('admin.lms.preview.*'))
+                <div role="status" class="sticky top-0 z-20 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+                    <div><p class="font-semibold text-amber-950">Previewing as {{ $activeLearningPreview['label']??'a generic learner' }}</p><p class="mt-1 text-xs text-amber-900">Read-only preview context · Student-area actions are paused until you exit.</p></div>
+                    <form method="POST" action="{{ route('admin.lms.preview.exit',$activeLearningPreview['id']) }}">@csrf<x-lms.button tone="neutral">Exit preview</x-lms.button></form>
+                </div>
+                @endif
                 {{ $slot ?? '' }}
                 @yield('content')
             </main>

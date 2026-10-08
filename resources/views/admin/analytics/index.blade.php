@@ -12,6 +12,7 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
+            @can('viewAnalytics', \App\Domains\Lms\Models\Course::class)<a href="{{ route('admin.lms.operations') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-amber-800">Learning analytics & operations</a>@endcan
 
             <!-- Dual-Format Export Buttons -->
             <div class="inline-flex items-center gap-1.5">

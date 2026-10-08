@@ -3,6 +3,7 @@
 namespace App\Domains\Lms\Services;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Services\LessonMaterialService;
 use App\Domains\Lms\Models\AssignmentSubmission;
@@ -68,6 +69,8 @@ class LmsAssignmentService
                     'status' => 'submitted', 'body' => $body, 'url' => $url, 'lock_version' => 1] + $attachment)->save();
                 $this->progress->evaluate($student, $lesson);
                 $this->audits->logStudent($student->id, 'lms_assignment_submitted', AssignmentSubmission::class, $submission->id, null, ['block_id' => $block->id, 'number' => $submission->number, 'kind' => $submission->kind]);
+                app(AnalyticsService::class)->recordLearning($student, 'lms_assignment_submitted', 'submission:'.$submission->id,
+                    ['course_id' => (int) $course->id, 'lesson_id' => (int) $lesson->id, 'block_id' => (int) $block->id, 'submission_id' => (int) $submission->id], $submission->created_at);
 
                 return $submission;
             });

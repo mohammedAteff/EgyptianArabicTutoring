@@ -17,6 +17,32 @@ class LmsPolicy
             && Administrator::query()->whereKey($actor->id)->whereNull('suspended_at')->whereIn('role', ['admin', 'super_admin'])->exists();
     }
 
+    public function viewAnalytics(Administrator|Student $actor): bool
+    {
+        return $this->manage($actor);
+    }
+
+    public function viewProgress(Administrator|Student $actor): bool
+    {
+        return $this->manage($actor);
+    }
+
+    public function preview(Administrator|Student $actor): bool
+    {
+        return $this->manage($actor);
+    }
+
+    public function manageSettings(Administrator|Student $actor): bool
+    {
+        return $actor instanceof Administrator && Administrator::query()->whereKey($actor->id)
+            ->whereNull('suspended_at')->where('role', 'super_admin')->exists();
+    }
+
+    public function viewSecurity(Administrator|Student $actor): bool
+    {
+        return $this->manageSettings($actor);
+    }
+
     public function view(Administrator|Student|null $actor, Model $target): bool
     {
         return ! ($actor instanceof Administrator) && $this->access->canAccess($actor, $target);

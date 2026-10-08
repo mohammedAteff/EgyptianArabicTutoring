@@ -2,6 +2,7 @@
 
 namespace App\Domains\Lms\Services;
 
+use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Lms\Models\AssignmentSubmission;
 use App\Domains\Lms\Models\Course;
@@ -13,6 +14,7 @@ use App\Domains\Lms\Models\QuizAttempt;
 use App\Domains\Lms\Models\VideoProgress;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\TeachingRecordService;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +90,15 @@ class LmsProgressService
         if ($satisfied && ! $row->completed_at) {
             $row->forceFill(['completed_at' => now('UTC')])->save();
             $this->audits->logStudent($student->id, 'lms_lesson_completed', LessonProgress::class, $row->id, null, ['lesson_id' => $lesson->id, 'requirement_hash' => $row->requirement_hash]);
+            app(AnalyticsService::class)->recordLearning($student, 'lms_lesson_completed', 'progress:'.$row->id,
+                ['course_id' => (int) $lesson->course_id, 'lesson_id' => (int) $lesson->id, 'requirement_hash' => $row->requirement_hash], $row->completed_at);
+            $lessons = Lesson::query()->where('course_id', $lesson->course_id)->where('status', 'published')->where('published_at', '<=', now('UTC'))
+                ->whereHas('section', fn ($query) => $query->where('status', 'published')->where('published_at', '<=', now('UTC')))->with('blocks.videoAsset')->get();
+            $summary = $this->summary($student, $lessons);
+            if ($summary['status'] === 'Completed') {
+                app(AnalyticsService::class)->recordLearning($student, 'lms_course_completed', $lesson->course_id.':'.$summary['completion_key'],
+                    ['course_id' => (int) $lesson->course_id, 'completion_key' => $summary['completion_key']], $summary['completed_at']);
+            }
         }
 
         return $row;
@@ -98,8 +109,14 @@ class LmsProgressService
         $hash = $this->definitions->requirementHash($lesson);
         $row = LessonProgress::query()->where('student_id', $student->id)->where('lesson_id', $lesson->id)->where('requirement_hash', $hash)->lockForUpdate()->first();
         if (! $row) {
+            $started = LessonProgress::query()->where('student_id', $student->id)
+                ->whereIn('lesson_id', Lesson::query()->where('course_id', $lesson->course_id)->select('id'))->exists();
             $row = new LessonProgress;
             $row->forceFill(['student_id' => $student->id, 'lesson_id' => $lesson->id, 'requirement_hash' => $hash, 'started_at' => now('UTC')])->save();
+            if (! $started) {
+                app(AnalyticsService::class)->recordLearning($student, 'lms_course_started', 'course:'.$lesson->course_id,
+                    ['course_id' => (int) $lesson->course_id], $row->started_at);
+            }
         }
 
         return $row;
@@ -115,11 +132,13 @@ class LmsProgressService
     }
 
     /** @param Collection<int,Lesson> $lessons
+     * @param Collection<int,LessonProgress>|null $retainedRows
+     * @param array<int,mixed>|null $enrollmentAnchors
      * @return array<string,mixed> */
-    public function summary(Student $student, Collection $lessons): array
+    public function summary(Student $student, Collection $lessons, ?Collection $retainedRows = null, ?array $enrollmentAnchors = null): array
     {
         (new \Illuminate\Database\Eloquent\Collection($lessons->all()))->loadMissing('blocks.videoAsset');
-        $rows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $lessons->pluck('id'))->get()->groupBy('lesson_id');
+        $rows = ($retainedRows ?? LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $lessons->pluck('id'))->get())->groupBy('lesson_id');
         $current = $lessons->mapWithKeys(function (Lesson $lesson) use ($rows): array {
             $row = $rows->get($lesson->id, collect())->firstWhere('requirement_hash', $this->definitions->requirementHash($lesson));
 
@@ -127,7 +146,7 @@ class LmsProgressService
         });
         $completedMap = $current->map(fn (?LessonProgress $row): bool => $row?->completed_at !== null)->all();
         $relativeCourses = $lessons->filter(fn (Lesson $lesson): bool => $this->definitions->lessonRules($lesson)['drip_mode'] === 'relative')->pluck('course_id')->unique();
-        $anchors = Enrollment::query()->where('student_id', $student->id)->whereIn('course_id', $relativeCourses)->get()->groupBy('course_id')
+        $anchors = $enrollmentAnchors ?? Enrollment::query()->where('student_id', $student->id)->whereIn('course_id', $relativeCourses)->get()->groupBy('course_id')
             ->filter(fn (Collection $rows): bool => $rows->contains('status', 'enrolled'))->map(fn (Collection $rows) => $rows->sortBy('enrolled_at')->first()->enrolled_at)->all();
         $states = $lessons->mapWithKeys(function (Lesson $lesson) use ($student, $current, $completedMap, $anchors): array {
             $row = $current[$lesson->id];
@@ -135,6 +154,38 @@ class LmsProgressService
             return [$lesson->id => ['status' => $row?->completed_at ? 'Completed' : ($row ? 'In Progress' : 'Not Started'),
                 'completed' => $row?->completed_at !== null, 'required' => $this->definitions->lessonRules($lesson)['required']] + $this->gate->decision($student, $lesson, $completedMap, $anchors)];
         });
+
+        return $this->assembleSummary($lessons, $current, $states->all());
+    }
+
+    /** Canonical cohort projection consumes a batch of retained rows; no per-Student database reads.
+     * @param Collection<int,Lesson> $lessons
+     * @param Collection<int,LessonProgress> $rows
+     * @return array<string,mixed> */
+    public function cohortSummary(Collection $lessons, Collection $rows, ?CarbonInterface $at = null, ?array $hashes = null): array
+    {
+        $hashes ??= $lessons->mapWithKeys(fn (Lesson $lesson): array => [$lesson->id => $this->definitions->requirementHash($lesson)])->all();
+        $rows = $rows->filter(fn (LessonProgress $row): bool => $at === null || $row->started_at->lte($at))->groupBy('lesson_id');
+        $current = $lessons->mapWithKeys(fn (Lesson $lesson): array => [$lesson->id => $rows->get($lesson->id, collect())
+            ->firstWhere('requirement_hash', $hashes[$lesson->id])]);
+        $states = $lessons->mapWithKeys(function (Lesson $lesson) use ($current, $at): array {
+            $row = $current[$lesson->id];
+            $complete = $row?->completed_at !== null && ($at === null || $row->completed_at->lte($at));
+
+            return [$lesson->id => ['status' => $complete ? 'Completed' : ($row ? 'In Progress' : 'Not Started'),
+                'completed' => $complete, 'required' => $this->definitions->lessonRules($lesson)['required'], 'allowed' => false]];
+        });
+
+        return $this->assembleSummary($lessons, $current, $states->all());
+    }
+
+    /** @param Collection<int,Lesson> $lessons
+     * @param Collection<int,LessonProgress|null> $current
+     * @param array<int,array<string,mixed>> $states
+     * @return array<string,mixed> */
+    private function assembleSummary(Collection $lessons, Collection $current, array $states): array
+    {
+        $states = collect($states);
         $required = $states->filter(fn (array $state): bool => $state['required']);
         $completed = $required->filter(fn (array $state): bool => $state['completed'])->count();
         $done = $required->isNotEmpty() && $completed === $required->count();
@@ -143,7 +194,8 @@ class LmsProgressService
         return ['status' => $done ? 'Completed' : ($states->contains(fn (array $s): bool => $s['status'] !== 'Not Started') ? 'In Progress' : 'Not Started'),
             'percent' => $required->isEmpty() ? 0 : (int) floor(100 * $completed / $required->count()), 'completed' => $completed, 'required' => $required->count(),
             'completed_at' => $done ? $requiredRows->max('completed_at') : null,
-            'completion_key' => $done ? hash('sha256', json_encode($requiredRows->map(fn (LessonProgress $row): string => $row->requirement_hash)->all(), JSON_THROW_ON_ERROR)) : null,
+            'completion_key' => $done ? hash('sha256', json_encode($requiredRows->sortKeys()->map(fn (LessonProgress $row): string => $row->requirement_hash)->all(), JSON_THROW_ON_ERROR)) : null,
+            'started_at' => $current->filter()->min('started_at'), 'last_completed_at' => $current->filter()->max('completed_at'),
             'lessons' => $states, 'next' => $lessons->first(fn (Lesson $l): bool => $states[$l->id]['allowed'] && ! $states[$l->id]['completed'])];
     }
 

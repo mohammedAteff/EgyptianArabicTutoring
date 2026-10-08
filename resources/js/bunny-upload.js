@@ -15,6 +15,7 @@ function initialize() {
             if (!file || !file.type.startsWith('video/')) { status.textContent = 'Choose a video file.'; return; }
             busy = true; button.disabled = true; status.textContent = 'Preparing direct upload…';
             try {
+                if (!globalThis.crypto?.subtle) throw new Error('Secure uploads require HTTPS. Open the secure site and try again.');
                 const {Upload, isSupported} = await import('tus-js-client');
                 if (!isSupported) throw new Error('This browser does not support resumable uploads.');
                 asset ??= await protectedPost(form.dataset.createUrl, {label: form.elements.namedItem('label').value, version: Number(form.dataset.version), request_key: crypto.randomUUID()});

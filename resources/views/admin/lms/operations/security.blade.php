@@ -1,0 +1,7 @@
+@extends('layouts.admin')
+@section('content')
+<div class="space-y-6"><header><h1 class="font-serif text-3xl font-bold">LMS security & audit</h1><p class="mt-2 text-slate-600">Canonical access, authoring, security and preview audit actions.</p></header>@include('admin.lms.operations._nav')
+    <a href="{{ route('admin.audit-logs') }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-800">Open full protected audit viewer</a>
+    <div class="space-y-3">@forelse($logs as $log)<article class="rounded-2xl border border-slate-200 bg-white p-5"><div class="flex flex-wrap items-center justify-between gap-3"><h2 class="break-words text-sm font-semibold">{{ ucfirst(str_replace('_',' ',$log->action)) }}</h2><time datetime="{{ $log->created_at->toIso8601String() }}" class="text-xs text-slate-500">{{ $log->created_at->timezone($businessTz)->format('j M Y, H:i T') }}</time></div><p class="mt-2 text-xs text-slate-500">Audit #{{ $log->id }} · {{ $log->administrator_id?'Administrator #'.$log->administrator_id:'Student action' }}</p>@foreach($diffs[$log->id] as $diff)<p class="mt-2 text-xs text-slate-600">{{ $diff['field'] }}: {{ $diff['before'] }} → {{ $diff['after'] }}</p>@endforeach</article>@empty<p class="rounded-2xl border border-dashed border-slate-300 p-8 text-slate-500">No LMS audit actions yet.</p>@endforelse</div>{{ $logs->links() }}
+</div>
+@endsection

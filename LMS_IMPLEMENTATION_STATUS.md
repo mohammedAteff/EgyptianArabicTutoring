@@ -2,6 +2,84 @@
 
 Date: 2026-10-08 (Africa/Cairo).
 
+## Stage 8 disposition — completed implementation
+
+**COMPLETE — IMPLEMENTATION COMPLETE — PENDING INDEPENDENT STAGE 9 ACCEPTANCE.** Learning analytics/operations, deterministic attention, canonical review queues, visit-based notifications, versioned settings, current permissions, safe generic/specific learner preview, security audit visibility and functional/performance hardening are implemented. The independent Stage 9 acceptance has not been performed; this does not call the full application verified. No production deployment occurred. Live Bunny certification remains pending under the owner's explicit mock-verification choice.
+
+Stage 8 starts from complete Stage 7 commit `02bc5071cb0bc638e5a6ee493bcb190e44c3bf90`; the accepted pre-LMS application baseline remains `4296b21368cbc9c564d0cb7a85e29b2ae408e0ee`. Plan section 18 records final authority, event ownership, reporting scope, settings precedence, preview and deliberate exclusions. No new dependency or stop-condition owner decision was required.
+
+### Stage 8 evidence
+
+| Gate | Exact final evidence |
+|---|---|
+| Focused integration and UI fixture render | PASS **116 tests / 982 assertions** across LearningAnalyticsOperationsTest, LearningPreviewTest, LmsOperationalPermissionsSettingsTest, TutoringLearningIntegrationTest and StudentLearningTest |
+| Complete current-schema backend | PASS **1361 tests / 11073 assertions** against explicit bolt_landing_test |
+| Dedicated MariaDB/concurrency | PASS **61 tests / 340 assertions**, 10 classes with phpunit.concurrency.xml; includes three new simultaneous settings/completion/notification races |
+| JS | PASS **43 tests / 0 failures**, including secure UUID fallback and missing-randomness failure; no dependencies changed |
+| Frontend | PASS Vite production build; final CSS **130.10 kB**, app **25.89 kB**, TUS **60.41 kB**, HLS **574.74 kB**. Existing HLS >500-kB warning remains non-blocking |
+| Static analysis | PASS no regression: the **same 255 accepted diagnostics**, compared as a complete path/identifier/message multiset with duplicate multiplicity; no suppression/configuration weakening |
+| Blade/routes | PASS **256 compiled views**, each PHP-linted; view cache/clear and route cache/clear. All **15 new operational/settings/preview routes** remain in the guarded web pipeline with canonical capabilities and mutation CSRF/throttles/session blocking |
+| Formatting/diff | PASS required dirty-PHP Pint plus working/staged whitespace checks |
+| Audits | PASS fresh Composer **0 advisories / 0 abandoned packages** and npm **0 vulnerabilities** |
+| Performance | Hub **15 queries** with one or 20 courses; a course report **15 queries** with one or 20 Students. Controlled MariaDB EXPLAIN uses lms_video_operations with **range**, not ALL, access |
+| Functional UI | PASS nine current feature-rendered screens at **1280×900 and 390×844**, accessible names/captions, Arabic/English direction, navigation, disabled assessment preview, visible actor/subject/exit, locked/empty states and recovered player failure; **19 screenshots** in the delivery evidence |
+| Local additive DDL | PASS local bolt_landing / MariaDB **10.11.18**, **batch 25**, **131 tables / 81 Ran migrations**, one non-unique video queue index; **14 generated columns / four typed finance guards exactly unchanged** |
+| Local data boundary | Existing **3 Students / 0 Courses** remain. Learning content/access/evidence/security tables stay empty except the existing four protection profiles. Synthetic fixtures are confined to test/render workflows |
+| Git/deployment | Reviewed **55 task files (22 new / 33 modified)** are committed/pushed through the established non-force workflow; exact SHA and full inventory are in the delivery receipt. Three pre-existing untracked production documents remain untouched/uncommitted. No production migration, credential change, hot edit, deployment or Stage 9 run |
+
+The normal suite excludes the historical intermediate-schema group and the 10 dedicated concurrency classes; the dedicated classes run separately. Database suites are serial. The full backend includes booking, availability, holds, reschedule, package/funding/payment/refund/ledger, Resources/private files, maintenance, notifications, analytics, authentication/roles, Student Portal, public pages and timezone regressions, alongside Stage 2–7 LMS integration. Earlier assertions were not weakened: the one Stage 4 zero-LMS-event assertion was replaced by the newly authorized **exactly one Course Started and no other semantic events** check, while all existing notification/read-state assertions remain.
+
+### Stage 8 analytics validation and limitations
+
+Existing AnalyticsService/AnalyticsEvent have the five server-only event recorders documented in plan 18.1; the browser and generic track cannot forge them. Canonical start/completion/submit retries and concurrent completion persist one semantic identity. Metadata is finite opaque learner identity/IDs/hashes with existing server-derived country/IP hashing, and excludes permanent raw IP, names/emails, private titles, answers, feedback, URLs/referrers and video proof/security telemetry. Staff, preview, bot, synthetic and internal requests produce no normal learning events.
+
+Canonical current state, not event counts or security heartbeats, drives progress/completion/results. Controlled data proves two retained Students with three access grants remain two enrolled/two started/one completed, **50% completion**, **50% average progress**, one completed lesson and one latest-visit learner; optional lessons and sorted curriculum ordering do not change completion identity. Changed requirement generations and evidence after the period end cannot complete the selected cohort. Unverified/suspended/future/archived/foreign-private cohorts are excluded. A revoked source removes current accessibility without deleting retained history.
+
+Three submitted quizzes (one passed, one failed, one manual pending) yield **3 submissions / 1 pass / 50 graded average**. Two assignment revisions with one Needs Revision decision yield **2 submissions / 1 reviewed / 1 awaiting final review**. Numerators are subsets; completion rates cannot exceed 100. Six current video placements at 20/25/50/75/95/100% yield **started 6, 25% 5, 50% 4, 75% 3, threshold 2, average coverage 60.8%, average covered seconds 61**. A changed media generation removes stale coverage and Processing media cannot enter trusted video reports. Reports/queues make no Bunny calls.
+
+The report explicitly uses current retained enrolled cohorts/current published curriculum through the selected end. Open-access learners without retained enrollment are excluded from that cohort, with normal hub/profile learning unaffected. Latest-visit metrics describe each retained Student/course's latest visit, not a reconstruction of all historical activity. Video ranges are current coverage for placements started in the period, not historical watch snapshots. No total study/attention time, precise completion-time claim, heatmap, overdue assignment date or parallel progress model is invented.
+
+### Stage 8 operational rules, notifications and precedence
+
+Attention uses editable elapsed-day defaults: inactive 14; stalled completion 14; three current-definition failures without a current pass; union access ending within five days below 30%; private follow-up neither visited nor canonically started for seven days after actual availability. Recent Student submissions count as activity, staff grading does not. Completion, visits/starts, passes, permanent overlap, changed definitions and loss of access resolve flags from canonical facts; Students appear once across courses. There is no AI or second alert-state writer.
+
+Authenticated visits remain the only Student notification synchronization trigger. Existing assignment/review semantic keys and read state remain; private assignment/video readiness, Needs Revision, union expiry and eligible scheduled unlocks are added with bounded owner-scoped facts. Ready video is deduplicated across assignments. Future, expired, revoked, locked and foreign targets produce no new notification. Existing read history is retained. There is no proactive queue/worker, email/SMS/Telegram redesign or new notification subsystem.
+
+Private versioned `lms.options` uses the current Setting architecture. Super Admin saves validate finite fields and concurrency versions and audit non-secret changes. New content captures the global completion default; prior explicit rules remain stable. Protection is explicit lesson → explicit course → optional safe catalog global fallback → Member; private learning keeps the strong Private fallback. Profile limits and encrypted Bunny credentials remain in their existing authority, with no duplicated storage or Student override.
+
+### Stage 8 final permission matrix
+
+| Capability | Super Admin | Admin | Assistant |
+|---|---|---|---|
+| Learning analytics and Student progress | Allow | Allow | Deny |
+| Course create/edit/publish/archive/duplicate | Allow | Allow | Deny |
+| Assign learning/private creation/grant/revoke/extend | Allow | Allow | Deny |
+| Quiz and assignment review | Allow | Allow | Deny |
+| Generic/specific Student preview | Allow | Allow | Deny |
+| Student browser/session administration (existing teaching delegation) | Allow | Allow | Deny |
+| Global device/stream limits and protection profiles | Allow | Deny | Deny |
+| Bunny configuration/global LMS settings/security audit | Allow | Deny | Deny |
+
+Fresh capability queries, existing role/authentication/account-activity/MFA boundaries and Student ownership remain. Specific preview adds manageTeaching and private-owner checks. Assistant navigation and crafted requests are denied. The existing Admin browser delegation was preserved rather than redefined. Actual Student self-service remains owner/session scoped.
+
+### Stage 8 preview validation
+
+Generic and Lucy-specific previews retain the real web Administrator and a 15-minute actor/session context; there is no Student login, guard substitution or fake enrollment. Current entitlement/drip/prerequisite/progress projection, disabled quiz/assignment interactions, dedicated private material routes, persistent subject/actor/exit banner and initiation/valid-exit audits are verified. Regenerated/foreign-actor contexts remain unusable and can be safely discarded/restarted/exited in the caller's own session, without misattributing an old actor's exit. Demoted/suspended/forbidden staff, foreign lessons/media/materials, expired contexts and lost access fail closed.
+
+Snapshots of **14 tables** prove no changes to enrollment, grants, learning assignments/visits, notes/bookmarks, progress/watch rows, attempts/submissions, authorized devices, Student leases, notifications or analytics. Dual real guards cannot perform Student-area actions while preview is active; actual Student session proof is unchanged. Personal notes, actual answers/body/feedback and tutor preparation are excluded.
+
+Bunny preview uses separate authenticated Staff authorization, provider mock verification/reconciliation and narrow HLS signing. It does not reserve a Student device/stream/watch row, even with occupied allowances. Tokens last at most **120 seconds**, further clipped to real access end (the controlled 30-second source remains 30 seconds). Proof closure, changed policy/provider/media, source revocation and Processing media refuse renewal/play. Network/provider work remains outside the final locking/signing transaction. Exiting prevents fresh authorization; an issued CDN capability can remain usable until its already bounded expiration. Ordinary page loads make no provider calls. This is mock/local proof, not live Bunny certification.
+
+### Stage 8 performance, UI, invariants and release boundary
+
+Fresh graph/enrollment/grant/evidence projections remove per-course/per-lesson access/progress rereads from the hub, curriculum modules, profile/For You, timeline and visit facts. Cohort reports stream 200-Student batches and attention aggregates attempt facts without loading answers. Direct delivery and writes keep fresh canonical authorization/locks; no cross-request entitlement cache exists. One additive provider/status/id index supports the new global media queue; existing status/block, enrollment and progress indexes remain. No table, rollup, backfill or broad application/database cleanup was added.
+
+The UI pass corrected narrow mobile filters, verified accessible labels/captions and Arabic/English direction, and exercised preview loading/error/disabled/locked states. A local HTTP player UUID error was fixed using secure random bytes and a recoverable catch/finally path; uploads now clearly explain their secure HTTPS context requirement. Existing production TLS checks are unchanged. Screenshots use isolated synthetic test HTML with submissions, navigation to real endpoints and telemetry disabled. All temporary public review files were removed, the viewport/tabs reset, and the final build assets matched the reviewed files. The known HLS bundle-size warning and the exact accepted PHPStan baseline remain deliberate disclosed limitations.
+
+All **27 PRE_LMS_INVARIANTS** retain their meaning. Directly touched integration concerns are **1–5, 7–8, 17 and 19–24**: identity/ownership/session/roles/security, time interpretation/display, append-only history, Resources/private materials/teaching, notification synchronization, analytics privacy and audit. **6, 9–16, 18 and 25–27** retain unchanged writers and regression proof for booking storage/availability/locking/holds/funding/reschedule/cancellation/money/installments/meeting rooms/recurrence/waitlist/destructive tools. AI, transcription, community, certificates, ecommerce, SCORM/xAPI, Student early drip overrides, a proactive notification architecture and a visual rebrand remain excluded.
+
+Deployment state: local additive index applied only after local database/version/pending-SQL checks; source is tested/committed/pushed, with exact SHA in the delivery receipt. No production backup/deploy/migration/hot edit/credential configuration or production retest is claimed. **Stage 9 independent acceptance remains pending and was not started.**
+
 ## Stage 7 disposition — completed implementation
 
 **COMPLETE — Stage 7 implementation and local verification.** The Student profile now offers Assign Learning for existing courses, lessons, Resources and targeted quizzes/assignments, plus a quick private item/video/quiz/assignment editor. Optional tutoring-session follow-up is independent of canonical session completion. Profile Learning, Student For You, current educational progress/review needs, eligible visit-synchronized notifications and a bounded pedagogical timeline reuse the existing Stage 2–6 authorities. No production deployment or Stage 8 work was performed. Live Bunny certification remains pending by the owner's explicit mock-verification choice.
@@ -611,7 +689,7 @@ See the appended exact PARTIAL inventory for each accepted classification/limit.
 
 No invariant relaxation or material roadmap change is proposed. If any future decision requires one, stop at that stage and identify the exact contract/collision for owner resolution.
 
-## Future stage checklist
+## Implementation and acceptance checklist (current)
 
 - [x] Stage 1 discovery/integration/schema/security/regression blueprint written.
 - [x] Accepted baseline and documentation-only differences established.
@@ -621,10 +699,10 @@ No invariant relaxation or material roadmap change is proposed. If any future de
 - [x] Stage 2 — foundation/schema/LMS access; current member assumption and confirmed elapsed windows documented; MariaDB/lifecycle/concurrency/full gates passed.
 - [x] Stage 3 — Course Studio/mixed content/drafts/releases/preview; current authoring/access/file/lifecycle/concurrency/UI and full local gates passed.
 - [x] Stage 4 — My Learning/For You/Continue/player/private notes/bookmarks; access/auth/file/privacy/UI/concurrency and full local gates passed.
-- [ ] Stage 5 — Bunny security/profiles/devices/leases/dynamic watermark, measured residual limits.
-- [ ] Stage 6 — progress/completion/prerequisites/drip/quizzes/submissions/reviews.
-- [ ] Stage 7 — tutoring/private Assign Learning/follow-up/timeline integration.
-- [ ] Stage 8 — analytics/attention/visit notifications/permissions/settings/localization/export integration.
+- [x] Stage 5 — Bunny security/profiles/devices/leases/dynamic watermark and bounded residual limits implemented; owner-approved mocks pass, live certification remains pending.
+- [x] Stage 6 — progress/completion/prerequisites/drip/quizzes/submissions/reviews implemented and locally verified.
+- [x] Stage 7 — tutoring/private Assign Learning/follow-up/timeline integration implemented and locally verified.
+- [x] Stage 8 — analytics/attention/visit notifications/permissions/settings/preview/functional UI integration implemented; independent acceptance remains pending.
 - [ ] Stage 9 — adversarial whole-system audit/remediation/acceptance, all 27 invariants and new permanent capabilities.
 - [ ] Separate post-Stage-9 complete tutoring + LMS architecture/database review.
 
