@@ -20,7 +20,7 @@
 
             <td class="p-3"><x-entitlement-balances :rows="$summary['entitlements']" /></td>
 
-            <td class="p-3">{{ $package->expiration_date?->toDateString() ?? 'No expiry' }}</td><td class="p-3">{{ $summary['entitlement_status'] }}</td></tr>
+            <td class="p-3">{{ $package->expiryLabel() }}</td><td class="p-3">{{ $summary['entitlement_status'] }}</td></tr>
 
         @empty<tr><td colspan="5" class="p-6 text-center text-slate-500">No packages or credits allocated.</td></tr>@endforelse</tbody>
 

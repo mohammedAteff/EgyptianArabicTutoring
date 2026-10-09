@@ -18,7 +18,7 @@
         <h1 class="text-3xl sm:text-4xl font-extrabold text-stone-900 mt-3 tracking-tight">
             {{ $title ?? 'Terms of Service & Booking Policy' }}
         </h1>
-        <p class="text-stone-500 text-sm mt-1">Last updated: September 2026</p>
+        <p class="text-stone-500 text-sm mt-1">Booking policy updated: 8 October 2026</p>
     </div>
 
     <div @if($isFallback ?? false) lang="en" dir="ltr" @endif class="bg-white rounded-3xl border border-stone-200/80 p-8 sm:p-12 shadow-sm space-y-8 text-stone-700 leading-relaxed text-sm sm:text-base">

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="ltr" class="h-full scroll-smooth">
+<html lang="{{ str_replace('_', '-', $contentLocale ?? (($isFallback ?? false) ? 'en' : app()->getLocale())) }}" dir="ltr" class="h-full scroll-smooth">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}</title>
-    <meta name="description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Master authentic conversational Egyptian Arabic through structured 1-on-1 private lessons with a native educator in Cairo.') }}">
+    <title>{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}</title>
+    <meta name="description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', config('public_content.home.0.blocks.0.text', 'Personalized Arabic lessons and practical learning resources.')) }}">
     @php
         $urlService = app(\App\Domains\CMS\Services\LocalizedUrlService::class);
         $isFallbackMode = $isFallback ?? false;
@@ -18,8 +18,8 @@
         } elseif (! $eligibleHreflangLocales && isset($page) && method_exists($page, 'getAvailableLocales')) {
             $eligibleHreflangLocales = $page->getAvailableLocales();
         }
-        $canonicalUrl = $urlService->getCanonicalUrl(app()->getLocale(), $isFallbackMode);
-        $hreflangAlternates = $urlService->getHreflangAlternates($isFallbackMode, $eligibleHreflangLocales);
+        $canonicalUrl = $canonicalOverride ?? $urlService->getCanonicalUrl(app()->getLocale(), $isFallbackMode);
+        $hreflangAlternates = $articleAlternates ?? $urlService->getHreflangAlternates($isFallbackMode, $eligibleHreflangLocales);
         $currentLocale = app()->getLocale();
         $availableLocales = [
             'en' => ['label' => 'English', 'code' => 'EN'],
@@ -27,16 +27,34 @@
             'de' => ['label' => 'Deutsch', 'code' => 'DE'],
         ];
     @endphp
-    <link rel="canonical" href="{{ isset($blog) && $blog->canonical_url ? $blog->canonical_url : $canonicalUrl }}">
+    <link rel="canonical" href="{{ $canonicalUrl }}">
     @foreach($hreflangAlternates as $langCode => $altUrl)
         <link rel="alternate" hreflang="{{ $langCode }}" href="{{ $altUrl }}">
     @endforeach
 
     <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}">
-    <meta property="og:description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Master authentic conversational Egyptian Arabic.') }}">
+    <meta property="og:type" content="{{ $ogType ?? 'website' }}">
+    <meta property="og:title" content="{{ isset($title) ? $title . ' — ' : '' }}{{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}">
+    <meta property="og:description" content="{{ $metaDescription ?? \App\Domains\CMS\Models\Setting::get('hero_subtitle', 'Personalized Arabic tutoring, practical learning resources, and creative ways to keep your Arabic active.') }}">
     <meta property="og:url" content="{{ $canonicalUrl }}">
+
+    <meta name="twitter:card" content="{{ !empty($ogImage) ? 'summary_large_image' : 'summary' }}">
+    <meta name="twitter:title" content="{{ $title ?? config('public_content.site_name') }}">
+    <meta name="twitter:description" content="{{ $metaDescription ?? 'Personalized Arabic lessons and practical learning resources.' }}">
+    @if(!empty($ogImage))
+        <meta property="og:image" content="{{ url($ogImage) }}">
+        <meta property="og:image:alt" content="{{ $blog->featured_image_alt ?? '' }}">
+        <meta name="twitter:image" content="{{ url($ogImage) }}">
+    @endif
+    @if(isset($blog))
+        <meta property="og:locale" content="{{ ['en'=>'en_US','fr'=>'fr_FR','de'=>'de_DE'][$blog->locale] }}">
+        @if($blog->published_at)<meta property="article:published_time" content="{{ $blog->published_at->toIso8601String() }}">@endif
+        @if($blog->editorial_updated_at)<meta property="article:modified_time" content="{{ $blog->editorial_updated_at->toIso8601String() }}">@endif
+    @endif
+    @if(($isPreview ?? false) || ($noIndex ?? false))<meta name="robots" content="noindex, nofollow, noarchive">@endif
+    @if(!empty($articleSchema))
+        <script type="application/ld+json">{!! json_encode($articleSchema, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}</script>
+    @endif
 
     <!-- Google Fonts Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -66,8 +84,8 @@
     <!-- Top Announcement Bar (Subtle & Informative) -->
     <div class="bg-nile-900 text-stone-200 text-xs py-2 px-4 text-center">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <span class="hidden sm:inline font-medium">Authentic Egyptian Colloquial Arabic (ECA) • Private 1-on-1 Mentorship</span>
-            <span class="sm:hidden font-medium mx-auto">Private Egyptian Arabic Lessons</span>
+            <span class="hidden sm:inline font-medium">Egyptian Arabic · Modern Standard Arabic · Personalized 1-on-1 Lessons</span>
+            <span class="sm:hidden font-medium mx-auto">Personalized Arabic Lessons</span>
             <div class="hidden sm:flex items-center gap-4 text-stone-300">
                 <span>📍 Cairo, Egypt</span>
                 @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', now('UTC')); @endphp
@@ -93,12 +111,12 @@
                     </div>
                     <div>
                         <div class="font-bold text-lg text-stone-900 leading-snug group-hover:text-terracotta-600 transition-colors">
-                            {{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}
+                            {{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}
                         </div>
                         <div class="text-xs text-stone-500 font-medium flex items-center gap-1.5">
                             <span>Private Lessons with {{ config('app.tutor_name') }}</span>
                             <span>•</span>
-                            <bdi dir="rtl" lang="ar" class="font-cairo text-stone-600">اتعلم مصري صح</bdi>
+                            <bdi dir="rtl" lang="ar" class="font-cairo text-stone-600">العربية</bdi>
                         </div>
                     </div>
                 </a>
@@ -129,7 +147,7 @@
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('faq*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
                         {{ __('FAQ') }}
                     </a>
-                    <a href="{{ route('blog.index') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('blog.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Blog</a>
+                    <a href="{{ localized_url('blogs') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('blog.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Blogs</a>
 
                     <!-- Language Switcher (Desktop) -->
                     <div class="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200/80 text-xs font-semibold" role="group" aria-label="{{ __('Language selector') }}">
@@ -204,7 +222,7 @@
             <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
             <a href="{{ localized_url('about') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('About') }}</a>
             <a href="{{ localized_url('faq') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('FAQ') }}</a>
-            <a href="{{ route('blog.index') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Blog</a>
+            <a href="{{ localized_url('blogs') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Blogs</a>
 
             <!-- Mobile Language Switcher -->
             <div class="pt-3 border-t border-stone-100">
@@ -235,6 +253,7 @@
 
     <!-- Main Content Area -->
     <main class="flex-grow">
+        @if($isPreview ?? false)<div role="status" lang="en" class="border-b border-amber-200 bg-amber-50 px-4 py-4 text-center text-sm text-amber-900"><strong>Administrator Preview Mode</strong> — This is a private preview. Changes appear publicly only after you publish.</div>@endif
         @if(isset($slot) && ($slot instanceof \Illuminate\Contracts\Support\Htmlable || is_string($slot)))
             {{ $slot }}
         @endif
@@ -252,11 +271,11 @@
                             <span aria-hidden="true">A</span>
                         </div>
                         <span class="font-bold text-white text-lg tracking-tight">
-                            {{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}
+                            {{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}
                         </span>
                     </div>
                     <p class="text-stone-400 text-sm max-w-md leading-relaxed">
-                        {{ \App\Domains\CMS\Models\Setting::get('site_footer_text', 'Dedicated private Egyptian Arabic language instruction for expatriates, travelers, heritage speakers, and passionate learners worldwide. Real conversational mastery from Cairo.') }}
+                        {{ \App\Domains\CMS\Models\Setting::get('site_footer_text', 'Personalized Arabic tutoring, practical learning resources, and creative ways to keep your Arabic active.') }}
                     </p>
                     <div class="pt-2 flex items-center gap-4 text-xs text-stone-400">
                         <span class="inline-flex items-center gap-1.5 text-emerald-400">
@@ -278,6 +297,9 @@
                         <li><a href="{{ localized_url('games') }}" class="hover:text-white transition-colors">{{ __('Games') }}</a></li>
                         <li><a href="{{ localized_url('about') }}" class="hover:text-white transition-colors">{{ __('About') }}</a></li>
                         <li><a href="{{ localized_url('faq') }}" class="hover:text-white transition-colors">{{ __('FAQ') }}</a></li>
+                        <li><a href="{{ localized_url('blogs') }}" class="hover:text-white transition-colors">Blogs</a></li>
+                        <li><a href="{{ route('student.login') }}" class="hover:text-white transition-colors">Student Portal</a></li>
+                        <li><a href="{{ route('policy') }}" class="hover:text-white transition-colors">Booking &amp; Refund Policy</a></li>
                         <li><a href="{{ localized_url('privacy') }}" class="hover:text-white transition-colors">{{ __('Privacy') }}</a></li>
                         <li><a href="{{ localized_url('terms') }}" class="hover:text-white transition-colors">{{ __('Terms') }}</a></li>
                     </ul>
@@ -341,7 +363,7 @@
                                 </a>
                             </li>
                         @empty
-                            <li><span class="text-stone-500">Contact directly via email</span></li>
+                            <li><span class="text-stone-500">Public contact details will be added once confirmed.</span></li>
                         @endforelse
                     </ul>
                 </div>
@@ -350,7 +372,7 @@
             <!-- Bottom Legal Bar -->
             <div class="mt-12 pt-8 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
                 <div>
-                    © {{ date('Y') }} {{ \App\Domains\CMS\Models\Setting::get('site_name', config('business.site_name')) }}. {{ __('All rights reserved.') }}
+                    © {{ date('Y') }} {{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}. {{ __('All rights reserved.') }}
                 </div>
                 <div class="flex items-center gap-6">
                     <a href="{{ localized_url('terms') }}" class="hover:text-stone-400 transition-colors">{{ __('Terms') }}</a>

@@ -163,11 +163,12 @@ class BookingWizard extends Component
         $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
 
         // Check active session types
-        $activeSessions = SessionType::where('active', true)->get();
+        $activeSessions = SessionType::publicBookable()->get();
         if ($activeSessions->count() === 1) {
             $this->selectedSessionTypeId = $activeSessions->first()->id;
             $this->currentStep = 2; // skip session selection step
         } elseif ($activeSessions->count() > 1) {
+            $this->selectedSessionTypeId = $activeSessions->firstWhere('slug', 'diagnostic-session')?->id;
             $this->currentStep = 1;
         }
 
@@ -309,7 +310,7 @@ class BookingWizard extends Component
 
         $sessionType = SessionType::query()
             ->whereKey($hold->session_type_id)
-            ->where('active', true)
+            ->publicBookable()
             ->first();
 
         if (! $sessionType) {
@@ -397,7 +398,7 @@ class BookingWizard extends Component
 
     public function selectSession(int $id): void
     {
-        if (! SessionType::query()->whereKey($id)->where('active', true)->exists()) {
+        if (! SessionType::query()->whereKey($id)->publicBookable()->exists()) {
             $this->errorMessage = 'Please select a valid session type.';
 
             return;
@@ -462,7 +463,7 @@ class BookingWizard extends Component
         RateLimiter::hit($holdIpKey, 60);
         RateLimiter::hit($holdVisitorKey, 60);
 
-        $sessionType = SessionType::query()->whereKey($this->selectedSessionTypeId)->where('active', true)->first();
+        $sessionType = SessionType::query()->whereKey($this->selectedSessionTypeId)->publicBookable()->first();
         if (! $sessionType) {
             $this->errorMessage = 'Please select a valid session type.';
 
@@ -601,7 +602,7 @@ class BookingWizard extends Component
         RateLimiter::hit($confirmIpKey, 60);
         RateLimiter::hit($confirmEmailKey, 300);
 
-        $sessionType = SessionType::find($this->selectedSessionTypeId);
+        $sessionType = SessionType::publicBookable()->find($this->selectedSessionTypeId);
         if (! $sessionType || ! $this->selectedSlotId) {
             $this->errorMessage = 'Incomplete booking details. Please select your time slot again.';
             $this->currentStep = 2;
@@ -823,9 +824,9 @@ class BookingWizard extends Component
     public function render()
     {
         $sessionType = $this->selectedSessionTypeId
-            ? SessionType::query()->whereKey($this->selectedSessionTypeId)->where('active', true)->first()
+            ? SessionType::query()->whereKey($this->selectedSessionTypeId)->publicBookable()->first()
             : null;
-        $activeSessionTypes = SessionType::where('active', true)->get();
+        $activeSessionTypes = SessionType::publicBookable()->get();
 
         $availableSlotsByDate = [];
         if ($sessionType) {

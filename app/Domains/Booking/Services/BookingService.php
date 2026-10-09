@@ -173,8 +173,8 @@ class BookingService
             return $existingBooking;
         }
 
-        if (! $sessionType->active) {
-            throw new SlotUnavailableException('This session type is not currently active.');
+        if (! $sessionType->active || ! $sessionType->public_bookable) {
+            throw new SlotUnavailableException('This lesson type is not available for public booking.');
         }
         if ($startUtc <= CarbonImmutable::now('UTC')) {
             throw new SlotUnavailableException('Cannot book an appointment in the past.');

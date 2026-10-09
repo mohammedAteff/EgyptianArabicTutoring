@@ -36,7 +36,7 @@ class StudentPortalService
         $packages = StudentPackage::query()->where('student_id', $student->id)->with(['entitlements.type', 'ledgerEntries', 'payments', 'refunds'])->orderByDesc('created_at')->get();
         $packageSummaries = $packages->map(fn (StudentPackage $package): array => [
             'name' => $package->package_name,
-            'id' => $package->id, 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'expiry' => $package->expiration_date?->toDateString(),
+            'id' => $package->id, 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'expiry' => $package->expiryLabel(),
             'status' => $package->status,
             'currency' => $package->currency,
             'summary' => $ledger->summary($package),

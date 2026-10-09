@@ -26,9 +26,9 @@ class GameController extends Controller
 
         return view('public.games.index', [
             'games' => $games,
-            'title' => 'Egyptian Arabic Learning Games & Quizzes',
-            'isFallback' => false,
-            'entityLocales' => ['en', 'fr', 'de'],
+            'title' => 'Language Games',
+            'isFallback' => app()->getLocale() !== 'en',
+            'entityLocales' => ['en'],
         ]);
     }
 

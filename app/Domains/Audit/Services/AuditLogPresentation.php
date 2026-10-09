@@ -27,7 +27,7 @@ class AuditLogPresentation
 
                 continue;
             }
-            if (! is_string($field) || ! preg_match('/^(status|operational_status|active|enabled|funding_mode|outcome|reason_code|cancellation_cutoff_hours|late_cancellation|staff_cancellation|no_show|student_id|booking_id|session_type_id|previous_package_id|new_package_id|primary_student_id|secondary_student_id|merged_student_id|surviving_student_id|installment_count|expiration_date|date|start_at_utc|end_at_utc)$/', $field)) {
+            if (! is_string($field) || ! preg_match('/^(status|operational_status|active|enabled|funding_mode|outcome|reason_code|cancellation_cutoff_hours|late_cancellation|staff_cancellation|no_show|student_id|booking_id|session_type_id|previous_package_id|new_package_id|primary_student_id|secondary_student_id|merged_student_id|surviving_student_id|installment_count|expiration_date|validity_started_at|expires_at|paid_at|date|start_at_utc|end_at_utc)$/', $field)) {
                 continue;
             }
             $old = $this->value($field, $before[$field] ?? null);
@@ -67,7 +67,7 @@ class AuditLogPresentation
         if (is_string($value) && in_array($value, $enums, true)) {
             return str_replace('_', ' ', $value);
         }
-        if (is_string($value) && in_array($field, ['expiration_date', 'date', 'start_at_utc', 'end_at_utc'], true) && preg_match('/^\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}:\\d{2})?$/', $value)) {
+        if (is_string($value) && in_array($field, ['expiration_date', 'validity_started_at', 'expires_at', 'paid_at', 'date', 'start_at_utc', 'end_at_utc'], true) && preg_match('/^\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}:\\d{2})?$/', $value)) {
             return $value;
         }
 

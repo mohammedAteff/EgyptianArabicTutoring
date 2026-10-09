@@ -67,7 +67,7 @@ class BusinessLifecycleReport
             yield ['package' => $package, 'summary' => $summary, 'period_paid' => $paid, 'period_refunded' => $refunded,
                 'period_net' => bcsub($paid, $refunded, 2), 'renewals' => $renewals,
                 'in_cohort' => $package->created_at->lessThan($to),
-                'expired' => $package->expiration_date !== null && $package->expiration_date->toDateString() < now($timezone)->toDateString()];
+                'expired' => $package->isExpired($timezone)];
         }
     }
 
@@ -111,6 +111,6 @@ class BusinessLifecycleReport
 
         return [$package->id, $package->student_id, $package->package_name, $package->currency, $row['period_paid'], $row['period_refunded'], $row['period_net'],
             $row['summary']['balance_due'], $row['summary']['overpaid'], $row['summary']['balance_text'],
-            $package->expiration_date?->toDateString(), $row['renewals']->map(fn ($renewal): string => '#'.$renewal->new_package_id.' on '.$renewal->renewal_date->toDateString())->implode('; ')];
+            $package->expiryLabel(), $row['renewals']->map(fn ($renewal): string => '#'.$renewal->new_package_id.' on '.$renewal->renewal_date->toDateString())->implode('; ')];
     }
 }

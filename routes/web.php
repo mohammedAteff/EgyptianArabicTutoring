@@ -64,6 +64,7 @@ use App\Http\Controllers\LmsFoundationController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\Student\AuthController as StudentAuthController;
 use App\Http\Controllers\Student\BookingController as StudentBookingController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
@@ -182,6 +183,8 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     });
 });
 
+Route::view('/booking-policy', 'public.policy', ['title' => 'Booking, Cancellation & Refund Policy', 'entityLocales' => ['en']])->name('policy');
+
 Route::get('/booking', [BookingController::class, 'index'])->name('booking.index');
 Route::get('/book', function (Request $request) {
     $queryString = $request->server->get('QUERY_STRING') ?: $request->getQueryString();
@@ -277,6 +280,11 @@ Route::get('/p/{slug}', [PageController::class, 'show'])->name('page.show');
 Route::get('/fr/p/{slug}', [PageController::class, 'show'])->name('page.show.fr');
 Route::get('/de/p/{slug}', [PageController::class, 'show'])->name('page.show.de');
 
+Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
+Route::get('/fr/blog', [BlogController::class, 'index'])->name('blog.fr');
+Route::get('/de/blog', [BlogController::class, 'index'])->name('blog.de');
+Route::get('/fr/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[A-Za-z0-9-]+')->name('blog.show.fr');
+Route::get('/de/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[A-Za-z0-9-]+')->name('blog.show.de');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->where('slug', '[A-Za-z0-9-]+')->name('blog.show');
 
@@ -568,6 +576,10 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::get('/promotions/{promotion}/preview', [PromotionController::class, 'preview'])->middleware('admin.preview')->name('promotions.preview');
 
             Route::prefix('blog')->name('blog.')->group(function () {
+                Route::post('/categories', [App\Http\Controllers\Admin\BlogController::class, 'storeCategory'])->name('categories.store');
+                Route::put('/categories/{category}', [App\Http\Controllers\Admin\BlogController::class, 'updateCategory'])->name('categories.update');
+                Route::delete('/categories/{category}', [App\Http\Controllers\Admin\BlogController::class, 'destroyCategory'])->name('categories.destroy');
+                Route::post('/featured', [App\Http\Controllers\Admin\BlogController::class, 'feature'])->name('feature');
                 Route::get('/', [App\Http\Controllers\Admin\BlogController::class, 'index'])->name('index');
                 Route::get('/create', [App\Http\Controllers\Admin\BlogController::class, 'create'])->name('create');
                 Route::post('/', [App\Http\Controllers\Admin\BlogController::class, 'store'])->name('store');

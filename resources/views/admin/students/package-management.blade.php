@@ -15,7 +15,7 @@
                         <td class="p-3">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($listedPackage->created_at, $businessTz) }}</td>
                         <td class="p-3">{{ $listedPackage->original_price }}</td><td class="p-3">{{ $listedPackage->final_price }}</td>
                         @foreach(['gross_paid', 'gross_refunded', 'balance_due', 'overpaid', 'balance_text'] as $metric)<td class="p-3">{{ $financial['summary'][$metric] }}</td>@endforeach
-                        <td class="p-3">{{ $listedPackage->expiration_date?->toDateString() ?? 'No expiry' }}</td><td class="p-3">{{ $financial['status'] }}</td>
+                        <td class="p-3">{{ $listedPackage->expiryLabel() }}</td><td class="p-3">{{ $financial['status'] }}</td>
                         <td class="p-3"><a href="{{ route('admin.students.show', ['student' => $student->id, 'package_id' => $listedPackage->id, 'billing_tab' => 'overview']) }}#package-management" aria-label="Manage {{ $listedPackage->package_name }}, purchase {{ $listedPackage->id }}" class="inline-flex min-h-11 items-center rounded-lg px-3 font-semibold text-amber-800 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-amber-600">Manage →</a></td>
                     </tr>
                 @empty
@@ -53,7 +53,7 @@
                         <div><dt class="text-slate-500">Acquired</dt><dd class="mt-1 font-semibold">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($package->created_at, $businessTz) }}</dd></div>
                         @foreach(['Original price' => $package->original_price, 'Discount' => $package->discount_amount, 'Final price' => $package->final_price, 'Paid' => $summary['gross_paid'], 'Refunded' => $summary['gross_refunded'], 'Net paid' => $summary['net_paid'], 'Remaining due' => $summary['balance_due'], 'Overpayment' => $summary['overpaid']] as $label => $amount)<div><dt class="text-slate-500">{{ $label }}</dt><dd class="mt-1 font-semibold">{{ $package->currency }} {{ $amount }}</dd></div>@endforeach
                         <div class="col-span-2"><x-entitlement-balances :rows="$summary['entitlements']" /></div>
-                        <div><dt class="text-slate-500">Effective expiry</dt><dd class="mt-1 font-semibold">{{ $package->expiration_date?->toDateString() ?? 'No expiry' }}</dd></div>
+                        <div><dt class="text-slate-500">Effective expiry</dt><dd class="mt-1 font-semibold">{{ $package->expiryLabel() }}</dd></div>
                         <div><dt class="text-slate-500">Status</dt><dd class="mt-1 font-semibold">{{ $selectedFinancial['status'] }}</dd></div>
                     </dl>
                 @elseif($billingTab === 'payments')
@@ -61,6 +61,7 @@
                         @csrf
                         <h4 class="font-semibold text-slate-900 sm:col-span-2">Record payment</h4>
                         <label class="text-sm text-slate-700">Amount ({{ $package->currency }})<input name="amount_paid" required inputmode="decimal" value="{{ old('amount_paid') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
+                        <x-payment-receipt-input />
                         <label class="text-sm text-slate-700">Payment method<select name="payment_method" required class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5">@foreach($paymentMethods as $method)<option value="{{ $method->id }}" @selected(old('payment_method', $method->is_default ? $method->id : '') == $method->id)>{{ $method->name }}</option>@endforeach</select></label>
                         <label class="text-sm text-slate-700 sm:col-span-2">External / manual reference<input name="transaction_reference" maxlength="255" value="{{ old('transaction_reference') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
                         <label class="text-sm text-slate-700 sm:col-span-2">Private staff note<textarea name="notes" rows="2" maxlength="4000" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5">{{ old('notes') }}</textarea></label>
@@ -102,9 +103,10 @@
                         <div class="sm:col-span-2"><button class="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50">Record adjustment</button></div>
                     </form>
                 @elseif($billingTab === 'expiration')
-                    <h4 class="font-semibold text-slate-900">Effective expiry: {{ $package->expiration_date?->toDateString() ?? 'No expiry' }}</h4>
+                    <h4 class="font-semibold text-slate-900">Effective expiry: {{ $package->expiryLabel() }}</h4>
                     <form method="POST" action="{{ route('admin.students.packages.validity', [$student->id, $package->id]) }}" class="grid gap-3 sm:grid-cols-2">
                         @csrf
+                        <input type="hidden" name="previous_expires_at" value="{{ $package->expires_at?->toDateTimeString() }}">
                         <input type="hidden" name="previous_expiration_date" value="{{ $package->expiration_date?->toDateString() }}">
                         <label class="text-sm">Extend expiration<input type="date" name="expiration_date" required min="{{ $package->expiration_date?->copy()->addDay()->toDateString() }}" value="{{ old('expiration_date') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
                         <label class="text-sm">Reason<input name="reason" required maxlength="1000" value="{{ old('reason') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>

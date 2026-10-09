@@ -78,6 +78,7 @@ class Media extends Model
         $blogs = Blog::query()
             ->where('featured_image_path', $this->path)
             ->orWhere('featured_image_path', $this->url())
+            ->orWhere('body', 'like', '%'.$this->path.'%')
             ->get(['id', 'title']);
         foreach ($blogs as $blog) {
             $refs[] = "Blog: {$blog->title}";
@@ -94,6 +95,7 @@ class Media extends Model
         $blogRevisions = BlogRevision::query()
             ->where('snapshot->featured_image_path', $this->path)
             ->orWhere('snapshot->featured_image_path', $this->url())
+            ->orWhere('snapshot->body', 'like', '%'.$this->path.'%')
             ->get(['id']);
         foreach ($blogRevisions as $revision) {
             $refs[] = "Blog revision #{$revision->id}";
@@ -167,7 +169,7 @@ class Media extends Model
             return true;
         }
 
-        if (Blog::query()->where('featured_image_path', $normalized)->orWhere('featured_image_path', $path)->exists()) {
+        if (Blog::query()->where('featured_image_path', $normalized)->orWhere('featured_image_path', $path)->orWhere('body', 'like', '%'.$normalized.'%')->exists()) {
             return true;
         }
 
@@ -175,7 +177,7 @@ class Media extends Model
             return true;
         }
 
-        if (BlogRevision::query()->where('snapshot->featured_image_path', $normalized)->orWhere('snapshot->featured_image_path', $path)->exists()) {
+        if (BlogRevision::query()->where('snapshot->featured_image_path', $normalized)->orWhere('snapshot->featured_image_path', $path)->orWhere('snapshot->body', 'like', '%'.$normalized.'%')->exists()) {
             return true;
         }
 

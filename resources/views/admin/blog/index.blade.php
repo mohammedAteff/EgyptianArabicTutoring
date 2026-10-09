@@ -1,24 +1,34 @@
 @extends('layouts.admin')
-
 @section('content')
 <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 class="text-2xl font-bold font-serif text-slate-900">Blog</h1><p class="mt-1 text-sm text-slate-500">Draft, publish, and maintain blog posts and revisions.</p></div>
-        <a href="{{ route('admin.blog.create') }}" class="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700">Add Blog Post</a>
-    </div>
-    @if(session('success'))<p role="status" class="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800">{{ session('success') }}</p>@endif
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div class="divide-y divide-slate-100">
-            @forelse($blogs as $blog)
-                <a href="{{ route('admin.blog.edit', $blog) }}" class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50">
-                    <span><span class="block font-semibold text-slate-900">{{ $blog->title }}</span><span class="mt-1 block text-xs text-slate-500">/blog/{{ $blog->slug }} · {{ strtoupper($blog->locale) }}</span></span>
-                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-700">{{ $blog->status }}</span>
-                </a>
-            @empty
-                <p class="px-5 py-8 text-sm text-slate-500">No blog posts yet.</p>
-            @endforelse
-        </div>
+    <div class="flex flex-wrap items-center justify-between gap-3"><div><h1 class="font-serif text-2xl font-bold">Blogs &amp; Articles</h1><p class="mt-1 text-sm text-slate-500">Draft, publish and maintain articles and their revisions.</p></div><a href="{{ route('admin.blog.create') }}" class="rounded-xl bg-amber-600 px-4 py-2.5 font-semibold text-white">Add Article</a></div>
+    @if(session('success'))<p role="status" class="rounded-xl bg-green-50 p-4 text-sm text-green-800">{{ session('success') }}</p>@endif
+    @if($errors->any())<p role="alert" class="rounded-xl bg-red-50 p-4 text-sm text-red-800">{{ $errors->first() }}</p>@endif
+    <form method="GET" class="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-white p-5">
+        <div class="min-w-48 flex-1"><label for="q" class="block text-sm font-semibold">Search articles</label><input id="q" name="q" value="{{ $filters['q'] ?? '' }}" class="mt-2 w-full rounded-lg border border-slate-300 p-2"></div>
+        <div><label for="filter-status" class="block text-sm font-semibold">Status</label><select id="filter-status" name="status" class="mt-2 rounded-lg border border-slate-300 p-2"><option value="">All statuses</option>@foreach(['draft','published','archived'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>@endforeach</select></div>
+        <div><label for="filter-locale" class="block text-sm font-semibold">Language</label><select id="filter-locale" name="locale" class="mt-2 rounded-lg border border-slate-300 p-2"><option value="">All languages</option>@foreach(['en'=>'English','fr'=>'Français','de'=>'Deutsch'] as $code=>$label)<option value="{{ $code }}" @selected(($filters['locale'] ?? '') === $code)>{{ $label }}</option>@endforeach</select></div>
+        <div><label for="filter-category" class="block text-sm font-semibold">Category</label><select id="filter-category" name="category" class="mt-2 rounded-lg border border-slate-300 p-2"><option value="">All categories</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected((string)($filters['category'] ?? '') === (string)$category->id)>{{ $category->name }}</option>@endforeach</select></div>
+        <button class="rounded-lg bg-slate-800 px-4 py-2 font-semibold text-white">Filter</button><a href="{{ route('admin.blog.index') }}" class="py-2 text-sm underline">Clear</a>
+    </form>
+    <div class="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        @forelse($blogs as $blog)
+            <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                <a href="{{ route('admin.blog.edit', $blog) }}" class="min-w-0 flex-1"><span class="block font-semibold">{{ $blog->title ?: 'Untitled draft' }}</span><span class="mt-1 block break-all text-xs text-slate-500">{{ $blog->slug }} · {{ strtoupper($blog->locale) }}@if($blog->category) · {{ $blog->category->name }}@endif</span></a>
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize">{{ $blog->status }}</span>
+                <a href="{{ route('admin.blog.preview',$blog) }}" class="text-sm font-semibold text-amber-700 underline">Preview</a>
+                @if($blog->status === 'published' && $blog->published_at?->isPast())<a href="{{ $blog->publicUrl() }}" class="text-sm font-semibold text-amber-700 underline">Public Article</a>@endif
+                @if($blog->status !== 'archived')<form method="POST" action="{{ route('admin.blog.destroy',$blog) }}" onsubmit="return confirm('Archive this article? Its content and history will be preserved.');">@csrf @method('DELETE')<input type="hidden" name="lock_version" value="{{ $blog->lock_version }}"><button class="text-sm text-slate-600 underline">Archive</button></form>@endif
+            </div>
+        @empty<p class="px-5 py-8 text-sm text-slate-500">No articles match these filters.</p>@endforelse
     </div>
     {{ $blogs->links() }}
+    <details class="rounded-2xl border border-slate-200 bg-white p-6">
+        <summary class="cursor-pointer font-semibold">Manage Article Categories</summary>
+        <p class="mt-3 text-sm text-slate-500">Suggested topics: Egyptian Arabic, Modern Standard Arabic, Learning Arabic, Language &amp; Linguistics, Egyptian Life &amp; Culture. Create only categories you intend to use.</p>
+        @foreach($categories as $category)<div class="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4"><form method="POST" action="{{ route('admin.blog.categories.update',$category) }}" class="flex flex-1 flex-wrap items-end gap-3">@csrf @method('PUT')<label class="flex-1 text-sm">Name<input name="name" aria-label="Category name" required maxlength="100" value="{{ $category->name }}" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label><label class="flex-1 text-sm">Slug<input name="slug" aria-label="Category slug" required maxlength="120" value="{{ $category->slug }}" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label><button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Save</button></form><form method="POST" action="{{ route('admin.blog.categories.destroy',$category) }}">@csrf @method('DELETE')<button class="px-3 py-2 text-sm underline">Remove if Unused</button></form></div>@endforeach
+        <form method="POST" action="{{ route('admin.blog.categories.store') }}" class="mt-5 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4">@csrf<label class="flex-1 text-sm">New category name<input name="name" required maxlength="100" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label><label class="flex-1 text-sm">Slug<input name="slug" required maxlength="120" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label><button class="rounded-lg bg-slate-800 px-4 py-2 font-semibold text-white">Add Category</button></form>
+    </details>
+    <details class="rounded-2xl border border-slate-200 bg-white p-6"><summary class="cursor-pointer font-semibold">Featured Article</summary>@foreach(['en'=>'English','fr'=>'Français','de'=>'Deutsch'] as $code=>$label)<form method="POST" action="{{ route('admin.blog.feature') }}" class="mt-4 flex flex-wrap items-end gap-3">@csrf<input type="hidden" name="locale" value="{{ $code }}"><label class="flex-1 text-sm">{{ $label }}<select name="blog_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"><option value="">No featured article</option>@foreach($publishedArticles->where('locale',$code) as $article)<option value="{{ $article->id }}" @selected((string)\App\Domains\CMS\Models\Setting::get('blog.featured.'.$code) === (string)$article->id)>{{ $article->title }}</option>@endforeach</select></label><button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold">Save {{ $label }}</button></form>@endforeach</details>
 </div>
 @endsection

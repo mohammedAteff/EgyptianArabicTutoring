@@ -108,7 +108,7 @@ class AuditLog extends Model
             $value = preg_replace_callback('/(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])/', fn (array $match): string => filter_var($match[0], FILTER_VALIDATE_IP) ? '[redacted]' : $match[0], $value) ?? $value;
             $value = preg_replace_callback('/(?<![\w:])(?:[a-f0-9]{0,4}:){2,}[a-f0-9:.]+(?![\w:])/i', fn (array $match): string => filter_var($match[0], FILTER_VALIDATE_IP) ? '[redacted]' : $match[0], $value) ?? $value;
 
-            if ($key === 'expiration_date' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            if (in_array($key, ['expiration_date', 'paid_at', 'validity_started_at', 'expires_at'], true) && preg_match('/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/', $value)) {
                 return $value;
             }
 

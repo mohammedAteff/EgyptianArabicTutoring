@@ -83,8 +83,8 @@
     <!-- STEP 1: Session Selection (Only if multiple sessions) -->
     @if($currentStep === 1 && $activeSessionTypes->count() > 1)
         <div class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-8 shadow-sm">
-            <h2 class="text-xl font-bold text-stone-900 mb-2">{{ __('Select Your Lesson Type') }}</h2>
-            <p class="text-stone-600 text-sm mb-6">{{ __('Choose the format that best fits your language goals.') }}</p>
+            <h2 class="text-xl font-bold text-stone-900 mb-2">{{ __('Choose Your Session') }}</h2>
+            <p class="text-stone-600 text-sm mb-6">{{ __("Every learner starts somewhere different. Select the session that's right for you.") }}</p>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 @foreach($activeSessionTypes as $type)
@@ -98,7 +98,7 @@
                         <div class="mt-4 flex items-center gap-2 text-xs font-semibold text-stone-500">
                             <span>⏱ {{ $type->duration_minutes }} {{ __('Minutes') }}</span>
                             <span>•</span>
-                            <span>{{ __('1-on-1 via Zoom/Google Meet') }}</span>
+                            <span>{{ __('Private online session') }}</span>
                         </div>
                     </div>
                 @endforeach
@@ -113,7 +113,7 @@
             @if($sessionType)
                 <div class="mb-8 pb-6 border-b border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                        <span class="text-xs font-semibold uppercase tracking-wider text-terracotta-600">{{ __('Selected Lesson') }}</span>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-terracotta-600">{{ __('Selected Session') }}</span>
                         <h2 class="text-xl font-bold text-stone-900">{{ $sessionType->title }}</h2>
                     </div>
                     <div class="flex items-center gap-4 text-sm font-semibold text-stone-700">
@@ -188,8 +188,8 @@
                 </div>
             </div>
 
-            <h2 class="text-xl font-bold text-stone-900 mb-1">{{ __('Your Information') }}</h2>
-            <p class="text-stone-600 text-sm mb-6">{{ __('Enter your details so your tutor can send your meeting invite and prepare for your session.') }}</p>
+            <h2 class="text-xl font-bold text-stone-900 mb-1">{{ __('Tell Me a Little About Yourself.') }}</h2>
+            <p class="text-stone-600 text-sm mb-6">{{ __("A few details will help Abdallah prepare for your session and contact you with the information you need. You don't need to know any Arabic before getting started.") }}</p>
 
             <form wire:submit.prevent="submitDetails" class="space-y-5">
                 <!-- Honeypot anti-spam field -->
@@ -234,7 +234,7 @@
                            required
                            max="{{ now()->subYear()->toDateString() }}"
                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('date_of_birth') border-rose-400 @enderror">
-                    <p class="text-xs text-stone-500 mt-1">{{ __('Required for your student portal identity verification.') }}</p>
+                    <p class="text-xs text-stone-500 mt-1">{{ __('Used to help verify your identity when accessing your student portal.') }}</p>
                     @error('date_of_birth') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
                 </div>
 
@@ -249,7 +249,7 @@
                            required
                            placeholder="sarah@example.com"
                            class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all @error('email') border-rose-400 @enderror">
-                    <p class="text-xs text-stone-500 mt-1">{{ __('Your calendar invite (.ics) and confirmation link will be delivered here.') }}</p>
+                    <p class="text-xs text-stone-500 mt-1">{{ __("We'll use this address for booking-related communication.") }}</p>
                     @error('email') <span class="text-xs text-rose-500 font-medium mt-1 block">{{ $message }}</span> @enderror
                 </div>
 
@@ -323,12 +323,12 @@
                 <!-- Learning Goals / Notes -->
                 <div>
                     <label for="notes" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                        {{ __('Arabic Level & Learning Goals') }} <span class="text-stone-400 text-xs font-normal">({{ __('Optional') }})</span>
+                        {{ __("Anything else you'd like Abdallah to know?") }} <span class="text-stone-400 text-xs font-normal">({{ __('Optional') }})</span>
                     </label>
                     <textarea id="notes"
                               wire:model.live.debounce.250ms="notes"
                               rows="3"
-                              placeholder="{{ __('Tell Abdallah about your Arabic background, goals (e.g. travel, dialect, conversation), or specific topics you want to practice.') }}"
+                              placeholder="{{ __('Anything that might help us prepare for your diagnostic...') }}"
                               class="w-full px-4 py-3 rounded-xl border border-stone-200 focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-200 outline-none text-stone-900 text-sm transition-all"></textarea>
                 </div>
 
@@ -341,7 +341,7 @@
                     </button>
                     <button type="submit"
                             class="bg-terracotta-500 hover:bg-terracotta-600 text-white font-semibold text-sm px-6 py-3 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2">
-                        <span>{{ __('Continue to Review') }}</span>
+                        <span>{{ __('Review Your Booking') }}</span>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
                         </svg>
@@ -354,8 +354,8 @@
     <!-- STEP 4: Review & Final Confirmation -->
     @if($currentStep === 4)
         <div class="bg-white rounded-3xl border border-stone-200/80 p-6 sm:p-8 shadow-sm">
-            <h2 class="text-xl font-bold text-stone-900 mb-1">{{ __('Review & Confirm Your Lesson') }}</h2>
-            <p class="text-stone-600 text-sm mb-6">{{ __('Please verify your booking details before final confirmation.') }}</p>
+            <h2 class="text-xl font-bold text-stone-900 mb-1">{{ __('One Last Look Before You Book.') }}</h2>
+            <p class="text-stone-600 text-sm mb-6">{{ __('Please review your appointment and contact information before confirming your reservation.') }}</p>
 
             <div class="bg-stone-50 rounded-2xl border border-stone-200/80 p-6 mb-6 space-y-6">
                 <!-- Dual Timezone Breakdown (Spec Requirement) -->
@@ -426,10 +426,13 @@
                 @endif
             </div>
 
+            <section lang="en" class="mb-5 rounded-xl border border-stone-200 bg-stone-50 p-5">
+                <h3 class="font-semibold">Payment Information</h3><p class="mt-2 text-sm leading-7 text-stone-600">Payment is arranged after booking. When you confirm, your appointment time will be reserved. Abdallah will contact you personally to arrange your session payment and share the relevant session information. You won't be charged automatically when submitting this booking form.</p>
+            </section>
             <!-- Booking Policy Notice -->
             <div class="mb-4 p-4 rounded-xl bg-stone-100/70 text-xs text-stone-600 leading-relaxed">
-                <strong>{{ __('Policy Notice:') }}</strong> {{ \App\Domains\CMS\Models\Setting::get('cancellation_policy', 'Cancellations with at least 4 hours notice do not forfeit the session credit. Rescheduling requests must be made directly to Abdallah at least 24 hours before class.') }}
-                {{ __('Upon confirmation, you will receive an immediate calendar invitation with direct lesson access links.') }}
+                <strong>{{ __('Policy Notice:') }}</strong> Cancel at least four hours before your appointment to receive a full refund or arrange another available time by direct contact. Later cancellations and no-shows are ordinarily non-refundable. Online rescheduling requires at least 24 hours’ notice; new appointments must be booked at least 24 hours ahead. Genuine emergencies may be considered individually.
+                <a href="{{ route('policy') }}" class="font-semibold underline">Read the Booking, Cancellation &amp; Refund Policy</a>
             </div>
 
             <!-- Student Portal Verification Notice -->
@@ -448,7 +451,7 @@
                         wire:click="confirmBooking"
                         wire:loading.attr="disabled"
                         class="bg-terracotta-500 hover:bg-terracotta-600 disabled:opacity-50 text-white font-bold text-sm px-8 py-3.5 rounded-full shadow-md hover:shadow-lg transition-all flex items-center gap-2">
-                    <span wire:loading.remove>{{ __('Confirm & Book Lesson') }}</span>
+                    <span wire:loading.remove>{{ __('Confirm My Booking') }}</span>
                     <span wire:loading class="flex items-center gap-2">
                         <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

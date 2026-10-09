@@ -80,7 +80,7 @@
 
         <!-- Download Gate Card (5 cols) -->
         <div class="lg:col-span-5" x-data="{
-            state: '{{ (! $resource->is_gated || session('access_granted')) ? 'unlocked' : 'idle' }}',
+            state: '{{ (! $resource->requiresPublicAccessRequest() || session('access_granted')) ? 'unlocked' : 'idle' }}',
             name: @js(old('name', ($resourceStudent ?? null)?->name ?? '')),
             email: @js(old('email', ($resourceStudent ?? null)?->email ?? '')),
             pin: '',
@@ -188,7 +188,7 @@
         >
             <div class="bg-white rounded-3xl border border-stone-200/90 p-6 sm:p-8 shadow-xl sticky top-28">
                 <!-- Unlocked / Ready State -->
-                <div x-show="state === 'unlocked'" class="text-center space-y-4 py-4" style="{{ (! $resource->is_gated || session('access_granted')) ? '' : 'display: none;' }}">
+                <div x-show="state === 'unlocked'" class="text-center space-y-4 py-4" style="{{ (! $resource->requiresPublicAccessRequest() || session('access_granted')) ? '' : 'display: none;' }}">
                     <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
                         <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -210,14 +210,14 @@
                 </div>
 
                 <!-- Idle / Submitting State (Email Input) -->
-                <div x-show="state === 'idle' || state === 'submitting'" style="{{ (! $resource->is_gated || session('access_granted')) ? 'display: none;' : '' }}">
+                <div x-show="state === 'idle' || state === 'submitting'" style="{{ (! $resource->requiresPublicAccessRequest() || session('access_granted')) ? 'display: none;' : '' }}">
                     <div class="flex items-center gap-2 text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                         <span>Free Instant Access</span>
                     </div>
-                    <h2 class="text-xl font-bold text-stone-900">Get This Resource</h2>
+                    <h2 class="text-xl font-bold text-stone-900">Get Free Access</h2>
                     <p class="text-stone-500 text-xs mt-1 mb-6 leading-relaxed">
-                        Instant access provided right on this screen. No waiting for email links or promotional spam.
+                        Enter your name and email address to access this free resource. If this email matches a registered student, complete the existing identity check when requested.
                     </p>
 
                     <div x-show="errorMessage" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-600 font-medium" x-text="errorMessage"></div>

@@ -217,6 +217,8 @@ class StudentBillingController extends Controller
 
         $validated = $request->validate([
             'amount_paid' => ['required', 'regex:/^\d{1,8}(?:\.\d{1,2})?$/'],
+            'received_at' => ['nullable', 'date_format:Y-m-d\\TH:i:s,Y-m-d\\TH:i'],
+            'received_at_timezone' => ['nullable', Rule::in([app(TimezoneService::class)->getBusinessTimezone(), 'UTC'])],
             'payment_method' => ['required', 'string', 'max:80'],
             'transaction_reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:4000'],
@@ -233,6 +235,23 @@ class StudentBillingController extends Controller
         }
         $packageRecord = StudentPackage::query()->where('student_id', $student)->findOrFail($package);
 
+        $receiptTimezone = $validated['received_at_timezone'] ?? app(TimezoneService::class)->getBusinessTimezone();
+        $receiptFormat = strlen((string) ($validated['received_at'] ?? '')) === 16 ? '!Y-m-d\\TH:i' : '!Y-m-d\\TH:i:s';
+        $receipt = $request->date('received_at', $receiptFormat, $receiptTimezone);
+        if ($receipt && $receipt->format(ltrim($receiptFormat, '!')) !== $validated['received_at']) {
+            throw ValidationException::withMessages(['received_at' => 'This local clock time does not exist. Choose the actual receipt time in UTC.']);
+        }
+        if ($receipt && $receiptTimezone !== 'UTC') {
+            $wallTime = CarbonImmutable::createFromFormat($receiptFormat, $validated['received_at'], 'UTC')->getTimestamp();
+            $transitions = (new \DateTimeZone($receiptTimezone))->getTransitions($receipt->getTimestamp() - 86400, $receipt->getTimestamp() + 86400);
+            $previousOffset = $transitions[0]['offset'] ?? 0;
+            foreach (array_slice($transitions ?: [], 1) as $transition) {
+                if ($transition['offset'] < $previousOffset && $wallTime >= $transition['ts'] + $transition['offset'] && $wallTime < $transition['ts'] + $previousOffset) {
+                    throw ValidationException::withMessages(['received_at' => 'This local time occurs twice when clocks change. Select UTC and enter the actual receipt instant.']);
+                }
+                $previousOffset = $transition['offset'];
+            }
+        }
         try {
             $payment = $ledger->recordPayment(
                 $packageRecord,
@@ -243,6 +262,7 @@ class StudentBillingController extends Controller
                 $validated['transaction_reference'] ?? null,
                 $validated['notes'] ?? null,
                 $method->id,
+                $receipt?->utc(),
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['payment' => $exception->getMessage()]);
@@ -256,6 +276,9 @@ class StudentBillingController extends Controller
                 'student_package_id' => $packageRecord->id,
                 'payment_record_id' => $payment->id,
                 'amount_paid' => $payment->amount_paid,
+                'paid_at' => $payment->paid_at->utc()->toDateTimeString(),
+                'validity_started_at' => $packageRecord->fresh()->validity_started_at?->toDateTimeString(),
+                'expires_at' => $packageRecord->fresh()->expires_at?->toDateTimeString(),
                 'currency' => $payment->currency,
             ], $request->user('web')?->id);
         }
@@ -316,7 +339,7 @@ class StudentBillingController extends Controller
 
     public function extendValidity(Request $request, int $student, int $package, AuditLogService $audit): RedirectResponse
     {
-        $data = $request->validate(['expiration_date' => ['required', 'date_format:Y-m-d'], 'previous_expiration_date' => ['nullable', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:1000']]);
+        $data = $request->validate(['expiration_date' => ['required', 'date_format:Y-m-d'], 'previous_expiration_date' => ['nullable', 'date_format:Y-m-d'], 'previous_expires_at' => ['nullable', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'string', 'max:1000']]);
         DB::transaction(function () use ($request, $student, $package, $data, $audit): void {
             Student::query()->whereKey($student)->lockForUpdate()->firstOrFail();
             $record = StudentPackage::query()->where('student_id', $student)->whereKey($package)->lockForUpdate()->firstOrFail();
@@ -327,8 +350,20 @@ class StudentBillingController extends Controller
             if (! $oldDate || $data['expiration_date'] <= $oldDate) {
                 throw ValidationException::withMessages(['expiration_date' => 'Choose a date later than the current expiration.']);
             }
-            $record->update(['expiration_date' => $data['expiration_date']]);
-            $audit->log('package_validity_extended', StudentPackage::class, $record->id, ['expiration_date' => $oldDate], ['expiration_date' => $data['expiration_date'], 'reason' => $data['reason']], $request->user('web')->id);
+            $oldExpiry = $record->expires_at?->toDateTimeString();
+            $newData = ['expiration_date' => $data['expiration_date']];
+            if ($oldExpiry !== null) {
+                if ($oldExpiry !== ($data['previous_expires_at'] ?? null)) {
+                    throw ValidationException::withMessages(['expiration_date' => 'The exact expiry changed. Reload before extending it.']);
+                }
+                $newExpiry = CarbonImmutable::parse($data['expiration_date'], app(TimezoneService::class)->getBusinessTimezone())->endOfDay()->utc();
+                if ($newExpiry->lessThanOrEqualTo($record->expires_at)) {
+                    throw ValidationException::withMessages(['expiration_date' => 'An extension must move the deadline later.']);
+                }
+                $newData['expires_at'] = $newExpiry->toDateTimeString();
+            }
+            $record->update($newData);
+            $audit->log('package_validity_extended', StudentPackage::class, $record->id, ['expiration_date' => $oldDate, 'expires_at' => $oldExpiry], $newData + ['reason' => $data['reason']], $request->user('web')->id);
         }, 5);
 
         return back()->with('success', 'Package validity extended. Credit ledger entries were preserved.');

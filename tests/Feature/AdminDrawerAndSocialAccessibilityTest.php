@@ -202,8 +202,8 @@ class AdminDrawerAndSocialAccessibilityTest extends TestCase
 
         // Embedded learning content wrapped in bdi with dir="rtl" and lang="ar"
         $response->assertSee('<bdi dir="rtl" lang="ar"', false);
-        $response->assertSee('اتعلم مصري صح', false);
-        $response->assertSee('إزيك؟ عامل إيه؟', false);
+        $response->assertSee('ماشي', false);
+        $response->assertSee('يلا بينا', false);
 
         // Game page
         $game = Game::create([

@@ -17,7 +17,9 @@ class BookingController extends Controller
     public function index(): View
     {
         return view('public.booking', [
-            'title' => 'Book a Private Egyptian Arabic Lesson',
+            'title' => 'Book an Arabic Session',
+            'isFallback' => app()->getLocale() !== 'en',
+            'entityLocales' => ['en'],
         ]);
     }
 
@@ -33,6 +35,10 @@ class BookingController extends Controller
             'booking' => $booking,
             'timezone' => app(TimezoneService::class)->isValid(is_string($request->query('timezone')) ? $request->query('timezone') : null) ? $request->query('timezone') : $booking->customer_timezone,
             'meetingUrl' => $meetingLinks->studentUrl($booking),
+            'noIndex' => true,
+            'isFallback' => app()->getLocale() !== 'en',
+            'contentLocale' => 'en',
+            'entityLocales' => [],
             'title' => $booking->studentStatusLabel().' — #'.substr($booking->confirmation_token, 0, 8),
         ]);
     }

@@ -74,6 +74,7 @@ class PublicExperienceTest extends TestCase
             'question' => 'How are lessons conducted?',
             'answer' => 'Sessions take place 1-on-1 via Zoom or Google Meet.',
             'category' => 'general',
+            'featured' => true,
             'is_active' => true,
             'sort_order' => 1,
         ]);
@@ -82,7 +83,7 @@ class PublicExperienceTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSeeText('Speak Egyptian Arabic with Confidence');
-        $response->assertSeeText('Book a Private Lesson');
+        $response->assertSeeText('Book Your Diagnostic');
         $response->assertSeeText('How are lessons conducted?');
     }
 
@@ -373,7 +374,8 @@ class PublicExperienceTest extends TestCase
             'status' => 'published',
             'file_type' => 'pdf',
             'file_path' => 'resources/nonexistent-file.pdf',
-            'is_gated' => false, // ungated so token check passes
+            'is_gated' => false, // Existing unlisted link remains ungated.
+            'public_catalogue' => false,
             'published_at' => now(),
         ]);
 
@@ -486,7 +488,7 @@ class PublicExperienceTest extends TestCase
 
         $response = $this->get(route('games.index'));
         $response->assertStatus(200);
-        $response->assertSeeText('Available Games');
+        $response->assertSeeText('Pick a Challenge. See Where It Takes You.');
         $response->assertSeeText('6-Word Story');
         $response->assertSeeText('Speaking Practice');
         $response->assertSeeText('Think fast, speak continuously');
@@ -514,7 +516,7 @@ class PublicExperienceTest extends TestCase
 
     public function test_static_pages_load_successfully(): void
     {
-        $this->get(route('about'))->assertStatus(200)->assertSeeText('Meet Your Tutor, Abdallah');
+        $this->get(route('about'))->assertStatus(200)->assertSeeText("Hi, I'm Abdallah.");
         $this->get(route('faq'))->assertStatus(200)->assertSeeText('Frequently Asked Questions');
         $this->get(route('terms'))->assertStatus(200)->assertSeeText('Terms of Service & Booking Policy');
         $this->get(route('privacy'))->assertStatus(200)->assertSeeText('Privacy Policy & Data Ethics');

@@ -68,27 +68,25 @@ class BlogPublishingTest extends TestCase
         $this->get(route('blog.index'))->assertOk()->assertDontSee('Private draft');
     }
 
-    public function test_public_and_admin_navigation_use_singular_blog_terminology(): void
+    public function test_public_and_admin_navigation_use_approved_blogs_and_articles_terminology(): void
     {
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
 
         $this->get(route('blog.index'))
             ->assertOk()
-            ->assertSeeText('Blog')
-            ->assertSeeText('New blog posts are coming soon.')
-            ->assertDontSeeText('Blogs');
+            ->assertSeeText('Blogs')
+            ->assertSeeText('Good Things Take a Little Thought.');
 
         $this->actingAs($admin, 'web')
             ->get(route('admin.blog.index'))
             ->assertOk()
-            ->assertSeeText('Blog')
-            ->assertSeeText('Add Blog Post')
-            ->assertDontSeeText('Blogs');
+            ->assertSeeText('Blogs')
+            ->assertSeeText('Add Article');
 
         $this->get(route('admin.blog.create'))
             ->assertOk()
-            ->assertSeeText('Add Blog Post')
-            ->assertSeeText('Create Blog Post');
+            ->assertSeeText('Add Article')
+            ->assertSeeText('Save Draft');
     }
 
     /** @return array<string, mixed> */

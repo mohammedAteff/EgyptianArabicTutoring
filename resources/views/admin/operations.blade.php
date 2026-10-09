@@ -22,7 +22,7 @@
         </x-operations-card>
         @if(auth('web')->user()?->isAdmin())
         <x-operations-card heading="Packages expiring within 7 days" :count="$counts['expiringPackages']" :url="route('admin.students.index', ['expiry_from'=>now($businessTz)->toDateString(), 'expiry_to'=>now($businessTz)->addDays(7)->toDateString()])">
-            @forelse($expiringPackages as $package)<a class="block rounded-xl bg-slate-50 p-3" href="{{ route('admin.students.show', $package->student_id) }}"><strong class="text-sm text-amber-800">{{ $package->student?->name }}</strong><span class="mt-1 block text-sm text-slate-600">{{ $package->package_name }} · {{ $package->expiration_date?->format('j M Y') }}</span></a>@empty<p class="text-sm text-slate-500">No available packages nearing expiry.</p>@endforelse
+            @forelse($expiringPackages as $package)<a class="block rounded-xl bg-slate-50 p-3" href="{{ route('admin.students.show', $package->student_id) }}"><strong class="text-sm text-amber-800">{{ $package->student?->name }}</strong><span class="mt-1 block text-sm text-slate-600">{{ $package->package_name }} · {{ $package->expiryLabel() }}</span></a>@empty<p class="text-sm text-slate-500">No available packages nearing expiry.</p>@endforelse
         </x-operations-card>
         <x-operations-card heading="Low-credit students" :count="$counts['lowCreditStudents']" :url="route('admin.students.index')">
             <p class="text-xs text-slate-500">At least one active entitlement type has 0–2 units available. Types remain separate.</p>

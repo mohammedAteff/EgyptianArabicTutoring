@@ -17,7 +17,7 @@ export function studentDetails(form) {
     return Object.entries(fields).map(([name, label]) => `${label}: ${studentDetailValue(form, name) || '—'}`).join('\n');
 }
 
-async function copyText(value) {
+export async function copyText(value) {
     if (navigator.clipboard?.writeText && window.isSecureContext) {
         await navigator.clipboard.writeText(value);
         return;
@@ -39,15 +39,15 @@ export function recoveryCodesText(panel) {
 }
 
 if (typeof document !== 'undefined') document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-copy-field], [data-copy-student], [data-copy-bin], [data-copy-recovery]');
+    const button = event.target.closest('[data-copy-field], [data-copy-student], [data-copy-bin], [data-copy-recovery], [data-copy-text]');
     if (!button) return;
     const form = document.querySelector('[data-student-identity]');
-    const value = button.hasAttribute('data-copy-recovery') ? recoveryCodesText(button.closest('[data-recovery-panel]')) : button.hasAttribute('data-copy-bin')
+    const value = button.hasAttribute('data-copy-text') ? button.dataset.copyText : button.hasAttribute('data-copy-recovery') ? recoveryCodesText(button.closest('[data-recovery-panel]')) : button.hasAttribute('data-copy-bin')
         ? button.closest('[data-bin]')?.querySelector('[data-bin-body]')?.textContent.trim() || ''
         : button.hasAttribute('data-copy-student') ? studentDetails(form) : studentDetailValue(form, button.dataset.copyField);
     const status = button.querySelector('[data-copy-status]');
     try {
-        if (!value) { status.textContent = 'Empty'; } else { await copyText(value); status.textContent = 'Copied ✓'; }
-    } catch { status.textContent = 'Copy unavailable'; }
-    setTimeout(() => { status.textContent = ''; }, 1800);
+        if (!value) { if (status) status.textContent = 'Empty'; } else { await copyText(value); if (status) status.textContent = button.dataset.copySuccess || 'Copied ✓'; }
+    } catch { if (status) status.textContent = 'Copy unavailable'; }
+    setTimeout(() => { if (status) status.textContent = ''; }, 1800);
 });

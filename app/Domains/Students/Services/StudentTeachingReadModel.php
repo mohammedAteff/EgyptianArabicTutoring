@@ -75,13 +75,13 @@ class StudentTeachingReadModel
                 }
                 $allocation = $package->entitlements->firstWhere('id', $balance['id']);
                 $canBook = $canBook || $requirements->contains(fn ($session): bool => (int) $session->required_entitlement_type_id === (int) $allocation?->entitlement_type_id && $balance['available'] >= (int) $session->required_entitlement_units);
-                $expiry = $package->expiration_date?->toDateString();
-                $soon = $package->status === 'active' && $expiry !== null && $expiry <= now($this->timezones->getBusinessTimezone())->addDays(14)->toDateString() && $balance['remaining'] > 0;
+                $expiry = $package->expiryDeadline();
+                $soon = $package->status === 'active' && $expiry !== null && $expiry->lessThanOrEqualTo(now($this->timezones->getBusinessTimezone())->addDays(14)) && $balance['remaining'] > 0;
                 $low = $this->entitlements->eligible($package) && $balance['available'] <= 2;
                 if (! $low && ! $soon) {
                     continue;
                 }
-                $message = $balance['label'].' · '.$package->package_name.' · Purchase #'.$package->id.' · '.$balance['available'].' available · Expiry '.($expiry ?? 'No expiry');
+                $message = $balance['label'].' · '.$package->package_name.' · Purchase #'.$package->id.' · '.$balance['available'].' available · Expiry '.$package->expiryLabel();
                 $notices[] = $message;
                 $events[] = ['key' => 'entitlement:'.$balance['id'].':'.$balance['available'].':'.$expiry.':'.($soon ? 'expiry' : 'low'), 'type' => 'entitlement', 'title' => $soon ? 'Package expiry notice' : 'Low entitlement balance', 'message' => $message, 'link' => route('student.dashboard', [], false).'#credits-title'];
             }

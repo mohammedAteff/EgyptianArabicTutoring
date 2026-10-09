@@ -35,6 +35,8 @@
                     $hasDraft = (bool) $draftRevision;
                     $valQuestion = $draftRevision?->title ?? $draftRevision?->content['question'] ?? $faq->question;
                     $valAnswer = $draftRevision?->content['answer'] ?? $faq->answer;
+                    $valTopic = $draftRevision && array_key_exists('topic', $draftRevision->content) ? $draftRevision->content['topic'] : $faq->topic;
+                    $valFeatured = $draftRevision?->content['featured'] ?? $faq->featured;
                     $valSortOrder = $draftRevision?->content['sort_order'] ?? $faq->sort_order;
                     $valActive = $draftRevision ? ($draftRevision->content['active'] ?? $faq->active) : $faq->active;
                 @endphp
@@ -105,6 +107,10 @@
                                           class="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">{{ $valAnswer }}</textarea>
                             </div>
 
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <label class="text-xs font-semibold">Topic<select name="topic" class="mt-1 block w-full rounded-xl border border-slate-300 p-2"><option value="">General questions</option>@foreach(config('public_content.faq_topics') as $topic)<option value="{{ $topic }}" @selected($valTopic === $topic)>{{ $topic }}</option>@endforeach</select></label>
+                                <label class="flex items-center gap-2 text-xs font-semibold"><input type="hidden" name="featured" value="0"><input type="checkbox" name="featured" value="1" @checked($valFeatured)>Show on the homepage (up to six active FAQs)</label>
+                            </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Sort Order</label>
@@ -324,6 +330,10 @@
                               class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
                 </div>
 
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="text-xs font-semibold">Topic<select name="topic" class="mt-1 block w-full rounded-xl border border-slate-300 p-2"><option value="">General questions</option>@foreach(config('public_content.faq_topics') as $topic)<option value="{{ $topic }}">{{ $topic }}</option>@endforeach</select></label>
+                    <label class="flex items-center gap-2 text-xs font-semibold"><input type="hidden" name="featured" value="0"><input type="checkbox" name="featured" value="1">Show on the homepage</label>
+                </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Sort Order</label>

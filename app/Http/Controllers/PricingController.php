@@ -14,9 +14,10 @@ class PricingController extends Controller
         $bookingUrl = $urlService->getLocalizedUrl('booking', $locale);
 
         return view('public.pricing', [
-            'title' => __('pricing.title'),
+            'title' => 'Lessons & Pricing',
             'bookingUrl' => $bookingUrl,
-            'entityLocales' => ['en', 'fr', 'de'],
+            'entityLocales' => ['en'],
+            'isFallback' => $locale !== 'en',
         ]);
     }
 }

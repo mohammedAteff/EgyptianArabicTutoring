@@ -75,16 +75,16 @@ class StudentLedgerService
         ],
     ];
 
-    public function __construct(private TimezoneService $timezones, private DatabaseCapability $database, private EntitlementService $entitlements) {}
+    public function __construct(private TimezoneService $timezones, private DatabaseCapability $database, private EntitlementService $entitlements, private PackageValidityService $validity) {}
 
     /**
      * Check if a student is eligible for the 48-Hour Diagnostic Credit (-$25.00).
      *
-     * @return array{eligible: bool, credit_amount: string, payment_id: int, paid_at: string}|null
+     * @return array{eligible: bool, credit_amount: string, payment_id: int, paid_at: string, completed_at: string, credit_expires_at: string}|null
      */
     public function checkDiagnosticCreditEligibility(int $studentId): ?array
     {
-        $cutoff = CarbonImmutable::now('UTC')->subHours(48);
+        $now = CarbonImmutable::now('UTC');
         $diagnosticPackages = StudentPackage::query()
             ->where('student_id', $studentId)
             ->where('offering_key', 'diagnostic_roadmap')
@@ -97,7 +97,7 @@ class StudentLedgerService
                         ->where('status', 'completed')
                         ->select('id'));
             })
-            ->with(['payments', 'refunds'])
+            ->with(['payments', 'refunds', 'ledgerEntries.booking.events'])
             ->orderByDesc('id')
             ->get();
 
@@ -127,7 +127,19 @@ class StudentLedgerService
                 }
             }
 
-            if (! $settledAt || $settledAt->lessThan($cutoff) || bccomp($netPaid, '25.00', 2) < 0) {
+            $completedBooking = $package->ledgerEntries->where('entry_type', 'session_consumed')->map(fn ($entry) => $entry->booking)->first(fn ($booking) => $booking && $booking->status === 'completed' && (int) $booking->student_id === $studentId);
+            $completedAt = $completedBooking?->completed_at ? CarbonImmutable::instance($completedBooking->completed_at) : null;
+            if (! $completedAt && $completedBooking) {
+                $event = $completedBooking->events->where('event_type', 'completed')->sortByDesc('id')->first();
+                if ($event) {
+                    try {
+                        $completedAt = ! empty($event->new_data['completed_at']) ? CarbonImmutable::parse($event->new_data['completed_at'], 'UTC') : CarbonImmutable::instance($event->created_at);
+                    } catch (\Throwable) {
+                        $completedAt = null;
+                    }
+                }
+            }
+            if (! $settledAt || ! $completedAt || $completedAt->greaterThan($now) || $now->greaterThanOrEqualTo($completedAt->addHours(48)) || bccomp($netPaid, '25.00', 2) < 0) {
                 continue;
             }
 
@@ -144,6 +156,8 @@ class StudentLedgerService
                     'credit_amount' => '25.00',
                     'payment_id' => $settlingPaymentId,
                     'paid_at' => $settledAt->toDateTimeString(),
+                    'completed_at' => $completedAt->utc()->toDateTimeString(),
+                    'credit_expires_at' => $completedAt->addHours(48)->utc()->toDateTimeString(),
                 ];
             }
         }
@@ -342,14 +356,14 @@ class StudentLedgerService
         ]);
     }
 
-    public function recordPayment(StudentPackage $package, string $amount, string $idempotencyKey, ?int $administratorId, string $method = 'PayPal - Manual', ?string $reference = null, ?string $notes = null, ?int $paymentMethodId = null): PaymentRecord
+    public function recordPayment(StudentPackage $package, string $amount, string $idempotencyKey, ?int $administratorId, string $method = 'PayPal - Manual', ?string $reference = null, ?string $notes = null, ?int $paymentMethodId = null, ?\DateTimeInterface $receivedAt = null): PaymentRecord
     {
         $cents = $this->toCents($amount);
         if ($cents <= 0) {
             throw new InvalidArgumentException('Payment amount must be positive.');
         }
 
-        return $this->database->transaction(function () use ($package, $cents, $idempotencyKey, $administratorId, $method, $reference, $notes, $paymentMethodId): PaymentRecord {
+        return $this->database->transaction(function () use ($package, $cents, $idempotencyKey, $administratorId, $method, $reference, $notes, $paymentMethodId, $receivedAt): PaymentRecord {
             $lockedStudent = Student::withTrashed()->whereKey($package->student_id)->lockForUpdate()->firstOrFail();
             $lockedPackage = StudentPackage::query()->whereKey($package->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged' || (int) $lockedPackage->student_id !== (int) $lockedStudent->id) {
@@ -372,6 +386,11 @@ class StudentLedgerService
                 $method = $configuredMethod->name;
             }
 
+            $receipt = CarbonImmutable::instance($receivedAt ?? now('UTC'))->utc();
+            if ($receipt->greaterThan(now('UTC'))) {
+                throw new InvalidArgumentException('The payment receipt time cannot be in the future.');
+            }
+            $hadPreviousSettlement = $lockedPackage->validity_days !== null && $lockedPackage->expiration_date === null && $this->validity->firstFullReceipt($lockedPackage) !== null;
             $recordedPayment = PaymentRecord::create([
                 'student_package_id' => $package->id,
                 'student_id' => $package->student_id,
@@ -381,21 +400,13 @@ class StudentLedgerService
                 'payment_method' => $method,
                 'payment_method_id' => $paymentMethodId,
                 'transaction_reference' => $reference,
-                'paid_at' => now('UTC'),
+                'paid_at' => $receipt,
                 'recorded_by' => $administratorId,
                 'notes' => $notes,
                 'created_at' => now('UTC'),
             ]);
 
-            if ($lockedPackage->validity_days !== null && $lockedPackage->expiration_date === null) {
-                $totalPaid = (string) PaymentRecord::query()->where('student_package_id', $lockedPackage->id)->sum('amount_paid');
-                $totalRefunded = (string) PaymentRefund::query()->where('student_package_id', $lockedPackage->id)->sum('amount_refunded');
-                if (bccomp(bcsub($totalPaid, $totalRefunded, 2), (string) $lockedPackage->final_price, 2) >= 0) {
-                    $lockedPackage->update([
-                        'expiration_date' => $this->calculateExpirationDate($recordedPayment->paid_at, (int) $lockedPackage->validity_days),
-                    ]);
-                }
-            }
+            $this->validity->activate($lockedPackage, $hadPreviousSettlement);
 
             return $recordedPayment;
         }, 5);
@@ -561,7 +572,7 @@ class StudentLedgerService
         $state = ucfirst($package->status);
         if ($package->identity_state === 'legacy_unclassified') {
             $state = 'Review required';
-        } elseif ($package->status === 'active' && $package->expiration_date === null && $package->validity_days !== null) {
+        } elseif ($package->status === 'active' && $package->expiration_date === null && $package->expires_at === null && $package->validity_days !== null) {
             $state = 'Awaiting settlement';
         } elseif ($package->status === 'active' && ! $this->entitlements->eligible($package, $businessTimezone)) {
             $state = 'Expired';

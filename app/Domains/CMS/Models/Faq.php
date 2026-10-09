@@ -29,6 +29,8 @@ class Faq extends Model
         'answer',
         'sort_order',
         'active',
+        'topic',
+        'featured',
     ];
 
     protected function casts(): array
@@ -36,6 +38,7 @@ class Faq extends Model
         return [
             'sort_order' => 'integer',
             'active' => 'boolean',
+            'featured' => 'boolean',
         ];
     }
 

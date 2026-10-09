@@ -17,6 +17,7 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentSessionContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -33,14 +34,16 @@ class ResourceController extends Controller
         $categorySlug = $request->query('category');
 
         $categories = ResourceCategory::where('active', true)
+            ->whereHas('resources', function (Builder $query): void {
+                /** @var Builder<\App\Domains\Resources\Models\Resource> $query */
+                $query->publicCatalogue();
+            })
             ->with('translations')
             ->orderBy('sort_order')
             ->get();
 
         $query = Resource::query()
-            ->where('status', 'published')
-            ->whereNotNull('published_at')
-            ->where('published_at', '<=', now())
+            ->publicCatalogue()
             ->with(['category.translations', 'translations'])
             ->orderBy('sort_order');
 
@@ -54,9 +57,9 @@ class ResourceController extends Controller
             'resources' => $resources,
             'categories' => $categories,
             'selectedCategory' => $categorySlug,
-            'title' => 'Free Egyptian Arabic Workbooks & Guides',
-            'isFallback' => false,
-            'entityLocales' => ['en', 'fr', 'de'],
+            'title' => 'Arabic Learning Resources',
+            'isFallback' => app()->getLocale() !== 'en',
+            'entityLocales' => ['en'],
         ]);
     }
 
@@ -79,7 +82,7 @@ class ResourceController extends Controller
             'isStale' => $resolved['is_stale'],
             'entityLocales' => $resource->getAvailableLocales(),
             'resourceStudent' => $this->authenticatedStudent(request()),
-            'title' => ($resolved['translation']?->title ?? $resource->title).' — Free Egyptian Arabic Resource',
+            'title' => ($resolved['translation']?->title ?? $resource->title).' — Free Arabic Resource',
         ]);
     }
 
@@ -299,7 +302,7 @@ class ResourceController extends Controller
             return $sameSession && $sameVisitor;
         };
 
-        if ($resource->is_gated) {
+        if ($resource->requiresPublicAccessRequest()) {
             $token = $request->query('token');
 
             if ($token) {

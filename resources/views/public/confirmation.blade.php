@@ -1,6 +1,7 @@
 @extends('layouts.public')
 
 @section('content')
+<x-public-english-fallback :is-fallback="$isFallback ?? false" />
 <x-student-timezone :timezone="$timezone" />
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     @if(session('success'))
@@ -20,11 +21,12 @@
             $statusLabel = $booking->studentStatusLabel();
             $isScheduled = $booking->status === 'confirmed';
             $isDelivered = $booking->status === 'completed';
+            $isDiagnostic = $booking->sessionType?->slug === 'diagnostic-session';
             $statusDescription = match ($booking->status) {
                 'completed' => 'Your lesson has been delivered. Review your learning profile or schedule another session in your student portal.',
                 'cancelled' => 'This booking was canceled. Its time slot has been released.',
                 'no_show', 'no-show' => 'This session was forfeited. Contact your tutor if you have questions.',
-                'confirmed' => $booking->reschedules_exists ? 'Your session has been rescheduled. Your updated lesson details are below.' : 'Your booking is confirmed. Your calendar invitation and meeting details are below.',
+                'confirmed' => $booking->reschedules_exists ? 'Your session has been rescheduled. Your updated lesson details are below.' : 'Your appointment time is reserved. Payment is arranged separately; confirming this booking has not charged you. Your session details and available calendar download are below.',
                 'pending' => 'Your booking is awaiting confirmation.',
                 'held' => 'This time is reserved temporarily. Complete your booking to confirm it.',
                 default => 'We could not determine the status of this booking. Please contact your tutor.',
@@ -148,6 +150,18 @@
         </div>
     </div>
 
+    @if($isDiagnostic && $booking->status === 'confirmed' && $booking->funding_mode !== 'package')
+        <section lang="en" class="mb-8 rounded-2xl border border-stone-200 bg-white p-6">
+            <h2 class="text-xl font-semibold text-nile-900">What Happens Next?</h2>
+            <ol class="mt-4 list-inside list-decimal space-y-3 text-sm leading-7 text-stone-600">
+                <li>Check your session details and save the appointment to your calendar.</li>
+                <li>Abdallah will contact you personally to arrange payment and confirm the practical details.</li>
+                <li>Your meeting link will appear when it is available. Keep this confirmation page for access.</li>
+                <li>After your diagnostic, you'll receive a personalized written learning roadmap.</li>
+            </ol>
+            <p class="mt-4 text-sm leading-7 text-stone-600">If you enroll in an eligible coaching package within 48 hours after completing the diagnostic, the full $25 fee is credited toward its price. No package purchase is required.</p>
+        </section>
+    @endif
     <!-- Cancellation and direct-contact rescheduling (if confirmed and eligible) -->
     @if($booking->status === 'confirmed')
         @php
@@ -161,7 +175,11 @@
         @if($canMutate)
             <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
                 <p class="max-w-md text-center text-xs text-stone-500">
-                    {{ __('Need a different time? Contact Abdallah directly by WhatsApp, Telegram, or email at least 24 hours before the lesson. The tutor will confirm a new available slot.') }}
+                    <span lang="en">Online rescheduling is available with at least 24 hours’ notice. For cancellation and rebooking by direct contact, allow at least four hours before the appointment. A cancellation with sufficient notice is eligible for a full refund; payments are handled personally.</span>
+                    @if($booking->start_at_utc >= $nowUtc->copy()->addHours(24))
+                        <a href="{{ route('booking.reschedule', $booking->confirmation_token) }}" class="mt-3 block font-semibold text-terracotta-600 underline">Reschedule Online</a>
+                    @endif
+                    <a href="{{ route('policy') }}" class="mt-3 block font-semibold underline">Read the Booking &amp; Refund Policy</a>
                 </p>
 
                 <div x-data="{ showCancelModal: false }">

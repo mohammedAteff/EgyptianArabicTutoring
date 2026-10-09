@@ -17,11 +17,13 @@ class MediaController extends Controller
     public function picker(Request $request): JsonResponse
     {
         $media = Media::query()
+            ->when($request->boolean('images_only'), fn ($query) => $query->where('disk', 'public')->whereIn('mime_type', ['image/jpeg', 'image/png', 'image/webp', 'image/gif']))
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (Media $m) => [
                 'id' => $m->id,
                 'filename' => $m->filename,
+                'disk' => $m->disk,
                 'path' => $m->path,
                 'url' => $m->url(),
                 'mime_type' => $m->mime_type,
@@ -49,7 +51,7 @@ class MediaController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'file' => [
@@ -57,7 +59,7 @@ class MediaController extends Controller
                 'file',
                 // SVG is intentionally excluded: uploaded SVG is served from
                 // a public disk and can carry active script content.
-                'mimes:jpeg,jpg,png,webp,gif,pdf',
+                $request->boolean('images_only') ? 'mimes:jpeg,jpg,png,webp,gif' : 'mimes:jpeg,jpg,png,webp,gif,pdf',
                 'max:10240', // 10 MB
             ],
             'alt_text' => ['nullable', 'string', 'max:255'],
@@ -97,6 +99,10 @@ class MediaController extends Controller
             ],
             'created_at' => now(),
         ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['id' => $media->id, 'path' => $media->path, 'url' => $media->url(), 'alt_text' => $media->alt_text, 'mime_type' => $media->mime_type], 201);
+        }
 
         return back()->with('success', "Media asset '{$originalFilename}' uploaded successfully.");
     }

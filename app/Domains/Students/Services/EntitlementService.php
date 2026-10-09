@@ -34,6 +34,9 @@ class EntitlementService
         if ($package->status !== 'active' || $package->identity_state === 'legacy_unclassified') {
             return false;
         }
+        if ($package->expires_at !== null) {
+            return now('UTC')->lessThan($package->expires_at);
+        }
         if ($package->expiration_date === null) {
             return $package->validity_days === null;
         }
@@ -45,7 +48,7 @@ class EntitlementService
     public function scopeAvailablePackages(Builder $query): void
     {
         $query->where('status', 'active')->where('identity_state', '!=', 'legacy_unclassified')
-            ->where(fn ($q) => $q->where(fn ($unlimited) => $unlimited->whereNull('expiration_date')->whereNull('validity_days'))->orWhereDate('expiration_date', '>=', now($this->timezones->getBusinessTimezone())->toDateString()))
+            ->withinValidity()
             ->whereHas('entitlements', fn ($allocations) => $allocations->whereHas('type', fn ($types) => $types->where('active', true))->whereRaw('(select coalesce(sum(credit_change),0) from session_ledger_entries where student_package_entitlement_id = student_package_entitlements.id) > 0'));
     }
 
@@ -58,7 +61,7 @@ class EntitlementService
         $packages = StudentPackage::query()->where('student_id', $studentId)->where('status', 'active')->orderBy('id')->lockForUpdate()->get();
         $allocations = StudentPackageEntitlement::query()->whereIn('student_package_id', $packages->modelKeys())->where('student_id', $studentId)->orderBy('id')->lockForUpdate()->get();
         $entries = SessionLedgerEntry::query()->whereIn('student_package_id', $packages->modelKeys())->orderBy('id')->lockForUpdate()->get();
-        $packages = $packages->sort(fn (StudentPackage $a, StudentPackage $b): int => (($a->expiration_date === null) <=> ($b->expiration_date === null)) ?: strcmp((string) $a->expiration_date?->toDateString(), (string) $b->expiration_date?->toDateString()) ?: strcmp((string) $a->created_at, (string) $b->created_at) ?: ($a->id <=> $b->id));
+        $packages = $packages->sort(fn (StudentPackage $a, StudentPackage $b): int => (($a->expiryDeadline()?->getTimestamp() ?? PHP_INT_MAX) <=> ($b->expiryDeadline()?->getTimestamp() ?? PHP_INT_MAX)) ?: strcmp((string) $a->created_at, (string) $b->created_at) ?: ($a->id <=> $b->id));
         foreach ($packages as $package) {
             if (! $this->eligible($package)) {
                 continue;

@@ -41,7 +41,7 @@ class TelegramReadService
     {
         $package->loadMissing('student');
 
-        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => $package->expiration_date?->format('Y-m-d') ?? 'Never', 'admin_url' => route('admin.students.show', $package->student_id)];
+        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => $package->expiryLabel(), 'admin_url' => route('admin.students.show', $package->student_id)];
     }
 
     public function scanPackage(StudentPackage $package): void
@@ -60,7 +60,7 @@ class TelegramReadService
         if (! $service->eligible($package)) {
             return;
         }
-        $expiry = $package->expiration_date ? CarbonImmutable::parse($package->expiration_date->format('Y-m-d'), app(TimezoneService::class)->getBusinessTimezone())->endOfDay()->utc() : null;
+        $expiry = $package->expiryDeadline();
         foreach ($service->projection($package) as $allocation) {
             if ($allocation['id'] === null) {
                 continue;

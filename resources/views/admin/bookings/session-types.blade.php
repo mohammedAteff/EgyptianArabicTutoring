@@ -12,6 +12,7 @@
 <label>Required entitlement<select name="required_entitlement_type_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"><option value="">None</option>@foreach($entitlementTypes as $entitlement)<option value="{{ $entitlement->id }}" @selected($type->required_entitlement_type_id === $entitlement->id)>{{ $entitlement->label }}</option>@endforeach</select></label>
 <label>Required units<input type="number" name="required_entitlement_units" min="1" max="100" value="{{ $type->required_entitlement_units }}" class="mt-1 block w-full rounded-lg border border-slate-300 p-3"></label>
 <label class="flex items-center gap-2"><input type="checkbox" name="active" value="1" @checked($type->active)>Active</label>
+<label class="flex items-center gap-2"><input type="hidden" name="public_bookable" value="0"><input type="checkbox" name="public_bookable" value="1" @checked(old('public_bookable', $type->public_bookable ?? true))>Visible in public booking</label>
 <button class="min-h-11 rounded-lg bg-slate-900 px-4 py-3 text-white">Save lesson type</button>
 </form>@endforeach</div>
 @endsection

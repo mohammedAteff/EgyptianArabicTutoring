@@ -24,6 +24,20 @@ class RichTextSanitizer
         ]);
     }
 
+    public function sanitizeBlog(string $html): string
+    {
+        $html = preg_replace('/<(\\/?)(?:bdi)\\b/i', '<$1span', $html) ?? $html;
+        if (preg_match('/<img\\b/i', $html)) {
+            $html = $this->removeNonStorageImages($html);
+        }
+
+        return (string) $this->purifier->clean($html, [
+            'HTML.Allowed' => 'h1[dir|lang],h2[dir|lang],h3[dir|lang],h4[dir|lang],h5[dir|lang],h6[dir|lang],p[dir|lang],span[dir|lang],b,i,strong,em,u,s,sup,sub,pre[dir|lang],code,ul[dir|lang],ol[start|dir|lang],li[dir|lang],blockquote[dir|lang],a[href|title],img[src|alt|width|height],br,hr,table,thead,tbody,tr,th[colspan|rowspan],td[colspan|rowspan]',
+            'URI.AllowedSchemes' => ['http' => true, 'https' => true, 'mailto' => true],
+            'Attr.EnableID' => false,
+        ]);
+    }
+
     private function removeNonStorageImages(string $html): string
     {
         $document = new DOMDocument('1.0', 'UTF-8');

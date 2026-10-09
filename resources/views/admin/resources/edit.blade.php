@@ -109,12 +109,14 @@
                 <!-- Gate Toggle -->
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Access Gate</label>
+                    <p class="mb-2 text-xs text-slate-500">Public catalogue resources always require a name and email address. This choice applies to direct links outside the catalogue.</p>
                     <select name="is_gated" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                        <option value="1" {{ $valIsGated == '1' ? 'selected' : '' }}>Email Gated (Captures Student Lead)</option>
-                        <option value="0" {{ $valIsGated == '0' ? 'selected' : '' }}>Direct Public Download (Ungated)</option>
+                        <option value="1" {{ $valIsGated == '1' ? 'selected' : '' }}>Request Name and Email</option>
+                        <option value="0" {{ $valIsGated == '0' ? 'selected' : '' }}>Allow Download from a Direct Link</option>
                     </select>
                 </div>
 
+                <label class="flex items-start gap-3 text-sm text-slate-700"><input type="hidden" name="public_catalogue" value="0"><input type="checkbox" name="public_catalogue" value="1" @checked(old('public_catalogue', $draftContent['public_catalogue'] ?? $resource->public_catalogue)) class="mt-1"><span>Show in the public library<br><small>Hiding a resource here preserves its publication status, existing links and assigned student access.</small></span></label>
                 <!-- Status -->
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Publication Status</label>

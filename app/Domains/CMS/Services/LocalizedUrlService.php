@@ -2,6 +2,7 @@
 
 namespace App\Domains\CMS\Services;
 
+use App\Domains\CMS\Models\Blog;
 use Illuminate\Http\Request;
 
 class LocalizedUrlService
@@ -119,6 +120,8 @@ class LocalizedUrlService
             'games', 'jeux', 'spiele' => $slug
                 ? ['key' => 'game.detail', 'slug' => $slug]
                 : ['key' => 'games'],
+            'blog' => $slug ? ['key' => 'blog.detail', 'slug' => $slug] : ['key' => 'blogs'],
+            'booking-policy' => ['key' => 'policy'],
             'about', 'a-propos', 'ueber-uns' => ['key' => 'about'],
             'faq' => ['key' => 'faq'],
             'pricing', 'tarifs', 'preise' => ['key' => 'pricing'],
@@ -129,6 +132,16 @@ class LocalizedUrlService
         };
     }
 
+    private function articleUrl(string $locale, ?string $slug): string
+    {
+        $article = Blog::query()->where('slug', $slug)->first(['translation_group_id']);
+        if ($article?->translation_group_id) {
+            $slug = Blog::published()->where('translation_group_id', $article->translation_group_id)->where('locale', $locale)->value('slug') ?? $slug;
+        }
+
+        return $locale === 'en' ? route('blog.show', $slug) : route('blog.show.'.$locale, $slug);
+    }
+
     /**
      * Get the localized URL for a canonical route key.
      */
@@ -136,6 +149,8 @@ class LocalizedUrlService
     {
         $key = match ($key) {
             'booking.index' => 'booking',
+            'blog.index' => 'blogs',
+            'blog.show' => 'blog.detail',
             'resources.index' => 'resources',
             'games.index' => 'games',
             'resource.show' => 'resource.detail',
@@ -144,6 +159,9 @@ class LocalizedUrlService
         };
 
         return match ($key) {
+            'policy' => route('policy'),
+            'blogs' => $locale === 'en' ? route('blog.index') : url('/'.$locale.'/blog'),
+            'blog.detail' => $this->articleUrl($locale, $slug),
             'home' => match ($locale) {
                 'fr' => url('/fr'),
                 'de' => url('/de'),

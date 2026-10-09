@@ -94,6 +94,7 @@ class ExternalResourceLinkingTest extends TestCase
             'status' => 'published',
             'published_at' => now()->subMinute(),
             'is_gated' => false,
+            'public_catalogue' => false,
         ]);
 
         $response = $this->get(route('resources.download', ['slug' => $resource->slug]));

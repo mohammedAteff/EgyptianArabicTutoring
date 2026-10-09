@@ -4,6 +4,7 @@ namespace App\Domains\Booking\Models;
 
 use App\Domains\Students\Models\EntitlementType;
 use Database\Factories\SessionTypeFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,15 +30,22 @@ class SessionType extends Model
         'price',
         'currency',
         'active',
+        'public_bookable',
     ];
 
     protected function casts(): array
     {
         return [
             'active' => 'boolean',
+            'public_bookable' => 'boolean',
             'duration_minutes' => 'integer',
             'price' => 'decimal:2',
         ];
+    }
+
+    public function scopePublicBookable(Builder $query): Builder
+    {
+        return $query->where('active', true)->where('public_bookable', true);
     }
 
     /** @return BelongsTo<EntitlementType, $this> */

@@ -43,6 +43,8 @@ class ContentController extends Controller
             'answer' => ['required', 'string', 'max:5000'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'active' => ['nullable', 'boolean'],
+            'topic' => ['nullable', Rule::in(config('public_content.faq_topics'))],
+            'featured' => ['sometimes', 'boolean'],
         ]);
 
         $faq = Faq::create([
@@ -50,6 +52,8 @@ class ContentController extends Controller
             'answer' => $validated['answer'],
             'sort_order' => $validated['sort_order'] ?? 0,
             'active' => $request->boolean('active', true),
+            'topic' => $validated['topic'] ?? null,
+            'featured' => $request->boolean('featured', false),
         ]);
 
         AuditLog::create([
@@ -76,6 +80,8 @@ class ContentController extends Controller
             'answer' => ['required', 'string', 'max:5000'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'active' => ['nullable', 'boolean'],
+            'topic' => ['nullable', Rule::in(config('public_content.faq_topics'))],
+            'featured' => ['sometimes', 'boolean'],
             'action' => ['nullable', 'string', 'in:draft,publish'],
         ]);
 
@@ -93,6 +99,8 @@ class ContentController extends Controller
                     'answer' => $validated['answer'],
                     'sort_order' => $validated['sort_order'] ?? $faq->sort_order,
                     'active' => $request->boolean('active', true),
+                    'topic' => array_key_exists('topic', $validated) ? $validated['topic'] : ($faq->topic ?? null),
+                    'featured' => $request->boolean('featured', $faq->featured),
                 ],
                 'created_by_id' => Auth::id(),
                 'status' => 'draft',
@@ -123,6 +131,8 @@ class ContentController extends Controller
                 'answer' => $validated['answer'],
                 'sort_order' => $validated['sort_order'] ?? 0,
                 'active' => $request->boolean('active'),
+                'topic' => array_key_exists('topic', $validated) ? $validated['topic'] : $lockedFaq->topic,
+                'featured' => $request->boolean('featured', $lockedFaq->featured),
             ]);
 
             app(TranslationService::class)->updateEnglishSource($lockedFaq, [
@@ -143,6 +153,8 @@ class ContentController extends Controller
                     'answer' => $lockedFaq->answer,
                     'sort_order' => $lockedFaq->sort_order,
                     'active' => $lockedFaq->active,
+                    'topic' => $lockedFaq->topic,
+                    'featured' => $lockedFaq->featured,
                 ],
                 'created_by_id' => Auth::id(),
                 'status' => 'published',

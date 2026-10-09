@@ -42,6 +42,7 @@ class Resource extends Model
         'status', // 'draft', 'published', 'archived'
         'is_gated',
         'featured',
+        'public_catalogue',
         'sort_order',
         'published_at',
     ];
@@ -51,6 +52,7 @@ class Resource extends Model
         return [
             'is_gated' => 'boolean',
             'featured' => 'boolean',
+            'public_catalogue' => 'boolean',
             'sort_order' => 'integer',
             'file_size' => 'integer',
             'published_at' => 'datetime',
@@ -87,6 +89,20 @@ class Resource extends Model
     public function scopeFeatured(Builder $query): Builder
     {
         return $query->where('featured', true);
+    }
+
+    public function requiresPublicAccessRequest(): bool
+    {
+        return $this->is_gated || $this->public_catalogue;
+    }
+
+    /**
+     * @param  Builder<\App\Domains\Resources\Models\Resource>  $query
+     * @return Builder<\App\Domains\Resources\Models\Resource>
+     */
+    public function scopePublicCatalogue(Builder $query): Builder
+    {
+        return $query->published()->where('public_catalogue', true);
     }
 
     public function isPublished(): bool

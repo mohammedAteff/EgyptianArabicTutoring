@@ -29,11 +29,10 @@ class HomeController extends Controller
 
     protected function renderHome(bool $isPreview = false): View
     {
-        $sessionType = SessionType::where('active', true)->first();
+        $sessionType = SessionType::publicBookable()->first();
 
         $featuredResources = Resource::query()
-            ->where('status', 'published')
-            ->whereNotNull('published_at')
+            ->publicCatalogue()
             ->with(['category.translations', 'translations'])
             ->orderBy('sort_order')
             ->take(3)
@@ -47,6 +46,7 @@ class HomeController extends Controller
             ->get();
 
         $faqs = Faq::active()
+            ->where('featured', true)
             ->with('translations')
             ->take(6)
             ->get();
@@ -55,28 +55,27 @@ class HomeController extends Controller
             ? (Setting::get('draft:'.$key) ?? Setting::get($key, $default))
             : Setting::get($key, $default);
 
+        $sections = config('public_content.home');
+        foreach (config('public_content.home_controls') as $index => $controls) {
+            foreach ($controls as $field => $key) {
+                if ($field === 'intro') {
+                    $sections[$index]['blocks'][0]['text'] = $getSetting($key, $sections[$index]['blocks'][0]['text']);
+                } else {
+                    $sections[$index][$field] = $getSetting($key, $sections[$index][$field]);
+                }
+            }
+        }
+
         return view('public.home', [
             'sessionType' => $sessionType,
             'featuredResources' => $featuredResources,
             'featuredGames' => $featuredGames,
             'faqs' => $faqs,
-            'heroTitle' => $getSetting('hero_title', 'Speak Egyptian Arabic with Confidence'),
-            'heroSubtitle' => $getSetting('hero_subtitle', 'Master authentic Egyptian street and conversational Arabic through structured, 1-on-1 private lessons with an experienced native speaker.'),
-            'homeApproachBadge' => $getSetting('home_approach_badge', 'The Practical Method'),
-            'homeApproachTitle' => $getSetting('home_approach_title', 'Why Learn Egyptian Arabic 1-on-1?'),
-            'homeApproachIntro' => $getSetting('home_approach_intro', "Most Arabic courses teach Modern Standard Arabic (MSA), which native speakers don't speak at home or on the streets. We teach you authentic spoken Egyptian Arabic as it is used today."),
-            'homeResourcesBadge' => $getSetting('home_resources_badge', 'Free Workbooks & Cheatsheets'),
-            'homeResourcesTitle' => $getSetting('home_resources_title', 'Grow Your Vocabulary'),
-            'homeResourcesSubtitle' => $getSetting('home_resources_subtitle', 'Download free structured guides prepared specifically for Egyptian Arabic learners.'),
-            'homeGamesBadge' => $getSetting('home_games_badge', 'Interactive Practice'),
-            'homeGamesTitle' => $getSetting('home_games_title', 'Play Egyptian Arabic Games'),
-            'homeGamesSubtitle' => $getSetting('home_games_subtitle', 'Reinforce your memory with engaging numbers, food, and street phrase exercises.'),
-            'homeCtaTitle' => $getSetting('home_cta_title', 'Ready to Speak Authentic Egyptian Arabic?'),
-            'homeCtaSubtitle' => $getSetting('home_cta_subtitle', 'Reserve your first private lesson in minutes. Choose your local timezone and get instant confirmation with your calendar invitation.'),
-            'homeCtaButton' => $getSetting('home_cta_button', 'Book Your Session Now'),
+            'homeSections' => $sections,
+            'homeCtaButton' => $getSetting('home_cta_button', 'Book Your Diagnostic'),
             'isPreview' => $isPreview,
-            'isFallback' => false,
-            'entityLocales' => ['en', 'fr', 'de'],
+            'isFallback' => app()->getLocale() !== 'en',
+            'entityLocales' => ['en'],
         ]);
     }
 }

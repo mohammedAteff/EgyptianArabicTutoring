@@ -24,12 +24,16 @@ class PageController extends Controller
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.about', [
-            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'About Abdallah & The Teaching Methodology'),
+            'title' => ($resolved['translation'] ?? null)?->getAttribute('title') ?? 'About Abdallah',
             'page' => $page,
             'translation' => $resolved['translation'] ?? null,
             'isFallback' => $isFallback,
             'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
-            'biography' => $resolved['translation']?->content ?? ($page?->content ?? Setting::get('about_biography')),
+            'biography' => ($resolved && $resolved['effective_locale'] !== 'en')
+                ? $resolved['translation']->getAttribute('content')
+                : (Setting::get('about_biography') ?: (($resolved['translation'] ?? null)?->getAttribute('content') ?? $page?->content)),
+            'biographyLocale' => $resolved['effective_locale'] ?? 'en',
+            'biographyHeading' => ($resolved && $resolved['effective_locale'] !== 'en') ? $resolved['translation']->getAttribute('title') : null,
             'philosophy' => Setting::get('about_philosophy'),
             'imagePath' => $page?->og_image_path ?? Setting::get('about_image_path'),
         ]);
@@ -98,15 +102,28 @@ class PageController extends Controller
         ]);
     }
 
-    public function faq(): View
+    public function faq(Request $request): View
     {
-        $faqs = Faq::active()->with('translations')->orderBy('sort_order')->get();
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:200'], 'topic' => ['nullable', 'string', 'max:100']]);
+        $search = trim((string) ($filters['q'] ?? ''));
+        $topic = (string) ($filters['topic'] ?? '');
+        $topics = Faq::active()->whereNotNull('topic')->select('topic')->distinct()->reorder()->orderBy('topic')->pluck('topic');
+        $query = Faq::active()->with('translations');
+        if ($topic !== '') {
+            $query->where('topic', $topic);
+        }
+        if ($search !== '') {
+            $query->where(function ($query) use ($search): void {
+                $query->where('question', 'like', '%'.$search.'%')->orWhere('answer', 'like', '%'.$search.'%');
+            });
+        }
+        $faqs = $query->get();
 
         $locale = app()->getLocale();
         $isFallback = false;
         if ($locale !== 'en') {
-            $hasAnyTranslation = $faqs->contains(fn ($f) => $f->liveTranslation($locale) !== null);
-            if (! $hasAnyTranslation) {
+            $allTranslated = $faqs->isNotEmpty() && $faqs->every(fn ($f) => $f->liveTranslation($locale) !== null);
+            if (! $allTranslated) {
                 $isFallback = true;
             }
         }
@@ -124,6 +141,9 @@ class PageController extends Controller
             'isFallback' => $isFallback,
             'entityLocales' => $availableLocales,
             'title' => 'Frequently Asked Questions',
+            'search' => $search,
+            'topic' => $topic,
+            'topics' => $topics,
         ]);
     }
 
@@ -142,6 +162,9 @@ class PageController extends Controller
                 $previewFaq->question = $draftRevision->title ?? $draftRevision->content['question'] ?? $faq->question;
                 $previewFaq->answer = $draftRevision->content['answer'] ?? $faq->answer;
                 $previewFaq->active = $draftRevision->content['active'] ?? $faq->active;
+                $draftContent = $draftRevision->getAttribute('content');
+                $previewFaq->topic = array_key_exists('topic', $draftContent) ? $draftContent['topic'] : $faq->topic;
+                $previewFaq->featured = $draftRevision->content['featured'] ?? $faq->featured;
 
                 return $previewFaq;
             }
@@ -165,6 +188,10 @@ class PageController extends Controller
             ->first();
 
         $resolved = $page?->resolveTranslation();
+        if (($resolved['is_stale'] ?? false) && app()->getLocale() !== 'en') {
+            $resolved = $page->resolveTranslation('en');
+            $resolved['is_fallback'] = true;
+        }
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.terms', [
@@ -173,7 +200,7 @@ class PageController extends Controller
             'translation' => $resolved['translation'] ?? null,
             'content' => $resolved['translation']?->content ?? ($page?->content ?? null),
             'isFallback' => $isFallback,
-            'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
+            'entityLocales' => $page ? array_values(array_unique(array_merge(['en'], $page->translations->where('status', 'published')->pluck('locale')->all()))) : ['en'],
         ]);
     }
 

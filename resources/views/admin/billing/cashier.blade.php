@@ -309,7 +309,7 @@
                                             <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">Partial Payment (Owes ${{ $pkg->remaining_balance }})</span>
                                         @endif
                                     </div>
-                                    <p class="text-xs text-slate-500 mt-0.5">Created {{ $pkg->created_at->format('M j, Y') }} • Expires {{ $pkg->expiration_date ? $pkg->expiration_date->format('M j, Y') : 'Never' }}</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Created {{ $pkg->created_at->format('M j, Y') }} • Expires {{ $pkg->expiryLabel() }}</p>
                                 </div>
                                 <div class="flex items-center gap-4 text-xs font-mono">
                                     <div>Original Price: <span class="font-bold">${{ $pkg->original_price }}</span></div>
@@ -382,6 +382,7 @@
                                             <option value="{{ $method->id }}" @selected($method->is_default)>{{ $method->name }}</option>
                                         @endforeach
                                     </select>
+                                    <x-payment-receipt-input />
                                     <input type="text" name="transaction_reference" placeholder="Ref / Trans ID"
                                            class="w-32 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
                                     <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors">
