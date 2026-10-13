@@ -3,6 +3,7 @@
 namespace App\Domains\Reporting\Services;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Booking\Models\BookingPolicyDecision;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\ReceivablesReadModel;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -100,7 +101,23 @@ class BusinessLifecycleReport
         $attending = DB::query()->fromSub(clone $lessons, 'attending')->count();
         $repeat = DB::query()->fromSub($lessons, 'attending')->where('lesson_count', '>=', 2)->count();
 
-        return ['currencies' => $currencies, 'attending_students' => $attending, 'repeat_students' => $repeat];
+        $cancellationQuery = BookingPolicyDecision::query()
+            ->join('bookings', 'bookings.id', '=', 'booking_policy_decisions.booking_id')
+            ->where('booking_policy_decisions.created_at', '>=', $from)
+            ->where('booking_policy_decisions.created_at', '<', $to)
+            ->when(! empty($filters['student_id']), fn ($query) => $query->where('bookings.student_id', $filters['student_id']))
+            ->when(! empty($filters['currency']), fn ($query) => $query->whereIn('bookings.student_id', StudentPackage::query()->where('currency', $filters['currency'])->select('student_id')));
+
+        $cancellations = [
+            'total_cancellations' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'cancellation')->count(),
+            'restored' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'cancellation')->where('booking_policy_decisions.outcome', 'restore')->count(),
+            'retained' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'cancellation')->where('booking_policy_decisions.outcome', 'retain')->count(),
+            'customer_initiated' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'cancellation')->where('booking_policy_decisions.actor_type', 'customer')->count(),
+            'staff_initiated' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'cancellation')->where('booking_policy_decisions.actor_type', '!=', 'customer')->count(),
+            'no_shows' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'no_show')->count(),
+        ];
+
+        return ['currencies' => $currencies, 'attending_students' => $attending, 'repeat_students' => $repeat, 'cancellations' => $cancellations];
     }
 
     /** @param array<string, mixed> $row

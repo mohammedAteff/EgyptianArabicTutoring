@@ -557,6 +557,77 @@ class StudentLedgerService
         }, 5);
     }
 
+    /**
+     * Atomically transfer credits between two packages.
+     *
+     * @return array{source: SessionLedgerEntry, target: SessionLedgerEntry}
+     */
+    public function transferCredits(
+        StudentPackage $sourcePackage,
+        StudentPackage $targetPackage,
+        int $creditChange,
+        string $description,
+        string $idempotencyKey,
+        ?int $administratorId = null,
+        ?int $sourceAllocationId = null,
+        ?int $targetAllocationId = null
+    ): array {
+        if ($creditChange <= 0) {
+            throw new InvalidArgumentException('Transferred credits must be greater than zero.');
+        }
+
+        if ((int) $sourcePackage->id === (int) $targetPackage->id) {
+            throw new InvalidArgumentException('Cannot transfer credits to the same package.');
+        }
+
+        return $this->database->transaction(function () use ($sourcePackage, $targetPackage, $creditChange, $description, $idempotencyKey, $administratorId, $sourceAllocationId, $targetAllocationId): array {
+            $lockedSource = StudentPackage::query()->whereKey($sourcePackage->id)->lockForUpdate()->firstOrFail();
+            $lockedTarget = StudentPackage::query()->whereKey($targetPackage->id)->lockForUpdate()->firstOrFail();
+
+            $sourceAlloc = $this->entitlements->lockAllocation($lockedSource, $sourceAllocationId);
+            $targetAlloc = $this->entitlements->lockAllocation($lockedTarget, $targetAllocationId);
+
+            if ($this->entitlements->lockedBalance($sourceAlloc) - $creditChange < 0) {
+                throw new InvalidArgumentException('Insufficient remaining credits in source package.');
+            }
+
+            $sourceExisting = SessionLedgerEntry::query()->where('idempotency_key', 'transfer_out_'.$idempotencyKey)->first();
+            $targetExisting = SessionLedgerEntry::query()->where('idempotency_key', 'transfer_in_'.$idempotencyKey)->first();
+
+            if ($sourceExisting && $targetExisting) {
+                return ['source' => $sourceExisting, 'target' => $targetExisting];
+            }
+
+            $sourceEntry = SessionLedgerEntry::create([
+                'student_id' => $lockedSource->student_id,
+                'student_package_id' => $lockedSource->id,
+                'idempotency_key' => 'transfer_out_'.$idempotencyKey,
+                'student_package_entitlement_id' => $sourceAlloc->id,
+                'entitlement_type_id' => $sourceAlloc->entitlement_type_id,
+                'entry_type' => 'transfer_out',
+                'credit_change' => -$creditChange,
+                'description' => 'Transferred to package #'.$lockedTarget->id.': '.trim($description),
+                'created_by' => $administratorId,
+                'created_at' => now('UTC'),
+            ]);
+
+            $targetEntry = SessionLedgerEntry::create([
+                'student_id' => $lockedTarget->student_id,
+                'student_package_id' => $lockedTarget->id,
+                'idempotency_key' => 'transfer_in_'.$idempotencyKey,
+                'student_package_entitlement_id' => $targetAlloc->id,
+                'entitlement_type_id' => $targetAlloc->entitlement_type_id,
+                'entry_type' => 'transfer_in',
+                'credit_change' => $creditChange,
+                'description' => 'Transferred from package #'.$lockedSource->id.': '.trim($description),
+                'created_by' => $administratorId,
+                'created_at' => now('UTC'),
+            ]);
+
+            return ['source' => $sourceEntry, 'target' => $targetEntry];
+        }, 5);
+    }
+
     /** @return array<string, mixed> */
     public function summary(StudentPackage $package, bool $useLoadedSnapshot = false, ?string $businessTimezone = null): array
     {

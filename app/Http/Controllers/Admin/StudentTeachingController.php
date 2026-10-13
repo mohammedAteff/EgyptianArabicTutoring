@@ -8,6 +8,7 @@ use App\Domains\Lms\Services\LmsTeachingTimeline;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Models\LessonFeedback;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\StudentTimelineService;
 use App\Domains\Students\Services\TeachingRecordService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SaveTeachingRecordRequest;
@@ -18,7 +19,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class StudentTeachingController extends Controller
 {
-    public function show(Request $request, Student $student, LmsTeachingTimeline $timeline): Response
+    public function show(Request $request, Student $student, LmsTeachingTimeline $timeline, StudentTimelineService $unifiedTimelineService): Response
     {
         Gate::authorize('manageTeaching', $student);
         $bookingId = $request->integer('booking') ?: null;
@@ -41,8 +42,12 @@ class StudentTeachingController extends Controller
         $resources = Resource::query()->published()->orderBy('title')->get(['id', 'title']);
         $materials = LessonMaterial::query()->whereIn('booking_id', $bookings->modelKeys())->whereNull('withdrawn_at')->get(['id', 'booking_id', 'title']);
         $feedback = LessonFeedback::query()->where('student_id', $student->id)->with('booking:id,start_at_utc')->orderByDesc('id')->get();
+        $timelineFilter = $request->query('timeline_filter', 'all');
 
-        return response()->view('admin.students.teaching', compact('student', 'bookings', 'bookingId', 'records', 'resources', 'materials', 'feedback') + ['learningTimeline' => $timeline->staff($request->user('web'), $student)])->header('Cache-Control', 'private, no-store');
+        return response()->view('admin.students.teaching', compact('student', 'bookings', 'bookingId', 'records', 'resources', 'materials', 'feedback', 'timelineFilter') + [
+            'learningTimeline' => $timeline->staff($request->user('web'), $student),
+            'unifiedTimeline' => $unifiedTimelineService->timeline($request->user('web'), $student, $timelineFilter),
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function store(SaveTeachingRecordRequest $request, Student $student, string $kind, TeachingRecordService $records): RedirectResponse

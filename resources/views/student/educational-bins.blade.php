@@ -8,10 +8,31 @@
     @if(session('success'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-emerald-800">{{ session('success') }}</p>@endif
     @if($errors->any())<p role="alert" class="rounded-xl bg-rose-50 p-4 text-rose-800">{{ $errors->first() }}</p>@endif
     <x-report-filters :filters="$filters" :action="route($prefix.'index',$indexParams)" :fields="['q'=>['Search notes','search']]" />
-    <form method="POST" action="{{ $editing ? route($prefix.'update',[...$indexParams,'bin'=>$editing]) : route($prefix.'store',$indexParams) }}" class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">@csrf @if($editing) @method('PUT') @endif
-        <h2 class="text-lg font-semibold">{{ $editing ? 'Edit note' : 'Create educational note' }}</h2>
-        <label class="block text-sm font-semibold">Title<input name="title" required maxlength="160" value="{{ old('title',$editing?->title) }}" class="mt-1 w-full rounded-xl border border-slate-300 p-3"></label>
-        <label class="block text-sm font-semibold">Text<textarea name="body" required maxlength="30000" rows="7" class="mt-1 w-full rounded-xl border border-slate-300 p-3">{{ old('body',$editing?->body) }}</textarea></label>
+    <form method="POST" action="{{ $editing ? route($prefix.'update',[...$indexParams,'bin'=>$editing]) : route($prefix.'store',$indexParams) }}" class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5" x-data="{
+        applyTemplate(e) {
+            const val = e.target.value;
+            if (!val) return;
+            const data = JSON.parse(val);
+            if (data.title) this.$refs.titleInput.value = data.title;
+            if (data.body) this.$refs.bodyInput.value = data.body;
+        }
+    }">@csrf @if($editing) @method('PUT') @endif
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-lg font-semibold">{{ $editing ? 'Edit note' : 'Create educational note' }}</h2>
+            @if(! $portal)
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-500 font-medium">Insert Template:</span>
+                    <select @change="applyTemplate($event)" class="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs">
+                        <option value="">Select a note template...</option>
+                        @foreach(\App\Domains\Administration\Models\StaffNoteTemplate::orderBy('title')->get() as $tpl)
+                            <option value="{{ json_encode(['title' => $tpl->title, 'body' => $tpl->body]) }}">{{ $tpl->title }} ({{ ucfirst($tpl->category) }})</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+        </div>
+        <label class="block text-sm font-semibold">Title<input x-ref="titleInput" name="title" required maxlength="160" value="{{ old('title',$editing?->title) }}" class="mt-1 w-full rounded-xl border border-slate-300 p-3"></label>
+        <label class="block text-sm font-semibold">Text<textarea x-ref="bodyInput" name="body" required maxlength="30000" rows="7" class="mt-1 w-full rounded-xl border border-slate-300 p-3">{{ old('body',$editing?->body) }}</textarea></label>
         @if(! $portal)<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="student_visible" value="1" @checked(old('student_visible',$editing?->student_visible ?? true))> Visible to this student</label>@endif
         <button class="rounded-xl bg-amber-600 px-5 py-2.5 font-semibold text-white">Save note</button>@if($editing)<a href="{{ route($prefix.'index',$indexParams) }}" class="ml-3 text-sm">Cancel</a>@endif
     </form>

@@ -230,5 +230,11 @@ class DatabaseSeeder extends Seeder
 
         // 12. Blog Content (Phase 7)
         $this->call(BlogSeeder::class);
+
+        // 13. Reason Codes (Vault Phase 1)
+        $this->call(ReasonCodeSeeder::class);
+
+        // 14. Staff Note Templates (Vault Phase 2)
+        $this->call(StaffNoteTemplateSeeder::class);
     }
 }

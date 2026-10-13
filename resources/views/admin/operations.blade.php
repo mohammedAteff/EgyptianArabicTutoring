@@ -22,7 +22,25 @@
         </x-operations-card>
         @if(auth('web')->user()?->isAdmin())
         <x-operations-card heading="Packages expiring within 7 days" :count="$counts['expiringPackages']" :url="route('admin.students.index', ['expiry_from'=>now($businessTz)->toDateString(), 'expiry_to'=>now($businessTz)->addDays(7)->toDateString()])">
-            @forelse($expiringPackages as $package)<a class="block rounded-xl bg-slate-50 p-3" href="{{ route('admin.students.show', $package->student_id) }}"><strong class="text-sm text-amber-800">{{ $package->student?->name }}</strong><span class="mt-1 block text-sm text-slate-600">{{ $package->package_name }} · {{ $package->expiryLabel() }}</span></a>@empty<p class="text-sm text-slate-500">No available packages nearing expiry.</p>@endforelse
+            @forelse($expiringPackages as $package)
+            <div class="rounded-xl bg-slate-50 p-3">
+                <a class="block" href="{{ route('admin.students.show', $package->student_id) }}">
+                    <strong class="text-sm text-amber-800">{{ $package->student?->name }}</strong>
+                    <span class="mt-1 block text-sm text-slate-600">{{ $package->package_name }} · {{ $package->expiryLabel() }}</span>
+                </a>
+                <div class="mt-2.5 flex flex-wrap gap-2 pt-2 border-t border-slate-200 text-xs">
+                    <a href="{{ route('admin.packages.lifecycle', $package->id) }}" class="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 font-semibold text-amber-800 hover:bg-amber-200">
+                        Extend / Manage
+                    </a>
+                    <a href="{{ route('admin.tasks.index', ['student_id' => $package->student_id]) }}" class="inline-flex items-center rounded-md bg-slate-200 px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-300">
+                        Follow-up Task
+                    </a>
+                    <a href="{{ route('admin.students.show', $package->student_id) }}" class="inline-flex items-center rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50">
+                        Student Profile
+                    </a>
+                </div>
+            </div>
+            @empty<p class="text-sm text-slate-500">No available packages nearing expiry.</p>@endforelse
         </x-operations-card>
         <x-operations-card heading="Low-credit students" :count="$counts['lowCreditStudents']" :url="route('admin.students.index')">
             <p class="text-xs text-slate-500">At least one active entitlement type has 0–2 units available. Types remain separate.</p>

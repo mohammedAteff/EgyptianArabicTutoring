@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -108,5 +109,16 @@ class Resource extends Model
     public function isPublished(): bool
     {
         return $this->status === 'published' && $this->published_at !== null && $this->published_at->isPast();
+    }
+
+    /**
+     * @return BelongsToMany<ResourceCollection, $this>
+     */
+    public function collections(): BelongsToMany
+    {
+        return $this->belongsToMany(ResourceCollection::class, 'resource_collection_items', 'resource_id', 'collection_id')
+            ->withPivot('sort_order')
+            ->orderByPivot('sort_order')
+            ->withTimestamps();
     }
 }

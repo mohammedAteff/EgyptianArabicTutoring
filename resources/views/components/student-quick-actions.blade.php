@@ -9,7 +9,12 @@
         <a class="rounded-lg bg-slate-50 px-3 py-3" href="{{ route('admin.billing.cashier', ['student_id' => $student->id]) }}">Open Cashier</a>
         <a class="rounded-lg bg-slate-50 px-3 py-3" href="{{ route('admin.bookings.create', ['student_id' => $student->id]) }}">Book session</a>
         <a class="rounded-lg bg-slate-50 px-3 py-3" href="{{ route('admin.students.teaching', $student->id) }}#teaching-resource">Assign resource</a>
+        <a class="rounded-lg bg-amber-100 px-3 py-3 text-amber-950 font-semibold" href="{{ route('admin.students.preview-portal', $student->id) }}">Preview Portal ↗</a>
     @endif
     @if($student->email)<a class="rounded-lg bg-slate-50 px-3 py-3" href="mailto:{{ $student->email }}">Email student</a>@endif
-    @if($student->phone)<a class="rounded-lg bg-slate-50 px-3 py-3" href="tel:{{ $student->phone }}">Call student</a>@endif
+    @if($student->phone)
+        <a class="rounded-lg bg-slate-50 px-3 py-3" href="tel:{{ $student->phone }}">Call student</a>
+        <a class="rounded-lg bg-emerald-50 px-3 py-3 text-emerald-800 font-semibold" href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $student->phone) }}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>
+    @endif
 </nav>
+

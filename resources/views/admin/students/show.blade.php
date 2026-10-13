@@ -31,14 +31,66 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <a href="{{ route('admin.students.index') }}" class="text-sm font-semibold text-amber-800 hover:text-amber-950">← Student Records</a>
-            <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Student #{{ $student->id }}</p>
+            <div class="mt-4 flex items-center gap-2">
+                <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Student #{{ $student->id }}</p>
+                <form method="POST" action="{{ route('admin.students.pin', $student) }}" class="inline">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors {{ $isPinned ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200' }}" title="{{ $isPinned ? 'Pinned student (click to unpin)' : 'Click to pin to favorites' }}">
+                        <span>{{ $isPinned ? '★ Pinned' : '☆ Pin' }}</span>
+                    </button>
+                </form>
+            </div>
             <h1 class="mt-2 font-serif text-3xl font-bold tracking-tight text-slate-950">{{ $student->first_name }} {{ $student->last_name }}</h1>
             <p class="mt-2 text-sm text-slate-600">{{ $student->email ?: 'No email on file' }} <span class="px-1 text-slate-300">·</span> {{ $student->phone ?: 'No phone on file' }}</p>
         </div>
-        @if(! $isAssistant)
-            <span class="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-700">{{ str_replace('_', ' ', $student->identity_status) }}</span>
-        @endif
+        <div class="flex flex-col sm:items-end gap-2">
+            @if(! $isAssistant)
+                <span class="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-700">{{ str_replace('_', ' ', $student->identity_status) }}</span>
+            @endif
+            <!-- Profile Completeness Indicator (Idea 62) -->
+            <div class="rounded-xl border border-slate-200 bg-white p-3 text-right shadow-xs">
+                <div class="flex items-center gap-2 justify-end">
+                    <span class="text-xs text-slate-500 font-medium">Profile Completeness</span>
+                    <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-bold {{ $completeness['badge_class'] }}">
+                        {{ $completeness['percentage'] }}%
+                    </span>
+                </div>
+                @if(!empty($completeness['missing']))
+                    <p class="mt-1 text-[11px] text-slate-500">Missing: {{ implode(', ', array_slice($completeness['missing'], 0, 2)) }}</p>
+                @endif
+            </div>
+        </div>
     </div>
+
+    @if(! $isAssistant)
+    <!-- Lifetime Student Summary (Idea 56) -->
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-sm">
+        <div class="p-2">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Student Since</span>
+            <span class="font-bold text-slate-900 text-base">{{ $lifetimeSummary['studentSince'] ? $lifetimeSummary['studentSince']->format('M Y') : '—' }}</span>
+        </div>
+        <div class="p-2 sm:border-l border-slate-100">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Completed Lessons</span>
+            <span class="font-bold text-slate-900 text-base">{{ $lifetimeSummary['completedLessonsCount'] }} <span class="text-xs font-normal text-slate-500">({{ $lifetimeSummary['totalHours'] }}h)</span></span>
+        </div>
+        <div class="p-2 sm:border-l border-slate-100">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Remaining Credits</span>
+            <span class="font-bold text-emerald-700 text-base">{{ $lifetimeSummary['remainingCredits'] }} <span class="text-xs font-normal text-slate-500">({{ $lifetimeSummary['activePackagesCount'] }} pkgs)</span></span>
+        </div>
+        <div class="p-2 sm:border-l border-slate-100">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Lifetime Paid</span>
+            <span class="font-bold text-slate-900 text-base">${{ number_format($lifetimeSummary['lifetimePaymentsTotal'], 2) }}</span>
+        </div>
+        <div class="p-2 sm:border-l border-slate-100">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Lifetime Refunds</span>
+            <span class="font-bold text-rose-700 text-base">${{ number_format($lifetimeSummary['lifetimeRefundsTotal'], 2) }}</span>
+        </div>
+        <div class="p-2 sm:border-l border-slate-100">
+            <span class="text-xs text-slate-500 uppercase tracking-wider block">Next Scheduled</span>
+            <span class="font-bold text-slate-900 text-base">{{ $lifetimeSummary['nextBooking'] ? $lifetimeSummary['nextBooking']->start_at_utc->timezone($businessTz)->format('j M') : 'None' }}</span>
+        </div>
+    </div>
+    @endif
 
     @if(session('success'))
         <div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('success') }}</div>
@@ -102,6 +154,89 @@
                     <button class="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">Save identity details</button>
                 </div>
             </form>
+        </section>
+    @if(! $isAssistant)
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div class="mb-4 flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="font-serif text-xl font-bold text-slate-900">Parent / Guardian Records (Billing & Contact)</h2>
+                    <p class="mt-1 text-sm text-slate-500">Administrative emergency contact and billing sponsor details. The student logs into the portal using their own account.</p>
+                </div>
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{{ $guardians->count() }}</span>
+            </div>
+
+            @if($guardians->isNotEmpty())
+                <div class="mb-5 space-y-3">
+                    @foreach($guardians as $guardian)
+                        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <strong class="text-sm font-semibold text-slate-900">{{ $guardian->name }}</strong>
+                                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{{ $guardian->relationship }}</span>
+                                    @if($guardian->is_primary)
+                                        <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Primary</span>
+                                    @endif
+                                    @if($guardian->is_billing_contact)
+                                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Billing Contact</span>
+                                    @endif
+                                </div>
+                                <div class="mt-1 flex flex-wrap gap-x-4 text-xs text-slate-600">
+                                    @if($guardian->email) <span>Email: {{ $guardian->email }}</span> @endif
+                                    @if($guardian->phone) <span>Phone: {{ $guardian->phone }}</span> @endif
+                                </div>
+                                @if($guardian->notes)
+                                    <p class="mt-1 text-xs text-slate-500 italic">{{ $guardian->notes }}</p>
+                                @endif
+                            </div>
+                            <form method="POST" action="{{ route('admin.students.guardians.destroy', [$student, $guardian]) }}" onsubmit="return confirm('Remove this parent/guardian record?');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Remove</button>
+                            </form>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+
+            <details class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                <summary class="cursor-pointer text-sm font-semibold text-amber-800 hover:text-amber-950">+ Add Parent or Guardian</summary>
+                <form method="POST" action="{{ route('admin.students.guardians.store', $student) }}" class="mt-4 grid gap-4 sm:grid-cols-2">
+                    @csrf
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700">Full Name *</label>
+                        <input name="name" required class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700">Relationship *</label>
+                        <input name="relationship" placeholder="e.g. Mother, Father, Sponsor" required class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700">Email Address</label>
+                        <input type="email" name="email" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700">Phone Number</label>
+                        <input name="phone" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div class="sm:col-span-2 flex flex-wrap gap-6 pt-1">
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                            <input type="checkbox" name="is_primary" value="1" class="rounded text-amber-600">
+                            Mark as primary contact
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                            <input type="checkbox" name="is_billing_contact" value="1" class="rounded text-amber-600">
+                            Mark as billing contact
+                        </label>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700">Administrative Notes</label>
+                        <input name="notes" placeholder="Optional notes regarding communication preferences or payment coordination..." class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    </div>
+                    <div class="sm:col-span-2 flex justify-end">
+                        <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700">Save Guardian Record</button>
+                    </div>
+                </form>
+            </details>
         </section>
     @endif
 
@@ -185,7 +320,35 @@
             </details>
         </section>
 
+        <!-- Account Security & Verification (Idea 42) -->
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <h2 class="font-serif text-xl font-bold text-slate-900">Account Security & Verification</h2>
+            <p class="mt-1 text-sm text-slate-500">Authentication state and verified communication channels for this student.</p>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600">Primary Contact Channel</h3>
+                    <p class="mt-1 text-sm font-semibold text-slate-900">{{ $student->email ?: 'No email on file' }}</p>
+                    <p class="mt-0.5 text-xs text-slate-500">Phone: {{ $student->phone ?: 'No phone on file' }}</p>
+                    <p class="mt-2 text-xs text-slate-500">Timezone: <span class="font-medium text-slate-700">{{ $student->preferred_timezone ?: 'Default (' . $businessTz . ')' }}</span></p>
+                </div>
+                <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600">Verified Secondary Emails</h3>
+                    <div class="mt-1 space-y-1">
+                        @forelse($verifiedSecondaryEmails as $verifiedEmail)
+                            <div class="flex items-center justify-between text-xs py-1 border-b border-slate-200/50 last:border-0">
+                                <span class="font-medium text-slate-800">{{ $verifiedEmail->email_normalized }}</span>
+                                <span class="text-slate-400">Verified {{ $verifiedEmail->verified_at->format('M j, Y') }}</span>
+                            </div>
+                        @empty
+                            <p class="text-xs text-slate-400 mt-1">No secondary emails verified.</p>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </section>
+
         @if(auth()->user()->role === 'super_admin')
+
             <section class="grid gap-4 lg:grid-cols-2">
                 <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
                     <h2 class="font-serif text-xl font-bold text-slate-900">Merge student records</h2>

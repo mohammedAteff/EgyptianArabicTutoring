@@ -101,6 +101,15 @@
                                         {{ $b->status === 'cancelled' ? 'bg-slate-100 text-slate-600' : '' }}">
                                         {{ str_replace('_', ' ', $b->status) }}
                                     </span>
+                                    @if($b->meeting_url_snapshot || $b->meeting_room_id)
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            ✓ Room Assigned
+                                        </span>
+                                    @elseif($b->status === 'confirmed' && $b->end_at_utc->isFuture())
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                            ⚠️ Room Missing
+                                        </span>
+                                    @endif
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
@@ -305,13 +314,24 @@
                                     <div class="text-xs text-slate-500">{{ $booking->sessionType->duration_minutes ?? 60 }} mins</div>
                                 </td>
                                 <td class="px-4 py-4 whitespace-nowrap">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold capitalize
-                                        {{ $booking->status === 'confirmed' ? 'bg-amber-100 text-amber-800' : '' }}
-                                        {{ $booking->status === 'completed' ? 'bg-emerald-100 text-emerald-800' : '' }}
-                                        {{ $booking->status === 'cancelled' ? 'bg-slate-100 text-slate-600' : '' }}
-                                        {{ $booking->status === 'no_show' ? 'bg-red-100 text-red-800' : '' }}">
-                                        {{ str_replace('_', ' ', $booking->status) }}
-                                    </span>
+                                    <div class="flex flex-col gap-1">
+                                        <span class="inline-flex items-center w-fit px-2.5 py-1 rounded-md text-xs font-bold capitalize
+                                            {{ $booking->status === 'confirmed' ? 'bg-amber-100 text-amber-800' : '' }}
+                                            {{ $booking->status === 'completed' ? 'bg-emerald-100 text-emerald-800' : '' }}
+                                            {{ $booking->status === 'cancelled' ? 'bg-slate-100 text-slate-600' : '' }}
+                                            {{ $booking->status === 'no_show' ? 'bg-red-100 text-red-800' : '' }}">
+                                            {{ str_replace('_', ' ', $booking->status) }}
+                                        </span>
+                                        @if($booking->meeting_url_snapshot || $booking->meeting_room_id)
+                                            <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                                                ✓ Room Assigned
+                                            </span>
+                                        @elseif($booking->status === 'confirmed' && $booking->end_at_utc->isFuture())
+                                            <span class="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+                                                ⚠️ Room Missing
+                                            </span>
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-4 py-4 whitespace-nowrap text-right">
                                     <a href="{{ route('admin.bookings.show', $booking->id) }}" class="text-xs font-bold text-amber-700 hover:text-amber-800">

@@ -40,12 +40,16 @@ use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SessionTypeController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StaffBinController;
+use App\Http\Controllers\Admin\StaffNoteTemplateController;
 use App\Http\Controllers\Admin\StaffSavedViewController;
 use App\Http\Controllers\Admin\StaffTaskController;
 use App\Http\Controllers\Admin\StudentBillingController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\StudentGuardianController;
 use App\Http\Controllers\Admin\StudentOperationalAlertController;
 use App\Http\Controllers\Admin\StudentOperationalStatusController;
+use App\Http\Controllers\Admin\StudentPinController;
+use App\Http\Controllers\Admin\StudentPortalPreviewController;
 use App\Http\Controllers\Admin\StudentSchedulingController;
 use App\Http\Controllers\Admin\StudentTeachingController;
 use App\Http\Controllers\Admin\SystemHealthController;
@@ -467,6 +471,10 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/packages/{package}/installments', [PackageLifecycleController::class, 'installments'])->name('packages.installments');
             Route::post('/packages/{package}/installments/void', [PackageLifecycleController::class, 'void'])->name('packages.installments.void');
             Route::post('/packages/{package}/renew', [PackageLifecycleController::class, 'renew'])->name('packages.renew');
+            Route::post('/packages/{package}/pause', [PackageLifecycleController::class, 'pause'])->name('packages.pause');
+            Route::post('/packages/{package}/resume', [PackageLifecycleController::class, 'resume'])->name('packages.resume');
+            Route::post('/packages/{package}/notes', [PackageLifecycleController::class, 'notes'])->name('packages.notes');
+            Route::post('/packages/{package}/transfer', [PackageLifecycleController::class, 'transfer'])->name('packages.transfer');
             Route::get('/packages/{package}/statement', [App\Http\Controllers\Admin\FinancialStatementController::class, 'show'])->name('statements.show');
             Route::get('/packages/{package}/statement/export', [App\Http\Controllers\Admin\FinancialStatementController::class, 'export'])->name('statements.export');
             Route::get('/packages/{package}/receipts/{payment}', [App\Http\Controllers\Admin\FinancialStatementController::class, 'receipt'])->whereNumber('payment')->name('receipts.show');
@@ -598,8 +606,15 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         Route::middleware('role:super_admin,admin,assistant')->group(function () {
             Route::get('/students/export', [StudentController::class, 'export'])->middleware('role:super_admin,admin')->name('students.export');
+            Route::post('/students/bulk-task', [StudentController::class, 'bulkTask'])->name('students.bulk-task');
             Route::get('/students', [StudentController::class, 'index'])->name('students.index');
             Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
+            Route::post('/students/{student}/pin', [StudentPinController::class, 'toggle'])->name('students.pin');
+            Route::post('/students/{student}/guardians', [StudentGuardianController::class, 'store'])->name('students.guardians.store');
+            Route::delete('/students/{student}/guardians/{guardian}', [StudentGuardianController::class, 'destroy'])->name('students.guardians.destroy');
+            Route::get('/students/{student}/preview-portal', [StudentPortalPreviewController::class, 'show'])->middleware('role:super_admin,admin')->name('students.preview-portal');
+            Route::get('/staff-note-templates', [StaffNoteTemplateController::class, 'index'])->name('staff-note-templates.index');
+            Route::post('/staff-note-templates', [StaffNoteTemplateController::class, 'store'])->name('staff-note-templates.store');
             Route::get('/staff-notes', [StaffBinController::class, 'index'])->name('staff-bins.index');
             Route::post('/staff-notes', [StaffBinController::class, 'store'])->name('staff-bins.store');
             Route::get('/staff-notes/{bin}/edit', [StaffBinController::class, 'edit'])->name('staff-bins.edit');

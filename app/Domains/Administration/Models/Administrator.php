@@ -4,6 +4,8 @@ namespace App\Domains\Administration\Models;
 
 use App\Domains\Administration\Notifications\AdminResetPasswordNotification;
 use App\Domains\CMS\Models\Blog;
+use App\Domains\Students\Models\StaffPinnedStudent;
+use Database\Factories\AdministratorFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -17,6 +19,11 @@ use Illuminate\Support\Carbon;
 class Administrator extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes;
+
+    protected static function newFactory(): AdministratorFactory
+    {
+        return AdministratorFactory::new();
+    }
 
     protected $table = 'administrators';
 
@@ -93,5 +100,10 @@ class Administrator extends Authenticatable
     public function blogs(): HasMany
     {
         return $this->hasMany(Blog::class, 'author_id');
+    }
+
+    public function pinnedStudents(): HasMany
+    {
+        return $this->hasMany(StaffPinnedStudent::class, 'administrator_id');
     }
 }

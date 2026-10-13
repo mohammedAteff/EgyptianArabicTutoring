@@ -21,34 +21,108 @@
         <div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('success') }}</div>
     @endif
 
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="hidden grid-cols-[minmax(12rem,1.3fr)_minmax(12rem,1fr)_minmax(9rem,.8fr)_auto] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 md:grid">
-            <span>Student</span><span>Contact</span><span>Timezone</span><span>Record</span>
+    <div x-data="{ selected: [], allSelected: false, showBulkTask: false }" class="space-y-4">
+        <!-- Bulk Actions Floating Bar (Idea 79) -->
+        <div x-show="selected.length > 0" x-cloak class="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 shadow-md">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-amber-900" x-text="selected.length + ' student(s) selected'"></span>
+                <button type="button" @click="selected = []; allSelected = false" class="text-xs text-amber-700 underline hover:text-amber-900">Clear selection</button>
+            </div>
+            <div class="flex items-center gap-3">
+                <form method="GET" action="{{ route('admin.students.export') }}" class="inline">
+                    <template x-for="id in selected" :key="id">
+                        <input type="hidden" name="student_ids[]" :value="id">
+                    </template>
+                    <input type="hidden" name="format" value="csv">
+                    <button type="submit" class="rounded-xl border border-amber-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">
+                        Export Selected (CSV)
+                    </button>
+                </form>
+                <button type="button" @click="showBulkTask = !showBulkTask" class="rounded-xl bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+                    Create Bulk Task
+                </button>
+            </div>
         </div>
-        <div class="divide-y divide-slate-100">
-            @forelse($students as $student)
-                <a href="{{ route('admin.students.show', $student->id) }}" class="grid gap-3 px-5 py-4 transition hover:bg-amber-50/50 focus:bg-amber-50 focus:outline-none md:grid-cols-[minmax(12rem,1.3fr)_minmax(12rem,1fr)_minmax(9rem,.8fr)_auto] md:items-center md:gap-4">
-                    <span class="min-w-0">
-                        <span class="block truncate font-semibold text-slate-900">{{ $student->first_name }} {{ $student->last_name }}</span>
-                        <span class="mt-1 block text-xs text-slate-500">Student #{{ $student->id }}</span>
-                    </span>
-                    <span class="min-w-0 text-sm text-slate-700">
-                        <span class="block truncate">{{ $student->email ?: 'No email on file' }}</span>
-                        <span class="mt-1 block text-xs text-slate-500">{{ $student->phone ?: 'No phone on file' }}</span>
-                    </span>
-                    <span class="text-sm text-slate-600">{{ $student->preferred_timezone ?: 'Business timezone' }}</span>
-                    <span class="text-sm font-semibold text-amber-800">Open record <span aria-hidden="true">→</span></span>
-                </a>
-            @empty
-                <div class="px-5 py-12 text-center">
-                    <p class="font-semibold text-slate-800">No student records found</p>
-                    <p class="mt-1 text-sm text-slate-500">Try a different name, email, or phone number.</p>
+
+        <!-- Bulk Task Dialog Form -->
+        <div x-show="showBulkTask && selected.length > 0" x-cloak class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 class="font-serif text-lg font-bold text-slate-900">Create Task for Selected Students</h3>
+            <p class="mt-1 text-xs text-slate-500">This will generate a staff task for each selected student.</p>
+            <form method="POST" action="{{ route('admin.students.bulk-task') }}" class="mt-4 grid gap-4 sm:grid-cols-2">
+                @csrf
+                <template x-for="id in selected" :key="'task-' + id">
+                    <input type="hidden" name="student_ids[]" :value="id">
+                </template>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-slate-700">Task Title *</label>
+                    <input name="title" required placeholder="e.g. Follow up on course placement" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
-            @endforelse
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700">Due Date</label>
+                    <input type="date" name="due_date" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700">Priority</label>
+                    <select name="priority" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold text-slate-700">Description / Instructions</label>
+                    <textarea name="description" rows="2" placeholder="Optional details..." class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                </div>
+                <div class="sm:col-span-2 flex justify-end gap-2">
+                    <button type="button" @click="showBulkTask = false" class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">Cancel</button>
+                    <button type="submit" class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700">Create Tasks</button>
+                </div>
+            </form>
         </div>
-        @if($students->hasPages())
-            <div class="border-t border-slate-200 px-5 py-4">{{ $students->links() }}</div>
-        @endif
+
+        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="hidden grid-cols-[3rem_minmax(12rem,1.3fr)_minmax(12rem,1fr)_minmax(9rem,.8fr)_auto] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 md:grid items-center">
+                <input type="checkbox" @change="allSelected = !allSelected; selected = allSelected ? [{{ $students->pluck('id')->implode(',') }}] : []" :checked="allSelected" class="rounded text-amber-600" title="Select all on this page">
+                <span>Student</span><span>Contact</span><span>Timezone</span><span>Record</span>
+            </div>
+            <div class="divide-y divide-slate-100">
+                @forelse($students as $student)
+                    @php $isPinned = in_array($student->id, $pinnedStudentIds ?? []); @endphp
+                    <div class="grid gap-3 px-5 py-4 transition hover:bg-amber-50/50 md:grid-cols-[3rem_minmax(12rem,1.3fr)_minmax(12rem,1fr)_minmax(9rem,.8fr)_auto] md:items-center md:gap-4">
+                        <div>
+                            <input type="checkbox" :value="{{ $student->id }}" x-model="selected" class="rounded text-amber-600">
+                        </div>
+                        <a href="{{ route('admin.students.show', $student->id) }}" class="min-w-0">
+                            <span class="flex items-center gap-1.5 font-semibold text-slate-900">
+                                @if($isPinned) <span class="text-amber-500 text-sm" title="Pinned favorite">★</span> @endif
+                                <span class="truncate">{{ $student->first_name }} {{ $student->last_name }}</span>
+                            </span>
+                            <span class="mt-1 block text-xs text-slate-500">Student #{{ $student->id }}</span>
+                        </a>
+                        <a href="{{ route('admin.students.show', $student->id) }}" class="min-w-0 text-sm text-slate-700">
+                            <span class="block truncate">{{ $student->email ?: 'No email on file' }}</span>
+                            <span class="mt-1 block text-xs text-slate-500">{{ $student->phone ?: 'No phone on file' }}</span>
+                        </a>
+                        <a href="{{ route('admin.students.show', $student->id) }}" class="text-sm text-slate-600">
+                            {{ $student->preferred_timezone ?: 'Business timezone' }}
+                        </a>
+                        <div>
+                            <a href="{{ route('admin.students.show', $student->id) }}" class="text-sm font-semibold text-amber-800 hover:text-amber-950">
+                                Open <span aria-hidden="true">→</span>
+                            </a>
+                        </div>
+                    </div>
+                @empty
+                    <div class="px-5 py-12 text-center">
+                        <p class="font-semibold text-slate-800">No student records found</p>
+                        <p class="mt-1 text-sm text-slate-500">Try a different name, email, or phone number.</p>
+                    </div>
+                @endforelse
+            </div>
+            @if($students->hasPages())
+                <div class="border-t border-slate-200 px-5 py-4">{{ $students->links() }}</div>
+            @endif
+        </div>
     </div>
 </div>
 @endsection

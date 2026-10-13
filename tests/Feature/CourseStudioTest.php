@@ -239,8 +239,8 @@ class CourseStudioTest extends TestCase
         if (is_string($output) && is_dir($output)) {
             file_put_contents($output.'/course-studio-editor.html', $edit->getContent());
             $html = str_replace(route('admin.lms.courses.assets', [$course, $asset]), 'data:image/png;base64,'.base64_encode(Storage::disk('local')->get($asset->path)), $preview->getContent());
-            file_put_contents($output.'/course-studio-preview.html',$html);
-            file_put_contents($output.'/course-studio-list.html',$this->get(route('admin.lms.courses.index'))->assertOk()->getContent());
+            file_put_contents($output.'/course-studio-preview.html', $html);
+            file_put_contents($output.'/course-studio-list.html', $this->get(route('admin.lms.courses.index'))->assertOk()->getContent());
         }
     }
 }

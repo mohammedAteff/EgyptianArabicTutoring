@@ -269,12 +269,12 @@ class CourseStudioPublicationTest extends TestCase
         $actor = AdministratorFactory::new()->create(['role' => 'admin']);
         $structure = app(LmsStructureService::class);
         $course = Course::factory()->create();
-        $section = $structure->addSection($actor,$course,'Legacy section');
-        $lesson = $structure->addLesson($actor,$section,'Legacy lesson','legacy');
-        $structure->setStatus($actor,$section,'published',$section->fresh()->lock_version);
-        $structure->setStatus($actor,$lesson,'published',$lesson->fresh()->lock_version);
-        $structure->addBlock($actor,$lesson,['kind' => 'bunny_video']);
-        $this->actingAs($actor,'web')->postJson(route('admin.lms.courses.lifecycle',$course),['status' => 'published', 'version' => $course->fresh()->lock_version])->assertUnprocessable()->assertJsonValidationErrors('publication');
+        $section = $structure->addSection($actor, $course, 'Legacy section');
+        $lesson = $structure->addLesson($actor, $section, 'Legacy lesson', 'legacy');
+        $structure->setStatus($actor, $section, 'published', $section->fresh()->lock_version);
+        $structure->setStatus($actor, $lesson, 'published', $lesson->fresh()->lock_version);
+        $structure->addBlock($actor, $lesson, ['kind' => 'bunny_video']);
+        $this->actingAs($actor, 'web')->postJson(route('admin.lms.courses.lifecycle', $course), ['status' => 'published', 'version' => $course->fresh()->lock_version])->assertUnprocessable()->assertJsonValidationErrors('publication');
         $this->assertDatabaseCount('lms_course_releases',0);
     }
 }

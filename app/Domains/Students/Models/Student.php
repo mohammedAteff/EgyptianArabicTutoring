@@ -3,6 +3,7 @@
 namespace App\Domains\Students\Models;
 
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Forms\Models\FormSubmission;
 use Database\Factories\StudentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -76,6 +77,40 @@ class Student extends Authenticatable
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(PaymentRecord::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(PaymentRefund::class);
+    }
+
+    /**
+     * @return HasMany<StudentGuardian, $this>
+     */
+    public function guardians(): HasMany
+    {
+        return $this->hasMany(StudentGuardian::class);
+    }
+
+    /**
+     * @return HasMany<StaffPinnedStudent, $this>
+     */
+    public function pinnedByStaff(): HasMany
+    {
+        return $this->hasMany(StaffPinnedStudent::class);
+    }
+
+    /**
+     * @return HasMany<FormSubmission, $this>
+     */
+    public function formSubmissions(): HasMany
+    {
+        return $this->hasMany(FormSubmission::class);
     }
 
     public function possibleDuplicateOf(): BelongsTo

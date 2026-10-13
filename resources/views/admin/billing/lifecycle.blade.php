@@ -20,5 +20,85 @@
 </form>
 @endif</section>
 <section class="rounded-2xl border border-slate-200 bg-white p-6"><h2 class="text-xl font-bold">Renew as a new purchase</h2><p class="mt-2 text-sm text-slate-600">The previous purchase and its payments remain unchanged. A listed offering uses current catalog terms. Repeating a custom purchase preserves its price and typed quantity; set a new expiry if needed. No payment is recorded automatically.</p><form method="POST" action="{{ route('admin.packages.renew', $package) }}" class="mt-5 grid gap-4 sm:grid-cols-2">@csrf<input type="hidden" name="idempotency_key" value="{{ \Illuminate\Support\Str::uuid() }}"><label class="text-sm font-semibold">Renewal date<input type="date" name="renewal_date" required class="mt-1 block w-full rounded-xl border border-slate-300 p-3"></label><label class="text-sm font-semibold">Offering<select name="offering_key" class="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-3"><option value="">Repeat current offering / custom terms</option>@foreach(\App\Domains\Students\Services\StudentLedgerService::PRESETS as $key => $preset)<option value="{{ $key }}">{{ $preset['name'] }} · {{ $preset['price'] }} USD</option>@endforeach</select></label><label class="text-sm font-semibold">Custom purchase expiry (optional)<input type="date" name="expiration_date" class="mt-1 block w-full rounded-xl border border-slate-300 p-3"></label><x-operational-reason-select /><label class="text-sm font-semibold sm:col-span-2">Notes (optional)<textarea name="notes" maxlength="1000" rows="2" class="mt-1 block w-full rounded-xl border border-slate-300 p-3"></textarea></label><button class="min-h-11 justify-self-start rounded-xl bg-amber-700 px-5 py-3 text-sm font-semibold text-white">Create renewal purchase</button></form></section>
+<section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-bold">Package Status & Freeze / Pause</h2>
+            <p class="mt-1 text-sm text-slate-600">Freezing a package temporarily stops lesson booking and extends expiry when resumed.</p>
+        </div>
+        @if($package->isPaused())
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">Paused since {{ $package->paused_at->toDateString() }}</span>
+        @else
+            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Active</span>
+        @endif
+    </div>
+
+    @if($package->isPaused())
+        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <strong>Package is currently frozen.</strong>
+            @if($package->pause_reason) <p class="mt-1 text-xs">Reason: {{ $package->pause_reason }}</p> @endif
+            <p class="mt-2 text-xs text-amber-700">Resuming will automatically extend the package expiry deadline by the number of days it was paused.</p>
+            <form method="POST" action="{{ route('admin.packages.resume', $package) }}" class="mt-3">
+                @csrf
+                <button type="submit" class="rounded-xl bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800">Resume Package</button>
+            </form>
+        </div>
+    @else
+        <div class="mt-4">
+            <details class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                <summary class="cursor-pointer text-sm font-semibold text-amber-800 hover:text-amber-950">Freeze / Pause this package</summary>
+                <form method="POST" action="{{ route('admin.packages.pause', $package) }}" class="mt-3 space-y-3">
+                    @csrf
+                    <p class="text-xs text-slate-600">Note: All upcoming lessons funded by this package must be cancelled before freezing.</p>
+                    <label class="block text-xs font-semibold text-slate-700">Pause Reason *
+                        <input name="reason" required placeholder="e.g. Student travel / medical leave" class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white">
+                    </label>
+                    <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800">Confirm Pause</button>
+                </form>
+            </details>
+        </div>
+    @endif
+</section>
+
+<section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <h2 class="text-xl font-bold">Business & Agreement Notes</h2>
+    <p class="mt-1 text-sm text-slate-600">Internal administrative record regarding pricing agreements, discounts, or special conditions.</p>
+    <form method="POST" action="{{ route('admin.packages.notes', $package) }}" class="mt-4 space-y-3">
+        @csrf
+        <textarea name="admin_notes" rows="3" placeholder="Enter private business notes..." class="w-full rounded-xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">{{ old('admin_notes', $package->admin_notes) }}</textarea>
+        <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800">Save Business Notes</button>
+    </form>
+</section>
+
+@if($siblingPackages->isNotEmpty() && $summary['remaining_credits'] > 0)
+<section class="rounded-2xl border border-slate-200 bg-white p-6">
+    <h2 class="text-xl font-bold">Transfer Credits to Another Package</h2>
+    <p class="mt-1 text-sm text-slate-600">Move unused credits from this package into another package belonging to this student. The transfer is recorded in the append-only ledger.</p>
+    <form method="POST" action="{{ route('admin.packages.transfer', $package) }}" class="mt-4 grid gap-4 sm:grid-cols-2">
+        @csrf
+        <input type="hidden" name="idempotency_key" value="{{ \Illuminate\Support\Str::uuid() }}">
+        <div>
+            <label class="block text-xs font-semibold text-slate-700">Target Package *</label>
+            <select name="target_package_id" required class="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm">
+                @foreach($siblingPackages as $sibling)
+                    <option value="{{ $sibling->id }}">#{{ $sibling->id }} · {{ $sibling->package_name }} ({{ $sibling->currency }})</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-700">Number of Credits * (Max: {{ $summary['remaining_credits'] }})</label>
+            <input type="number" name="credits" min="1" max="{{ $summary['remaining_credits'] }}" value="1" required class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white">
+        </div>
+        <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700">Reason / Description *</label>
+            <input name="description" required placeholder="e.g. Transferred unused credits to upgrade package" class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white">
+        </div>
+        <div class="sm:col-span-2 flex justify-end">
+            <button type="submit" class="rounded-xl bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800">Transfer Credits</button>
+        </div>
+    </form>
+</section>
+@endif
+
 <section class="rounded-2xl border border-slate-200 bg-white p-6"><h2 class="mb-4 text-xl font-bold">Renewal history from this purchase</h2>@forelse($renewals as $renewal)<p class="border-t border-slate-100 py-3 text-sm">{{ $renewal->renewal_date->toDateString() }} · <a class="font-semibold text-amber-800" href="{{ route('admin.packages.lifecycle', $renewal->new_package_id) }}">New purchase #{{ $renewal->new_package_id }} · {{ $renewal->newPackage->package_name }}</a> · {{ str_replace('_', ' ', $renewal->reason_code ?? 'No reason recorded') }}@if($renewal->notes)<span class="mt-2 block whitespace-pre-wrap text-slate-600">{{ $renewal->notes }}</span>@endif</p>@empty<p class="text-sm text-slate-500">No renewals recorded.</p>@endforelse{{ $renewals->links() }}</section></div>
 @endsection

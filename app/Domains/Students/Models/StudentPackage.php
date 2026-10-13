@@ -16,11 +16,16 @@ class StudentPackage extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['offering_key', 'identity_state', 'validity_days', 'purchase_fingerprint', 'student_id', 'package_name', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated', 'expiration_date', 'validity_started_at', 'expires_at', 'status'];
+    protected $fillable = ['offering_key', 'identity_state', 'validity_days', 'purchase_fingerprint', 'student_id', 'package_name', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated', 'expiration_date', 'validity_started_at', 'expires_at', 'status', 'paused_at', 'pause_reason', 'paused_by', 'admin_notes'];
 
     protected function casts(): array
     {
-        return ['validity_started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'expiration_date' => 'date', 'original_price' => 'decimal:2', 'discount_amount' => 'decimal:2', 'final_price' => 'decimal:2'];
+        return ['validity_started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'paused_at' => 'immutable_datetime', 'expiration_date' => 'date', 'original_price' => 'decimal:2', 'discount_amount' => 'decimal:2', 'final_price' => 'decimal:2'];
+    }
+
+    public function isPaused(): bool
+    {
+        return $this->paused_at !== null;
     }
 
     public function expiryDeadline(?string $timezone = null): ?CarbonImmutable

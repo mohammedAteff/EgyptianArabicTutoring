@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Administration\Models\StaffTask;
 use App\Domains\Administration\Services\StaffSavedViewService;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
@@ -16,6 +17,7 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentEmail;
 use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\EntitlementService;
+use App\Domains\Students\Services\StudentCompletenessService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentPackagePresentation;
@@ -41,21 +43,69 @@ class StudentController extends Controller
     {
         $filters = $records->filters($request);
         $students = $records->query($filters)->paginate(25)->withQueryString();
+        $pinnedStudentIds = $request->user('web')->pinnedStudents()->pluck('student_id')->all();
 
-        return view('admin.students.index', ['students' => $students, 'search' => $filters['q'] ?? '', 'filters' => $filters, 'savedViews' => $views->forSection($request->user('web'), 'students'), 'totalStudents' => Student::tutoringRoster()->count()]);
+        return view('admin.students.index', [
+            'students' => $students,
+            'search' => $filters['q'] ?? '',
+            'filters' => $filters,
+            'savedViews' => $views->forSection($request->user('web'), 'students'),
+            'totalStudents' => Student::tutoringRoster()->count(),
+            'pinnedStudentIds' => $pinnedStudentIds,
+        ]);
     }
 
     public function export(Request $request, StudentRecordsQuery $records, ExportService $exports, TimezoneService $timezones): StreamedResponse|BinaryFileResponse
     {
         $filters = $records->filters($request);
-        $rows = function () use ($records, $filters, $timezones): \Generator {
-            foreach ($records->query($filters)->lazy(100) as $student) {
+        $selectedIds = $request->input('student_ids') ?: $request->input('ids');
+        $query = $records->query($filters);
+        if (! empty($selectedIds) && is_array($selectedIds)) {
+            $query->whereIn('students.id', $selectedIds);
+        }
+        $rows = function () use ($query, $timezones): \Generator {
+            foreach ($query->lazy(100) as $student) {
                 $remaining = $student->packages->map(fn ($package): string => $package->package_name.' #'.$package->id.' · '.app(EntitlementService::class)->balanceText($package))->implode('; ');
                 yield [$student->name, $student->email ?? '', $student->phone ?? '', $student->suspended_at ? 'Suspended' : $student->identity_status, $student->preferred_timezone ?? '', (int) $student->bookings_count, $remaining, $student->packages->pluck('package_name')->implode('; '), $student->packages->map(fn ($package) => $package->package_name.': '.($package->expiration_date?->toDateString() ?? 'No expiry'))->implode('; '), $student->created_at->setTimezone($timezones->getBusinessTimezone())->format('Y-m-d H:i'), $timezones->getBusinessTimezone()];
             }
         };
 
         return $exports->export('student_records', ['Student', 'Email', 'Phone', 'Status', 'Timezone', 'Sessions', 'Remaining Entitlements', 'Packages', 'Effective Expiry', 'Joined', 'Business Timezone'], $rows(), $filters['format'] ?? 'csv', 'Student Records');
+    }
+
+    public function bulkTask(Request $request, AuditLogService $audit): RedirectResponse
+    {
+        $data = $request->validate([
+            'student_ids' => ['required', 'array', 'min:1'],
+            'student_ids.*' => ['integer', 'exists:students,id'],
+            'title' => ['required', 'string', 'max:160'],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'due_date' => ['nullable', 'date_format:Y-m-d'],
+            'priority' => ['required', Rule::in(['low', 'normal', 'high'])],
+        ]);
+
+        $assigneeId = $request->user('web')->id;
+
+        foreach ($data['student_ids'] as $studentId) {
+            $task = StaffTask::create([
+                'title' => $data['title'],
+                'description' => $data['description'] ?? null,
+                'student_id' => $studentId,
+                'assignee_id' => $assigneeId,
+                'created_by' => $assigneeId,
+                'due_date' => $data['due_date'] ?? null,
+                'priority' => $data['priority'],
+                'status' => 'open',
+            ]);
+
+            $audit->log('staff_task_created', StaffTask::class, $task->id, null, [
+                'bulk' => true,
+                'student_id' => $studentId,
+                'assignee_id' => $assigneeId,
+            ], $assigneeId);
+        }
+
+        return back()->with('success', count($data['student_ids']).' tasks created.');
     }
 
     public function show(Request $request, int $student, StudentPackagePresentation $presentation, TimezoneService $timezones, LmsTutoringReadModel $learning): View
@@ -96,6 +146,23 @@ class StudentController extends Controller
             $financial = $presentation->forStudent($studentRecord->id, isset($filters['package_id']) ? (int) $filters['package_id'] : null, $historyType);
         }
 
+        $completedBookings = $bookings->where('status', 'completed');
+        $lifetimeSummary = [
+            'studentSince' => $studentRecord->created_at,
+            'completedLessonsCount' => $completedBookings->count(),
+            'totalHours' => round($completedBookings->sum(fn ($b) => $b->duration_minutes ?: 60) / 60, 1),
+            'activePackagesCount' => $studentRecord->packages()->where('status', 'active')->count(),
+            'remainingCredits' => (int) $studentRecord->packages()->where('status', 'active')->sum('remaining_sessions'),
+            'lifetimePaymentsTotal' => (float) ($studentRecord->payments()->sum('amount_cents') / 100),
+            'lifetimeRefundsTotal' => (float) ($studentRecord->refunds()->sum('amount_cents') / 100),
+            'lastBooking' => $completedBookings->first(),
+            'nextBooking' => $bookings->where('start_at_utc', '>=', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending'])->first(),
+        ];
+        $verifiedSecondaryEmails = $studentRecord->verifiedEmails()->orderByDesc('verified_at')->get();
+        $guardians = $studentRecord->guardians()->orderByDesc('is_primary')->orderBy('name')->get();
+        $isPinned = $studentRecord->pinnedByStaff()->where('administrator_id', $request->user('web')->id)->exists();
+        $completeness = app(StudentCompletenessService::class)->assess($studentRecord);
+
         return view('admin.students.show', [
             'learningProfile' => ! $isAssistant && Gate::forUser($request->user('web'))->allows('manageTeaching', $studentRecord->fresh())
                 ? $learning->profile($request->user('web'), $studentRecord) : null,
@@ -113,6 +180,11 @@ class StudentController extends Controller
             'paymentMethods' => $isAssistant ? collect() : PaymentMethod::available()->get(),
             'isAssistant' => $isAssistant,
             'businessTz' => $timezones->getBusinessTimezone(),
+            'lifetimeSummary' => $lifetimeSummary,
+            'verifiedSecondaryEmails' => $verifiedSecondaryEmails,
+            'guardians' => $guardians,
+            'isPinned' => $isPinned,
+            'completeness' => $completeness,
         ]);
     }
 
