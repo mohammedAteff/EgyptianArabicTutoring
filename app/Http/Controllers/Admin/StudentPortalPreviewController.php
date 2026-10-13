@@ -18,7 +18,7 @@ class StudentPortalPreviewController extends Controller
         // Populate request attribute with target student
         $request->attributes->set('student', $student);
 
-        $data = $portal->data($request);
+        $data = $portal->data($request, readOnly: true);
         $data['isPreview'] = true;
         $data['previewStudent'] = $student;
         $data['returnUrl'] = route('admin.students.show', $student);

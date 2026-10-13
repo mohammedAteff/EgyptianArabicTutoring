@@ -475,7 +475,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/packages/{package}/pause', [PackageLifecycleController::class, 'pause'])->name('packages.pause');
             Route::post('/packages/{package}/resume', [PackageLifecycleController::class, 'resume'])->name('packages.resume');
             Route::post('/packages/{package}/notes', [PackageLifecycleController::class, 'notes'])->name('packages.notes');
-            Route::post('/packages/{package}/transfer', [PackageLifecycleController::class, 'transfer'])->name('packages.transfer');
+            Route::post('/packages/{package}/transfer', [PackageLifecycleController::class, 'transfer'])->middleware('role:super_admin')->name('packages.transfer');
             Route::get('/packages/{package}/statement', [App\Http\Controllers\Admin\FinancialStatementController::class, 'show'])->name('statements.show');
             Route::get('/packages/{package}/statement/export', [App\Http\Controllers\Admin\FinancialStatementController::class, 'export'])->name('statements.export');
             Route::get('/packages/{package}/receipts/{payment}', [App\Http\Controllers\Admin\FinancialStatementController::class, 'receipt'])->whereNumber('payment')->name('receipts.show');

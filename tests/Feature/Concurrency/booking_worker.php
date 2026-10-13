@@ -42,6 +42,7 @@ use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Services\PackagePauseService;
 use App\Domains\Students\Services\PackageRenewalService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -94,6 +95,23 @@ if (isset($data['start_gate'], $data['worker_id'])) {
 }
 
 try {
+    if (in_array($action, ['transfer_credits', 'pause_package', 'resume_package'], true)) {
+        if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Package repair races require the dedicated test database.');
+        }
+        $package = StudentPackage::query()->findOrFail((int) $data['package_id']);
+        if ($action === 'transfer_credits') {
+            $target = StudentPackage::query()->findOrFail((int) $data['target_package_id']);
+            app(StudentLedgerService::class)->transferCredits($package, $target, 1, 'Concurrent transfer', $data['idempotency_key'],
+                (int) $data['administrator_id'], $package->entitlements()->sole()->id, $target->entitlements()->sole()->id);
+        } elseif ($action === 'pause_package') {
+            app(PackagePauseService::class)->pause($package, 'Concurrent pause', (int) $data['administrator_id']);
+        } else {
+            app(PackagePauseService::class)->resume($package, (int) $data['administrator_id']);
+        }
+        echo "RESULT:SUCCESS:package-repair\n";
+        exit(0);
+    }
     if (in_array($action, ['learning_settings_save', 'learning_semantic_manual', 'learning_notifications_sync'], true)) {
         if (DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
             throw new RuntimeException('Learning operations races require the dedicated test database.');

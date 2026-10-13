@@ -29,7 +29,7 @@ class StudentPortalService
     }
 
     /** @return array<string, mixed> */
-    public function data(Request $request): array
+    public function data(Request $request, bool $readOnly = false): array
     {
         $timezones = app(TimezoneService::class);
         $ledger = app(StudentLedgerService::class);
@@ -48,7 +48,7 @@ class StudentPortalService
         $upcoming = $bookings->filter(fn (Booking $booking): bool => $booking->start_at_utc->isFuture() && in_array($booking->status, ['confirmed', 'held', 'pending'], true));
         $history = $bookings->reject(fn (Booking $booking): bool => $upcoming->contains('id', $booking->id))->reverse();
         $packages = StudentPackage::query()->where('student_id', $student->id)->with(['entitlements.type', 'ledgerEntries', 'payments', 'refunds'])->orderByDesc('created_at')->get();
-        $displayTimezone = $request->session()->get('student_display_timezone', $student->preferred_timezone ?: $timezones->getBusinessTimezone());
+        $displayTimezone = $readOnly ? ($student->preferred_timezone ?: $timezones->getBusinessTimezone()) : $request->session()->get('student_display_timezone', $student->preferred_timezone ?: $timezones->getBusinessTimezone());
         $packageSummaries = $packages->map(fn (StudentPackage $package): array => [
             'name' => $package->package_name,
             'id' => $package->id, 'offering_key' => $package->offering_key ?? 'legacy_unclassified',
@@ -57,7 +57,7 @@ class StudentPortalService
                 : $package->expiryLabel(),
             'status' => $package->status,
             'currency' => $package->currency,
-            'summary' => $ledger->summary($package),
+            'summary' => $ledger->summary($package, true),
         ]);
         $forms = $formAssignments->assignedTo($student);
         $formSubmissions = FormSubmission::query()->where('student_id', $student->id)->with('version:id,form_id')->orderByDesc('id')->get()
@@ -66,7 +66,7 @@ class StudentPortalService
 
         $balances = app(EntitlementService::class)->forPackages($packages);
 
-        return app(StudentTeachingReadModel::class)->data($student, $bookings, $packages, $forms, $formSubmissions) + [
+        return app(StudentTeachingReadModel::class)->data($student, $bookings, $packages, $forms, $formSubmissions, $readOnly) + [
             'student' => $student,
             'upcoming' => $upcoming,
             'history' => $history,

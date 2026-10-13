@@ -45,7 +45,7 @@ class StudentTeachingReadModel
      * @param  Collection<int, FormSubmission>  $submissions
      * @return array<string, mixed>
      */
-    public function data(Student $student, Collection $bookings, Collection $packages, Collection $forms, Collection $submissions): array
+    public function data(Student $student, Collection $bookings, Collection $packages, Collection $forms, Collection $submissions, bool $readOnly = false): array
     {
         $homework = $this->shared(Homework::query(), $student)->with([
             'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
@@ -105,7 +105,9 @@ class StudentTeachingReadModel
                 $events[] = ['key' => 'material:'.$material->id, 'type' => 'material', 'title' => 'Lesson material published', 'message' => 'Shared material is available in your lesson workspace.', 'link' => route('student.lessons.show', $booking->id, false)];
             }
         }
-        $this->notifications->synchronize($student, array_merge($events, $this->learningNotifications->facts($student)));
+        if (! $readOnly) {
+            $this->notifications->synchronize($student, array_merge($events, $this->learningNotifications->facts($student)));
+        }
         $formLabel = $outstandingForm ? match ($outstandingForm->slug) {
             'short-form' => 'Finish Your Learning Goals',
             'long-form' => 'Finish Your Learning Profile',

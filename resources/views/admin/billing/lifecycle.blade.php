@@ -70,7 +70,7 @@
     </form>
 </section>
 
-@if($siblingPackages->isNotEmpty() && $summary['remaining_credits'] > 0)
+@if(auth('web')->user()->isSuperAdmin() && $siblingPackages->isNotEmpty() && $summary['remaining_credits'] > 0)
 <section class="rounded-2xl border border-slate-200 bg-white p-6">
     <h2 class="text-xl font-bold">Transfer Credits to Another Package</h2>
     <p class="mt-1 text-sm text-slate-600">Move unused credits from this package into another package belonging to this student. The transfer is recorded in the append-only ledger.</p>
@@ -89,9 +89,34 @@
             <label class="block text-xs font-semibold text-slate-700">Number of Credits * (Max: {{ $summary['remaining_credits'] }})</label>
             <input type="number" name="credits" min="1" max="{{ $summary['remaining_credits'] }}" value="1" required class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white">
         </div>
+        <div>
+            <label for="transfer-source-credits" class="block text-xs font-semibold text-slate-700">Source Lesson Credits *</label>
+            <select id="transfer-source-credits" name="source_allocation_id" required class="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm">
+                @foreach($summary['entitlements'] as $balance)
+                    @if($balance['id'] !== null && $balance['available'] > 0)
+                        <option value="{{ $balance['id'] }}">{{ $balance['label'] }} · {{ $balance['available'] }} available</option>
+                    @endif
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label for="transfer-target-credits" class="block text-xs font-semibold text-slate-700">Target Lesson Credits *</label>
+            <select id="transfer-target-credits" name="target_allocation_id" required class="mt-1 block w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm">
+                @foreach($siblingPackages as $sibling)
+                    <optgroup label="#{{ $sibling->id }} · {{ $sibling->package_name }}">
+                        @foreach($sibling->entitlements as $allocation)
+                            @if($allocation->type->active)
+                                <option value="{{ $allocation->id }}">#{{ $sibling->id }} · {{ $allocation->type->label }}</option>
+                            @endif
+                        @endforeach
+                    </optgroup>
+                @endforeach
+            </select>
+            <p class="mt-1 text-xs text-slate-500">Choose credits belonging to the selected target package and matching the source lesson type.</p>
+        </div>
         <div class="sm:col-span-2">
             <label class="block text-xs font-semibold text-slate-700">Reason / Description *</label>
-            <input name="description" required placeholder="e.g. Transferred unused credits to upgrade package" class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white">
+            <input name="description" required maxlength="200" placeholder="e.g. Transferred unused credits to upgrade package" class="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white">
         </div>
         <div class="sm:col-span-2 flex justify-end">
             <button type="submit" class="rounded-xl bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800">Transfer Credits</button>

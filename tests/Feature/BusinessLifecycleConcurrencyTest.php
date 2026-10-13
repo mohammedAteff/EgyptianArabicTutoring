@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingPolicyDecision;
@@ -143,6 +144,70 @@ class BusinessLifecycleConcurrencyTest extends TestCase
         $this->assertSame($this->package->id, PaymentRecord::query()->sole()->student_package_id);
         $this->assertSame('80.00', app(StudentLedgerService::class)->summary(StudentPackage::query()->findOrFail($renewal->new_package_id))['balance_due']);
         $this->assertSame('0.00', app(StudentLedgerService::class)->summary($this->package)['balance_due']);
+    }
+
+    private function transferTarget(): StudentPackage
+    {
+        return app(StudentLedgerService::class)->createPackage($this->student, 'Transfer target', 1, '80.00', '0.00', 'USD', null, Str::uuid()->toString(), entitlementCode: 'one_hour');
+    }
+
+    private function transferPayload(StudentPackage $target, string $key): array
+    {
+        return ['action' => 'transfer_credits', 'package_id' => $this->package->id, 'target_package_id' => $target->id,
+            'administrator_id' => $this->administratorId, 'idempotency_key' => $key];
+    }
+
+    public function test_identical_transfer_race_creates_one_pair_and_one_audit_even_when_source_is_drained(): void
+    {
+        $target = $this->transferTarget();
+        $payload = $this->transferPayload($target, 'same-transfer');
+        $results = $this->race([$payload, $payload]);
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results));
+        $this->assertSame(2, SessionLedgerEntry::query()->whereIn('entry_type', ['transfer_out', 'transfer_in'])->count());
+        $this->assertSame(0, app(StudentLedgerService::class)->summary($this->package)['remaining_credits']);
+        $this->assertSame(2, app(StudentLedgerService::class)->summary($target)['remaining_credits']);
+        $this->assertSame(1, AuditLog::query()->where('action', 'credits_transferred')->count());
+    }
+
+    public function test_distinct_transfers_racing_for_the_last_credit_cannot_overdraw(): void
+    {
+        $a = $this->transferTarget();
+        $b = $this->transferTarget();
+        $results = $this->race([$this->transferPayload($a, 'transfer-a'), $this->transferPayload($b, 'transfer-b')]);
+        $codes = array_column($results, 'exit_code');
+        sort($codes);
+        $this->assertSame([0, 2], $codes, json_encode($results));
+        $this->assertSame(2, SessionLedgerEntry::query()->whereIn('entry_type', ['transfer_out', 'transfer_in'])->count());
+        $this->assertSame(0, app(StudentLedgerService::class)->summary($this->package)['remaining_credits']);
+        $this->assertSame(3, (int) SessionLedgerEntry::query()->sum('credit_change'));
+    }
+
+    public function test_pause_and_booking_race_cannot_leave_a_future_funded_booking_on_a_paused_package(): void
+    {
+        $plan = $this->plan();
+        $results = $this->race([$this->recurringPayload($plan), ['action' => 'pause_package', 'package_id' => $this->package->id, 'administrator_id' => $this->administratorId]]);
+        $this->assertContains($results[1]['exit_code'], [0, 2], json_encode($results));
+        $this->assertSame(0, $results[0]['exit_code'], json_encode($results));
+        if ($this->package->fresh()->isPaused()) {
+            $this->assertSame(0, Booking::query()->count());
+            $this->assertSame(1, (int) SessionLedgerEntry::query()->where('student_package_id', $this->package->id)->sum('credit_change'));
+        } else {
+            $this->assertSame(1, Booking::query()->count());
+            $this->assertSame(0, (int) SessionLedgerEntry::query()->where('student_package_id', $this->package->id)->sum('credit_change'));
+        }
+    }
+
+    public function test_simultaneous_resume_extends_expiry_only_once(): void
+    {
+        $this->package->update(['expires_at' => now('UTC')->addDays(60), 'paused_at' => now('UTC')->subHours(2)]);
+        $before = $this->package->fresh()->expires_at;
+        $payload = ['action' => 'resume_package', 'package_id' => $this->package->id, 'administrator_id' => $this->administratorId];
+        $results = $this->race([$payload, $payload]);
+        $codes = array_column($results, 'exit_code');
+        sort($codes);
+        $this->assertSame([0, 2], $codes, json_encode($results));
+        $this->assertSame(1, AuditLog::query()->where('action', 'package_resumed')->count());
+        $this->assertEqualsWithDelta(7200, $this->package->fresh()->expires_at->timestamp - $before->timestamp, 10);
     }
 
     /** @param array<int, array<string, mixed>> $payloads

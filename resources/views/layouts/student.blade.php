@@ -16,7 +16,7 @@
     <header class="border-b border-stone-200 bg-white">
         <div class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6">
             <a href="{{ route('home') }}" class="font-semibold tracking-tight text-nile-900">Arabic with Abdallah</a>
-            @if($studentPortalAccount)
+            @if(empty($isPreview) && $studentPortalAccount)
                 <nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-nile-800 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center" aria-label="Student navigation">
                     <a href="{{ route('student.dashboard') }}">Sessions</a>
                     <a href="{{ route('student.learning.index') }}" @if(request()->routeIs('student.learning.*')) aria-current="page" @endif>My Learning</a>
@@ -38,7 +38,7 @@
         </div>
     </header>
     <main class="mx-auto max-w-5xl px-4 py-10 sm:px-6">@if(app()->getLocale() !== 'en')<p role="status" class="mb-6 rounded-xl bg-stone-100 p-4 text-sm text-stone-600">The Student Portal is currently available in English.</p>@endif @yield('content')</main>
-<x-whatsapp-cta context="portal" />
+@if(empty($isPreview))<x-whatsapp-cta context="portal" />@endif
     @livewireScripts
 </body>
 </html>

@@ -31,7 +31,7 @@ class EntitlementService
 
     public function eligible(StudentPackage $package, ?string $timezone = null): bool
     {
-        if ($package->status !== 'active' || $package->identity_state === 'legacy_unclassified') {
+        if ($package->status !== 'active' || $package->identity_state === 'legacy_unclassified' || $package->isPaused()) {
             return false;
         }
         if ($package->expires_at !== null) {
@@ -47,7 +47,7 @@ class EntitlementService
     /** @param Builder<StudentPackage> $query */
     public function scopeAvailablePackages(Builder $query): void
     {
-        $query->where('status', 'active')->where('identity_state', '!=', 'legacy_unclassified')
+        $query->where('status', 'active')->where('identity_state', '!=', 'legacy_unclassified')->whereNull('paused_at')
             ->withinValidity()
             ->whereHas('entitlements', fn ($allocations) => $allocations->whereHas('type', fn ($types) => $types->where('active', true))->whereRaw('(select coalesce(sum(credit_change),0) from session_ledger_entries where student_package_entitlement_id = student_package_entitlements.id) > 0'));
     }

@@ -1,4 +1,4 @@
-@props(['progress'])
+@props(['progress', 'readOnly' => false])
 <section aria-label="Learning progress" class="mt-7 rounded-2xl border border-stone-200 bg-white p-5">
     <h2 class="text-xl font-semibold text-nile-900">Your Learning Progress</h2>
     <p class="mt-1 text-sm text-stone-500">Recorded lesson and practice milestones shared by your tutor.</p>
@@ -12,5 +12,7 @@
     @else
     <p class="mt-4 text-sm text-stone-600">Your progress will appear here as you complete lessons and learning activities.</p>
     @endif
+    @if(!$readOnly)
     <a href="{{ route('student.bins.index') }}" class="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">View Learning Notes @if($progress['shared_notes'] > 0)({{ $progress['shared_notes'] }})@endif</a>
+    @endif
 </section>

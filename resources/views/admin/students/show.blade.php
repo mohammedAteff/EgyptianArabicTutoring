@@ -75,19 +75,34 @@
         </div>
         <div class="p-2 sm:border-l border-slate-100">
             <span class="text-xs text-slate-500 uppercase tracking-wider block">Remaining Credits</span>
-            <span class="font-bold text-emerald-700 text-base">{{ $lifetimeSummary['remainingCredits'] }} <span class="text-xs font-normal text-slate-500">({{ $lifetimeSummary['activePackagesCount'] }} pkgs)</span></span>
+            <span class="font-bold text-emerald-700 text-base">
+                @forelse($lifetimeSummary['credits'] as $balance)<span class="block">{{ $balance['label'] }}: {{ $balance['remaining'] }} <span class="text-xs font-normal text-slate-500">({{ $balance['available'] }} available)</span></span>
+                @empty
+                    0
+                @endforelse
+                <span class="text-xs font-normal text-slate-500">({{ $lifetimeSummary['activePackagesCount'] }} pkgs)</span></span>
         </div>
         <div class="p-2 sm:border-l border-slate-100">
             <span class="text-xs text-slate-500 uppercase tracking-wider block">Lifetime Paid</span>
-            <span class="font-bold text-slate-900 text-base">${{ number_format($lifetimeSummary['lifetimePaymentsTotal'], 2) }}</span>
+            <span class="font-bold text-slate-900 text-base">
+                @forelse($lifetimeSummary['money'] as $currency => $amount)<span class="block">{{ $currency }} {{ $amount['paid'] }}</span>
+                @empty
+                    —
+                @endforelse
+            </span>
         </div>
         <div class="p-2 sm:border-l border-slate-100">
             <span class="text-xs text-slate-500 uppercase tracking-wider block">Lifetime Refunds</span>
-            <span class="font-bold text-rose-700 text-base">${{ number_format($lifetimeSummary['lifetimeRefundsTotal'], 2) }}</span>
+            <span class="font-bold text-rose-700 text-base">
+                @forelse($lifetimeSummary['money'] as $currency => $amount)<span class="block">{{ $currency }} {{ $amount['refunded'] }}</span>
+                @empty
+                    —
+                @endforelse
+            </span>
         </div>
         <div class="p-2 sm:border-l border-slate-100">
             <span class="text-xs text-slate-500 uppercase tracking-wider block">Next Scheduled</span>
-            <span class="font-bold text-slate-900 text-base">{{ $lifetimeSummary['nextBooking'] ? $lifetimeSummary['nextBooking']->start_at_utc->timezone($businessTz)->format('j M') : 'None' }}</span>
+            <span class="font-bold text-slate-900 text-base">{{ $lifetimeSummary['nextBooking'] ? $lifetimeSummary['nextBooking']->start_at_utc->copy()->setTimezone($businessTz)->format('j M') : 'None' }}</span>
         </div>
     </div>
     @endif
@@ -155,6 +170,7 @@
                 </div>
             </form>
         </section>
+    @endif
     @if(! $isAssistant)
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div class="mb-4 flex items-start justify-between gap-3">

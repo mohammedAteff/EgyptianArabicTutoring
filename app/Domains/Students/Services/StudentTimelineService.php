@@ -43,20 +43,8 @@ class StudentTimelineService
         };
 
         // 1. Learning & Teaching Events
-        try {
-            $learningEvents = $this->teachingTimeline->staff($actor, $student);
-            foreach ($learningEvents as $item) {
-                $add(
-                    $item['key'],
-                    'learning',
-                    $item['at'],
-                    $item['label'],
-                    $item['detail'],
-                    'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                );
-            }
-        } catch (\Throwable) {
-            // Non-critical if LMS is unconfigured
+        foreach ($this->teachingTimeline->staff($actor, $student) as $item) {
+            $add($item['key'], 'learning', $item['at'], $item['label'], $item['detail'], 'bg-indigo-50 text-indigo-700 border border-indigo-200');
         }
 
         // 2. Billing & Financial Ledger Events (Only if actor has access)
@@ -71,15 +59,15 @@ class StudentTimelineService
             foreach ($ledgerEntries as $entry) {
                 $pkgName = $entry->package?->package_name ?? 'Package';
                 $badge = match ($entry->entry_type) {
-                    'credit_granted' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-                    'credit_refunded', 'cancellation_restored' => 'bg-amber-50 text-amber-700 border border-amber-200',
-                    'cancellation_forfeited', 'package_expired' => 'bg-rose-50 text-rose-700 border border-rose-200',
+                    'package_grant' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                    'courtesy_adjustment', 'cancellation_restore', 'transfer_in' => 'bg-amber-50 text-amber-700 border border-amber-200',
+                    'expiration_forfeit', 'transfer_out' => 'bg-rose-50 text-rose-700 border border-rose-200',
                     default => 'bg-slate-50 text-slate-700 border border-slate-200',
                 };
 
                 $label = ucwords(str_replace('_', ' ', $entry->entry_type));
-                $units = $entry->units_delta > 0 ? "+{$entry->units_delta}" : (string) $entry->units_delta;
-                $memo = $entry->memo ? " · {$entry->memo}" : '';
+                $units = $entry->credit_change > 0 ? "+{$entry->credit_change}" : (string) $entry->credit_change;
+                $memo = $entry->description ? " · {$entry->description}" : '';
 
                 $add(
                     "ledger:{$entry->id}",
@@ -100,13 +88,13 @@ class StudentTimelineService
 
             foreach ($payments as $pay) {
                 $cur = strtoupper($pay->currency ?? 'USD');
-                $amt = number_format(($pay->amount_cents ?? 0) / 100, 2);
+                $amt = $pay->amount_paid;
                 $add(
                     "payment:{$pay->id}",
                     'billing',
-                    $pay->created_at,
+                    $pay->paid_at,
                     "Payment Recorded ({$cur} {$amt})",
-                    "Method: {$pay->payment_method_code} · Ref: #{$pay->id}",
+                    "Method: {$pay->payment_method} · Ref: #{$pay->id}",
                     'bg-emerald-100 text-emerald-800 border border-emerald-300'
                 );
             }
@@ -119,15 +107,15 @@ class StudentTimelineService
                 ->get();
 
             foreach ($refunds as $ref) {
-                $amt = number_format(($ref->amount_cents ?? 0) / 100, 2);
+                $amt = $ref->amount_refunded;
                 $cur = strtoupper($ref->currency ?? 'USD');
                 $reason = $ref->reason ? " · Reason: {$ref->reason}" : '';
                 $add(
                     "refund:{$ref->id}",
                     'billing',
-                    $ref->created_at,
+                    $ref->refunded_at,
                     "Payment Refund ({$cur} {$amt})",
-                    "Status: {$ref->status}{$reason}",
+                    "Payment: #{$ref->payment_record_id}{$reason}",
                     'bg-rose-100 text-rose-800 border border-rose-300'
                 );
             }
@@ -136,13 +124,13 @@ class StudentTimelineService
         // 3. Bookings & Calendar Lifecycle Events
         $bookings = Booking::query()
             ->where('student_id', $student->id)
-            ->with('sessionType:id,name')
+            ->with(['sessionType:id,title', 'events' => fn ($query) => $query->whereIn('event_type', ['rescheduled', 'completed', 'marked_no_show', 'restored', 'confirmed'])->orderBy('id')])
             ->orderByDesc('created_at')
             ->limit(40)
             ->get();
 
         foreach ($bookings as $b) {
-            $sessName = $b->sessionType?->name ?? 'Tutoring session';
+            $sessName = $b->sessionType?->title ?? 'Tutoring session';
             $add(
                 "booking:{$b->id}:created",
                 'bookings',
@@ -152,15 +140,15 @@ class StudentTimelineService
                 'bg-blue-50 text-blue-700 border border-blue-200'
             );
 
-            if ($b->rescheduled_at) {
-                $add(
-                    "booking:{$b->id}:rescheduled",
-                    'bookings',
-                    $b->rescheduled_at,
-                    "Session Rescheduled (#{$b->id})",
-                    "Count: {$b->reschedule_count}",
-                    'bg-amber-50 text-amber-700 border border-amber-200'
-                );
+            foreach ($b->events as $event) {
+                $label = match ($event->event_type) {
+                    'rescheduled' => 'Session Rescheduled',
+                    'completed' => 'Session Completed',
+                    'marked_no_show' => 'Session Missed',
+                    'restored' => 'Session Restored',
+                    default => 'Session Confirmed',
+                };
+                $add("booking-event:{$event->id}", 'bookings', $event->created_at, "{$label} (#{$b->id})", $sessName);
             }
 
             if ($b->cancelled_at) {
@@ -183,7 +171,7 @@ class StudentTimelineService
             ->get();
 
         foreach ($notes as $note) {
-            $preview = mb_substr(strip_tags($note->content ?? ''), 0, 80);
+            $preview = mb_substr(strip_tags($note->body ?? ''), 0, 80);
             $add(
                 "note:{$note->id}",
                 'notes',

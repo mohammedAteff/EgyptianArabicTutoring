@@ -1,4 +1,4 @@
-@props(['booking'])
+@props(['booking', 'readOnly' => false])
 @php
     $materials = $booking->lessonMaterials->where('kind', '!=', 'recording');
     $recordings = $booking->lessonMaterials->where('kind', 'recording');
@@ -12,7 +12,7 @@
             <ul class="mt-2 space-y-2">
                 @foreach($items as $material)
                     <li>
-                        <a href="{{ route('student.lessons.materials.open', [$booking->id, $material->id]) }}" @if(in_array($material->kind, ['external_link', 'recording', 'resource'], true)) target="_blank" rel="noopener noreferrer" @endif class="inline-flex min-h-11 items-center break-words text-sm font-semibold text-nile-800 underline">{{ $material->title }}</a>
+                        @if($readOnly)<span class="text-sm font-semibold text-nile-800">{{ $material->title }}</span>@else<a href="{{ route('student.lessons.materials.open', [$booking->id, $material->id]) }}" @if(in_array($material->kind, ['external_link', 'recording', 'resource'], true)) target="_blank" rel="noopener noreferrer" @endif class="inline-flex min-h-11 items-center break-words text-sm font-semibold text-nile-800 underline">{{ $material->title }}</a>@endif
                         @if($material->description)<p class="whitespace-pre-line break-words text-sm text-stone-600">{{ $material->description }}</p>@endif
                     </li>
                 @endforeach

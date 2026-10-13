@@ -2,6 +2,7 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Database\Services\DatabaseCapability;
@@ -572,59 +573,74 @@ class StudentLedgerService
         ?int $sourceAllocationId = null,
         ?int $targetAllocationId = null
     ): array {
-        if ($creditChange <= 0) {
-            throw new InvalidArgumentException('Transferred credits must be greater than zero.');
+        $description = trim($description);
+        if ($creditChange < 1 || $creditChange > 500 || $description === '' || mb_strlen($description) > 200 || trim($idempotencyKey) === '' || mb_strlen($idempotencyKey) > 64) {
+            throw new InvalidArgumentException('Choose 1-500 credits, a reason up to 200 characters, and a transfer key up to 64 characters.');
         }
-
-        if ((int) $sourcePackage->id === (int) $targetPackage->id) {
-            throw new InvalidArgumentException('Cannot transfer credits to the same package.');
+        if ((int) $sourcePackage->id === (int) $targetPackage->id || (int) $sourcePackage->student_id !== (int) $targetPackage->student_id) {
+            throw new InvalidArgumentException('Transfers require two different packages belonging to the same student.');
         }
 
         return $this->database->transaction(function () use ($sourcePackage, $targetPackage, $creditChange, $description, $idempotencyKey, $administratorId, $sourceAllocationId, $targetAllocationId): array {
-            $lockedSource = StudentPackage::query()->whereKey($sourcePackage->id)->lockForUpdate()->firstOrFail();
-            $lockedTarget = StudentPackage::query()->whereKey($targetPackage->id)->lockForUpdate()->firstOrFail();
+            $student = Student::withTrashed()->whereKey($sourcePackage->student_id)->lockForUpdate()->firstOrFail();
+            $packages = StudentPackage::query()->whereIn('id', [$sourcePackage->id, $targetPackage->id])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $source = $packages->get($sourcePackage->id);
+            $target = $packages->get($targetPackage->id);
+            if (! $source || ! $target || $student->trashed() || $student->identity_status === 'merged'
+                || (int) $source->student_id !== (int) $student->id || (int) $target->student_id !== (int) $student->id) {
+                throw new InvalidArgumentException('Both packages must belong to the same active student record.');
+            }
+            $allocationIds = [$sourceAllocationId, $targetAllocationId];
+            sort($allocationIds);
+            foreach ($allocationIds as $allocationId) {
+                $this->entitlements->lockAllocation($allocationId === $sourceAllocationId ? $source : $target, $allocationId);
+            }
+            $sourceAlloc = $this->entitlements->lockAllocation($source, $sourceAllocationId);
+            $targetAlloc = $this->entitlements->lockAllocation($target, $targetAllocationId);
+            if ((int) $sourceAlloc->entitlement_type_id !== (int) $targetAlloc->entitlement_type_id) {
+                throw new InvalidArgumentException('Transfer credits between matching lesson types only.');
+            }
+            $payloads = [
+                'source' => ['student_id' => $student->id, 'student_package_id' => $source->id,
+                    'idempotency_key' => 'transfer_out_'.$idempotencyKey, 'student_package_entitlement_id' => $sourceAlloc->id,
+                    'entitlement_type_id' => $sourceAlloc->entitlement_type_id, 'entry_type' => 'transfer_out',
+                    'credit_change' => -$creditChange, 'description' => 'Transferred to package #'.$target->id.': '.$description],
+                'target' => ['student_id' => $student->id, 'student_package_id' => $target->id,
+                    'idempotency_key' => 'transfer_in_'.$idempotencyKey, 'student_package_entitlement_id' => $targetAlloc->id,
+                    'entitlement_type_id' => $targetAlloc->entitlement_type_id, 'entry_type' => 'transfer_in',
+                    'credit_change' => $creditChange, 'description' => 'Transferred from package #'.$source->id.': '.$description],
+            ];
+            $existing = SessionLedgerEntry::query()->whereIn('idempotency_key', array_column($payloads, 'idempotency_key'))->lockForUpdate()->get()->keyBy('idempotency_key');
+            if ($existing->isNotEmpty()) {
+                $replay = [];
+                foreach ($payloads as $side => $payload) {
+                    $entry = $existing->get($payload['idempotency_key']);
+                    foreach ($payload as $field => $value) {
+                        if (! $entry || (string) $entry->getAttribute($field) !== (string) $value) {
+                            throw new InvalidArgumentException('The transfer key was already used for a different or incomplete transfer.');
+                        }
+                    }
+                    $replay[$side] = $entry;
+                }
 
-            $sourceAlloc = $this->entitlements->lockAllocation($lockedSource, $sourceAllocationId);
-            $targetAlloc = $this->entitlements->lockAllocation($lockedTarget, $targetAllocationId);
-
-            if ($this->entitlements->lockedBalance($sourceAlloc) - $creditChange < 0) {
+                return $replay;
+            }
+            if (! $this->entitlements->eligible($source) || ! $this->entitlements->eligible($target) || ! $sourceAlloc->type->active) {
+                throw new InvalidArgumentException('Both packages and the lesson type must be active and eligible.');
+            }
+            if ($this->entitlements->lockedBalance($sourceAlloc) < $creditChange) {
                 throw new InvalidArgumentException('Insufficient remaining credits in source package.');
             }
-
-            $sourceExisting = SessionLedgerEntry::query()->where('idempotency_key', 'transfer_out_'.$idempotencyKey)->first();
-            $targetExisting = SessionLedgerEntry::query()->where('idempotency_key', 'transfer_in_'.$idempotencyKey)->first();
-
-            if ($sourceExisting && $targetExisting) {
-                return ['source' => $sourceExisting, 'target' => $targetExisting];
+            $entries = [];
+            foreach ($payloads as $side => $payload) {
+                $entries[$side] = SessionLedgerEntry::create($payload + ['created_by' => $administratorId, 'created_at' => now('UTC')]);
             }
+            app(AuditLogService::class)->log('credits_transferred', StudentPackage::class, $source->id, null, [
+                'source_package_id' => $source->id, 'target_package_id' => $target->id, 'credits' => $creditChange,
+                'entitlement_type_id' => $sourceAlloc->entitlement_type_id, 'idempotency_key' => $idempotencyKey,
+            ], $administratorId);
 
-            $sourceEntry = SessionLedgerEntry::create([
-                'student_id' => $lockedSource->student_id,
-                'student_package_id' => $lockedSource->id,
-                'idempotency_key' => 'transfer_out_'.$idempotencyKey,
-                'student_package_entitlement_id' => $sourceAlloc->id,
-                'entitlement_type_id' => $sourceAlloc->entitlement_type_id,
-                'entry_type' => 'transfer_out',
-                'credit_change' => -$creditChange,
-                'description' => 'Transferred to package #'.$lockedTarget->id.': '.trim($description),
-                'created_by' => $administratorId,
-                'created_at' => now('UTC'),
-            ]);
-
-            $targetEntry = SessionLedgerEntry::create([
-                'student_id' => $lockedTarget->student_id,
-                'student_package_id' => $lockedTarget->id,
-                'idempotency_key' => 'transfer_in_'.$idempotencyKey,
-                'student_package_entitlement_id' => $targetAlloc->id,
-                'entitlement_type_id' => $targetAlloc->entitlement_type_id,
-                'entry_type' => 'transfer_in',
-                'credit_change' => $creditChange,
-                'description' => 'Transferred from package #'.$lockedSource->id.': '.trim($description),
-                'created_by' => $administratorId,
-                'created_at' => now('UTC'),
-            ]);
-
-            return ['source' => $sourceEntry, 'target' => $targetEntry];
+            return $entries;
         }, 5);
     }
 
@@ -643,6 +659,8 @@ class StudentLedgerService
         $state = ucfirst($package->status);
         if ($package->identity_state === 'legacy_unclassified') {
             $state = 'Review required';
+        } elseif ($package->isPaused()) {
+            $state = 'Paused';
         } elseif ($package->status === 'active' && $package->expiration_date === null && $package->expires_at === null && $package->validity_days !== null) {
             $state = 'Awaiting settlement';
         } elseif ($package->status === 'active' && ! $this->entitlements->eligible($package, $businessTimezone)) {

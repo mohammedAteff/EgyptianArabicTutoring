@@ -19,6 +19,7 @@ use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentCompletenessService;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\Students\Services\StudentLifetimeSummary;
 use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentPackagePresentation;
 use App\Domains\Students\Services\StudentPrivacyService;
@@ -146,18 +147,8 @@ class StudentController extends Controller
             $financial = $presentation->forStudent($studentRecord->id, isset($filters['package_id']) ? (int) $filters['package_id'] : null, $historyType);
         }
 
-        $completedBookings = $bookings->where('status', 'completed');
-        $lifetimeSummary = [
-            'studentSince' => $studentRecord->created_at,
-            'completedLessonsCount' => $completedBookings->count(),
-            'totalHours' => round($completedBookings->sum(fn ($b) => $b->duration_minutes ?: 60) / 60, 1),
-            'activePackagesCount' => $studentRecord->packages()->where('status', 'active')->count(),
-            'remainingCredits' => (int) $studentRecord->packages()->where('status', 'active')->sum('remaining_sessions'),
-            'lifetimePaymentsTotal' => (float) ($studentRecord->payments()->sum('amount_cents') / 100),
-            'lifetimeRefundsTotal' => (float) ($studentRecord->refunds()->sum('amount_cents') / 100),
-            'lastBooking' => $completedBookings->first(),
-            'nextBooking' => $bookings->where('start_at_utc', '>=', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending'])->first(),
-        ];
+        $lifetimeSummary = $isAssistant ? null : app(StudentLifetimeSummary::class)
+            ->forStudent($studentRecord, $bookings, $financial['packages']);
         $verifiedSecondaryEmails = $studentRecord->verifiedEmails()->orderByDesc('verified_at')->get();
         $guardians = $studentRecord->guardians()->orderByDesc('is_primary')->orderBy('name')->get();
         $isPinned = $studentRecord->pinnedByStaff()->where('administrator_id', $request->user('web')->id)->exists();
