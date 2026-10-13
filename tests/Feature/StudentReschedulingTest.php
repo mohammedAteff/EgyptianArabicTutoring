@@ -42,8 +42,9 @@ class StudentReschedulingTest extends TestCase
             ->get(route('student.dashboard'));
 
         $response->assertOk()
-            ->assertSeeText('Held')
-            ->assertDontSeeText('No upcoming sessions.');
+            ->assertViewHas('bookingStatusLabels', fn (array $labels): bool => $labels[$booking->id] === 'Time Reserved')
+            ->assertSeeText('Time Reserved')
+            ->assertDontSeeText('No Upcoming Sessions.');
     }
 
     public function test_student_reschedule_uses_server_slot_preserves_status_and_is_idempotent(): void

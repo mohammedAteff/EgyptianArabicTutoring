@@ -518,7 +518,8 @@ class TypedEntitlementsTest extends TestCase
         $this->actingAs($student, 'student')->withSession(['student_id' => $student->id,
             'student_authenticated_at' => now('UTC')->toIso8601String(), 'student_auth_expires_at' => now('UTC')->addHours(3)->toIso8601String()]);
         $response = $this->get(route('student.bookings.create', ['session_type_id' => $lesson->id]))->assertOk()
-            ->assertSeeText('There are no compatible entitlements available for this lesson.');
+            ->assertSeeText('No lesson type is currently available for your eligible credits.');
+        $this->assertFalse($response->viewData('hasFundableFormat'));
         $this->assertSame(0, $response->viewData('availableCredits'));
         $this->assertSame([], $response->viewData('slots'));
         $this->assertSame(2, $response->viewData('entitlementBalances')['one_hour']['available']);

@@ -549,7 +549,7 @@ class TutoringLearningIntegrationTest extends TestCase
         Homework::factory()->create(['student_id' => $this->lucy->id, 'student_visible' => true, 'title' => 'Canonical Homework']);
         LearningPlan::factory()->create(['student_id' => $this->lucy->id, 'student_visible' => true]);
         $this->assign('course', $lesson->course_id);
-        $this->signIn($this->lucy)->get(route('student.learning.index'))->assertOk()->assertViewHas('nextAction', fn ($action) => $action['label'] === 'Continue your homework')->assertSee('Homework & learning plans', false);
+        $this->signIn($this->lucy)->get(route('student.learning.index'))->assertOk()->assertViewHas('nextAction', fn ($action) => $action['label'] === 'Continue your homework')->assertSeeText('Practice & Feedback');
         $this->actingAs($this->actor, 'web')->get(route('admin.students.learning.create', $this->lucy))->assertOk()->assertSee('Create for this Student')->assertSee('Assign existing learning')->assertHeader('Cache-Control', 'no-store, private');
         $assistant = AdministratorFactory::new()->create(['role' => 'assistant']);
         $this->actingAs($assistant, 'web')->get(route('admin.students.show', $this->lucy))->assertOk()->assertDontSee('Assign Learning')->assertDontSee('Arabic conversations');

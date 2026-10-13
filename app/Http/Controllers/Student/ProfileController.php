@@ -18,12 +18,12 @@ class ProfileController extends Controller
         return view('student.profile', ['student' => $student, 'emails' => StudentEmail::query()->where('student_id', $student->id)->get()]);
     }
 
-    public function requestVerification(Request $request, StudentEmailService $emails): RedirectResponse
+    public function addEmail(Request $request, StudentEmailService $emails): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email:rfc', 'max:255']]);
-        $emails->requestVerification($request->attributes->get('student'), $data['email']);
+        $emails->addContactAddress($request->attributes->get('student'), $data['email']);
 
-        return back()->with('success', 'Verification sent. The address will be trusted only after verification.');
+        return back()->with('success', 'The email address has been added to your student profile.');
     }
 
     public function verify(Request $request, string $token, StudentEmailService $emails): RedirectResponse

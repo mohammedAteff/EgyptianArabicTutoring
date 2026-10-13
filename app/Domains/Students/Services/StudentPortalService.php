@@ -14,6 +14,20 @@ use Illuminate\Http\Request;
 
 class StudentPortalService
 {
+    public function bookingStatusLabel(Booking $booking): string
+    {
+        return match ($booking->studentStatusLabel()) {
+            'Session Delivered' => 'Completed',
+            'Booking Canceled' => 'Cancelled',
+            'Session Forfeited' => 'Missed',
+            'Session Rescheduled' => 'Rescheduled',
+            'Confirmed' => 'Confirmed',
+            'Reservation Held' => 'Time Reserved',
+            'Pending Confirmation' => 'Awaiting Confirmation',
+            default => 'Status Unavailable',
+        };
+    }
+
     /** @return array<string, mixed> */
     public function data(Request $request): array
     {
@@ -34,9 +48,13 @@ class StudentPortalService
         $upcoming = $bookings->filter(fn (Booking $booking): bool => $booking->start_at_utc->isFuture() && in_array($booking->status, ['confirmed', 'held', 'pending'], true));
         $history = $bookings->reject(fn (Booking $booking): bool => $upcoming->contains('id', $booking->id))->reverse();
         $packages = StudentPackage::query()->where('student_id', $student->id)->with(['entitlements.type', 'ledgerEntries', 'payments', 'refunds'])->orderByDesc('created_at')->get();
+        $displayTimezone = $request->session()->get('student_display_timezone', $student->preferred_timezone ?: $timezones->getBusinessTimezone());
         $packageSummaries = $packages->map(fn (StudentPackage $package): array => [
             'name' => $package->package_name,
-            'id' => $package->id, 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'expiry' => $package->expiryLabel(),
+            'id' => $package->id, 'offering_key' => $package->offering_key ?? 'legacy_unclassified',
+            'expiry' => $package->expires_at
+                ? $package->expires_at->setTimezone($displayTimezone)->format('j M Y, g:i:s A T')
+                : $package->expiryLabel(),
             'status' => $package->status,
             'currency' => $package->currency,
             'summary' => $ledger->summary($package),
@@ -52,6 +70,7 @@ class StudentPortalService
             'student' => $student,
             'upcoming' => $upcoming,
             'history' => $history,
+            'bookingStatusLabels' => $bookings->mapWithKeys(fn (Booking $booking): array => [$booking->id => $this->bookingStatusLabel($booking)])->all(),
             'packageSummaries' => $packageSummaries,
             'entitlementBalances' => $balances,
             'totalPurchased' => (int) $packages->sum('total_sessions_allocated'),
@@ -60,7 +79,7 @@ class StudentPortalService
             'lessonFeedback' => LessonFeedback::query()->where('student_id', $student->id)->get()->keyBy('booking_id'),
             'businessTimezone' => $timezones->getBusinessTimezone(),
             'tutorName' => config('business.tutor_name'),
-            'timezone' => $request->session()->get('student_display_timezone', $student->preferred_timezone ?: $timezones->getBusinessTimezone()),
+            'timezone' => $displayTimezone,
             'meetingLinks' => $meetingLinks,
             'forms' => $forms,
             'formSubmissions' => $formSubmissions,

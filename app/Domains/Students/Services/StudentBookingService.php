@@ -58,7 +58,8 @@ class StudentBookingService
             return $this->assertOwnedReplay($existing, $student, $fingerprint);
         }
 
-        $sessionType = SessionType::query()->whereKey($sessionTypeId)->where('active', true)->firstOrFail();
+        $sessionType = SessionType::query()->whereKey($sessionTypeId)->where('active', true)
+            ->when($occurrence === null && $administratorId === null, fn ($query) => $query->where('student_discoverable', true))->firstOrFail();
         $customerTimezone = $this->timezones->validate($customerTimezone);
         $initialSlot = $this->slots->resolve($slotId, $sessionType, $customerTimezone, $slotOwnerToken);
         $startUtc = CarbonImmutable::parse($initialSlot['slot_start_utc'], 'UTC');
@@ -119,7 +120,8 @@ class StudentBookingService
                 }
                 app(StudentSchedulingService::class)->assertAvailable($lockedStudent->id, $startUtc, $endUtc);
 
-                $sessionType = SessionType::query()->whereKey($sessionType->id)->where('active', true)->lockForUpdate()->firstOrFail();
+                $sessionType = SessionType::query()->whereKey($sessionType->id)->where('active', true)
+                    ->when($occurrence === null && $administratorId === null, fn ($query) => $query->where('student_discoverable', true))->lockForUpdate()->firstOrFail();
                 if ($occurrence === null || $sessionType->funding_mode === 'package') {
                     app(EntitlementService::class)->requirement($sessionType);
                 } elseif (! in_array($sessionType->funding_mode, ['direct', 'free'], true)) {

@@ -315,7 +315,7 @@ class StudentTeachingExperienceTest extends TestCase
         Homework::factory()->create(['student_id' => $student->id, 'student_visible' => true]);
         $this->portal($student);
 
-        $this->get(route('student.dashboard'))->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Finish your questionnaire' && $action['detail'] === 'Learning profile');
+        $this->get(route('student.dashboard'))->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Finish Your Questionnaire' && $action['detail'] === 'Learning profile');
         $form->update(['status' => 'archived']);
         $this->get(route('student.dashboard'))->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Continue your homework');
     }
@@ -328,10 +328,10 @@ class StudentTeachingExperienceTest extends TestCase
         $ledger->createPackage($student, 'First', 1, '40', '0', 'USD', null, 'first', entitlementCode: 'one_hour');
         $ledger->createPackage($student, 'Second', 1, '40', '0', 'USD', null, 'second', entitlementCode: 'one_hour');
         $this->portal($student);
-        $this->get(route('student.dashboard'))->assertViewHas('canBookWithPackage', false)->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Review your learning progress');
+        $this->get(route('student.dashboard'))->assertViewHas('canBookWithPackage', false)->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Nothing Needs Your Attention Right Now');
 
         $type->update(['required_entitlement_units' => 1]);
-        $this->get(route('student.dashboard'))->assertViewHas('canBookWithPackage', true)->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Book your next session');
+        $this->get(route('student.dashboard'))->assertViewHas('canBookWithPackage', true)->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Book Your Next Lesson');
     }
 
     public function test_notifications_are_owner_scoped_persistent_and_do_not_repeat_after_read(): void
@@ -373,7 +373,7 @@ class StudentTeachingExperienceTest extends TestCase
         $this->assertEquals(['lesson' => 1, 'material' => 1, 'resource' => 1, 'form' => 1], $counts);
 
         $lesson->update(['status' => 'cancelled']);
-        $this->get(route('student.notifications.index'))->assertSeeText('Booking Canceled');
+        $this->get(route('student.notifications.index'))->assertSeeText('Cancelled');
         $this->get(route('student.notifications.index'))->assertOk();
         $this->assertSame(2, StudentNotification::where('student_id', $student->id)->where('type', 'lesson')->count());
         $this->assertSame(1, StudentNotification::where('student_id', $student->id)->where('type', 'material')->count());

@@ -51,7 +51,7 @@ class StudentTeachingReadModel
             'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
         ])->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('id')->get();
         $plans = $this->shared(LearningPlan::query(), $student, false)->with('milestones')->orderByDesc('id')->get();
-        $resources = $this->resources($student);
+        $resources = $this->resources($student, studentDiscovery: true);
         $errors = $this->shared(StudentErrorLog::query(), $student)->orderByDesc('id')->get();
         $tags = $this->shared(TeachingTag::query(), $student)->orderBy('label')->orderBy('id')->get();
         $notesCount = StudentBin::query()->where('student_id', $student->id)->where('student_visible', true)->count();
@@ -63,7 +63,7 @@ class StudentTeachingReadModel
         $unreviewed = $resources->whereNull('reviewed_at')->first();
         $hasUpcoming = $bookings->contains(fn (Booking $booking): bool => $booking->status === 'confirmed' && $booking->start_at_utc->isFuture());
         $canBook = false;
-        $requirements = SessionType::query()->where('active', true)->where('funding_mode', 'package')
+        $requirements = SessionType::query()->studentDiscoverable()->where('funding_mode', 'package')
             ->get(['required_entitlement_type_id', 'required_entitlement_units']);
         $notices = [];
         $events = [];
@@ -81,7 +81,10 @@ class StudentTeachingReadModel
                 if (! $low && ! $soon) {
                     continue;
                 }
-                $message = $balance['label'].' · '.$package->package_name.' · Purchase #'.$package->id.' · '.$balance['available'].' available · Expiry '.$package->expiryLabel();
+                $expiryLabel = $package->expires_at
+                    ? $package->expires_at->setTimezone($student->preferred_timezone ?: $this->timezones->getBusinessTimezone())->format('j M Y, g:i:s A T')
+                    : $package->expiryLabel();
+                $message = $balance['label'].' · '.$package->package_name.' · Purchase #'.$package->id.' · '.$balance['available'].' available · Valid until: '.$expiryLabel;
                 $notices[] = $message;
                 $events[] = ['key' => 'entitlement:'.$balance['id'].':'.$balance['available'].':'.$expiry.':'.($soon ? 'expiry' : 'low'), 'type' => 'entitlement', 'title' => $soon ? 'Package expiry notice' : 'Low entitlement balance', 'message' => $message, 'link' => route('student.dashboard', [], false).'#credits-title'];
             }
@@ -97,17 +100,22 @@ class StudentTeachingReadModel
         }
         foreach ($bookings as $booking) {
             $events[] = ['key' => 'lesson:'.$booking->id.':'.$booking->status.':'.$booking->start_at_utc->timestamp.':'.(int) $booking->admin_reconfirmation_needed,
-                'type' => 'lesson', 'title' => 'Lesson update', 'message' => 'Lesson #'.$booking->id.' · '.$booking->studentStatusLabel().'. Check your sessions for the current time.', 'link' => route('student.dashboard', [], false).'#history-title'];
+                'type' => 'lesson', 'title' => 'Lesson Update', 'message' => 'Session #'.$booking->id.' · '.app(StudentPortalService::class)->bookingStatusLabel($booking).'. Check your session details for the current date and time.', 'link' => route('student.bookings.show', $booking->id, false)];
             foreach ($booking->lessonMaterials as $material) {
                 $events[] = ['key' => 'material:'.$material->id, 'type' => 'material', 'title' => 'Lesson material published', 'message' => 'Shared material is available in your lesson workspace.', 'link' => route('student.lessons.show', $booking->id, false)];
             }
         }
         $this->notifications->synchronize($student, array_merge($events, $this->learningNotifications->facts($student)));
-        $action = $outstandingForm ? ['label' => 'Finish your questionnaire', 'detail' => $outstandingForm->title, 'url' => route('student.forms.show', $outstandingForm->slug)]
+        $formLabel = $outstandingForm ? match ($outstandingForm->slug) {
+            'short-form' => 'Finish Your Learning Goals',
+            'long-form' => 'Finish Your Learning Profile',
+            default => 'Finish Your Questionnaire',
+        } : '';
+        $action = $outstandingForm ? ['label' => $formLabel, 'detail' => $outstandingForm->title, 'button' => 'Continue Questionnaire', 'url' => route('student.forms.show', $outstandingForm->slug)]
             : ($openHomework ? ['label' => 'Continue your homework', 'detail' => $openHomework->title, 'url' => route('student.teaching.index').'#homework-'.$openHomework->id]
             : ($unreviewed ? ['label' => 'Review your assigned resource', 'detail' => $unreviewed->resource->title, 'url' => route('student.teaching.index').'#resources']
-            : (! $hasUpcoming && $canBook ? ['label' => 'Book your next session', 'detail' => 'Use a compatible package entitlement.', 'url' => route('student.bookings.create')]
-            : ['label' => 'Review your learning progress', 'detail' => 'Your tutor’s plans, notes and practice goals.', 'url' => route('student.teaching.index')])));
+            : (! $hasUpcoming && $canBook ? ['label' => 'Book Your Next Lesson', 'detail' => 'Choose a lesson using your eligible credits.', 'url' => route('student.bookings.create')]
+            : ['label' => 'Nothing Needs Your Attention Right Now', 'detail' => 'Your upcoming lessons and learning activity will appear below.', 'button' => 'View My Learning', 'url' => route('student.learning.index')])));
 
         return [
             'homework' => $homework, 'learningPlans' => $plans, 'assignedResources' => $resources, 'errorLog' => $errors, 'teachingTags' => $tags,
@@ -119,9 +127,9 @@ class StudentTeachingReadModel
     }
 
     /** @return Collection<int, ResourceAssignment> */
-    public function resources(Student $student): Collection
+    public function resources(Student $student, bool $studentDiscovery = false): Collection
     {
-        return $this->shared(ResourceAssignment::query(), $student)->whereHas('resource', fn (Builder $query) => $query->published())
+        return $this->shared(ResourceAssignment::query(), $student)->whereHas('resource', fn (Builder $query) => $query->published()->when($studentDiscovery, fn (Builder $query) => $query->where('student_discoverable', true)))
             ->with('resource:id,title,short_description')->orderByDesc('id')->get();
     }
 }

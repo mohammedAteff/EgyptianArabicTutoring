@@ -6,9 +6,9 @@
     <section aria-label="Current session" class="mt-5 rounded-2xl border border-stone-200 bg-white p-5">
         <h2 class="font-semibold">Current session · {{ $booking->sessionType?->title }}</h2>
         <p class="mt-2">{{ $booking->start_at_utc->copy()->setTimezone($timezone)->format('D, M j, Y · g:i A') }} – {{ $booking->end_at_utc->copy()->setTimezone($timezone)->format('g:i A') }}</p>
-        <p class="mt-1 text-sm text-stone-500">{{ $timezone }} · Your existing entitlement stays attached.</p>
+        <p class="mt-1 text-sm text-stone-500">{{ $timezone }}@if($booking->funding_mode === 'package') · Your existing lesson credit stays attached.@endif</p>
     </section>
-    <x-student-timezone :timezone="$timezone" />
+    <x-student-timezone :timezone="$timezone" :student-view="true" />
     <p class="text-sm text-stone-600">Choose a date and available time, review the change, then confirm. Your tutor will reconfirm the meeting link.</p>
     @if($errors->any())<div role="alert" class="mt-5 rounded-xl bg-rose-50 p-4 text-rose-700">{{ $errors->first() }}</div>@endif
     <div class="mt-7" x-data="{ selectedDate: @js(array_key_first($slots)), selectedSlot: '', selectedLabel: '', reviewing: false }" @date-selected="selectedSlot = ''; selectedLabel = ''; reviewing = false">
@@ -40,7 +40,7 @@
                 <div><dt class="text-sm text-stone-500">New time</dt><dd x-text="selectedLabel"></dd></div>
                 <div><dt class="text-sm text-stone-500">Selected timezone</dt><dd>{{ $timezone }}</dd></div>
             </dl>
-            <p class="mt-5 text-sm text-stone-600">This change uses the same entitlement type and units. No additional credit is spent.</p>
+            @if($booking->funding_mode === 'package')<p class="mt-5 text-sm text-stone-600">This change uses the same lesson credit type and amount. No additional credit is spent.</p>@endif
             <form method="POST" action="{{ route('student.bookings.reschedule.submit', $booking->id) }}" class="mt-5 flex flex-wrap gap-3">
                 @csrf
                 <input type="hidden" name="timezone" value="{{ $timezone }}"><input type="hidden" name="idempotency_key" value="{{ $idempotencyKey }}"><input type="hidden" name="slot_id" :value="selectedSlot">

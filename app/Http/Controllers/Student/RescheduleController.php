@@ -10,6 +10,7 @@ use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentUnavailability;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -53,6 +54,18 @@ class RescheduleController extends Controller
         $slots = app(BookingSlotPresenter::class)->forMonth(
             $ownedBooking->sessionType, $timezone, $fromDate, $fromDate->endOfMonth()->min($today->addDays(60)), $visitorToken,
         );
+        $unavailablePeriods = StudentUnavailability::query()->where('student_id', $student->id)->where('status', 'active')
+            ->where('ends_at_utc', '>', $fromDate->utc())
+            ->where('starts_at_utc', '<', $fromDate->endOfMonth()->min($today->addDays(60))->addDay()->utc())->get();
+        foreach ($slots as $date => $daySlots) {
+            $slots[$date] = array_values(array_filter($daySlots, fn (array $slot): bool => ! $unavailablePeriods->contains(
+                fn (StudentUnavailability $period): bool => $period->starts_at_utc->lt(CarbonImmutable::parse($slot['slot_end_utc'], 'UTC'))
+                    && $period->ends_at_utc->gt(CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')),
+            )));
+            if ($slots[$date] === []) {
+                unset($slots[$date]);
+            }
+        }
 
         return view('student.reschedule', [
             'booking' => $ownedBooking,

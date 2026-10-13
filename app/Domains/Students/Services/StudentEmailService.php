@@ -19,7 +19,35 @@ class StudentEmailService
 {
     public function trusted(Student $student, string $email): bool
     {
-        return $email === $student->email_normalized || StudentEmail::query()->where('student_id', $student->id)->where('email_normalized', $email)->exists();
+        return $email === $student->email_normalized || $student->verifiedEmails()->where('email_normalized', $email)->exists();
+    }
+
+    public function addContactAddress(Student $student, string $email): void
+    {
+        $email = app(StudentIdentityService::class)->normalizeEmail($email) ?? '';
+        app(EmailQualityService::class)->validate($email);
+        $key = 'student-secondary-email:'.$student->id;
+        if (RateLimiter::tooManyAttempts($key, 6)) {
+            throw ValidationException::withMessages(['email' => 'Please wait before adding another email address.']);
+        }
+        RateLimiter::hit($key, 3600);
+
+        try {
+            DB::transaction(function () use ($student, $email): void {
+                Student::withTrashed()->orderBy('id')->lockForUpdate()->get(['id']);
+                $lockedStudent = Student::verified()->whereNull('suspended_at')->whereNull('merged_into_student_id')->whereKey($student->id)->lockForUpdate()->firstOrFail();
+                $this->assertAvailable($lockedStudent, $email);
+
+                if ($lockedStudent->email_normalized === $email || StudentEmail::query()->where('student_id', $lockedStudent->id)->where('email_normalized', $email)->exists()) {
+                    throw ValidationException::withMessages(['email' => 'This email address is already connected to your student profile.']);
+                }
+
+                StudentEmail::create(['student_id' => $lockedStudent->id, 'email_normalized' => $email, 'verified_at' => null]);
+                app(AuditLogService::class)->log('student_contact_email_added', Student::class, $lockedStudent->id, null, ['email' => $email, 'student_id' => $lockedStudent->id], null);
+            }, 5);
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages(['email' => 'This email cannot be added to this profile.']);
+        }
     }
 
     public function requestVerification(Student $student, string $email): void
@@ -65,7 +93,10 @@ class StudentEmailService
                     throw ValidationException::withMessages(['email' => 'This verification link is invalid or expired.']);
                 }
                 $this->assertAvailable($student, $challenge->email_normalized);
-                StudentEmail::firstOrCreate(['email_normalized' => $challenge->email_normalized], ['student_id' => $student->id, 'verified_at' => now('UTC')]);
+                $address = StudentEmail::firstOrCreate(['email_normalized' => $challenge->email_normalized], ['student_id' => $student->id, 'verified_at' => now('UTC')]);
+                if ($address->verified_at === null) {
+                    $address->update(['verified_at' => now('UTC')]);
+                }
                 $challenge->update(['consumed_at' => now('UTC')]);
                 app(AuditLogService::class)->log('student_secondary_email_verified', Student::class, $student->id, null, ['email' => $challenge->email_normalized, 'student_id' => $student->id], null);
             }, 5);
