@@ -20,7 +20,7 @@ class FormCompletionController extends Controller
         }
         $items = [];
         foreach ($query->withExists(['bookings as has_upcoming' => fn ($query) => $query->where('start_at_utc', '>', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending'])])->lazy(100) as $student) {
-            $metadata = $forms->forStudent($student);
+            $metadata = $forms->forStudent($student, includeIntake: true);
             $short = $metadata->firstWhere('slug', 'short-form');
             $long = $metadata->firstWhere('slug', 'long-form');
             $matches = match ($filters['filter'] ?? 'all') {

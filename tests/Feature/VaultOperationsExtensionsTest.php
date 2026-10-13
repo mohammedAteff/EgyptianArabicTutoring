@@ -10,6 +10,7 @@ use App\Domains\Booking\Models\BookingPolicyDecision;
 use App\Domains\Booking\Models\MeetingRoom;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Forms\Services\FormAssignmentService;
 use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Forms\Services\FormCompletionReadModel;
 use App\Domains\Reporting\Services\BusinessActivityReadModel;
@@ -148,5 +149,32 @@ class VaultOperationsExtensionsTest extends TestCase
         $this->get(route('student.dashboard'))->assertOk()->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Book Your Next Lesson');
         $session->update(['required_entitlement_units' => 1]);
         $this->get(route('student.dashboard'))->assertOk()->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Schedule Your Remaining Credits');
+    }
+
+    public function test_exhausted_custom_packages_offer_renewal_and_paused_packages_do_not(): void
+    {
+        $student = Student::factory()->verified()->create();
+        $ledger = app(StudentLedgerService::class);
+        $package = $ledger->createPackage($student, 'Custom learning package', 1, '40', '0', 'USD', null, 'custom-renewal', entitlementCode: 'one_hour');
+        $ledger->adjustCredits($package, -1, 'Exhausted test balance', 'custom-exhausted', allocationId: $package->entitlements()->sole()->id);
+        $this->actingAs($student, 'student')->withSession(['student_id' => $student->id, 'student_auth_expires_at' => now('UTC')->addHour()->toIso8601String()]);
+        $this->get(route('student.dashboard'))->assertOk()->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Plan Your Next Package');
+        $package->update(['paused_at' => now('UTC')]);
+        $this->get(route('student.dashboard'))->assertOk()->assertViewHas('nextAction', fn (array $action): bool => $action['label'] === 'Nothing Needs Your Attention Right Now');
+    }
+
+    public function test_staff_intake_overview_includes_missing_prebooking_forms_without_changing_portal_assignments(): void
+    {
+        $actor = Administrator::factory()->create();
+        $builder = app(FormBuilderService::class);
+        $form = $builder->create(['title' => 'Intake for existing learners', 'slug' => 'short-form', 'trigger' => 'pre_booking', 'is_mandatory' => true], [['question_key' => 'goal', 'label' => 'Your goal', 'question_type' => 'short_text']], $actor);
+        $form = $builder->publish($form->id, $form->active_version_id, $form->lock_version);
+        $student = Student::factory()->verified()->create();
+        Booking::factory()->create(['student_id' => $student->id]);
+        $this->assertFalse(app(FormAssignmentService::class)->isAssignedTo($form, $student));
+        $this->actingAs($actor, 'web')->get(route('admin.forms.completion', ['filter' => 'short_missing']))->assertOk()->assertSee('Intake for existing learners')->assertViewHas('rows', fn ($rows): bool => $rows->count() === 1 && $rows->first()['forms']->firstWhere('slug', 'short-form')['status'] === 'missing');
+        $this->assertFalse(app(FormAssignmentService::class)->isAssignedTo($form, $student));
+        FormSubmission::query()->create(['student_id' => $student->id, 'form_version_id' => $form->published_version_id, 'status' => 'submitted', 'submitted_at' => now('UTC')]);
+        $this->get(route('admin.forms.completion', ['filter' => 'short_missing']))->assertOk()->assertViewHas('rows', fn ($rows): bool => $rows->isEmpty());
     }
 }

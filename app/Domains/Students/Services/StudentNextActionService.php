@@ -63,7 +63,7 @@ class StudentNextActionService
             }
         }
         $balances = $this->entitlements->forPackages($packages);
-        if ($packages->contains(fn (StudentPackage $package): bool => $package->identity_state === 'mapped' && ! $package->isPaused() && ($package->validity_days === null || $package->expiryDeadline() !== null)) && array_sum(array_column($balances, 'available')) === 0) {
+        if ($packages->contains(fn (StudentPackage $package): bool => in_array($package->identity_state, ['mapped', 'custom'], true) && ! $package->isPaused() && ($package->validity_days === null || $package->expiryDeadline() !== null)) && array_sum(array_column($balances, 'available')) === 0) {
             return ['label' => 'Plan Your Next Package', 'detail' => 'Contact your tutor to discuss continuing lessons and renewal.', 'button' => 'View Package Options', 'url' => route('home').'#pricing'];
         }
 

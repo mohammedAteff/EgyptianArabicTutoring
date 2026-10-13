@@ -2,6 +2,7 @@
 
 namespace App\Domains\Forms\Services;
 
+use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Students\Models\Student;
 use Illuminate\Support\Collection;
@@ -11,9 +12,15 @@ class FormCompletionReadModel
     public function __construct(private FormAssignmentService $assignments) {}
 
     /** @return Collection<int, array<string, mixed>> */
-    public function forStudent(Student $student): Collection
+    public function forStudent(Student $student, bool $includeIntake = false): Collection
     {
         $forms = $this->assignments->assignedTo($student);
+        if ($includeIntake) {
+            $intake = Form::query()->where('slug', 'short-form')->where('status', 'published')->whereNotNull('published_version_id')->first();
+            if ($intake && ! $forms->contains('id', $intake->id)) {
+                $forms->push($intake);
+            }
+        }
         $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block')])]);
         $submissions = FormSubmission::query()->where('student_id', $student->id)->whereIn('form_version_id', $forms->pluck('published_version_id'))
             ->withCount(['answers' => fn ($query) => $query->whereNotNull('value_text')->whereRaw("TRIM(value_text) <> ''")->where('value_text', '!=', '[]')])->orderByDesc('id')->get();
