@@ -24,7 +24,6 @@
                 @if($selectedCategory)<a href="{{ localized_url('resources') }}" class="mt-5 inline-block font-bold text-terracotta-600 underline">Browse All Resources</a>@endif
             </div>
         @endif
-        <p class="text-sm text-stone-500">The Alphabet Workbook is awaiting its confirmed file and is not available to download yet.</p>
     </section>
     <x-public-copy-section :section="config('public_content.resources.2')" />
     <x-public-copy-section :section="config('public_content.resources.3')" />

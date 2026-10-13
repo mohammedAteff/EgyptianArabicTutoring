@@ -8,6 +8,7 @@ use App\Domains\Resources\Models\ResourceRequest;
 use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentEmail;
+use App\Domains\Students\Services\StudentEmailService;
 use App\Mail\StudentSecondaryEmailVerification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -24,11 +25,11 @@ class StudentSecondaryEmailTest extends TestCase
         $this->partialMock(EmailQualityService::class)->shouldReceive('dnsRecords')->andReturn([['type' => 'MX', 'target' => 'mail.routable.example']]);
     }
 
-    public function test_verification_is_owned_single_use_and_enables_existing_two_identifier_login(): void
+    public function test_legacy_verification_is_owned_single_use_and_enables_existing_two_identifier_login(): void
     {
         $student = Student::factory()->verified()->create();
         $this->studentSession($student);
-        $this->post(route('student.profile.email.request'), ['email' => 'SECONDARY@routable.example'])->assertSessionHasNoErrors();
+        app(StudentEmailService::class)->requestVerification($student, 'SECONDARY@routable.example');
         $url = '';
         Mail::assertSent(StudentSecondaryEmailVerification::class, function ($mail) use (&$url): bool {
             $url = $mail->verificationUrl;
@@ -54,7 +55,7 @@ class StudentSecondaryEmailTest extends TestCase
         $other = Student::factory()->verified()->create();
         $this->studentSession($student);
         $this->post(route('student.profile.email.request'), ['email' => $other->email])->assertSessionHasErrors('email');
-        $this->post(route('student.profile.email.request'), ['email' => 'expire@routable.example'])->assertSessionHasNoErrors();
+        app(StudentEmailService::class)->requestVerification($student, 'expire@routable.example');
         $url = '';
         Mail::assertSent(StudentSecondaryEmailVerification::class, function ($mail) use (&$url): bool {
             $url = $mail->verificationUrl;

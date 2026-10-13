@@ -62,7 +62,7 @@ class StudentLearningTest extends TestCase
         $this->grant($student, $lesson->course);
         $this->grant($student, $lesson);
         $response = $this->signIn($student)->get(route('student.learning.index'));
-        $response->assertOk()->assertViewHas('cards', fn ($cards) => $cards->count() === 1)->assertSee('My Learning')->assertSee('Continue Learning')->assertSee('Completed')->assertSee('Tutoring work')->assertSee(route('student.teaching.index'), false)->assertSee('0%')->assertHeader('Cache-Control', 'no-store, private');
+        $response->assertOk()->assertViewHas('cards', fn ($cards) => $cards->count() === 1)->assertSee('My Learning')->assertSee('Continue Learning')->assertSee('Completed')->assertSeeText('Practice & Feedback')->assertSee(route('student.teaching.index'), false)->assertSee('0%')->assertHeader('Cache-Control', 'no-store, private');
         $this->assertDatabaseCount('lms_lesson_progress', 0);
         $this->assertDatabaseCount('lms_learning_visits', 0);
         $this->assertDatabaseCount('student_notifications', 0);
@@ -167,9 +167,9 @@ class StudentLearningTest extends TestCase
         $lesson = $this->lesson();
         $this->grant($student, $lesson->course, ['access_mode' => 'fixed', 'starts_at' => '2026-10-07T10:00:00Z', 'expires_at' => '2026-10-08T12:00:00Z']);
         $this->grant($student, $lesson->course, ['access_mode' => 'relative', 'relative_days' => 2]);
-        $this->signIn($student)->get(route('student.learning.index'))->assertSee('9 Oct 2026, 15:00 EEST');
+        $this->signIn($student)->get(route('student.learning.index'))->assertSee('9 Oct 2026, 3:00 PM EEST');
         $this->grant($student, $lesson->course);
-        $this->get(route('student.learning.index'))->assertSee('no scheduled end')->assertDontSee('9 Oct 2026, 15:00');
+        $this->get(route('student.learning.index'))->assertSee('no scheduled end')->assertDontSee('9 Oct 2026, 3:00 PM');
     }
 
     public function test_native_request_id_tampering_cannot_change_student_or_nested_scope(): void
@@ -195,8 +195,8 @@ class StudentLearningTest extends TestCase
         $sibling = Lesson::factory()->published()->create(['course_id' => $lesson->course_id, 'section_id' => $lesson->section_id, 'sort_order' => 1]);
         $this->grant($student, $lesson, ['access_mode' => 'relative', 'relative_days' => 1]);
         $this->grant($student, $sibling, ['access_mode' => 'relative', 'relative_days' => 3]);
-        $this->signIn($student)->get(route('student.learning.index'))->assertSee('10 Oct 2026, 15:00 EEST');
-        $this->get(route('student.learning.lessons.show', [$lesson->course, $lesson]))->assertViewHas('accessEndsAt', fn ($instant) => $instant->format('Y-m-d H:i:s') === '2026-10-08 12:00:00')->assertSee('8 Oct 2026, 15:00 EEST')->assertDontSee('10 Oct 2026, 15:00');
+        $this->signIn($student)->get(route('student.learning.index'))->assertSee('10 Oct 2026, 3:00 PM EEST');
+        $this->get(route('student.learning.lessons.show', [$lesson->course, $lesson]))->assertViewHas('accessEndsAt', fn ($instant) => $instant->format('Y-m-d H:i:s') === '2026-10-08 12:00:00')->assertSee('8 Oct 2026, 3:00 PM EEST')->assertDontSee('10 Oct 2026, 3:00 PM');
     }
 
     public function test_private_notes_create_edit_delete_escape_and_reject_foreign_ids_and_stale_edits(): void
@@ -304,7 +304,7 @@ class StudentLearningTest extends TestCase
         $this->video($lesson, 'https://vimeo.com/123456');
         $this->video($lesson);
         LessonBlock::factory()->create(['lesson_id' => $lesson->id, 'kind' => 'bunny_video', 'status' => 'placeholder', 'payload' => null]);
-        $this->signIn($student)->get(route('student.learning.lessons.show', [$lesson->course, $lesson]))->assertOk()->assertSee('أهلاً Hello')->assertSee('dir="auto"', false)->assertSee('player.vimeo.com/video/123456')->assertSee('data-lms-video', false)->assertSee('Protected video playback is not available yet')->assertSee('This content is currently unavailable.')->assertDontSee('PERMANENT-UNSAFE')->assertDontSee('javascript:alert')->assertDontSee('<script>INJECTED', false)->assertDontSee('evil.test');
+        $this->signIn($student)->get(route('student.learning.lessons.show', [$lesson->course, $lesson]))->assertOk()->assertSee('أهلاً Hello')->assertSee('dir="auto"', false)->assertSee('player.vimeo.com/video/123456')->assertSee('data-lms-video', false)->assertSee("This learning video isn't available yet", false)->assertSee('This content is currently unavailable.')->assertDontSee('PERMANENT-UNSAFE')->assertDontSee('javascript:alert')->assertDontSee('<script>INJECTED', false)->assertDontSee('evil.test');
     }
 
     public function test_current_published_resources_and_private_course_files_require_nested_access(): void

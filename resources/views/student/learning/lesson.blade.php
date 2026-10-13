@@ -54,8 +54,8 @@
                                 <p class="text-sm text-stone-600">This content is currently unavailable.</p>
                         @endswitch
                     </section>
-                @empty<p class="rounded-2xl border border-dashed border-stone-300 p-6 text-sm text-stone-600">No lesson content is available yet.</p>@endforelse
-                @if($hasBunnyPlaceholder)<p role="status" class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Protected video playback is not available yet. No public video link is provided.</p>@endif
+                @empty<p class="rounded-2xl border border-dashed border-stone-300 p-6 text-sm text-stone-600">Lesson Content Isn't Available Yet. Learning materials will appear here when they're ready.</p>@endforelse
+                @if($hasBunnyPlaceholder)<p role="status" class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">This learning video isn't available yet. You can continue with any other available lesson materials.</p>@endif
             </div>
             <nav aria-label="Lesson navigation" class="grid grid-cols-2 gap-3">
                 @if($previousLesson)<a href="{{ route('student.learning.lessons.show', [$course, $previousLesson]) }}" class="min-h-11 rounded-xl border border-stone-300 bg-white p-4 text-sm text-nile-900"><span class="block text-xs text-stone-500">← Previous lesson</span><span dir="auto" class="mt-1 block break-words font-semibold">{{ $previousLesson->title }}</span></a>@else<div></div>@endif
@@ -72,19 +72,19 @@
                 <p data-lms-jump-status role="status" class="text-xs text-stone-500"></p>
             </section>
             <section aria-labelledby="private-lesson-notes" class="space-y-5 rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
-                <div class="space-y-1"><h2 id="private-lesson-notes" class="text-lg font-semibold">Your private notes</h2><p class="text-sm text-stone-500">Visible only to you.</p></div>
+                <div class="space-y-1"><h2 id="private-lesson-notes" class="text-lg font-semibold">Private Lesson Notes</h2><p class="text-sm text-stone-500">Keep your study notes connected to this lesson. You can return to them from Private Lesson Notes.</p></div>
                 <form method="POST" action="{{ route('student.learning.notes.store', [$course, $lesson]) }}" class="space-y-3">
-                    @csrf<label for="new-lesson-note" class="text-sm font-medium">Add a note</label><textarea id="new-lesson-note" dir="auto" name="body" rows="4" maxlength="10000" required class="block w-full rounded-xl border border-stone-300 p-3 text-sm leading-relaxed">{{ old('body') }}</textarea><button class="min-h-11 rounded-xl bg-nile-800 px-5 text-sm font-semibold text-white">Save private note</button>
+                    @csrf<label for="new-lesson-note" class="text-sm font-medium">Add a note</label><textarea id="new-lesson-note" dir="auto" name="body" rows="4" maxlength="10000" required class="block w-full rounded-xl border border-stone-300 p-3 text-sm leading-relaxed">{{ old('body') }}</textarea><button class="min-h-11 rounded-xl bg-nile-800 px-5 text-sm font-semibold text-white">Save Note</button>
                 </form>
                 @foreach($notes as $note)
                     <article class="space-y-3 border-t border-stone-100 pt-5">
-                        <p dir="auto" class="whitespace-pre-wrap break-words text-sm leading-7">{{ $note->body }}</p><p class="text-xs text-stone-500">Updated {{ $note->updated_at->copy()->timezone($timezone)->format('j M Y, H:i T') }}</p>
-                        <details><summary class="min-h-11 cursor-pointer py-3 text-sm font-semibold text-nile-800">Edit note</summary><form method="POST" action="{{ route('student.learning.notes.update', [$course, $lesson, $note]) }}" class="space-y-3">@csrf @method('PATCH')<input type="hidden" name="version" value="{{ $note->lock_version }}"><label class="sr-only" for="edit-note-{{ $note->id }}">Edit private note</label><textarea id="edit-note-{{ $note->id }}" dir="auto" name="body" rows="4" maxlength="10000" required class="block w-full rounded-xl border border-stone-300 p-3 text-sm">{{ $note->body }}</textarea><button class="min-h-11 rounded-xl border border-nile-100 px-4 text-sm font-semibold text-nile-900">Save changes</button></form></details>
-                        <form method="POST" action="{{ route('student.learning.notes.destroy', $note) }}">@csrf @method('DELETE')<input type="hidden" name="version" value="{{ $note->lock_version }}"><button class="min-h-11 text-xs font-semibold text-stone-600">Delete private note</button></form>
+                        <p dir="auto" class="whitespace-pre-wrap break-words text-sm leading-7">{{ $note->body }}</p><p class="text-xs text-stone-500">Updated {{ $note->updated_at->copy()->timezone($timezone)->format('j M Y, g:i A T') }}</p>
+                        <details><summary class="min-h-11 cursor-pointer py-3 text-sm font-semibold text-nile-800">Edit note</summary><form method="POST" action="{{ route('student.learning.notes.update', [$course, $lesson, $note]) }}" class="space-y-3">@csrf @method('PATCH')<input type="hidden" name="version" value="{{ $note->lock_version }}"><label class="sr-only" for="edit-note-{{ $note->id }}">Edit Lesson Note</label><textarea id="edit-note-{{ $note->id }}" dir="auto" name="body" rows="4" maxlength="10000" required class="block w-full rounded-xl border border-stone-300 p-3 text-sm">{{ $note->body }}</textarea><button class="min-h-11 rounded-xl border border-nile-100 px-4 text-sm font-semibold text-nile-900">Save changes</button></form></details>
+                        <form method="POST" action="{{ route('student.learning.notes.destroy', $note) }}">@csrf @method('DELETE')<input type="hidden" name="version" value="{{ $note->lock_version }}"><button class="min-h-11 text-xs font-semibold text-stone-600">Delete Note</button></form>
                     </article>
                 @endforeach
             </section>
-            <p class="text-xs text-stone-500">@if($accessEndsAt)Current access available until {{ $accessEndsAt->timezone($timezone)->format('j M Y, H:i T') }}.@endif Opening lessons does not record completion.</p>
+            <p class="text-xs text-stone-500">@if($accessEndsAt)Current access available until {{ $accessEndsAt->timezone($timezone)->format('j M Y, g:i A T') }}.@endif Opening lessons does not record completion.</p>
         </div>
     </div>
 </div>

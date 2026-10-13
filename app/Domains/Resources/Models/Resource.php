@@ -44,6 +44,7 @@ class Resource extends Model
         'is_gated',
         'featured',
         'public_catalogue',
+        'student_discoverable',
         'sort_order',
         'published_at',
     ];
@@ -54,6 +55,7 @@ class Resource extends Model
             'is_gated' => 'boolean',
             'featured' => 'boolean',
             'public_catalogue' => 'boolean',
+            'student_discoverable' => 'boolean',
             'sort_order' => 'integer',
             'file_size' => 'integer',
             'published_at' => 'datetime',

@@ -31,6 +31,7 @@ class SessionType extends Model
         'currency',
         'active',
         'public_bookable',
+        'student_discoverable',
     ];
 
     protected function casts(): array
@@ -38,6 +39,7 @@ class SessionType extends Model
         return [
             'active' => 'boolean',
             'public_bookable' => 'boolean',
+            'student_discoverable' => 'boolean',
             'duration_minutes' => 'integer',
             'price' => 'decimal:2',
         ];
@@ -46,6 +48,11 @@ class SessionType extends Model
     public function scopePublicBookable(Builder $query): Builder
     {
         return $query->where('active', true)->where('public_bookable', true);
+    }
+
+    public function scopeStudentDiscoverable(Builder $query): Builder
+    {
+        return $query->where('active', true)->where('student_discoverable', true);
     }
 
     /** @return BelongsTo<EntitlementType, $this> */

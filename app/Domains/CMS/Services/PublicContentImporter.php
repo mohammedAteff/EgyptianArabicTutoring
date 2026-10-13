@@ -7,7 +7,6 @@ use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\Setting;
-use App\Domains\CMS\Models\SocialLink;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormQuestion;
 use App\Domains\Forms\Models\FormVersion;
@@ -46,7 +45,6 @@ class PublicContentImporter
                 'counters.live_users.public_enabled' => '0',
                 'counters.monthly_traffic.public_enabled' => '0',
                 'counters.learning_hours.public_enabled' => '0',
-                'whatsapp_public' => '0',
             ];
             foreach ($settings as $key => $value) {
                 $existing = Setting::query()->where('key', $key)->first();
@@ -81,10 +79,6 @@ class PublicContentImporter
             $hiddenResources = Resource::query()->where('slug', 'synthetic-followup-access-guide')
                 ->where('public_catalogue', true)->update(['public_catalogue' => false]);
 
-            foreach (SocialLink::query()->where('enabled', true)->get() as $social) {
-                $this->preserve($social);
-                $social->update(['enabled' => false]);
-            }
             foreach (Game::query()->where('target_url', 'https://mohamedateff.com/6word')->get() as $game) {
                 $this->preserve($game);
                 $game->update(['title' => '6-Word Story', 'description' => config('public_content.game_feature.description'), 'badge' => 'Speaking & Storytelling']);

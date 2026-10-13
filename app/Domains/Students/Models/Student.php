@@ -71,7 +71,7 @@ class Student extends Authenticatable
 
     public function verifiedEmails(): HasMany
     {
-        return $this->hasMany(StudentEmail::class);
+        return $this->hasMany(StudentEmail::class)->whereNotNull('verified_at');
     }
 
     public function bookings(): HasMany

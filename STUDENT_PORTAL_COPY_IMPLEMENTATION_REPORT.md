@@ -1,12 +1,12 @@
 # Student Portal Copy Discovery and Implementation Report
 
 Date: 9 October 2026 (Africa/Cairo)  
-Status: **DISCOVERY COMPLETE — IMPLEMENTATION NOT STARTED**  
-Approval: **Overall plan and student decisions S1–S5 pending**
+Status: **IMPLEMENTED — AUTOMATED ACCEPTANCE PASSED; BROWSER LIMITATIONS DOCUMENTED**
+Approval: **Overall plan, S1–S5 and bounded SP-01–SP-04 approved; SP-05 reproduced on both pickers and implemented within the approved display-only scope**
 
-The existing portal supports most of the supplied experience. The work should mainly update student-facing presentation around existing services. Additional emails, browser authorization, QA discovery, future Session Details and private-note wording need explicit decisions. No application code, schema, business/content record, dependency or configuration has been changed for this student assignment. Only this requested report and a sign-in review screenshot have been created.
+The approved Student Portal implementation is complete in the isolated student worktree. Automated acceptance passed; browser evidence and the remaining native-dialog limitation are recorded below. The discovery findings describe the original reviewed state; subsequent owner decisions, implementation and fresh evidence are recorded in the implementation log and final acceptance section. This report does not authorize deployment.
 
-The earlier website implementation is a separate, still-uncommitted baseline. Its approved financial corrections, public copy and Blog implementation must be preserved. This report does not authorize deployment or another financial-policy change.
+The completed Public Website/Blog work was preserved as local snapshot `b447de64039a700748fe38d42da3aa8974f06ec0` before Student Portal edits. The student branch descends from that exact snapshot. Its approved financial corrections, public copy and Blog implementation are preserved; this assignment adds no further financial-policy change.
 
 ## Sources and authority
 
@@ -383,4 +383,216 @@ Executed read-only inspection included:
 - Future verification must cover browser behavior, data preservation and current permissions, with actual test/build receipts. Earlier LMS/public evidence cannot substitute for it.
 - Production, the public marketing pages, admin presentation, financial/expiry policy and ongoing LMS architecture remain outside this implementation.
 
-**I am waiting for your approval before implementation.**
+The discovery approval checkpoint above was satisfied by the owner's subsequent approval. The following implementation log supersedes the historical NOT STARTED and pending-decision labels; the original findings remain as the reviewed baseline.
+
+## Approved implementation log
+
+Owner authority: [approval and boundaries](<C:/Users/e/.codex/attachments/1e52097a-2091-4efe-a911-0e9822ea77a0/Pasted text.txt>). S1 permits contact-only nullable addresses with explicit sign-in trust filters; S2 remains video-only; S3 permits only narrow discovery suppression with rights preserved and replacement records held; S4 permits appointment logistics without relaxing materials; S5 preserves the existing two notes systems with conservative wording. SP-01–SP-04 fixes are approved; SP-05 must be reproduced before a display-only correction. Shared ICS status, new learning content, real replacement records, contact destinations and production remain excluded.
+
+### Stage 0 — isolation established, runtime preflight in progress
+
+- Saved the completed Public Website/Blog work and reviewed discovery report in local baseline commit `b447de64039a700748fe38d42da3aa8974f06ec0` on `codex/public-copy-blog-v3`. The three pre-existing production reports remain untracked and untouched in the original checkout.
+- Created the attached managed worktree at `C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah`, based on that exact snapshot, then created local branch `codex/student-portal-copy`. No upstream/push/merge/deployment occurred. No repository deployment workflow or active local hook was found; unpublished local commits do not trigger a remote release.
+- Copied the installed dependencies and existing built assets to the isolated worktree, without dependency changes. Ignored preview `.env` derives from the committed test environment, uses `APP_ENV=testing`, `bolt_landing_test` at `127.0.0.1:3307`, array mail, synchronous queues and isolated file sessions/cache. The original environment and normal development database remain untouched.
+- Added the SP-04 pre-refresh guard in `tests/TestCase.php`: require testing, the exact dedicated database, local host/port, and actual `SELECT DATABASE()` identity before any refresh trait. Existing vendor/version checks remain. Negative and positive runtime evidence is pending.
+
+Student pages remain unimplemented. Test/build/browser receipts will be added as each stage is completed; none is inherited from the preceding task.
+
+### Current stage evidence
+
+- Stage 0 is verified: isolated runtime and PHP autoload paths resolve to the worktree; native PHP is `C:/Users/e/.config/herd/bin/php84/php.exe`. Herd's batch wrapper did not preserve regex arguments, so multi-class checks use the native executable. Two wrapper invocation errors ran no tests and are not application failures.
+- Negative safety check: a deliberately misconfigured authentication test refused `bolt_landing` before refresh/setup, with zero assertions. Normal development counts remained 3 students, 9 packages, 27 ledger rows and 20 notifications; no active legacy email challenge existed.
+- Fresh pre-implementation baseline: **120 tests passed, 886 assertions, 61.729 seconds** across authentication, secondary emails, credit booking, rescheduling, teaching, learning, notes and forms.
+- Stages 1–2 are implemented, awaiting full browser review: English-labelled student shell, brand/navigation/account menu and genuine unread count; supplied sign-in/profile copy; immediate contact-only address addition; explicit verified-only trust relation; video-scoped browser wording. Account suite: **18 passed, 177 assertions, 16.704 seconds**. Tests cover retained verified aliases/timestamps, no new mail or sign-in trust, collisions, ownership, invalid input, safe rollback, merge and erasure. Existing legacy verification-service/issued-link coverage remains; new profile POST creates no challenge or mail.
+- SP-05 reproduced before changing the display: the teacher offered four slots inside the owner's active unavailability and the authoritative rule rejected them. The UI exclusion now mirrors the same strict overlap predicate; correction test **1 passed, 4 assertions, 19.347 seconds**. Core scheduling rules remain unchanged.
+- Stage 3 is in progress: separate student discovery flags with exact ID-and-slug QA targeting, no record deletion/rename; staff/shared resource access retains its original query; student-only booking/planning choices use the new flags. Replacement real records remain held. New owner-scoped appointment details reuse current meeting/material/calendar/reschedule gates; notification links and booking review presentation are implemented, with expanded acceptance tests pending.
+
+No normal-development migration/data mutation or production action has occurred. The later page tracker and acceptance receipts will replace these in-progress entries as verification completes.
+
+- Expanded session acceptance: **111 passed, 542 assertions, 29.006 seconds**. Initial run exposed a test fixture's nonexistent material-status column, an assertion matching disabled CSS rather than the button attribute, a notification-view fallback omission, and an intentionally changed status caption. These were corrected and all cases rerun; none was skipped.
+- Stages 4–8 presentation is implemented and under verification: supplied learning/empty/course/lesson copy, supported homework and practice captions, real homework-feedback summary, narrow planning helpers, genuine statement/receipt amounts, student-only shared-view captions/times, conservative lesson-note wording and Learning Notes search/authorship. The absolute lesson-note privacy sentence was removed. Historical notification messages remain preserved, including any old date-format text; new expiry notices and exact package deadlines use AM/PM.
+- No package clock calculation, amount, refund, price, LMS completion or material-access rule was changed. Exact new package timestamps are formatted in the student display timezone; legacy calendar dates retain their original meaning. Staff timeline/note/statement presentation retains its original branch.
+- Current verification log: `storage/logs/student-session-tests.log`; learning/financial/notes display checks are running. SP-01 implementation and browser/build/static acceptance remain pending.
+
+### Stage 9 and integration checks
+
+- SP-01 is implemented in `resources/js/questionnaire-save.js`, imported by the existing app entry, with the original questionnaire conditional/value logic retained. Dirty state is immediate; saved state requires acknowledgement of the latest revision; errors keep answers pending; a native leave warning protects unsaved changes; final POST waits for any in-flight draft and retains the actual submit intent. No answers are put in browser storage. An inline fallback protects edits made before the bundle initializes or when it is unavailable. Save Draft bypasses final-only native required-field checks; final submission and server validation remain authoritative.
+- Nine deterministic JavaScript behavior tests passed (Node **24.19.0**): debounce protection, acknowledged save, stale acknowledgement/newer input, failure without endless retry, recovery, final-submit sequencing, cancelled validation, page-return edits and duplicate-request coalescing.
+- Fresh build: `npm run build` succeeded, Vite **8.3.0**, 83 modules, **5.09 seconds**. The inherited HLS chunk exceeds 500 kB; no dependency or provider change was made. A final build will include subsequent browser fixes if needed.
+- Learning/display run: 122 of 128 passed initially; six failures were expectations for deliberately replaced copy/24-hour display, not changes in access or amount calculations. Expectations were updated without removing their security/data assertions. A following 90-case run had two remaining old wrapper/status labels; those were updated with explicit booking-status view assertions, and all affected cases are being rerun.
+- SP-05 was independently reproduced on the reschedule picker (1 case, expected failure, 3 assertions). Existing `RescheduleService` also rejects owned active unavailability. Only the student picker now mirrors that same overlap predicate; shared availability, notice, concurrency, credit and reschedule services remain unchanged. Resource-discovery acceptance also checks retained assignments, staff projection and authorized direct delivery.
+- Pint ran successfully in fix mode, affecting import order/spacing in five files. The expanded core suite is running; static comparison and real-browser acceptance remain pending.
+
+### Fresh targeted and static acceptance
+
+- Latest targeted run: **164 tests passed, 1,171 assertions, 44.843 seconds**. It covers authentication/contact aliases, booking/details/rescheduling, forms/version preservation, learning access/progress/private notes, teaching/resources/notifications, general-note permissions, financial timing, cashier reconciliation and ledgers. Log: `storage/logs/student-targeted-final-tests.log`.
+- Integration caught a Blade compiler interaction between inline `@php(...)` and later PHP blocks in notes/questionnaires. The templates now use properly delimited blocks; owner/staff boundaries are unchanged. Old held/status/update-link expectations were aligned with approved captions and explicit status-data checks. The frozen-version test rerun passed **1 case / 29 assertions / 15.449 seconds** before the full targeted acceptance above.
+- Fresh static baseline used the unchanged local website snapshot, with its temporary cache/config confined to the student worktree and testing connection. Full verbose reports were compared by relative path, identifier, message and multiplicity. Initial student result was 251 versus 250; the added missing-property finding was corrected by calling the existing `Booking::studentStatusLabel()` helper. Final comparison: **250 baseline findings, 250 student findings, zero new, zero suppressed**. Logs: `student-phpstan-baseline.json` and `student-phpstan.json`.
+- The normal current-schema suite is now running with `--exclude-group=intermediate-schema --filter '^(?!.*Concurrency)'`. The inventory confirms eleven concurrency-named classes; their worker scenarios are separate from the normal run. Relevant dedicated concurrency checks and real-browser journeys are still pending.
+
+- First complete normal-suite result: **1,410 / 1,413 passed, 11,536 assertions, 379.530 seconds, three failures, zero errors**. The three failures expected old student receipt/navigation/unfundable-copy captions. Receipt checks now also verify the actual payment number; the multi-unit allocation test additionally checks `hasFundableFormat=false`, retaining available-credit, no-slot and unpooled-balance assertions. All cases remain selected for the rerun.
+- Review corrected the logistics link label to **View Package Statement**, because the current destination shows balances/payment records rather than a separate per-booking credit-history feature. No new financial page or calculation was added.
+
+### Current integration and concurrency evidence
+
+- Complete normal current-schema rerun passed: **1,413 tests / 11,557 assertions / 355.933 seconds**, zero failures/errors. Log: `storage/logs/student-current-schema-suite.log`. The intermediate-schema group and eleven concurrency-named classes were intentionally kept separate.
+- S1 code review reproduced a stale-model race when a primary address changes immediately before contact addition (**one expected failing case / one assertion / 14.242 seconds**). Contact addition now uses the current locked profile for availability, own-primary duplication and the audit association. The account file rerun passed **nine cases / 67 assertions / 15.293 seconds**. No authentication or primary-edit capability was added.
+- Dedicated workers passed **15 cases / 100 assertions / 27.245 seconds** across `StudentLearningConcurrencyTest`, `TutoringLearningConcurrencyTest` and `BusinessLifecycleConcurrencyTest` using `phpunit.concurrency.xml`, after the exact dedicated-database preflight. Log: `storage/logs/student-concurrency-tests.log`.
+- Final-source static comparison after that S1 tightening still contains **250 existing baseline findings and 250 current findings, zero new and zero resolved**, without suppression. Pint fix mode passed. Latest frontend build passed with **83 modules / Vite 8.3.0 / 2.22 seconds**, retaining the inherited HLS chunk-size warning.
+- Real-browser acceptance is in progress using temporary, explicitly labelled engineering fixtures only in `bolt_landing_test`, array mail and isolated sessions. These reuse existing factory/test content; no genuine replacement lesson records or natural owner-review dataset are created. No normal-development data is copied or changed.
+
+### Browser acceptance — observed results and limits
+
+The isolated preview used temporary engineering fixtures in the dedicated test database. Browser work finished before the final destructive suite started; all temporary network blocking/latency and viewport overrides were reset. Screenshots are engineering evidence, not approved production content.
+
+| Journey | Actual browser result |
+| --- | --- |
+| Sign In / Sessions | DOB plus one identifier produced the approved insufficient-information message. DOB plus the existing fixture name/email signed in. Dashboard showed genuine credits, completed/upcoming appointments, questionnaires and unread count. |
+| Booking / SP-02 | Unfunded two-hour selection remained enabled, showed an honest credit warning and exposed no slots. Switching to the funded one-hour type exposed available times. Review displayed type, date, AM/PM time, timezone and required unit. Confirmation reached the owned Session Details page with **Lesson credit used**; the statement subsequently showed exactly three credits from the original four. |
+| Reschedule / S4 | Existing confirmed appointment exposed eligible rescheduling. Date/time selection, review and confirmation succeeded. The appointment became **Rescheduled** and the credit count remained four until the separate new booking. Its unrecorded direct-payment state remained **To be arranged**, despite confirmation. Future logistics exposed calendar/reschedule actions without lesson materials. |
+| SP-05 / Planning | Saved the fixture's 23 October full-day unavailability. Existing 16 October appointments remained. Booking displayed 23 October as disabled and moved to the next actually available date, 30 October. No core availability or balance change was needed. |
+| My Learning / lessons / S5 | Four learning sections, real assigned course and initially empty Continue/For You/Completed states rendered. Opening the mixed Arabic/English lesson produced genuine In Progress/Continue state. A lesson-scoped private note saved and appeared alongside the existing note. No absolute “only you” claim appeared. |
+| General Learning Notes | Staff-shared and owned groups remained separate. Search for “Shared” returned the shared note and an honest no-match state in My Notes. Clearing search and editing the owned Arabic note preserved its identity and displayed the saved text. |
+| Practice & Feedback | Actual homework rendered Not Started → In Progress → Submitted through Save Progress and Submit Homework. No fake Reviewed state or feedback was manufactured. Existing plan, resource assignment and empty practice/feedback states rendered. The fixture's external resource destination was not followed. |
+| Notifications / SP-03 | New lesson notifications linked to the exact owned Session Details page. Mark as read succeeded, changed that item to Read and reduced seven unread to six. Old IDs/read state/history and legacy fallback are also covered by HTTP tests. |
+| Statements / receipts | The recorded engineering payment rendered the actual amount, method, reference and payment number. Package totals, net paid, due, overpaid and remaining typed credits matched the genuine fixture records. Receipt opened. Exports are covered by the current-schema suite; no external transaction or real payment occurred. |
+| Profile / S1 | Added a labelled engineering contact address immediately. Profile showed **Additional contact address**, success and no verification flow. Trust exclusion, old verified-alias sign-in, collision/merge/erasure and no outgoing mail are covered by the account tests. |
+| Authorized Browsers / S2 | Protected-video-only explanation and portal-sign-in limitation rendered. Renaming the existing engineering browser succeeded. The native Remove Access confirmation stalled the preview automation; actual removal through that dialog is **not** claimed as browser-verified. Existing service/ownership tests passed. |
+| Questionnaires / SP-01 | Observed immediate pending state, Saving…, successful Saved state, blocked-network failure, recovery, retained answers and rapid newer edits during an in-flight save. After acknowledgement, reloading retained the final rapid edit. Block/latency controls were then removed. |
+| Conditional questions | Browser inspection reproduced a preexisting Yes/No display mismatch: raw control strings were compared with existing boolean conditions. Only the display now normalizes that dependency, matching the already-authoritative `FormValidationService` rule. Stored input, keys, questions, logic definitions and versions are unchanged. “Yes” exposed Which course; entering it exposed Course level. “No” hid both. A raw network TypeError was replaced with clear recovery guidance. |
+| Responsive / Arabic | Desktop 1280×900, tablet 768×1024 and phone 390×844 were inspected. Tablet and phone page widths (753 and 375) stayed within their viewports. Mixed-direction headings, lesson content and notes rendered; document language remained English. |
+
+Native-dialog automation limitation: the in-app browser stopped accepting some pointer/keyboard interactions after the Remove Access confirmation. Fresh-tab direct navigation, input, autosave, reload and visual checks remained usable. Final questionnaire button submission and a native unsaved-leave prompt were therefore **not** verified by an interactive click. The final-submit sequencing, latest-acknowledgement warning state and failure retention passed all nine deterministic JavaScript cases; server submission/version/edit restrictions passed HTTP tests. This limitation is explicit, not a passed result. No browser security protection was disabled to continue.
+
+Browser evidence: [desktop My Learning](C:/Users/e/.codex/visualizations/2026/10/08/01a11c59-4828-79c3-9bb8-c9a4ceeb8f42/student-portal-learning-desktop.png), [tablet My Learning](C:/Users/e/.codex/visualizations/2026/10/08/01a11c59-4828-79c3-9bb8-c9a4ceeb8f42/student-portal-learning-tablet.png), [mobile lesson](C:/Users/e/.codex/visualizations/2026/10/08/01a11c59-4828-79c3-9bb8-c9a4ceeb8f42/student-portal-lesson-mobile.png).
+
+The preceding checks were fresh implementation evidence. The final-source receipts and explicit limitations follow.
+## Final implementation and acceptance status
+
+**The approved implementation is complete and automated acceptance passed.** Browser evidence and the native-dialog limitation above remain explicit. No production release is authorized or performed.
+
+| Stage / decision | Final status |
+| --- | --- |
+| 0 — isolation and prior website preservation | Complete: local baseline snapshot, dedicated managed worktree and unpublished `codex/student-portal-copy` branch. |
+| 1 — shared foundation | Implemented: brand, seven navigation labels, account actions, English-first states and AM/PM presentation. Shared public/staff presentation preserved through narrow student flags. |
+| 2 — Sign In, S1 and S2 | Implemented: existing sign-in model, immediate contact-only addresses with NULL verification time, preserved trusted aliases, truthful protected-video-browser controls. Native remove confirmation has the recorded browser-tool limit. |
+| 3 — Sessions, booking, S3 and S4 | Implemented: genuine credits/statuses, changeable type selection, review/confirmation, owner-scoped logistics and exact known QA discovery controls. Future materials remain gated. |
+| 4 — My Learning and S5 | Implemented: course/hub/lesson/empty states, recent activity and lesson-scoped Private Lesson Notes. Existing evidence and completion rules retained. |
+| 5 — Practice & Feedback | Implemented: honest homework states, real visible feedback summary, plans/resources/practice focus and **Explore Public Resources** linking to the existing approved English library. |
+| 6 — Planning and SP-05 | Implemented after reproduction on both booking and reschedule: existing full-day unavailable periods mirrored in displayed choices; no availability/notice/credit policy change. |
+| 7 — Statements & Receipts | Implemented: genuine prices, generic discounts, net payments/refunds/due/overpayment and student date display. Calculations, package clocks, exports and staff presentation unchanged. |
+| 8 — Notifications and Learning Notes | Implemented: exact new appointment links, safe legacy Sessions fallback, real read states, separate shared/owned notes and existing permissions. |
+| 9 — Questionnaires and SP-01 | Implemented: immediate dirty/saving/saved/error states, latest acknowledgement, leave warning and final-submit sequencing, existing versions/edit restrictions and no answer storage in the browser. Display-only Yes/No alignment preserves canonical rules. |
+| 10 — acceptance and report | Automated checks passed; browser/mobile/Arabic evidence recorded with native-dialog/manual-submit limits. No provider or production certification is claimed. |
+
+### Exact fresh verification receipts
+
+| Check | Actual final result | Evidence |
+| --- | --- | --- |
+| Normal current-schema suite | **1,414 passed; 11,562 assertions; 364.565 seconds; zero failures/errors**. Historical intermediate-schema and dedicated worker classes kept separate. | [suite log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-final-current-schema-suite.log) |
+| Dedicated relevant worker/concurrency suite | **15 passed; 100 assertions; 27.245 seconds**. | [worker log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-concurrency-tests.log) |
+| Final shared-view boundaries | After the broad pass, the timezone explanation was explicitly scoped to student views and the approved public-resource link added. PublicExperience, StudentPortalBooking, StudentTeachingExperience, StudentRescheduling and ReschedulePresentation all passed: **75 tests / 512 assertions / 36.584 seconds**. | [shared-view log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-final-shared-view-tests.log) |
+| Final reschedule wording | Credit-specific explanations are now shown only for package-funded appointments; direct appointments make no false entitlement claim. StudentRescheduling and ReschedulePresentation passed: **14 tests / 152 assertions / 24.186 seconds**. No rescheduling or funding service changed. | [reschedule log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-final-reschedule-copy-tests.log) |
+| JavaScript races and guard states | **9 passed; zero failed/skipped/cancelled; 76.1394 ms**. | [JavaScript log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-questionnaire-js-tests.log) |
+| Final build | **Passed**, Vite 8.3.0, 83 modules, **2.53 seconds**. Inherited 574.74 kB HLS warning retained. | [build log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-build.log) |
+| PHP formatting and whitespace | Pint dirty fix-mode **passed**; `git diff --check` **passed**. | Final command receipts; no dependency change. |
+| Static analysis | **250 existing findings at baseline and current; zero new, zero suppressed**. This is a comparison, not a clean static-analysis pass. | [baseline](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-phpstan-baseline.json), [current](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-phpstan.json) |
+| Test-database protection | APP_ENV/testing, exact dedicated database/host/port and actual selected schema checked before destructive setup. The intentional wrong-database test refused before refresh. | Stage 0 / SP-04 log above. |
+| Normal development preservation | Boost read-only check still finds **3 students, 9 packages, 27 ledger entries and 20 notifications**, matching isolation-time counts. The connected schema is `bolt_landing_test`; no normal-development migration ran. | [read-only safety log](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/storage/logs/student-final-safety-readonly.log) |
+
+### Environment and final handoff
+
+- Managed student worktree: [implementation files](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah).
+- Branch: **`codex/student-portal-copy`**, from local snapshot **`b447de64039a700748fe38d42da3aa8974f06ec0`**. It has no upstream and has never been pushed. Only local uncommitted Student Portal changes exist; no deployment branch, release workflow or hosting configuration was changed. With no published remote change, this local work cannot trigger a production deployment.
+- Original checkout remains on **`codex/public-copy-blog-v3`** at the same preserved snapshot with no tracked changes. Its three preexisting unrelated deployment/proposal documents remain untracked and untouched.
+- Preview sign-in URL, verified through Boost: [isolated student preview](http://arabicwabdallah-student-preview.test/student/login). It uses the dedicated testing database, isolated sessions, array mail and synchronous queues. The final database-refresh suites disposed of the temporary browser fixtures. No natural owner-review dataset has been provisioned.
+- Neither student migration has been applied to normal development or production. They remain prepared, reviewable application changes. The email migration preserves every existing verified timestamp and refuses unsafe rollback if contact-only rows remain; discovery targets are exact ID-and-slug pairs and do not delete or rename records.
+- Public marketing and admin presentation are preserved. No new translation, support destination, genuine lesson format, course/resource/question content, general private notebook, portal-session browser management or financial/expiry/cancellation/completion/authentication policy was added.
+- **Held / deferred:** genuine replacement lesson details; natural owner-review/QA cleanup; unsupported contacts/destinations/translations/content; broader ICS STATUS behavior; live provider certification. Existing future-material notification permission limits remain separate from the new appointment-logistics destination.
+- **Remaining verification limit:** native Remove Access confirmation, native unsaved-leave prompt and interactive final questionnaire submit remain browser-unverified because the preview automation stalled on the dialog. The corresponding backend and deterministic client checks passed. This report does not turn that limit into a passed browser result.
+- **No push, merge, deployment, production migration, production data/configuration change or production release was performed.** Deployment is a separate task requiring explicit owner approval.
+
+### Complete changed-file inventory
+
+There are **57 paths** in the Student Portal diff: 50 modified and seven new, including this requested report. Prior website/blog changes are committed in the baseline and are not mixed into this diff. Existing tests were retained; changed expectations align with approved captions while preserving ownership, credit, payment, version and access assertions.
+
+<details>
+<summary>Backend, routing and schema (17 files)</summary>
+
+- [app/Domains/Booking/Models/SessionType.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Booking/Models/SessionType.php)
+- [app/Domains/Resources/Models/Resource.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Resources/Models/Resource.php)
+- [app/Domains/Students/Models/Student.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Students/Models/Student.php)
+- [app/Domains/Students/Services/StudentBookingService.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Students/Services/StudentBookingService.php)
+- [app/Domains/Students/Services/StudentEmailService.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Students/Services/StudentEmailService.php)
+- [app/Domains/Students/Services/StudentPortalService.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Students/Services/StudentPortalService.php)
+- [app/Domains/Students/Services/StudentTeachingReadModel.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Domains/Students/Services/StudentTeachingReadModel.php)
+- [app/Http/Controllers/Student/BookingController.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Http/Controllers/Student/BookingController.php)
+- [app/Http/Controllers/Student/NotificationController.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Http/Controllers/Student/NotificationController.php)
+- [app/Http/Controllers/Student/ProfileController.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Http/Controllers/Student/ProfileController.php)
+- [app/Http/Controllers/Student/RescheduleController.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Http/Controllers/Student/RescheduleController.php)
+- [app/Http/Controllers/Student/SchedulingController.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Http/Controllers/Student/SchedulingController.php)
+- [app/Http/Controllers/Student/VideoDeviceController.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Http/Controllers/Student/VideoDeviceController.php)
+- [app/Providers/AppServiceProvider.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/app/Providers/AppServiceProvider.php)
+- [routes/web.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/routes/web.php)
+- [database/migrations/2026_10_09_030037_allow_contact_only_student_emails.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/database/migrations/2026_10_09_030037_allow_contact_only_student_emails.php)
+- [database/migrations/2026_10_09_031709_add_student_discovery_controls.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/database/migrations/2026_10_09_031709_add_student_discovery_controls.php)
+
+</details>
+
+<details>
+<summary>Student presentation and shared components (25 files)</summary>
+
+- [resources/views/admin/billing/statement.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/admin/billing/statement.blade.php)
+- [resources/views/components/learning-timeline.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/components/learning-timeline.blade.php)
+- [resources/views/components/planning-period-form.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/components/planning-period-form.blade.php)
+- [resources/views/components/student-progress.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/components/student-progress.blade.php)
+- [resources/views/components/student-timezone.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/components/student-timezone.blade.php)
+- [resources/views/layouts/student.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/layouts/student.blade.php)
+- [resources/views/student/bookings/create.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/bookings/create.blade.php)
+- [resources/views/student/dashboard.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/dashboard.blade.php)
+- [resources/views/student/educational-bins.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/educational-bins.blade.php)
+- [resources/views/student/forms/show.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/forms/show.blade.php)
+- [resources/views/student/learning/course.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/course.blade.php)
+- [resources/views/student/learning/curriculum.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/curriculum.blade.php)
+- [resources/views/student/learning/devices.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/devices.blade.php)
+- [resources/views/student/learning/index.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/index.blade.php)
+- [resources/views/student/learning/lesson.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/lesson.blade.php)
+- [resources/views/student/learning/notes.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/notes.blade.php)
+- [resources/views/student/learning/unavailable.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/learning/unavailable.blade.php)
+- [resources/views/student/login.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/login.blade.php)
+- [resources/views/student/notifications.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/notifications.blade.php)
+- [resources/views/student/profile.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/profile.blade.php)
+- [resources/views/student/reschedule.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/reschedule.blade.php)
+- [resources/views/student/scheduling.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/scheduling.blade.php)
+- [resources/views/student/statements.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/statements.blade.php)
+- [resources/views/student/teaching.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/teaching.blade.php)
+- [resources/views/student/bookings/show.blade.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/views/student/bookings/show.blade.php)
+
+</details>
+
+<details>
+<summary>Questionnaire client behavior (3 files)</summary>
+
+- [resources/js/app.js](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/js/app.js)
+- [resources/js/questionnaire-save.js](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/js/questionnaire-save.js)
+- [resources/js/questionnaire-save.test.js](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/resources/js/questionnaire-save.test.js)
+
+</details>
+
+<details>
+<summary>Tests and requested report (12 files)</summary>
+
+- [STUDENT_PORTAL_COPY_IMPLEMENTATION_REPORT.md](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/STUDENT_PORTAL_COPY_IMPLEMENTATION_REPORT.md)
+- [tests/Feature/BusinessLifecycleDataQualityTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/BusinessLifecycleDataQualityTest.php)
+- [tests/Feature/FormsEngineTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/FormsEngineTest.php)
+- [tests/Feature/StudentLearningTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/StudentLearningTest.php)
+- [tests/Feature/StudentReschedulingTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/StudentReschedulingTest.php)
+- [tests/Feature/StudentSecondaryEmailTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/StudentSecondaryEmailTest.php)
+- [tests/Feature/StudentTeachingExperienceTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/StudentTeachingExperienceTest.php)
+- [tests/Feature/TutoringLearningIntegrationTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/TutoringLearningIntegrationTest.php)
+- [tests/Feature/TypedEntitlementsTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/TypedEntitlementsTest.php)
+- [tests/TestCase.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/TestCase.php)
+- [tests/Feature/StudentContactEmailTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/StudentContactEmailTest.php)
+- [tests/Feature/StudentPortalBookingTest.php](C:/Users/e/.codex/worktrees/student-portal-copy/ArabicwAbdallah/tests/Feature/StudentPortalBookingTest.php)
+
+</details>

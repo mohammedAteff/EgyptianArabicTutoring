@@ -4,6 +4,10 @@
 <x-public-english-fallback :is-fallback="$isFallback ?? false" />
 <div lang="en" class="mx-auto max-w-6xl space-y-20 px-4 py-12 sm:px-6 sm:py-20 lg:px-8">
     @foreach($homeSections as $index => $section)
+        @php
+            $legacySectionId = [0 => 'hero', 2 => 'curriculum', 3 => 'pricing', 6 => 'tutor-bio'][$index] ?? null;
+        @endphp
+        @if($legacySectionId)<div id="{{ $legacySectionId }}" class="scroll-mt-24">@endif
         <section class="space-y-8" id="home-section-{{ $index + 1 }}" @if(in_array($index, [0, 2, 3, 6], true)) data-section-id="{{ [0 => 'hero', 2 => 'curriculum', 3 => 'pricing', 6 => 'tutor-bio'][$index] }}" @endif>
             @if($index === 0)
                 <div class="grid items-center gap-10 lg:grid-cols-[1.5fr_1fr]">
@@ -70,6 +74,7 @@
                 <a href="{{ localized_url('faq') }}" class="font-bold text-terracotta-600 underline underline-offset-4">View All Frequently Asked Questions</a>
             @endif
         </section>
+        @if($legacySectionId)</div>@endif
     @endforeach
 </div>
 @endsection

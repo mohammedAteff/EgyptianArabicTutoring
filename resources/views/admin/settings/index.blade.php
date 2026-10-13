@@ -210,6 +210,9 @@
 
             <div>
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Tutor Portrait Image Path</label>
+                @php
+                    $aboutImageUrl = app(\App\Domains\CMS\Services\AboutImageService::class)->url(old('about_image_path', $settings['about_image_path']->value ?? null));
+                @endphp
                 <div class="flex gap-3 items-center">
                     <input type="text" id="about_image_path" name="about_image_path" value="{{ old('about_image_path', $settings['about_image_path']->value ?? '') }}" 
                            placeholder="media/abdallah-portrait.webp"
@@ -217,8 +220,8 @@
                     <button type="button" onclick="openMediaPicker('about_image_path', 'about_image_preview')" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 shrink-0 transition-colors">
                         Choose from Media Library
                     </button>
-                    <div class="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 {{ !empty($settings['about_image_path']->value) ? '' : 'hidden' }}">
-                        <img id="about_image_preview" src="{{ !empty($settings['about_image_path']->value) ? (str_starts_with($settings['about_image_path']->value, 'http') ? $settings['about_image_path']->value : \Illuminate\Support\Facades\Storage::disk('public')->url($settings['about_image_path']->value)) : '' }}" alt="Preview" class="h-full w-full object-cover">
+                    <div class="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 {{ $aboutImageUrl ? '' : 'hidden' }}">
+                        <img id="about_image_preview" src="{{ $aboutImageUrl ?? '' }}" alt="Preview" class="h-full w-full object-cover">
                     </div>
                 </div>
             </div>

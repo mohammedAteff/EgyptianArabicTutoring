@@ -242,6 +242,33 @@ class VaultFeaturesPhase2Test extends TestCase
         ]);
     }
 
+    public function test_staff_note_templates_remain_available_without_appearing_in_student_learning_notes(): void
+    {
+        $student = Student::factory()->verified()->create();
+        StaffNoteTemplate::create([
+            'title' => 'Staff-only tutoring template',
+            'category' => 'teaching',
+            'body' => 'Internal preparation template text',
+        ]);
+
+        $this->actingAs($this->admin, 'web')
+            ->get(route('admin.student-bins.index', $student))
+            ->assertOk()
+            ->assertSee('Staff-only tutoring template');
+
+        $this->actingAs($student, 'student')
+            ->withSession([
+                'student_id' => $student->id,
+                'student_auth_expires_at' => now('UTC')->addHours(3)->toIso8601String(),
+            ])
+            ->get(route('student.bins.index'))
+            ->assertOk()
+            ->assertSee('Learning Notes')
+            ->assertSee('Create Note')
+            ->assertDontSee('Staff-only tutoring template')
+            ->assertDontSee('Internal preparation template text');
+    }
+
     public function test_staff_can_create_bulk_tasks(): void
     {
         $studentA = Student::factory()->verified()->create();

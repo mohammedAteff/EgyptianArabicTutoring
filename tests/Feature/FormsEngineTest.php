@@ -136,7 +136,7 @@ class FormsEngineTest extends TestCase
             ->assertOk()
             ->assertSee('Learning goal')
             ->assertDontSee('Updated learning goal')
-            ->assertDontSee('Start updated version');
+            ->assertDontSee('Start Updated Questionnaire');
 
         $this->actingAs($admin, 'web')->put(route('admin.forms.publish', $form), [
             'base_version_id' => $form->active_version_id,
@@ -148,8 +148,8 @@ class FormsEngineTest extends TestCase
         $this->asStudent($student);
         $this->get(route('student.forms.show', $form->slug))
             ->assertOk()
-            ->assertSee('An updated version is available')
-            ->assertSee('Start updated version')
+            ->assertSee('An updated questionnaire is available')
+            ->assertSee('Start Updated Questionnaire')
             ->assertSee('Learning goal');
         $this->get(route('student.forms.show', [$form->slug, 'new_version' => 1]))
             ->assertOk()
@@ -436,9 +436,9 @@ class FormsEngineTest extends TestCase
         ]);
         $this->asStudent($student);
 
-        $this->get(route('student.dashboard'))->assertSee('Session Rescheduled');
+        $this->get(route('student.dashboard'))->assertViewHas('bookingStatusLabels', fn (array $labels): bool => $labels[$booking->id] === 'Rescheduled')->assertSee('Rescheduled');
         $booking->update(['status' => 'completed']);
-        $this->get(route('student.dashboard'))->assertSee('Session Delivered');
+        $this->get(route('student.dashboard'))->assertViewHas('bookingStatusLabels', fn (array $labels): bool => $labels[$booking->id] === 'Completed')->assertSee('Completed');
     }
 
     private function createStudentBooking(Student $student): Booking

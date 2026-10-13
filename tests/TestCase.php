@@ -6,6 +6,8 @@ use App\Domains\Booking\Models\SessionType;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\EntitlementType;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 if (! class_exists('Symfony\Component\DomCrawler\Crawler')) {
     require_once __DIR__.'/Support/Crawler.php';
@@ -15,6 +17,20 @@ abstract class TestCase extends BaseTestCase
 {
     protected function setUpTraits(): array
     {
+        $connection = DB::connection();
+
+        if (! app()->environment('testing')
+            || $connection->getDriverName() !== 'mysql'
+            || $connection->getDatabaseName() !== 'bolt_landing_test'
+            || ! in_array($connection->getConfig('host'), ['127.0.0.1', 'localhost'], true)
+            || (string) $connection->getConfig('port') !== '3307') {
+            throw new RuntimeException('Automated tests require the dedicated local bolt_landing_test database on port 3307. No refresh or test setup was run.');
+        }
+
+        if ($connection->selectOne('SELECT DATABASE() AS database_name')->database_name !== 'bolt_landing_test') {
+            throw new RuntimeException('The active database is not bolt_landing_test. No refresh or test setup was run.');
+        }
+
         app(DatabaseCapability::class)->assertMatchesReconciledEnvironment(
             config('database.reconciled.vendor'),
             config('database.reconciled.version'),

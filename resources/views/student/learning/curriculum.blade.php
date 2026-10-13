@@ -11,7 +11,7 @@
                         @if($itemState['allowed'])
                             <a href="{{ route('student.learning.lessons.show', [$course, $item]) }}" @if(isset($lesson) && $lesson->id === $item->id) aria-current="page" @endif class="block min-h-11 rounded-lg px-3 py-3 text-sm leading-relaxed hover:bg-nile-50 {{ isset($lesson) && $lesson->id === $item->id ? 'bg-nile-50 font-semibold text-nile-900' : 'text-stone-700' }}"><span dir="auto" class="block break-words">{{ $item->title }}</span><span class="text-xs text-stone-500">{{ $itemState['status'] }}{{ $itemState['required'] ? '' : ' · Optional' }}</span></a>
                         @else
-                            <div class="rounded-lg bg-stone-50 px-3 py-3 text-sm text-stone-500"><span dir="auto" class="block break-words">{{ $item->title }} · Locked</span><p class="mt-1 text-xs">{{ $itemState['reason'] }}@if($itemState['unlocks_at']) {{ $itemState['unlocks_at']->timezone($timezone)->format('j M Y, H:i T') }}@endif</p></div>
+                            <div class="rounded-lg bg-stone-50 px-3 py-3 text-sm text-stone-500"><span dir="auto" class="block break-words">{{ $item->title }} · Locked</span><p class="mt-1 text-xs">{{ $itemState['reason'] }}@if($itemState['unlocks_at']) {{ $itemState['unlocks_at']->timezone($timezone)->format('j M Y, g:i A T') }}@endif</p></div>
                         @endif
                     </li>
                 @empty<li class="py-2 text-xs text-stone-500">No available lessons in this module.</li>@endforelse

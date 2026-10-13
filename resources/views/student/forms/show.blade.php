@@ -1,25 +1,26 @@
-@extends('layouts.student', ['title' => $form->title])
+@php $questionnaireTitle = match($form->slug) { 'short-form' => 'Your Learning Goals', 'long-form' => 'Your Learning Profile', default => $form->title }; @endphp
+@extends('layouts.student', ['title' => $questionnaireTitle])
 
 @section('content')
-<a href="{{ route('student.dashboard') }}" class="text-sm font-medium text-nile-800 underline">← Student dashboard</a>
-<h1 class="mt-3 text-3xl font-semibold tracking-tight text-nile-900">{{ $form->title }}</h1>
+<a href="{{ route('student.dashboard') }}" class="text-sm font-medium text-nile-800 underline">← Back to Sessions</a>
+<h1 class="mt-3 text-3xl font-semibold tracking-tight text-nile-900">{{ $questionnaireTitle }}</h1>
 @if($form->description)<p class="mt-2 text-stone-600">{{ $form->description }}</p>@endif
 <p class="mt-2 text-xs text-stone-500">Form version {{ $version->version_number }}</p>
-@if($updateAvailable)<p role="status" class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">An updated version is available. This draft stays with version {{ $version->version_number }} until you finish it.</p>@endif
-@if($updateAvailable && !$startNewVersion)<a href="{{ route('student.forms.show', [$form->slug, 'new_version' => 1]) }}" class="mt-3 inline-block rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-900">Start updated version</a>@endif
+@if($updateAvailable)<p role="status" class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">An updated questionnaire is available. Your existing answers remain connected to their original version.</p>@endif
+@if($updateAvailable && !$startNewVersion)<a href="{{ route('student.forms.show', [$form->slug, 'new_version' => 1]) }}" class="mt-3 inline-block rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-900">Start Updated Questionnaire</a>@endif
 @if($startNewVersion)<p class="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900">Starting a new response for version {{ $version->version_number }}. Your previous version remains unchanged.</p>@endif
 @if(session('success'))<p role="status" class="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{{ session('success') }}</p>@endif
 @if($errors->any())<div role="alert" class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
-<form method="POST" action="{{ route('student.forms.save', $form->slug) }}" class="mt-6 space-y-5" data-questionnaire data-read-only="{{ $readOnly ? '1' : '0' }}">
+<form method="POST" action="{{ route('student.forms.save', $form->slug) }}" class="mt-6 space-y-5" data-questionnaire data-autosave-url="{{ route('student.forms.autosave', $form->slug) }}" data-read-only="{{ $readOnly ? '1' : '0' }}">
     @csrf
     <input type="hidden" name="submission_id" value="{{ $submission?->id }}"><input type="hidden" name="form_version_id" value="{{ $version->id }}">
-    <p data-save-status role="status" class="text-sm text-stone-600">{{ $readOnly ? 'Submitted' : 'Changes save automatically' }}</p>
+    <p data-save-status role="status" aria-live="polite" aria-atomic="true" class="text-sm text-stone-600">{{ $readOnly ? 'Completed' : 'Changes save automatically' }}</p>
     @foreach($version->questions as $question)
         @php $value = old("answers.{$question->question_key}", $answers[$question->question_key] ?? null); @endphp
         @if($question->question_type === 'info_block')
             <section class="rounded-xl border border-stone-200 bg-blue-50 p-5"><h2 class="font-semibold text-nile-900">{{ $question->label }}</h2>@if($question->description)<p class="mt-2 whitespace-pre-line text-sm text-stone-700">{{ $question->description }}</p>@endif</section>
         @else
-            <fieldset data-question-key="{{ $question->question_key }}" data-conditional='@json($question->conditional_logic)' class="rounded-xl border border-stone-200 bg-white p-5">
+            <fieldset data-question-key="{{ $question->question_key }}" data-question-type="{{ $question->question_type }}" data-conditional='@json($question->conditional_logic)' class="rounded-xl border border-stone-200 bg-white p-5">
                 <legend class="font-semibold text-stone-900">{{ $question->label }} @if($question->is_required)<span class="text-red-700" aria-label="required">*</span>@endif</legend>
                 @if($question->description)<p class="mt-1 text-sm text-stone-600">{{ $question->description }}</p>@endif
                 @switch($question->question_type)
@@ -35,8 +36,9 @@
             </fieldset>
         @endif
     @endforeach
-    @unless($readOnly)<div class="flex flex-wrap gap-3"><button name="intent" value="draft" class="rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold">Save draft</button><button name="intent" value="submit" class="rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white">{{ $submission?->status === 'submitted' ? 'Save responses' : 'Submit responses' }}</button></div>@else<p class="text-sm text-stone-600">Your responses are final. Contact your tutor if you need a correction.</p>@endunless
+    @unless($readOnly)<div class="flex flex-wrap gap-3"><button name="intent" value="draft" formnovalidate class="rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold">Save Draft</button><button name="intent" value="submit" class="rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white">{{ $submission?->status === 'submitted' ? 'Save Answers' : 'Submit Answers' }}</button></div>@else<p class="text-sm text-stone-600">Your Answers Are Saved. You can review them here. Contact Abdallah if you need a correction.</p>@endunless
 </form>
+<noscript><p class="mt-4 text-sm text-stone-600">Automatic saving requires JavaScript. Use Save Draft or Submit Answers to save your work before leaving.</p></noscript>
 <script>
 (() => {
     const form = document.querySelector('[data-questionnaire]');
@@ -57,7 +59,9 @@
         return result;
     };
     const passes = (condition, data) => {
-        const value = data[condition.question_key] ?? null;
+        const rawValue = data[condition.question_key] ?? null;
+        const dependency = fields.find(field => field.dataset.questionKey === condition.question_key);
+        const value = dependency?.dataset.questionType === 'yes_no' && (rawValue === '1' || rawValue === '0') ? rawValue === '1' : rawValue;
         const target = condition.value;
         const answered = value !== null && value !== '' && !(Array.isArray(value) && !value.length);
         switch (condition.operator) {
@@ -90,28 +94,26 @@
     form.addEventListener('input', refresh);
     form.addEventListener('change', refresh);
     refresh();
-    if (readOnly) return;
-    const status = form.querySelector('[data-save-status]');
-    let timer, saving = false, pending = false, submitting = false;
-    const save = async () => {
-        if (saving || submitting) { pending = true; return; }
-        saving = true; pending = false; status.textContent = 'Saving…';
-        try {
-            const response = await fetch(@js(route('student.forms.autosave', $form->slug)), {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': form.querySelector('[name="_token"]').value}, body: JSON.stringify({answers: values(), submission_id: form.querySelector('[name="submission_id"]').value || null, form_version_id: Number(form.querySelector('[name="form_version_id"]').value)})});
-            if (!response.ok) throw new Error(response.status === 409 ? 'Form changed. Reload before saving.' : 'Could not save. Use Save draft to retry.');
-            const data = await response.json(); form.querySelector('[name="submission_id"]').value = data.draft_id;
-            status.textContent = 'Saved';
-        } catch (error) { status.textContent = error.message; }
-        finally { saving = false; if (pending && !submitting) save(); }
-    };
-    const queueSave = () => { clearTimeout(timer); timer = setTimeout(save, 700); };
-    form.addEventListener('input', queueSave); form.addEventListener('change', queueSave);
-    form.addEventListener('submit', async (event) => {
-        if (submitting) return;
-        event.preventDefault(); clearTimeout(timer); pending = false; submitting = true;
-        while (saving) await new Promise(resolve => setTimeout(resolve, 50));
-        setTimeout(() => form.requestSubmit(event.submitter), 0);
-    });
+    form.questionnaireValues = values;
+    if (!readOnly) {
+        const saveStatus = form.querySelector('[data-save-status]');
+        const markEarlyChange = () => {
+            if (form.dataset.saveInitialized === '1') return;
+            form.dataset.nativeSubmission = '0';
+            form.dataset.earlyDirty = '1';
+            saveStatus.textContent = 'Unsaved changes. Use Save Draft if automatic saving is unavailable.';
+        };
+        form.addEventListener('input', markEarlyChange);
+        form.addEventListener('change', markEarlyChange);
+        form.addEventListener('submit', () => {
+            if (form.dataset.saveInitialized !== '1') form.dataset.nativeSubmission = '1';
+        });
+        window.addEventListener('beforeunload', event => {
+            if (form.dataset.saveInitialized === '1' || form.dataset.earlyDirty !== '1' || form.dataset.nativeSubmission === '1') return;
+            event.preventDefault();
+            event.returnValue = '';
+        });
+    }
 })();
 </script>
 @endsection

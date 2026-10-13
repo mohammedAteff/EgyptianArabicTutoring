@@ -171,7 +171,7 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::put('/notes/{bin}', [StudentBinController::class, 'update'])->name('bins.update');
 
         Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
-        Route::post('/profile/emails', [ProfileController::class, 'requestVerification'])->middleware('throttle:6,1')->name('profile.email.request');
+        Route::post('/profile/emails', [ProfileController::class, 'addEmail'])->middleware('throttle:6,1')->name('profile.email.request');
         Route::get('/profile/emails/verify/{token}', [ProfileController::class, 'verify'])->middleware('throttle:10,1')->name('profile.email.verify');
         Route::get('/', [StudentDashboardController::class, 'index'])->name('dashboard');
         Route::get('/lessons/{booking}', [LessonWorkspaceController::class, 'show'])->whereNumber('booking')->name('lessons.show');
@@ -180,6 +180,7 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::post('/forms/{slug}', [StudentFormController::class, 'save'])->middleware('throttle:student-form-save')->name('forms.save');
         Route::post('/forms/{slug}/autosave', [StudentFormController::class, 'autosave'])->middleware('throttle:student-form-save')->name('forms.autosave');
         Route::get('/bookings/create', [StudentBookingController::class, 'create'])->name('bookings.create');
+        Route::get('/bookings/{booking}', [StudentBookingController::class, 'show'])->whereNumber('booking')->name('bookings.show');
         Route::post('/bookings', [StudentBookingController::class, 'store'])->middleware('throttle:student-booking-finalize')->name('bookings.store');
         Route::get('/bookings/{booking}/reschedule', [StudentRescheduleController::class, 'show'])->name('bookings.reschedule');
         Route::post('/bookings/{booking}/reschedule', [StudentRescheduleController::class, 'update'])->middleware('throttle:booking-reschedule')->name('bookings.reschedule.submit');

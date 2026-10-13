@@ -9,6 +9,10 @@ import './learning-player.js';
 import './protected-video.js';
 import './bunny-upload.js';
 import './learning-progress.js';
+import { initializeQuestionnaireSaves } from './questionnaire-save.js';
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initializeQuestionnaireSaves());
+else initializeQuestionnaireSaves();
 function initializeArticleEditors() {
     document.querySelectorAll('[data-blog-form]').forEach(form => {
         import('./blog-editor.js').then(({ initializeBlogEditor }) => initializeBlogEditor(form)).catch(() => {

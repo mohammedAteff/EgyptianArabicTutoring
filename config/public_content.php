@@ -1826,7 +1826,7 @@ Free resource access requires your name and email address, but you don\'t need t
             'key' => 'faq-31',
             'topic' => 'Resources & Games',
             'question' => 'What\'s included in the Arabic Alphabet Workbook?',
-            'answer' => 'The Alphabet Workbook is awaiting its confirmed file and is not available to download yet. The accompanying video series is planned. Available learning materials are listed in the Resources library.',
+            'answer' => 'The accompanying video series is planned. Available learning materials are listed in the Resources library.',
             'featured' => false,
         ],
         [

@@ -2,6 +2,9 @@
 @extends('layouts.public')
 @section('content')
 <x-public-english-fallback :is-fallback="$isFallback ?? false" />
+@php
+    $imageUrl = app(\App\Domains\CMS\Services\AboutImageService::class)->url($imagePath ?? null);
+@endphp
 <div lang="en" class="mx-auto max-w-4xl space-y-16 px-4 py-12 sm:px-6 lg:px-8">
     @foreach(config('public_content.about') as $index => $section)
         <section>
@@ -15,8 +18,8 @@
             @else
                 <x-public-copy-section :section="$section" :level="$index === 0 ? 1 : 2" />
             @endif
-            @if($index === 0 && !empty($imagePath) && \Illuminate\Support\Facades\Storage::disk('public')->exists($imagePath))
-                <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($imagePath) }}" alt="Abdallah" class="mt-8 max-h-96 rounded-2xl object-cover" loading="lazy">
+            @if($index === 0 && $imageUrl)
+                <img src="{{ $imageUrl }}" alt="Abdallah" class="mt-8 max-h-96 rounded-2xl object-cover" loading="lazy">
             @endif
             @if($index === 5)
                 <div class="mt-7 flex flex-wrap gap-4">

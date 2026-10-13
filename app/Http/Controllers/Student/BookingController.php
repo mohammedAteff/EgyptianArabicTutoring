@@ -6,16 +6,23 @@ use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
+use App\Domains\Booking\Services\MeetingLinkService;
+use App\Domains\CMS\Models\Setting;
+use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentUnavailability;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Students\Services\StudentPortalService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use InvalidArgumentException;
@@ -23,6 +30,27 @@ use Throwable;
 
 class BookingController extends Controller
 {
+    public function show(Request $request, int $booking, TimezoneService $timezones, MeetingLinkService $meetingLinks, StudentPortalService $portal): View
+    {
+        /** @var Student $student */
+        $student = $request->attributes->get('student');
+        $owned = Booking::query()->where('student_id', $student->id)->with('sessionType')->withExists('reschedules')->findOrFail($booking);
+        $timezone = $this->displayTimezone($request->session()->get('student_display_timezone'), $student, $timezones);
+        $creditHistory = SessionLedgerEntry::query()->where('student_id', $student->id)->where('booking_id', $owned->id)->get();
+
+        return view('student.bookings.show', [
+            'booking' => $owned, 'timezone' => $timezone,
+            'statusLabel' => $portal->bookingStatusLabel($owned),
+            'meetingUrl' => $meetingLinks->studentUrl($owned),
+            'meetingRevealMinutes' => (int) Setting::get('meeting.student_reveal_minutes', 15),
+            'canReschedule' => $owned->status === 'confirmed' && now('UTC')->addHours(24)->lte($owned->start_at_utc),
+            'canViewMaterials' => Gate::forUser($student)->allows('viewLessonWorkspace', $owned),
+            'canAddToCalendar' => $owned->status === 'confirmed' && $owned->end_at_utc->isFuture() && (bool) $owned->confirmation_token,
+            'creditEntry' => $creditHistory->firstWhere('entry_type', 'session_consumed'),
+            'creditUsed' => $creditHistory->sum('credit_change') < 0,
+        ]);
+    }
+
     public function create(Request $request, AvailabilityService $availability, SlotResolver $resolver, TimezoneService $timezones, StudentLedgerService $ledger): View
     {
         /** @var Student $student */
@@ -40,8 +68,9 @@ class BookingController extends Controller
         }
 
         $entitlements = app(EntitlementService::class)->forStudent($student->id);
-        $sessionTypes = SessionType::query()->where('active', true)->where('funding_mode', 'package')->with('requiredEntitlementType')->orderBy('duration_minutes')->get();
+        $sessionTypes = SessionType::query()->studentDiscoverable()->where('funding_mode', 'package')->with('requiredEntitlementType')->orderBy('duration_minutes')->get();
         $selectedSessionType = $sessionTypes->firstWhere('id', (int) $request->query('session_type_id'));
+        $hasFundableFormat = $sessionTypes->contains(fn (SessionType $type): bool => app(EntitlementService::class)->canFund($student->id, $type));
         $selectedBalance = $selectedSessionType ? ($entitlements[$selectedSessionType->requiredEntitlementType?->code]['available'] ?? 0) : array_sum(array_column($entitlements, 'available'));
         $availableCredits = $selectedSessionType && ! app(EntitlementService::class)->canFund($student->id, $selectedSessionType) ? 0 : $selectedBalance;
         $slots = [];
@@ -54,8 +83,16 @@ class BookingController extends Controller
                 toDate: $fromDate->endOfMonth()->min($today->addDays(60)),
                 currentVisitorToken: $ownerToken,
             );
+            $unavailablePeriods = StudentUnavailability::query()->where('student_id', $student->id)->where('status', 'active')
+                ->where('ends_at_utc', '>', $fromDate->utc())
+                ->where('starts_at_utc', '<', $fromDate->endOfMonth()->min($today->addDays(60))->addDay()->utc())->get();
             foreach ($available as $date => $dailySlots) {
                 foreach ($dailySlots as $slot) {
+                    $start = CarbonImmutable::parse($slot['slot_start_utc'], 'UTC');
+                    $end = CarbonImmutable::parse($slot['slot_end_utc'], 'UTC');
+                    if ($unavailablePeriods->contains(fn (StudentUnavailability $period): bool => $period->starts_at_utc->lt($end) && $period->ends_at_utc->gt($start))) {
+                        continue;
+                    }
                     $slots[$date][] = [
                         'slot_id' => $resolver->issue($selectedSessionType, $slot, $timezone, $ownerToken),
                         'label' => CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')->setTimezone($timezone)->format('g:i A'),
@@ -66,6 +103,7 @@ class BookingController extends Controller
 
         return view('student.bookings.create', [
             'sessionTypes' => $sessionTypes,
+            'hasFundableFormat' => $hasFundableFormat,
             'selectedSessionType' => $selectedSessionType,
             'timezone' => $timezone,
             'fromDate' => $fromDate,
@@ -103,7 +141,7 @@ class BookingController extends Controller
 
         app(AnalyticsService::class)->track('package_session_scheduled', ['booking_id' => $booking->id], $request, eventUuid: 'package-booking-'.$booking->id);
 
-        return redirect()->route('student.dashboard')->with('success', 'Your confirmed session is booked and the required entitlement has been reserved.');
+        return redirect()->route('student.bookings.show', $booking->id)->with('success', 'Lesson Confirmed. Your lesson has been booked using the required lesson credit.');
     }
 
     private function displayTimezone(?string $requested, Student $student, TimezoneService $timezones): string

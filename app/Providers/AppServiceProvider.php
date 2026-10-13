@@ -24,8 +24,10 @@ use App\Domains\Lms\Services\VideoDeliveryProvider;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
+use App\Domains\Students\Models\StudentNotification;
 use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\Students\Services\StudentSessionContext;
 use App\Domains\System\Services\DevelopmentDataSchema;
 use App\Policies\LessonMaterialPolicy;
 use App\Policies\LessonWorkspacePolicy;
@@ -79,6 +81,13 @@ class AppServiceProvider extends ServiceProvider
     {
         View::composer(['layouts.public', 'layouts.student'], function (\Illuminate\View\View $view): void {
             $view->with('siteAnnouncement', app(AnnouncementService::class)->visible($view->name() === 'layouts.student' ? 'student' : 'public'));
+        });
+        View::composer('layouts.student', function (\Illuminate\View\View $view): void {
+            $student = app(StudentSessionContext::class)->current(request());
+            $view->with('studentPortalAccount', $student);
+            $view->with('studentPortalUnreadCount', $student
+                ? StudentNotification::query()->where('student_id', $student->id)->whereNull('read_at')->count()
+                : 0);
         });
         Session::extend('database', fn ($app) => new PrivacyDatabaseSessionHandler(
             DB::connection(config('session.connection')), config('session.table'), (int) config('session.lifetime'), $app,

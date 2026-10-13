@@ -10,6 +10,7 @@ use App\Domains\Students\Services\StudentSchedulingService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 class SchedulingController extends Controller
@@ -22,7 +23,7 @@ class SchedulingController extends Controller
         return response()->view('student.scheduling', ['student' => $student,
             'interests' => BookingWaitlist::query()->where('student_id', $student->id)->with('sessionType')->orderByDesc('id')->paginate(15, ['*'], 'waitlist_page'),
             'holidays' => StudentUnavailability::query()->where('student_id', $student->id)->orderByDesc('id')->paginate(15, ['*'], 'holiday_page'),
-            'sessionTypes' => SessionType::query()->where('active', true)->orderBy('title')->get()])->header('Cache-Control', 'private, no-store');
+            'sessionTypes' => SessionType::query()->studentDiscoverable()->orderBy('title')->get()])->header('Cache-Control', 'private, no-store');
     }
 
     public function store(Request $request, string $kind, StudentSchedulingService $service): RedirectResponse
@@ -33,6 +34,9 @@ class SchedulingController extends Controller
         if ($kind === 'holiday') {
             $service->holiday($student, $data);
         } else {
+            if (! SessionType::query()->studentDiscoverable()->whereKey((int) ($data['session_type_id'] ?? 0))->exists()) {
+                throw ValidationException::withMessages(['session_type_id' => 'This lesson type is not available for preferred lesson periods.']);
+            }
             $service->waitlist($student, $data);
         }
 
