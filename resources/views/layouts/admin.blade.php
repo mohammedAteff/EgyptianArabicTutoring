@@ -54,7 +54,7 @@
         }
     </style>
 </head>
-<body class="h-full font-sans antialiased bg-slate-100" 
+<body data-admin-ux class="h-full font-sans antialiased bg-slate-100"
       x-data="adminMobileNav()" 
       @keydown.window="handleKeydown($event)"
       @staff-quick-actions-open.window="if (mobileSidebarOpen) closeSidebar()">
@@ -409,7 +409,7 @@
                         <svg aria-hidden="true" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path :d="desktopCollapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'"/></svg>
                     </button>
 
-                    <form action="{{ route(auth('web')->user()?->isAssistant() ? 'admin.students.index' : 'admin.search') }}" method="GET" class="hidden min-w-0 w-full sm:block">
+                    <form action="{{ route('admin.search') }}" method="GET" class="hidden min-w-0 w-full sm:block">
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>

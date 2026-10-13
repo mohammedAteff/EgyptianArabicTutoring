@@ -2,6 +2,7 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Forms\Services\FormCompletionReadModel;
 use App\Domains\Students\Models\Student;
 
 class StudentCompletenessService
@@ -19,18 +20,18 @@ class StudentCompletenessService
      */
     public function assess(Student $student): array
     {
+        $forms = app(FormCompletionReadModel::class)->forStudent($student);
+        $short = $forms->firstWhere('slug', 'short-form');
+        $long = $forms->firstWhere('slug', 'long-form');
+        $packages = $student->relationLoaded('packages') ? $student->packages : $student->packages()->get();
         $checks = [
-            'Basic Identity' => ! empty($student->name) && ! empty($student->email),
-            'Phone Number' => ! empty($student->phone),
-            'Timezone' => ! empty($student->preferred_timezone),
-            'Meeting Preference' => ! empty($student->preferred_meeting_provider_id),
-            'Date of Birth' => ! empty($student->date_of_birth),
-            'Intake Form Submission' => $student->relationLoaded('formSubmissions')
-                ? $student->formSubmissions->isNotEmpty()
-                : $student->formSubmissions()->exists(),
-            'Package Enrolled' => $student->relationLoaded('packages')
-                ? $student->packages->isNotEmpty()
-                : $student->packages()->exists(),
+            'Basic Identity' => $student->identity_status === 'verified' && filled($student->name) && filled($student->email),
+            'Phone Number' => filled($student->phone),
+            'Timezone' => filled($student->preferred_timezone),
+            'Date of Birth' => filled($student->date_of_birth),
+            'Intake Form Submission' => ($short['status'] ?? null) === 'submitted',
+            'Long Form Submission' => ($long['status'] ?? null) === 'submitted',
+            'Package Enrolled' => $packages->contains(fn ($package): bool => app(EntitlementService::class)->eligible($package)),
         ];
 
         $completed = [];

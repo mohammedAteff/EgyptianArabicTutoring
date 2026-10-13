@@ -24,6 +24,7 @@
                     <a href="{{ route('student.scheduling.index') }}">Planning</a>
                     <a href="{{ route('student.statements.index') }}">Statements &amp; Receipts</a>
                     <a href="{{ route('student.notifications.index') }}">Notifications @if($studentPortalUnreadCount > 0)<span class="ml-1 rounded-full bg-nile-100 px-2 py-0.5 text-xs" aria-label="{{ $studentPortalUnreadCount }} unread">{{ $studentPortalUnreadCount }}</span>@endif</a>
+                <a href="{{ route('student.bookmarks.index') }}">Bookmarks</a>
                 <a href="{{ route('student.bins.index') }}" class="text-sm font-semibold text-nile-800">Notes</a>
                 </nav>
                 <details class="relative text-sm">

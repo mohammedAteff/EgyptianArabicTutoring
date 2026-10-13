@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domains\Administration\Models\StaffBin;
+use App\Domains\Administration\Models\StaffNoteTemplate;
 use App\Domains\Administration\Models\StaffTask;
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Services\AnalyticsLifecycle;
@@ -79,6 +80,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        View::composer(['components.staff-template-picker'], function (\Illuminate\View\View $view): void {
+            $templates = collect();
+            if (request()->routeIs('admin.*') && auth('web')->check()) {
+                $category = $view->getData()['category'] ?? 'teaching';
+                $templates = StaffNoteTemplate::query()->whereIn('category', [$category, 'teaching'])->orderBy('title')->get(['id', 'title', 'body']);
+            }
+            $view->with('templates', $templates);
+        });
         View::composer(['layouts.public', 'layouts.student'], function (\Illuminate\View\View $view): void {
             $view->with('siteAnnouncement', app(AnnouncementService::class)->visible($view->name() === 'layouts.student' ? 'student' : 'public'));
         });

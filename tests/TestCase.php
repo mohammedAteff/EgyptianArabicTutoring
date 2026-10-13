@@ -5,6 +5,9 @@ namespace Tests;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Students\Models\EntitlementType;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -15,6 +18,8 @@ if (! class_exists('Symfony\Component\DomCrawler\Crawler')) {
 
 abstract class TestCase extends BaseTestCase
 {
+    private static ?string $databaseStrategy = null;
+
     protected function setUpTraits(): array
     {
         $connection = DB::connection();
@@ -35,6 +40,15 @@ abstract class TestCase extends BaseTestCase
             config('database.reconciled.vendor'),
             config('database.reconciled.version'),
         );
+
+        $traits = class_uses_recursive(static::class);
+        $strategy = isset($traits[DatabaseTruncation::class]) ? 'committed:'.static::class
+            : (isset($traits[RefreshDatabase::class]) ? 'transactional' : null);
+        if ($strategy !== null && self::$databaseStrategy !== $strategy) {
+            // Committed concurrency fixtures must not survive into transactional tests or another committed class.
+            RefreshDatabaseState::$migrated = false;
+            self::$databaseStrategy = $strategy;
+        }
 
         return parent::setUpTraits();
     }

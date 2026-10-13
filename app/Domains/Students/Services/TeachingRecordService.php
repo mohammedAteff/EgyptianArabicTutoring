@@ -120,6 +120,12 @@ class TeachingRecordService
     /** Student and Booking locks are held by privacy/merge services. */
     public function erase(int $studentId): void
     {
+        DB::table('homework_submissions')->whereIn('homework_id', DB::table('homeworks')->select('id')->where('student_id', $studentId))->update(['body' => '[redacted]']);
+        DB::table('student_bookmarks')->where('student_id', $studentId)->delete();
+        DB::table('student_portal_logins')->where('student_id', $studentId)->delete();
+        DB::table('student_skill_assessments')->where('student_id', $studentId)->update(['notes' => null, 'student_visible' => false]);
+        DB::table('student_progress_reports')->where('student_id', $studentId)->update(['summary' => '[redacted]', 'next_goals' => null, 'student_visible' => false]);
+        DB::table('resource_collection_assignments')->where('student_id', $studentId)->update(['student_visible' => false]);
         DB::table('homeworks')->where('student_id', $studentId)->update(['title' => 'Redacted homework', 'instructions' => '[redacted]', 'feedback' => null, 'student_response' => null, 'url' => null, 'resource_id' => null, 'lesson_material_id' => null, 'student_visible' => false]);
         DB::table('learning_milestones')->whereIn('learning_plan_id', DB::table('learning_plans')->select('id')->where('student_id', $studentId))->update(['title' => 'Redacted milestone']);
         DB::table('learning_plans')->where('student_id', $studentId)->update(['title' => 'Redacted plan', 'goals' => '[redacted]', 'focus_areas' => null, 'current_level' => null, 'notes' => null, 'student_visible' => false]);

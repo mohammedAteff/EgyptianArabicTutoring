@@ -62,6 +62,7 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
 
     public function test_funnel_cumulative_progression_counts_each_visitor_once(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-10 12:00:00', 'UTC'));
         $visitor = Visitor::create([
             'visitor_token' => 'vis-cumulative-1',
             'first_seen_at' => '2026-09-10 10:00:00',
@@ -111,6 +112,7 @@ class AnalyticsFunnelAndAttributionTest extends TestCase
 
     public function test_direct_booking_imputes_upstream_stages_with_correct_provenance(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-12 12:00:00', 'UTC'));
         $visitor = Visitor::create([
             'visitor_token' => 'vis-direct-1',
             'first_seen_at' => '2026-09-12 11:00:00',

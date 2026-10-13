@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<a href="{{ route('admin.forms.completion') }}" class="mb-5 inline-flex min-h-11 items-center text-sm font-semibold text-amber-800 underline">Student Form Completion Overview</a>
 <div class="flex flex-wrap items-center justify-between gap-4">
     <div><h1 class="text-2xl font-semibold text-nile-900">Student forms</h1><p class="mt-1 text-sm text-stone-600">Versioned questionnaires and their student responses.</p></div>
     @if($canManageForms)<a href="{{ route('admin.forms.create') }}" class="rounded-lg bg-nile-800 px-4 py-2 text-sm font-semibold text-white hover:bg-nile-900">Create form</a>@endif

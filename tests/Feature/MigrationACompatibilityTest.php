@@ -16,7 +16,9 @@ use App\Domains\Forms\Services\FormBuilderService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -27,6 +29,19 @@ use Tests\TestCase;
 class MigrationACompatibilityTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // This compatibility suite exercises the retained legacy column alongside the current trigger tables.
+        Schema::table('forms', function (Blueprint $table): void {
+            $table->enum('prompt_trigger', ['none', 'after_booking', 'after_reschedule', 'next_session_check'])->default('none');
+        });
+        $this->beforeApplicationDestroyed(function (): void {
+            RefreshDatabaseState::$migrated = false;
+        });
+    }
 
     public function test_prompt_trigger_column_physically_exists_under_intermediate_schema(): void
     {

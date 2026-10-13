@@ -424,7 +424,7 @@
                                     </div>
                                     <div class="sm:col-span-2">
                                         <label class="block text-[10px] uppercase font-bold text-rose-800 mb-1">Refund Reason</label>
-                                        <input type="text" name="reason" placeholder="Reason for refund..."
+                                        <x-operational-reason-select category="refund" /><input type="text" name="reason" placeholder="Reason for refund..."
                                                class="w-full px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs focus:outline-none">
                                     </div>
                                     <div class="sm:col-span-4 flex justify-end gap-2">
@@ -448,7 +448,7 @@
                                     </div>
                                     <div class="sm:col-span-3">
                                         <label class="block text-[10px] uppercase font-bold text-amber-800 mb-1">Description / Reason</label>
-                                        <input type="text" name="description" placeholder="e.g. Courtesy makeup credit for tutor rescheduled session" required
+                                        <x-operational-reason-select category="courtesy_credit" /><input type="text" name="description" placeholder="e.g. Courtesy makeup credit for tutor rescheduled session" required
                                                class="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs focus:outline-none">
                                     </div>
                                     <div class="sm:col-span-4 flex justify-end gap-2">

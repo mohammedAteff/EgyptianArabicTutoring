@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\BookingPolicyController;
+use App\Http\Controllers\Admin\BusinessActivityController;
 use App\Http\Controllers\Admin\BusinessLifecycleReportController;
 use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContentController;
@@ -16,11 +17,13 @@ use App\Http\Controllers\Admin\CourseVideoController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
 use App\Http\Controllers\Admin\DevelopmentToolsController;
+use App\Http\Controllers\Admin\FormCompletionController;
 use App\Http\Controllers\Admin\FormController;
 use App\Http\Controllers\Admin\LearningOperationsController;
 use App\Http\Controllers\Admin\LearningPreviewController;
 use App\Http\Controllers\Admin\LearningReviewController;
 use App\Http\Controllers\Admin\LearningSettingsController;
+use App\Http\Controllers\Admin\LearningSkillController;
 use App\Http\Controllers\Admin\LmsAccessController;
 use App\Http\Controllers\Admin\MaintenanceAnalyticsController;
 use App\Http\Controllers\Admin\MediaController;
@@ -32,10 +35,12 @@ use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\PaymentMethodController;
 use App\Http\Controllers\Admin\PrivateLearningController;
 use App\Http\Controllers\Admin\PromotionController;
+use App\Http\Controllers\Admin\ReasonCodeController;
 use App\Http\Controllers\Admin\ReceivablesController;
 use App\Http\Controllers\Admin\RecurringLessonController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ResourceCategoryController;
+use App\Http\Controllers\Admin\ResourceCollectionController;
 use App\Http\Controllers\Admin\SearchController;
 use App\Http\Controllers\Admin\SessionTypeController;
 use App\Http\Controllers\Admin\SettingController;
@@ -50,6 +55,7 @@ use App\Http\Controllers\Admin\StudentOperationalAlertController;
 use App\Http\Controllers\Admin\StudentOperationalStatusController;
 use App\Http\Controllers\Admin\StudentPinController;
 use App\Http\Controllers\Admin\StudentPortalPreviewController;
+use App\Http\Controllers\Admin\StudentProgressReportController;
 use App\Http\Controllers\Admin\StudentSchedulingController;
 use App\Http\Controllers\Admin\StudentTeachingController;
 use App\Http\Controllers\Admin\SystemHealthController;
@@ -84,6 +90,7 @@ use App\Http\Controllers\Student\ProtectedPlaybackController;
 use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
 use App\Http\Controllers\Student\ResourceAssignmentController;
 use App\Http\Controllers\Student\SchedulingController;
+use App\Http\Controllers\Student\StudentBookmarkController;
 use App\Http\Controllers\Student\TeachingController;
 use App\Http\Controllers\Student\VideoDeviceController;
 use App\Http\Controllers\StudentBinController;
@@ -157,6 +164,10 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::get('/packages/{package}/statement/export', [FinancialStatementController::class, 'export'])->whereNumber('package')->name('statements.export');
         Route::get('/packages/{package}/receipts/{payment}', [FinancialStatementController::class, 'receipt'])->whereNumber(['package', 'payment'])->name('receipts.show');
         Route::get('/learning', [TeachingController::class, 'index'])->name('teaching.index');
+        Route::get('/bookmarks', [StudentBookmarkController::class, 'index'])->name('bookmarks.index');
+        Route::post('/bookmarks', [StudentBookmarkController::class, 'store'])->name('bookmarks.store');
+        Route::delete('/bookmarks/{bookmark}', [StudentBookmarkController::class, 'destroy'])->whereNumber('bookmark')->name('bookmarks.destroy');
+        Route::get('/progress-reports/{report}', [StudentProgressReportController::class, 'student'])->whereNumber('report')->name('progress-reports.show');
         Route::patch('/homework/{homework}', [HomeworkController::class, 'update'])->whereNumber('homework')->name('homework.update');
         Route::get('/homework/{homework}/resource', [HomeworkController::class, 'resource'])->whereNumber('homework')->name('homework.resource');
         Route::get('/homework/{homework}/link', [HomeworkController::class, 'link'])->whereNumber('homework')->name('homework.link');
@@ -429,6 +440,19 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/bookings/{booking}', [App\Http\Controllers\Admin\BookingController::class, 'show'])->name('bookings.show');
         Route::get('/bookings/{booking}/lesson', [App\Http\Controllers\Admin\LessonWorkspaceController::class, 'show'])->name('lessons.show');
         Route::get('/students/{student}/teaching', [StudentTeachingController::class, 'show'])->name('students.teaching');
+        Route::get('/reason-codes', [ReasonCodeController::class, 'index'])->middleware('role:super_admin')->name('reason-codes.index');
+        Route::post('/reason-codes', [ReasonCodeController::class, 'store'])->middleware('role:super_admin')->name('reason-codes.store');
+        Route::patch('/reason-codes/{reason}', [ReasonCodeController::class, 'update'])->middleware('role:super_admin')->name('reason-codes.update');
+        Route::get('/forms-completion', [FormCompletionController::class, 'index'])->middleware('role:super_admin,admin,assistant')->name('forms.completion');
+        Route::get('/reports/activity', [BusinessActivityController::class, 'index'])->middleware('role:super_admin,admin')->name('reports.activity');
+        Route::post('/learning-skills', [LearningSkillController::class, 'store'])->middleware('role:super_admin,admin')->name('learning-skills.store');
+        Route::post('/students/{student}/skills', [LearningSkillController::class, 'assess'])->middleware('role:super_admin,admin')->name('students.skills.store');
+        Route::post('/students/{student}/progress-reports', [StudentProgressReportController::class, 'store'])->middleware('role:super_admin,admin')->name('students.progress-reports.store');
+        Route::get('/students/{student}/progress-reports/{report}', [StudentProgressReportController::class, 'show'])->middleware('role:super_admin,admin')->name('students.progress-reports.show');
+        Route::get('/resource-collections', [ResourceCollectionController::class, 'index'])->middleware('role:super_admin,admin')->name('resource-collections.index');
+        Route::post('/resource-collections', [ResourceCollectionController::class, 'save'])->middleware('role:super_admin,admin')->name('resource-collections.store');
+        Route::put('/resource-collections/{collection}', [ResourceCollectionController::class, 'save'])->middleware('role:super_admin,admin')->name('resource-collections.update');
+        Route::post('/resource-collections/{collection}/assign', [ResourceCollectionController::class, 'assign'])->middleware('role:super_admin,admin')->name('resource-collections.assign');
         Route::middleware('role:super_admin,admin')->group(function (): void {
             Route::get('/students/{student}/assign-learning', [AssignLearningController::class, 'create'])->whereNumber('student')->name('students.learning.create');
             Route::post('/students/{student}/assign-learning', [AssignLearningController::class, 'store'])->whereNumber('student')->middleware('throttle:30,1')->name('students.learning.store');
@@ -607,6 +631,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         Route::middleware('role:super_admin,admin,assistant')->group(function () {
             Route::get('/students/export', [StudentController::class, 'export'])->middleware('role:super_admin,admin')->name('students.export');
+            Route::post('/students/bulk-teaching', [StudentController::class, 'bulkTeaching'])->middleware('role:super_admin,admin')->name('students.bulk-teaching');
             Route::post('/students/bulk-task', [StudentController::class, 'bulkTask'])->name('students.bulk-task');
             Route::get('/students', [StudentController::class, 'index'])->name('students.index');
             Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
@@ -614,6 +639,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/students/{student}/guardians', [StudentGuardianController::class, 'store'])->name('students.guardians.store');
             Route::delete('/students/{student}/guardians/{guardian}', [StudentGuardianController::class, 'destroy'])->name('students.guardians.destroy');
             Route::get('/students/{student}/preview-portal', [StudentPortalPreviewController::class, 'show'])->middleware('role:super_admin,admin')->name('students.preview-portal');
+            Route::get('/staff-note-templates/library', [StaffNoteTemplateController::class, 'library'])->name('staff-note-templates.library');
             Route::get('/staff-note-templates', [StaffNoteTemplateController::class, 'index'])->name('staff-note-templates.index');
             Route::post('/staff-note-templates', [StaffNoteTemplateController::class, 'store'])->name('staff-note-templates.store');
             Route::get('/staff-notes', [StaffBinController::class, 'index'])->name('staff-bins.index');
@@ -641,7 +667,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         });
 
         // Global Search
-        Route::get('/search', [SearchController::class, 'search'])->middleware('role:super_admin,admin')->name('search');
+        Route::get('/search', [SearchController::class, 'search'])->middleware('role:super_admin,admin,assistant')->name('search');
 
         // Analytics & Business Funnels
         Route::get('/analytics', [AnalyticsDashboardController::class, 'index'])->middleware('admin.role:super_admin,admin')->name('analytics');

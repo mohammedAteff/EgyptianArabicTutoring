@@ -80,7 +80,7 @@
                                     <form method="POST" action="{{ route('admin.students.refunds.store', [$student->id, $payment->id]) }}" class="mt-3 grid gap-3 sm:grid-cols-2">
                                         @csrf
                                         <label class="text-sm">Refund amount ({{ $payment->currency }})<input name="amount_refunded" required inputmode="decimal" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
-                                        <label class="text-sm">Reason<input name="reason" maxlength="4000" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
+                                        <x-operational-reason-select category="refund" /><label class="text-sm">Reason<input name="reason" maxlength="4000" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
                                         <input type="hidden" name="refund_idempotency_key_{{ $payment->id }}" value="{{ old('refund_idempotency_key_'.$payment->id, (string) \Illuminate\Support\Str::uuid()) }}">
                                         <div class="sm:col-span-2"><button class="min-h-11 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-800 hover:bg-rose-100">Record refund</button></div>
                                     </form>
@@ -98,7 +98,7 @@
                         <h4 class="font-semibold text-slate-900 sm:col-span-2">Adjust credits</h4>
                         <x-entitlement-allocation-select :package="$package" />
                         <label class="text-sm">Signed credit change<input name="credit_change" required type="number" min="-500" max="500" value="{{ old('credit_change') }}" placeholder="+ / − credits" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
-                        <label class="text-sm">Reason<input name="description" required maxlength="255" value="{{ old('description') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
+                        <x-operational-reason-select category="courtesy_credit" /><label class="text-sm">Reason<input name="description" required maxlength="255" value="{{ old('description') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
                         <input type="hidden" name="credit_idempotency_key_{{ $package->id }}" value="{{ old('credit_idempotency_key_'.$package->id, (string) \Illuminate\Support\Str::uuid()) }}">
                         <div class="sm:col-span-2"><button class="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50">Record adjustment</button></div>
                     </form>
@@ -109,7 +109,7 @@
                         <input type="hidden" name="previous_expires_at" value="{{ $package->expires_at?->toDateTimeString() }}">
                         <input type="hidden" name="previous_expiration_date" value="{{ $package->expiration_date?->toDateString() }}">
                         <label class="text-sm">Extend expiration<input type="date" name="expiration_date" required min="{{ $package->expiration_date?->copy()->addDay()->toDateString() }}" value="{{ old('expiration_date') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
-                        <label class="text-sm">Reason<input name="reason" required maxlength="1000" value="{{ old('reason') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
+                        <x-operational-reason-select category="validity_extension" /><label class="text-sm">Reason<input name="reason" required maxlength="1000" value="{{ old('reason') }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5"></label>
                         <div class="sm:col-span-2"><button class="min-h-11 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50">Extend validity</button></div>
                     </form>
                     <div class="space-y-2 border-t border-slate-200 pt-5"><h4 class="font-semibold text-slate-900">Validity history</h4>

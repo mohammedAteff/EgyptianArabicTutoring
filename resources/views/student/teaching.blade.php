@@ -11,7 +11,7 @@
     <h2 id="homework-heading" class="text-xl font-semibold">Homework</h2>
     @forelse($homework as $item)
     <article id="homework-{{ $item->id }}" class="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
-        <div class="flex flex-wrap items-start justify-between gap-3"><h3 class="font-semibold text-nile-900">{{ $item->title }}</h3><span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold">{{ match($item->status) { 'assigned' => 'Not Started', 'in_progress' => 'In Progress', 'submitted' => 'Submitted', 'completed' => 'Completed', default => 'Status Unavailable' } }}</span></div>
+        <div class="flex flex-wrap items-start justify-between gap-3"><h3 class="font-semibold text-nile-900">{{ $item->title }}</h3><span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold">{{ match($item->status) { 'assigned' => 'Not Started', 'in_progress' => 'In Progress', 'submitted' => 'Submitted', 'reviewed' => 'Reviewed', 'completed' => 'Completed', default => 'Status Unavailable' } }}</span></div>
         <p class="mt-2 text-xs text-stone-500">Assigned {{ $item->assigned_date->format('M j, Y') }}@if($item->due_date) · Due {{ $item->due_date->format('M j, Y') }}@endif @if($item->booking_id) · Lesson #{{ $item->booking_id }}@endif</p>
         <p class="mt-4 whitespace-pre-line break-words text-sm text-stone-700">{{ $item->instructions }}</p>
         <div class="mt-3 flex flex-wrap gap-4 text-sm font-semibold text-nile-800">
@@ -19,10 +19,14 @@
             @if($item->resource?->isPublished())<a href="{{ route('student.homework.resource', $item->id) }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $item->resource->title }}</a>@endif
             @if($item->material)<a href="{{ route('student.lessons.materials.open', [$item->material->booking_id, $item->material->id]) }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $item->material->title }}</a>@endif
         </div>
+        <x-student-bookmark-button kind="homework" :target-id="$item->id" />
+        @if($item->due_date && $item->due_date->isPast() && !in_array($item->status, ['submitted', 'reviewed', 'completed'], true))<p class="mt-2 text-sm font-semibold text-amber-800">Overdue</p>@endif
+        @if($item->submissions->isNotEmpty())<details class="mt-4"><summary class="cursor-pointer text-sm font-semibold">Submission History</summary>@foreach($item->submissions as $submission)<article class="mt-2 rounded-xl bg-stone-50 p-3"><p class="text-xs text-stone-500">{{ $submission->submitted_at->setTimezone($timezone)->format('j M Y, g:i A') }}</p><p class="mt-1 whitespace-pre-line">{{ $submission->body }}</p></article>@endforeach</details>@endif
         @if($item->feedback)<div class="mt-4 rounded-xl bg-nile-50 p-4"><h4 class="text-sm font-semibold text-nile-900">Tutor feedback</h4><p class="mt-1 whitespace-pre-line break-words text-sm">{{ $item->feedback }}</p></div>@endif
         @if($item->status !== 'completed')
         <form method="POST" action="{{ route('student.homework.update', $item->id) }}" class="mt-5 grid gap-3">
             @csrf @method('PATCH')
+            <input type="hidden" name="submission_key" value="{{ \Illuminate\Support\Str::uuid() }}">
             <label class="text-sm font-medium">Your response (optional)<textarea name="student_response" rows="3" maxlength="5000" class="mt-2 w-full rounded-xl border border-stone-300 p-3">{{ $item->student_response }}</textarea></label>
             <div class="flex flex-wrap gap-3"><button name="status" value="in_progress" class="min-h-11 rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold">Save Progress</button><button name="status" value="submitted" class="min-h-11 rounded-xl bg-nile-800 px-4 py-2 text-sm font-semibold text-white">Submit Homework</button></div>
         </form>
@@ -52,6 +56,7 @@
         <h3 class="font-semibold text-nile-900">{{ $assignment->resource->title }}</h3>
         <p class="mt-2 whitespace-pre-line break-words text-sm text-stone-600">{{ $assignment->instructions ?? $assignment->resource->short_description }}</p>
         <a href="{{ route('student.resources.open', $assignment->id) }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">Open Resource</a>
+        <x-student-bookmark-button kind="resource" :target-id="$assignment->id" />
         @if(!$assignment->reviewed_at)<form method="POST" action="{{ route('student.resources.update', $assignment->id) }}" class="mt-2">@csrf @method('PATCH')<button class="min-h-11 rounded-xl bg-nile-800 px-4 py-2 text-sm font-semibold text-white">Mark as reviewed</button></form>@else<p class="mt-2 text-xs text-stone-500">Reviewed {{ $assignment->reviewed_at->format('M j, Y') }}</p>@endif
     </article>
     @empty <p class="rounded-xl border border-stone-200 bg-white p-5 text-sm text-stone-500">No Assigned Resources Yet. Resources chosen for your learning will appear here.</p>@endforelse
@@ -69,4 +74,7 @@
     @empty<p class="rounded-xl border border-stone-200 bg-white p-5 text-sm text-stone-500">No Feedback Yet. Feedback will appear here when your submitted work has been reviewed.</p>@endforelse
     <a href="{{ route('student.learning.index') }}#for-you" class="inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">View Learning Activities and Feedback</a>
 </section>
+<section class="mt-8 space-y-4"><h2 class="text-xl font-semibold">Learning Collections</h2>@forelse($resourceCollections as $assignment)<article class="rounded-xl border border-stone-200 bg-white p-5"><h3 class="font-semibold">{{ $assignment->collection->title }}</h3><p class="mt-2">{{ $assignment->collection->description }}</p><ol class="mt-3 list-inside list-decimal">@foreach($assignment->collection->resources as $resource)<li>{{ $resource->title }}@php $assigned = $assignedResources->firstWhere('resource_id', $resource->id); @endphp @if($assigned)<a href="{{ route('student.resources.open', $assigned->id) }}" class="ml-2 text-nile-800 underline">Open Resource</a>@endif</li>@endforeach</ol></article>@empty<p class="text-sm text-stone-500">No learning collections assigned yet.</p>@endforelse</section>
+<section class="mt-8 space-y-4"><h2 class="text-xl font-semibold">Skill Assessments</h2><p class="text-sm text-stone-500">Tutor observations shared with you.</p>@forelse($skillAssessments as $assessment)<article class="rounded-xl border border-stone-200 bg-white p-5"><h3 class="font-semibold">{{ $assessment->skill->label }} · {{ ucfirst(str_replace('_', ' ', $assessment->state)) }}</h3><p class="mt-2 whitespace-pre-line">{{ $assessment->notes }}</p><p class="mt-2 text-xs text-stone-500">{{ $assessment->assessed_at->setTimezone($timezone)->format('j M Y') }}</p></article>@empty<p class="text-sm text-stone-500">No skill assessments shared yet.</p>@endforelse</section>
+<section class="mt-8"><h2 class="text-xl font-semibold">Progress Reports</h2>@forelse($progressReports as $report)<a href="{{ route('student.progress-reports.show', $report) }}" class="mt-3 block min-h-11 text-nile-800 underline">{{ $report->date_from->format('j M Y') }} – {{ $report->date_to->format('j M Y') }}</a>@empty<p class="mt-3 text-sm text-stone-500">No progress reports shared yet.</p>@endforelse</section>
 @endsection

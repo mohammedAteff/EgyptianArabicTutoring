@@ -1,0 +1,2 @@
+@props(['category' => 'teaching', 'field' => 'body'])
+<label class="block text-sm font-semibold">Insert Editable Template<select data-staff-template-picker data-target-field="{{ $field }}" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white p-3"><option value="">Choose a template</option>@foreach($templates as $template)<option value="{{ $template->body }}">{{ $template->title }}</option>@endforeach</select></label>

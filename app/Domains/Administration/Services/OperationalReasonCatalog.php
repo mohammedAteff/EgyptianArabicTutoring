@@ -41,23 +41,29 @@ class OperationalReasonCatalog
     /** @return array<string, string> */
     public static function forCategory(string $category): array
     {
-        try {
-            if (Schema::hasTable('reason_codes')) {
-                $dbReasons = ReasonCode::query()->active()->category($category)->pluck('label', 'code')->toArray();
-                if (! empty($dbReasons)) {
-                    return $dbReasons;
-                }
+        $defaults = match ($category) {
+            'refund' => ['student_request' => 'Student request', 'tutor_cancellation' => 'Tutor cancellation', 'duplicate_payment' => 'Duplicate payment', 'pricing_correction' => 'Pricing correction', 'other' => 'Other'],
+            'courtesy_credit' => ['service_recovery' => 'Service recovery', 'promotion' => 'Promotion', 'tutor_cancellation_compensation' => 'Tutor cancellation compensation', 'administrative_correction' => 'Administrative correction', 'other' => 'Other'],
+            'validity_extension' => ['travel' => 'Travel', 'medical_personal_break' => 'Medical / personal break', 'tutor_availability' => 'Tutor availability', 'service_recovery' => 'Service recovery', 'administrative' => 'Administrative', 'other' => 'Other'],
+            'suspension' => ['payment_overdue' => 'Payment overdue', 'conduct_issue' => 'Conduct issue', 'temporary_administrative_hold' => 'Temporary administrative hold', 'requested_by_student' => 'Requested by student', 'other' => 'Other'],
+            'cancellation', 'reschedule' => ['schedule_change' => 'Schedule change', 'holiday' => 'Holiday / travel', 'illness' => 'Illness', 'student_request' => 'Student request', 'tutor_request' => 'Tutor request', 'other' => 'Other'],
+            default => self::all(),
+        };
+        if (Schema::hasTable('reason_codes')) {
+            $configured = ReasonCode::query()->category($category)->get();
+            foreach ($configured as $reason) {
+                unset($defaults[$reason->code]);
             }
-        } catch (\Throwable) {
-            // Fall back
+
+            return $configured->where('is_active', true)->pluck('label', 'code')->all() + $defaults;
         }
 
-        return self::all();
+        return $defaults;
     }
 
-    public static function validate(?string $code): ?string
+    public static function validate(?string $code, ?string $category = null): ?string
     {
-        if ($code !== null && ! array_key_exists($code, self::all())) {
+        if ($code !== null && ! array_key_exists($code, $category ? self::forCategory($category) : self::all())) {
             throw ValidationException::withMessages(['reason_code' => 'Choose a listed reason.']);
         }
 

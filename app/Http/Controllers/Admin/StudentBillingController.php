@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Administration\Services\OperationalReasonCatalog;
 use App\Domains\Audit\Services\AuditLogService;
+use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
@@ -295,51 +297,57 @@ class StudentBillingController extends Controller
 
         $validated = $request->validate([
             'amount_refunded' => ['required', 'regex:/^\d{1,8}(?:\.\d{1,2})?$/'],
-            'reason' => ['nullable', 'string', 'max:4000'],
+            'reason' => ['nullable', 'string', 'max:4000'], 'reason_code' => ['nullable', 'string', 'max:40'],
             'allocation_id' => ['required_if:forfeit_credits,1', 'nullable', 'integer'],
             'forfeit_credits' => ['nullable', 'integer', 'min:0', 'max:500'],
             $idempotencyField => ['required', 'uuid'],
         ]);
-        $paymentRecord = PaymentRecord::query()->where('student_id', $student)->findOrFail($payment);
 
-        try {
-            $refund = $ledger->refund(
-                $paymentRecord,
-                $validated['amount_refunded'],
-                $validated[$idempotencyField],
-                $request->user('web')?->id,
-                $validated['reason'] ?? null,
-                (int) ($validated['forfeit_credits'] ?? 0),
-                isset($validated['allocation_id']) ? (int) $validated['allocation_id'] : null,
-            );
-        } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages(['refund' => $exception->getMessage()]);
-        }
+        return app(DatabaseCapability::class)->transaction(function () use ($request, $student, $payment, $ledger, $auditLogs, $validated, $idempotencyField): RedirectResponse {
+            OperationalReasonCatalog::validate($validated['reason_code'] ?? null, 'refund');
+            $paymentRecord = PaymentRecord::query()->where('student_id', $student)->findOrFail($payment);
 
-        abort_unless($refund->wasRecentlyCreated, 409, 'This refund request was already processed.');
+            try {
+                $refund = $ledger->refund(
+                    $paymentRecord,
+                    $validated['amount_refunded'],
+                    $validated[$idempotencyField],
+                    $request->user('web')?->id,
+                    $validated['reason'] ?? null,
+                    (int) ($validated['forfeit_credits'] ?? 0),
+                    isset($validated['allocation_id']) ? (int) $validated['allocation_id'] : null,
+                );
+            } catch (InvalidArgumentException $exception) {
+                throw ValidationException::withMessages(['refund' => $exception->getMessage()]);
+            }
 
-        if ($refund->wasRecentlyCreated) {
-            $auditLogs->log('student_payment_refunded', PaymentRecord::class, $paymentRecord->id, null, [
-                'student_id' => $student,
-                'student_package_id' => $refund->student_package_id,
-                'payment_record_id' => $paymentRecord->id,
-                'payment_refund_id' => $refund->id,
-                'amount_refunded' => $refund->amount_refunded,
-                'currency' => $refund->currency,
-                'forfeited_credits' => (int) ($validated['forfeit_credits'] ?? 0),
-            ], $request->user('web')?->id);
-        }
+            abort_unless($refund->wasRecentlyCreated, 409, 'This refund request was already processed.');
 
-        $forfeitMsg = ((int) ($validated['forfeit_credits'] ?? 0)) > 0
-            ? ' Refund saved and '.(int) $validated['forfeit_credits'].' credits forfeited.'
-            : ' Refund record saved. Credits were not changed.';
+            if ($refund->wasRecentlyCreated) {
+                $auditLogs->log('student_payment_refunded', PaymentRecord::class, $paymentRecord->id, null, [
+                    'student_id' => $student,
+                    'student_package_id' => $refund->student_package_id,
+                    'payment_record_id' => $paymentRecord->id,
+                    'payment_refund_id' => $refund->id,
+                    'reason_code' => $validated['reason_code'] ?? null, 'reason' => $validated['reason'] ?? null,
+                    'amount_refunded' => $refund->amount_refunded,
+                    'currency' => $refund->currency,
+                    'forfeited_credits' => (int) ($validated['forfeit_credits'] ?? 0),
+                ], $request->user('web')?->id);
+            }
 
-        return back()->with('success', $forfeitMsg);
+            $forfeitMsg = ((int) ($validated['forfeit_credits'] ?? 0)) > 0
+                ? ' Refund saved and '.(int) $validated['forfeit_credits'].' credits forfeited.'
+                : ' Refund record saved. Credits were not changed.';
+
+            return back()->with('success', $forfeitMsg);
+        }, 5);
     }
 
     public function extendValidity(Request $request, int $student, int $package, AuditLogService $audit): RedirectResponse
     {
-        $data = $request->validate(['expiration_date' => ['required', 'date_format:Y-m-d'], 'previous_expiration_date' => ['nullable', 'date_format:Y-m-d'], 'previous_expires_at' => ['nullable', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'string', 'max:1000']]);
+        $data = $request->validate(['expiration_date' => ['required', 'date_format:Y-m-d'], 'previous_expiration_date' => ['nullable', 'date_format:Y-m-d'], 'previous_expires_at' => ['nullable', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'string', 'max:1000'], 'reason_code' => ['nullable', 'string', 'max:40']]);
+        OperationalReasonCatalog::validate($data['reason_code'] ?? null, 'validity_extension');
         DB::transaction(function () use ($request, $student, $package, $data, $audit): void {
             Student::query()->whereKey($student)->lockForUpdate()->firstOrFail();
             $record = StudentPackage::query()->where('student_id', $student)->whereKey($package)->lockForUpdate()->firstOrFail();
@@ -363,7 +371,7 @@ class StudentBillingController extends Controller
                 $newData['expires_at'] = $newExpiry->toDateTimeString();
             }
             $record->update($newData);
-            $audit->log('package_validity_extended', StudentPackage::class, $record->id, ['expiration_date' => $oldDate, 'expires_at' => $oldExpiry], $newData + ['reason' => $data['reason']], $request->user('web')->id);
+            $audit->log('package_validity_extended', StudentPackage::class, $record->id, ['expiration_date' => $oldDate, 'expires_at' => $oldExpiry], $newData + ['reason' => $data['reason'], 'reason_code' => $data['reason_code'] ?? null], $request->user('web')->id);
         }, 5);
 
         return back()->with('success', 'Package validity extended. Credit ledger entries were preserved.');
@@ -380,34 +388,38 @@ class StudentBillingController extends Controller
         $validated = $request->validate([
             'allocation_id' => ['required', 'integer'],
             'credit_change' => ['required', 'integer', 'between:-500,500', 'not_in:0'],
-            'description' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string', 'max:255'], 'reason_code' => ['nullable', 'string', 'max:40'],
             $idempotencyField => ['required', 'uuid'],
         ]);
-        try {
-            $entry = $ledger->adjustCredits(
-                $packageRecord,
-                (int) $validated['credit_change'],
-                $validated['description'],
-                $validated[$idempotencyField],
-                $request->user('web')?->id,
-                (int) $validated['allocation_id'],
-            );
-        } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages(['credit_change' => $exception->getMessage()]);
-        }
 
-        abort_unless($entry->wasRecentlyCreated, 409, 'This credit adjustment was already processed.');
+        return app(DatabaseCapability::class)->transaction(function () use ($request, $student, $packageRecord, $ledger, $auditLogs, $validated, $idempotencyField): RedirectResponse {
+            OperationalReasonCatalog::validate($validated['reason_code'] ?? null, 'courtesy_credit');
+            try {
+                $entry = $ledger->adjustCredits(
+                    $packageRecord,
+                    (int) $validated['credit_change'],
+                    $validated['description'],
+                    $validated[$idempotencyField],
+                    $request->user('web')?->id,
+                    (int) $validated['allocation_id'],
+                );
+            } catch (InvalidArgumentException $exception) {
+                throw ValidationException::withMessages(['credit_change' => $exception->getMessage()]);
+            }
 
-        if ($entry->wasRecentlyCreated) {
-            $auditLogs->log('student_credit_adjusted', StudentPackage::class, $packageRecord->id, null, [
-                'student_id' => $student,
-                'student_package_id' => $packageRecord->id,
-                'ledger_entry_id' => $entry->id,
-                'credit_change' => $entry->credit_change,
-            ], $request->user('web')?->id);
-        }
+            abort_unless($entry->wasRecentlyCreated, 409, 'This credit adjustment was already processed.');
 
-        return back()->with('success', 'Credit adjustment recorded in the append-only ledger.');
+            if ($entry->wasRecentlyCreated) {
+                $auditLogs->log('student_credit_adjusted', StudentPackage::class, $packageRecord->id, null, [
+                    'student_id' => $student,
+                    'student_package_id' => $packageRecord->id,
+                    'ledger_entry_id' => $entry->id, 'reason_code' => $validated['reason_code'] ?? null, 'description' => $validated['description'],
+                    'credit_change' => $entry->credit_change,
+                ], $request->user('web')?->id);
+            }
+
+            return back()->with('success', 'Credit adjustment recorded in the append-only ledger.');
+        }, 5);
     }
 
     /**

@@ -136,6 +136,23 @@ class StudentMergeService
                 DB::table($table)->where('student_id', $secondaryId)->update($changes);
             }
 
+            foreach (['student_bookmarks' => ['kind', 'target_id'], 'resource_collection_assignments' => ['resource_collection_id']] as $table => $keys) {
+                foreach (DB::table($table)->where('student_id', $secondaryId)->orderBy('id')->get() as $row) {
+                    $duplicate = DB::table($table)->where('student_id', $primaryId);
+                    foreach ($keys as $key) {
+                        $duplicate->where($key, $row->{$key});
+                    }
+                    if ($duplicate->exists()) {
+                        DB::table($table)->where('id', $row->id)->delete();
+                    } else {
+                        DB::table($table)->where('id', $row->id)->update(['student_id' => $primaryId]);
+                    }
+                }
+            }
+            foreach (['student_skill_assessments', 'student_progress_reports', 'student_portal_logins'] as $table) {
+                DB::table($table)->where('student_id', $secondaryId)->update(['student_id' => $primaryId]);
+            }
+
             $this->learning->merge($primaryId, $secondaryId);
 
             DB::table('session_reschedules')

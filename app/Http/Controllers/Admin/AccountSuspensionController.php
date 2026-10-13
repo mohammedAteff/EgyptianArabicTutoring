@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Administration\Models\Administrator;
+use App\Domains\Administration\Services\OperationalReasonCatalog;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Students\Models\Student;
 use App\Http\Controllers\Controller;
@@ -18,7 +19,8 @@ class AccountSuspensionController extends Controller
     {
         abort_unless($request->user('web')?->isSuperAdmin(), 403);
         abort_unless(in_array($type, ['student', 'administrator'], true), 404);
-        $data = $request->validate(['suspend' => ['required', 'boolean'], 'reason' => ['required', 'string', 'max:1000']]);
+        $data = $request->validate(['suspend' => ['required', 'boolean'], 'reason' => ['required', 'string', 'max:1000'], 'reason_code' => ['nullable', 'string', 'max:40']]);
+        OperationalReasonCatalog::validate($data['reason_code'] ?? null, 'suspension');
         DB::transaction(function () use ($request, $type, $account, $data, $audit): void {
             $administrators = Administrator::query()->orderBy('id')->lockForUpdate()->get();
             $actor = $administrators->firstWhere('id', $request->user('web')->id);
@@ -34,7 +36,7 @@ class AccountSuspensionController extends Controller
             }
             $old = ['suspended_at' => $target->suspended_at?->toIso8601String()];
             $target->update(['suspended_at' => $data['suspend'] ? now('UTC') : null, 'suspended_by' => $data['suspend'] ? $request->user('web')->id : null, 'suspension_reason' => $data['suspend'] ? $data['reason'] : null]);
-            $audit->log($data['suspend'] ? 'account_suspended' : 'account_restored', get_class($target), $target->id, $old, ['reason' => $data['reason'], 'suspended' => (bool) $data['suspend']], $request->user('web')->id);
+            $audit->log($data['suspend'] ? 'account_suspended' : 'account_restored', get_class($target), $target->id, $old, ['reason' => $data['reason'], 'reason_code' => $data['reason_code'] ?? null, 'suspended' => (bool) $data['suspend']], $request->user('web')->id);
             DB::afterCommit(fn () => Cache::forget('student_auth_check_'.$account));
         }, 5);
 

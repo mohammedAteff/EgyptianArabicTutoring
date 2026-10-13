@@ -14,7 +14,7 @@ class StudentRecordsQuery
     public function filters(Request $request): array
     {
         return $request->validate([
-            'q' => ['nullable', 'string', 'max:255'],
+            'q' => ['nullable', 'string', 'max:255'], 'pinned' => ['nullable', 'boolean'],
             'operational_status' => ['nullable', Rule::in(['active', 'inactive', 'archived', 'all'])],
             'status' => ['nullable', Rule::in(['verified', 'legacy_unverified', 'suspended'])],
             'package' => ['nullable', 'string', 'max:160'],
@@ -28,9 +28,12 @@ class StudentRecordsQuery
     }
 
     /** @return Builder<Student> */
-    public function query(array $filters): Builder
+    public function query(array $filters, ?int $administratorId = null): Builder
     {
         $query = Student::tutoringRoster()->withCount('bookings')->with(['packages.ledgerEntries', 'packages.payments', 'packages.refunds', 'packages.entitlements.type']);
+        if (! empty($filters['pinned'])) {
+            $query->whereHas('pinnedByStaff', fn (Builder $pins) => $pins->where('administrator_id', $administratorId ?? 0));
+        }
         if (($filters['operational_status'] ?? 'active') !== 'all') {
             $query->where('operational_status', $filters['operational_status'] ?? 'active');
         }

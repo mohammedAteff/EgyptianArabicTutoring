@@ -4,9 +4,11 @@ namespace App\Console\Commands;
 
 use App\Domains\Administration\Models\StaffTask;
 use App\Domains\Booking\Models\Booking;
+use App\Domains\Reporting\Services\BusinessActivityReadModel;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Validator;
 
 class TutorDailySummaryCommand extends Command
 {
@@ -18,11 +20,16 @@ class TutorDailySummaryCommand extends Command
     {
         $tz = $timezones->getBusinessTimezone();
         $dateStr = $this->option('date') ?: now($tz)->toDateString();
+        if (Validator::make(['date' => $dateStr], ['date' => ['required', 'date_format:Y-m-d']])->fails()) {
+            $this->error('Use a valid date in Y-m-d format.');
+
+            return self::FAILURE;
+        }
         $start = CarbonImmutable::parse($dateStr, $tz)->startOfDay()->utc();
         $end = CarbonImmutable::parse($dateStr, $tz)->endOfDay()->utc();
 
-        $tomorrowStart = $start->addDay();
-        $tomorrowEnd = $end->addDay();
+        $tomorrowStart = CarbonImmutable::parse($dateStr, $tz)->startOfDay()->addDay()->utc();
+        $tomorrowEnd = CarbonImmutable::parse($dateStr, $tz)->startOfDay()->addDays(2)->utc();
 
         $todayBookings = Booking::query()
             ->where('start_at_utc', '>=', $start)
@@ -37,7 +44,7 @@ class TutorDailySummaryCommand extends Command
 
         $tomorrowBookings = Booking::query()
             ->where('start_at_utc', '>=', $tomorrowStart)
-            ->where('start_at_utc', '<=', $tomorrowEnd)
+            ->where('start_at_utc', '<', $tomorrowEnd)
             ->where('status', 'confirmed')
             ->count();
 
@@ -48,12 +55,17 @@ class TutorDailySummaryCommand extends Command
 
         $tasksDue = StaffTask::query()
             ->where('due_date', $dateStr)
-            ->where('status', 'open')
+            ->whereIn('status', ['open', 'in_progress'])
             ->count();
 
         $this->info('=== End-of-Day Tutor Operations Summary ===');
         $this->info("Date: {$dateStr} ({$tz})");
         $this->newLine();
+        $activity = app(BusinessActivityReadModel::class)->day($dateStr);
+        $this->table(['Business Activity', 'Count'], [['New bookings', $activity['newBookings']], ['Payments recorded', $activity['paymentsCount']], ['Leads created', $activity['newLeads']], ['Tasks remaining', $activity['tasksRemaining']]]);
+        foreach ($activity['payments'] as $currency => $amount) {
+            $this->line('Payments: '.$currency.' '.$amount);
+        }
 
         $this->table(
             ['Metric', 'Count'],

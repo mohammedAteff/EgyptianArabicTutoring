@@ -31,7 +31,7 @@ class SaveTeachingRecordRequest extends FormRequest
                 'instructions' => ['required', 'string', 'max:5000'],
                 'assigned_date' => ['required', 'date_format:Y-m-d'],
                 'due_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:assigned_date'],
-                'status' => ['required', Rule::in(['assigned', 'in_progress', 'submitted', 'completed'])],
+                'status' => ['required', Rule::in(['assigned', 'in_progress', 'submitted', 'reviewed', 'completed'])],
                 'feedback' => $text, 'url' => ['nullable', 'string', 'max:2048', new SafeLessonUrl],
                 'resource_id' => ['nullable', 'integer'], 'lesson_material_id' => ['nullable', 'integer'],
             ],

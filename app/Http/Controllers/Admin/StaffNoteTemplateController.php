@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class StaffNoteTemplateController extends Controller
 {
@@ -19,6 +20,11 @@ class StaffNoteTemplateController extends Controller
             ->get(['id', 'title', 'category', 'body']);
 
         return response()->json($templates);
+    }
+
+    public function library(): View
+    {
+        return view('admin.staff-note-templates', ['templates' => StaffNoteTemplate::query()->orderBy('category')->orderBy('title')->get()]);
     }
 
     public function store(Request $request): RedirectResponse

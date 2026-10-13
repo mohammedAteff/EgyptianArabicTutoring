@@ -40,4 +40,24 @@ class StudentLifetimeSummary
                 ->filter(fn (Booking $booking): bool => $booking->start_at_utc->isFuture())->sortBy('start_at_utc')->first(),
         ];
     }
+
+    /** @param Collection<int, Booking> $bookings
+     * @param  Collection<int, array<string, mixed>>  $packageRows
+     * @return array<string, string>
+     */
+    public function copyBlocks(Student $student, Collection $bookings, Collection $packageRows, string $timezone): array
+    {
+        $summary = $this->forStudent($student, $bookings, $packageRows);
+        $next = $summary['nextBooking'];
+        $nextText = $next ? 'Next lesson: '.$next->start_at_utc->copy()->setTimezone($timezone)->format('Y-m-d H:i T').' · '.$next->sessionType?->title : 'No upcoming lesson.';
+        $billing = [];
+        foreach ($summary['money'] as $currency => $money) {
+            $billing[] = $currency.' · Paid: '.$money['paid'].' · Refunded: '.$money['refunded'].' · Net: '.bcsub($money['paid'], $money['refunded'], 2);
+        }
+        $packages = $packageRows->map(fn (array $row): string => $row['package']->package_name.' · Purchase #'.$row['package']->id.' · '.$row['summary']['entitlement_status'].' · '.$row['summary']['balance_text'].' · Expiry: '.$row['package']->expiryLabel())->implode("\n");
+        $meeting = $next && $next->meeting_url_snapshot ? 'Meeting: '.$next->meeting_provider_snapshot."\n".$next->meeting_url_snapshot : 'Meeting not yet assigned.';
+
+        return ['Billing Summary' => $student->name."\n".(implode("\n", $billing) ?: 'No payment history.'), 'Upcoming Lesson' => $student->name."\n".$nextText,
+            'Meeting Details' => $student->name."\n".$nextText."\n".$meeting, 'Package Summary' => $student->name."\n".($packages ?: 'No packages recorded.')];
+    }
 }

@@ -2,12 +2,22 @@
 
 namespace App\Domains\Resources\Models;
 
+use Database\Factories\Domains\Resources\ResourceCollectionFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class ResourceCollection extends Model
 {
+    /** @use HasFactory<ResourceCollectionFactory> */
+    use HasFactory;
+
+    protected static function newFactory(): ResourceCollectionFactory
+    {
+        return ResourceCollectionFactory::new();
+    }
+
     protected $fillable = [
         'title',
         'slug',

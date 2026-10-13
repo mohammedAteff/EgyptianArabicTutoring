@@ -6,8 +6,11 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
 use App\Domains\Lms\Services\LmsTeachingTimeline;
 use App\Domains\Resources\Models\Resource;
+use App\Domains\Students\Models\LearningSkill;
 use App\Domains\Students\Models\LessonFeedback;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentProgressReport;
+use App\Domains\Students\Models\StudentSkillAssessment;
 use App\Domains\Students\Services\StudentTimelineService;
 use App\Domains\Students\Services\TeachingRecordService;
 use App\Http\Controllers\Controller;
@@ -31,6 +34,9 @@ class StudentTeachingController extends Controller
                 continue;
             }
             $query = $modelClass::query()->where('student_id', $student->id);
+            if ($kind === 'homework') {
+                $query->with('submissions');
+            }
             if ($kind === 'plan') {
                 $query->with('milestones');
             }
@@ -45,6 +51,9 @@ class StudentTeachingController extends Controller
         $timelineFilter = $request->query('timeline_filter', 'all');
 
         return response()->view('admin.students.teaching', compact('student', 'bookings', 'bookingId', 'records', 'resources', 'materials', 'feedback', 'timelineFilter') + [
+            'skills' => LearningSkill::query()->where('active', true)->orderBy('sort_order')->orderBy('label')->get(),
+            'skillAssessments' => StudentSkillAssessment::query()->where('student_id', $student->id)->with('skill')->orderByDesc('assessed_at')->get(),
+            'progressReports' => StudentProgressReport::query()->where('student_id', $student->id)->orderByDesc('date_to')->get(),
             'learningTimeline' => $timeline->staff($request->user('web'), $student),
             'unifiedTimeline' => $unifiedTimelineService->timeline($request->user('web'), $student, $timelineFilter),
         ])->header('Cache-Control', 'private, no-store');

@@ -8,6 +8,7 @@ use Database\Factories\Domains\Students\Models\HomeworkFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Homework extends Model
 {
@@ -21,6 +22,12 @@ class Homework extends Model
     protected function casts(): array
     {
         return ['student_visible' => 'boolean', 'assigned_date' => 'date', 'due_date' => 'date'];
+    }
+
+    /** @return HasMany<HomeworkSubmission, $this> */
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(HomeworkSubmission::class)->orderByDesc('submitted_at')->orderByDesc('id');
     }
 
     /** @return BelongsTo<Booking, $this> */

@@ -14,14 +14,14 @@
     <p class="text-sm text-slate-600">Total Students: <strong>{{ $totalStudents }}</strong> · Roster members with allocated credits or confirmed/delivered sessions.</p>
     <x-staff-saved-views section="students" :filters="$filters" :views="$savedViews" />
     <x-report-filters :default-labels="['operational_status' => 'Default (active)']" :filters="$filters" :action="route('admin.students.index')" export-route="admin.students.export" :fields="[
-        'q'=>['Name, email or phone','search'], 'operational_status' => ['Operational status', ['active' => 'Active (default)', 'inactive' => 'Inactive', 'archived' => 'Archived', 'all' => 'All operational states']], 'status'=>['Status',['verified'=>'Verified','legacy_unverified'=>'Unverified','suspended'=>'Suspended']], 'package'=>['Package name','text'], 'credits'=>['Credits',['available'=>'Available','none'=>'None available']],
+        'q'=>['Name, email or phone','search'], 'pinned'=>['Pinned students',['1'=>'My pinned students']], 'operational_status' => ['Operational status', ['active' => 'Active (default)', 'inactive' => 'Inactive', 'archived' => 'Archived', 'all' => 'All operational states']], 'status'=>['Status',['verified'=>'Verified','legacy_unverified'=>'Unverified','suspended'=>'Suspended']], 'package'=>['Package name','text'], 'credits'=>['Credits',['available'=>'Available','none'=>'None available']],
         'expiry_from'=>['Expiry from','date'], 'expiry_to'=>['Expiry to','date'], 'timezone'=>['Preferred timezone','text'], 'session_status'=>['Session status',['confirmed'=>'Confirmed','completed'=>'Completed','cancelled'=>'Cancelled','no_show'=>'No show']], 'joined_from'=>['Joined from','date'], 'joined_to'=>['Joined through','date']
     ]" />
     @if(session('success'))
         <div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('success') }}</div>
     @endif
 
-    <div x-data="{ selected: [], allSelected: false, showBulkTask: false }" class="space-y-4">
+    <div x-data="{ selected: [], allSelected: false, showBulkTask: false }" @keydown.escape.window="showBulkTask = false" class="space-y-4">
         <!-- Bulk Actions Floating Bar (Idea 79) -->
         <div x-show="selected.length > 0" x-cloak class="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 shadow-md">
             <div class="flex items-center gap-2">
@@ -44,6 +44,15 @@
             </div>
         </div>
 
+        @if(auth('web')->user()?->isAdmin())
+        <form method="POST" action="{{ route('admin.students.bulk-teaching') }}" x-show="selected.length > 0" x-cloak class="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-2">@csrf
+            <template x-for="id in selected" :key="'teaching-'+id"><input type="hidden" name="student_ids[]" :value="id"></template>
+            <label class="text-sm font-semibold">Safe Batch Action<select name="action" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 p-3"><option value="resource">Assign Resource</option><option value="tag">Apply Tag</option></select></label>
+            <label class="text-sm font-semibold">Resource<select name="resource_id" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 p-3"><option value="">Choose for resource assignments</option>@foreach($bulkResources as $resource)<option value="{{ $resource->id }}">{{ $resource->title }}</option>@endforeach</select></label>
+            <label class="text-sm font-semibold">Tag<input name="label" maxlength="40" placeholder="Use for tag batches" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 p-3"></label><label class="flex min-h-11 items-center gap-2 text-sm"><input type="hidden" name="student_visible" value="0"><input type="checkbox" name="student_visible" value="1">Share with students</label>
+            <button class="min-h-11 rounded-xl bg-amber-700 px-4 py-2 text-white sm:col-span-2">Apply to Selected Students</button>
+        </form>
+        @endif
         <!-- Bulk Task Dialog Form -->
         <div x-show="showBulkTask && selected.length > 0" x-cloak class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 class="font-serif text-lg font-bold text-slate-900">Create Task for Selected Students</h3>

@@ -21,6 +21,7 @@
         <details class="rounded-2xl border border-slate-200 bg-white p-5">
             <summary class="cursor-pointer font-semibold"><span class="break-words">{{ $record->title ?? $record->label ?? $record->mistake ?? $record->resource?->title ?? 'Preparation #'.$record->id }}</span> <span class="text-xs font-normal text-slate-500">· {{ $kind === 'preparation' || !$record->student_visible ? 'Staff only' : 'Shared with student' }}@if($record->booking_id) · Lesson #{{ $record->booking_id }}@endif @if($record->status) · {{ str_replace('_', ' ', $record->status) }}@endif</span></summary>
             <x-teaching-record-form :student="$student" :kind="$kind" :record="$record" :bookings="$bookings" :booking-id="$bookingId" :resources="$resources" :materials="$materials" :plans="$records['plan']" />
+            @if($kind === 'homework' && $record->submissions->isNotEmpty())<div class="mt-4 border-t border-slate-100 pt-4"><h3 class="font-semibold">Submission History</h3>@foreach($record->submissions as $submission)<article class="mt-2 rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">{{ $submission->submitted_at->format('j M Y, g:i A') }}</p><p class="mt-1 whitespace-pre-line">{{ $submission->body }}</p></article>@endforeach</div>@endif
             @if($kind === 'plan')
                 <div class="mt-5 border-t border-slate-100 pt-4"><h3 class="font-semibold">Milestones</h3>
                     @foreach($record->milestones as $milestone)
@@ -35,6 +36,7 @@
         @endforeach
     </section>
     @endforeach
+    @include('admin.students._vault-learning')
     <section aria-label="Private student feedback" class="space-y-3">
         <h2 class="text-xl font-bold text-slate-900">Private student feedback</h2>
         @forelse($feedback as $entry)<article class="rounded-2xl border border-slate-200 bg-white p-5"><h3 class="font-semibold">Lesson #{{ $entry->booking_id }} · {{ $entry->booking?->start_at_utc->format('M j, Y') }} · {{ $entry->rating ?? 'Redacted' }} / 5</h3>@if($entry->comment)<p class="mt-2 whitespace-pre-line break-words text-sm text-slate-600">{{ $entry->comment }}</p>@endif</article>

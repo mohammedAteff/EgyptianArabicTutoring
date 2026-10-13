@@ -1,0 +1,9 @@
+@extends('layouts.admin')
+@section('content')
+<div class="mx-auto max-w-4xl space-y-6"><h1 class="text-3xl font-bold">Resource Collections</h1><p class="text-slate-600">Arrange published resources in a teaching sequence and assign the collection to a student. After adding resources to a collection, assign it again to share the new items.</p>
+@if($errors->any())<p role="alert" class="rounded-xl bg-rose-50 p-4 text-rose-800">{{ $errors->first() }}</p>@endif
+<details class="rounded-xl border border-slate-200 bg-white p-5"><summary class="cursor-pointer font-semibold">New Collection</summary><x-resource-collection-form :resources="$resources" /></details>
+@forelse($collections as $collection)<article class="space-y-3 rounded-xl border border-slate-200 bg-white p-5"><h2 class="text-xl font-bold">{{ $collection->title }} · {{ $collection->is_published ? 'Published' : 'Draft' }}</h2><ol class="list-inside list-decimal">@foreach($collection->resources as $resource)<li>{{ $resource->title }}</li>@endforeach</ol><details><summary class="cursor-pointer text-sm font-semibold text-amber-800">Edit Collection &amp; Resource Order</summary><x-resource-collection-form :collection="$collection" :resources="$resources" /></details>
+@if($collection->is_published)<form method="POST" action="{{ route('admin.resource-collections.assign', $collection) }}" class="flex flex-wrap gap-3">@csrf<select name="student_id" aria-label="Student" required class="min-h-11 rounded-xl border border-slate-300 p-3">@foreach($students as $student)<option value="{{ $student->id }}">{{ $student->name }}</option>@endforeach</select><button class="min-h-11 rounded-xl bg-amber-700 px-4 py-2 text-white">Assign Collection</button></form>@endif
+</article>@empty<p class="rounded-xl bg-white p-5 text-slate-500">No collections created yet.</p>@endforelse</div>
+@endsection

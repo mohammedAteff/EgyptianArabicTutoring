@@ -1,7 +1,9 @@
 @extends('layouts.admin')
 
 @section('content')
+<a href="{{ $studentListUrl }}" class="mb-4 inline-flex min-h-11 items-center text-sm font-semibold text-amber-800 underline">← Back to Student Records</a>
 <x-student-quick-actions :student="$student" />
+@if($copyBlocks)<div class="mb-5 flex flex-wrap gap-3">@foreach($copyBlocks as $label=>$text)<button type="button" data-copy-text="{{ $text }}" class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800">Copy {{ $label }}</button>@endforeach</div>@endif
 <x-student-operational-alerts :student="$student" :alerts="$operationalAlerts" />
 @if(auth('web')->user()?->isAdmin())
 <form method="POST" action="{{ route('admin.students.operational-status', $student) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
@@ -20,7 +22,7 @@
 <form method="POST" action="{{ route('admin.accounts.suspension', ['type' => 'student', 'account' => $student->id]) }}" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
     @csrf
     <input type="hidden" name="suspend" value="{{ $student->suspended_at ? '0' : '1' }}">
-    <label class="flex-1 text-sm">Reason<input name="reason" required maxlength="1000" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label>
+    <x-operational-reason-select category="suspension" /><label class="flex-1 text-sm">Reason<input name="reason" required maxlength="1000" class="mt-1 block w-full rounded-lg border border-slate-300 p-2"></label>
     <span class="pb-2 text-sm font-semibold {{ $student->suspended_at ? 'text-rose-700' : 'text-emerald-700' }}">{{ $student->suspended_at ? 'Suspended' : 'Active' }}</span>
     <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{{ $student->suspended_at ? 'Restore account' : 'Suspend account' }}</button>
 </form>
@@ -47,18 +49,21 @@
             @if(! $isAssistant)
                 <span class="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-700">{{ str_replace('_', ' ', $student->identity_status) }}</span>
             @endif
+            @if(! $isAssistant)
             <!-- Profile Completeness Indicator (Idea 62) -->
+            <p class="max-w-xs text-xs text-slate-500">Seven checks: verified identity and primary contact, phone, timezone, date of birth, completed Short and Long Forms, and an eligible active package.</p>
             <div class="rounded-xl border border-slate-200 bg-white p-3 text-right shadow-xs">
                 <div class="flex items-center gap-2 justify-end">
                     <span class="text-xs text-slate-500 font-medium">Profile Completeness</span>
                     <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-bold {{ $completeness['badge_class'] }}">
-                        {{ $completeness['percentage'] }}%
+                        {{ $completeness['completed_count'] }} / {{ $completeness['total_count'] }} checks
                     </span>
                 </div>
                 @if(!empty($completeness['missing']))
-                    <p class="mt-1 text-[11px] text-slate-500">Missing: {{ implode(', ', array_slice($completeness['missing'], 0, 2)) }}</p>
+                    <p class="mt-1 text-[11px] text-slate-500">Missing: {{ implode(', ', $completeness['missing']) }}</p>
                 @endif
             </div>
+            @endif
         </div>
     </div>
 
@@ -339,6 +344,8 @@
         <!-- Account Security & Verification (Idea 42) -->
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 class="font-serif text-xl font-bold text-slate-900">Account Security & Verification</h2>
+            <p class="mt-3 text-sm text-slate-600">Last portal login / successful authentication: {{ $portalLogins->first()?->authenticated_at->setTimezone($businessTz)->format('j M Y, g:i A T') ?? 'No recorded login' }} · Primary email: {{ $student->identity_status === 'verified' ? 'Verified student identity' : 'Not verified' }} · {{ $student->suspended_at ? 'Suspended' : 'Account active' }}</p>
+            @foreach($portalLogins as $login)<p class="mt-1 text-xs text-slate-500">{{ $login->authenticated_at->setTimezone($businessTz)->format('j M Y, g:i A') }} · Preferred timezone at login: {{ $login->timezone ?: 'Not set' }}</p>@endforeach
             <p class="mt-1 text-sm text-slate-500">Authentication state and verified communication channels for this student.</p>
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">

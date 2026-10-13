@@ -2,12 +2,17 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Booking\Services\BookingPolicyService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Forms\Services\FormCompletionReadModel;
+use App\Domains\Students\Models\PaymentRecord;
+use App\Domains\Students\Models\ResourceAssignment;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Timezone\Services\TimezoneService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -41,7 +46,56 @@ class DataQualityReadModel
         return ['missingCount' => (clone $missing)->count(), 'missingStudents' => $missing->orderBy('id')->limit(30)->get(),
             'packageCount' => (clone $packages)->count(), 'packages' => $packages->with('student')->orderBy('id')->limit(30)->get(),
             'configuration' => $configuration, 'relationships' => $orphans,
-            'studentDuplicates' => $this->duplicates('student'), 'contactDuplicates' => $this->duplicates('contact')];
+            'businessIssues' => $this->businessIssues(), 'studentDuplicates' => $this->duplicates('student'), 'contactDuplicates' => $this->duplicates('contact')];
+    }
+
+    /** @return array<string, array{count: int, records: list<array{label: string, url: string}>}> */
+    public function businessIssues(): array
+    {
+        $issues = [];
+        $add = function (string $label, $query, callable $link) use (&$issues): void {
+            $issues[$label] = ['count' => (clone $query)->count(), 'records' => $query->limit(30)->get()->map($link)->all()];
+        };
+        $future = Booking::query()->where('start_at_utc', '>', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending']);
+        $bookingLink = fn ($booking): array => ['label' => 'Session #'.$booking->id, 'url' => route('admin.bookings.show', $booking->id)];
+        $studentLink = fn ($student): array => ['label' => $student->name, 'url' => route('admin.students.show', $student->id)];
+        $packageLink = fn ($package): array => ['label' => 'Purchase #'.$package->id.' · '.$package->package_name, 'url' => route('admin.packages.lifecycle', $package->id)];
+        $add('Upcoming sessions missing a meeting room', (clone $future)->whereNull('meeting_room_id'), $bookingLink);
+        $add('Suspended students with upcoming sessions', (clone $future)->whereHas('student', fn ($query) => $query->whereNotNull('suspended_at')), $bookingLink);
+        $add('Students without a trusted email contact', Student::query()->where('identity_status', '!=', 'merged')->where(fn ($query) => $query->whereNull('email')->orWhere('email', ''))->whereDoesntHave('verifiedEmails'), $studentLink);
+        $pending = Student::query()->whereIn('id', DB::table('student_email_verifications')->whereNull('consumed_at')->where('expires_at', '>', now('UTC'))->select('student_id'));
+        $add('Email verification challenges awaiting completion', $pending, $studentLink);
+        $invalidExpiry = StudentPackage::query()->where('status', 'active')->where(function ($query): void {
+            $query->whereColumn('expires_at', '<=', 'validity_started_at')->orWhere(function ($query): void {
+                $query->whereNotNull('validity_days')->whereNull('expires_at')->whereNull('expiration_date')
+                    ->whereRaw('(select coalesce(sum(amount_paid),0) from payment_records where student_package_id = student_packages.id) - (select coalesce(sum(amount_refunded),0) from payment_refunds where student_package_id = student_packages.id) >= final_price');
+            });
+        })->whereHas('ledgerEntries', fn ($query) => $query->where('credit_change', '>', 0));
+        $add('Settled purchases with invalid or missing validity', $invalidExpiry, $packageLink);
+        $overRefund = PaymentRecord::query()->whereRaw('(select coalesce(sum(amount_refunded),0) from payment_refunds where payment_record_id = payment_records.id) > amount_paid');
+        $add('Refund totals exceeding their original payment', $overRefund, fn ($payment): array => ['label' => 'Payment PAY-'.$payment->id, 'url' => route('admin.packages.lifecycle', $payment->student_package_id)]);
+        $negative = StudentPackage::query()->whereExists(function ($query): void {
+            $query->selectRaw('1')->from('session_ledger_entries')->whereColumn('student_package_id', 'student_packages.id')->groupBy('student_package_entitlement_id')->havingRaw('SUM(credit_change) < 0');
+        });
+        $add('Purchases with a negative entitlement balance', $negative, $packageLink);
+        $overdue = StudentPackage::query()->whereHas('installments', fn ($query) => $query->where('status', 'expected')->where('due_date', '<', now(app(TimezoneService::class)->getBusinessTimezone())->toDateString()))
+            ->whereRaw('final_price > (select coalesce(sum(amount_paid),0) from payment_records where student_package_id = student_packages.id) - (select coalesce(sum(amount_refunded),0) from payment_refunds where student_package_id = student_packages.id)');
+        $add('Overdue expected installments', $overdue, $packageLink);
+        $pool = (clone $future)->whereRaw('not exists (select 1 from meeting_rooms r join meeting_providers mp on mp.id = r.meeting_provider_id and mp.active = 1 where r.active = 1 and r.meeting_provider_id = coalesce((select preferred_meeting_provider_id from students where students.id = bookings.student_id), (select id from meeting_providers where is_default = 1 and active = 1 order by id limit 1)))');
+        $add('Upcoming sessions without an available provider room pool', $pool, $bookingLink);
+        $resources = ResourceAssignment::query()->where('student_visible', true)->whereDoesntHave('resource', fn ($query) => $query->published());
+        $add('Assigned resource activity without a published resource', $resources, fn ($assignment): array => ['label' => 'Resource assignment #'.$assignment->id, 'url' => route('admin.students.teaching', $assignment->student_id)]);
+        $missingForms = [];
+        foreach (Student::query()->where('operational_status', 'active')->whereHas('bookings', fn ($query) => $query->where('start_at_utc', '>', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending']))->orderBy('id')->get() as $student) {
+            if (app(FormCompletionReadModel::class)->forStudent($student)->contains(fn (array $form): bool => $form['mandatory'] && $form['status'] !== 'submitted')) {
+                $missingForms[] = $studentLink($student);
+            }
+        }
+        $issues['Upcoming students missing mandatory forms'] = ['count' => count($missingForms), 'records' => array_slice($missingForms, 0, 30)];
+        $orphans = DB::table('payment_records')->whereNull('student_package_id')->count();
+        $issues['Payments without a purchase association'] = ['count' => $orphans, 'records' => $orphans ? [['label' => 'Review payment associations', 'url' => route('admin.billing.reconcile')]] : []];
+
+        return $issues;
     }
 
     /** @return array<int, array{first: int, second: int, signal: string}> */

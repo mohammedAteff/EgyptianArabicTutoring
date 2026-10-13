@@ -9,10 +9,10 @@ class DevelopmentDataCatalog
     public const VERSION = 1;
 
     public const MODULES = [
-        'students.profile' => ['students', 'student_emails'],
+        'students.profile' => ['students', 'student_emails', 'student_portal_logins'],
         'students.bookings' => ['bookings', 'booking_events', 'session_reschedules', 'booking_policy_decisions', 'migration_booking_exceptions', 'migration_booking_timezone_exceptions', 'recurring_lesson_plans', 'recurring_lesson_occurrences', 'booking_waitlists', 'student_unavailabilities'],
         'students.forms' => ['form_submissions', 'form_answers', 'form_submission_revisions'],
-        'students.teaching' => ['student_bins', 'homeworks', 'learning_plans', 'learning_milestones', 'tutor_preparations', 'resource_assignments', 'student_error_logs', 'teaching_tags', 'lesson_feedback', 'staff_tasks', 'student_operational_alerts'],
+        'students.teaching' => ['student_bins', 'homeworks', 'homework_submissions', 'learning_skills', 'student_skill_assessments', 'student_progress_reports', 'student_bookmarks', 'resource_collection_assignments', 'learning_plans', 'learning_milestones', 'tutor_preparations', 'resource_assignments', 'student_error_logs', 'teaching_tags', 'lesson_feedback', 'staff_tasks', 'student_operational_alerts'],
         'students.materials' => ['lesson_materials'],
         'students.notifications' => ['student_notifications'],
         'financial.packages' => ['student_packages', 'student_package_entitlements', 'entitlement_mapping_reviews', 'package_installments', 'package_renewals'],
@@ -26,6 +26,7 @@ class DevelopmentDataCatalog
         'analytics.maintenance' => ['maintenance_visits'],
         'resources.records' => ['resources', 'resource_translations'],
         'resources.categories' => ['resource_categories', 'category_translations'],
+        'resources.collections' => ['resource_collections', 'resource_collection_items'],
         'resources.history' => ['resource_requests', 'resource_downloads'],
         'resources.revisions' => ['content_revisions', 'entity_translation_revisions'],
         'backups.snapshots' => [],
@@ -41,6 +42,7 @@ class DevelopmentDataCatalog
         'analytics.rollups' => 'Country / social / daily rollups', 'analytics.maintenance' => 'Maintenance traffic',
         'resources.records' => 'Resources / translations / private files', 'resources.categories' => 'Resource categories',
         'resources.history' => 'Resource requests / downloads', 'backups.snapshots' => 'Selected managed snapshots (sanitized portable copies)',
+        'resources.collections' => 'Resource collections / ordered learning paths',
         'resources.revisions' => 'Resource / category revision history',
     ];
 

@@ -36,7 +36,7 @@ class DevelopmentDataConcurrencyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['development_tools.enabled' => true, 'development_tools.require_snapshot' => false]);
+        config(['development_tools.enabled' => true, 'development_tools.require_snapshot' => false, 'session.driver' => 'database']);
         $this->assertSame(0, DB::transactionLevel());
     }
 
@@ -138,6 +138,7 @@ class DevelopmentDataConcurrencyTest extends TestCase
                 $payload['start_gate'] = $gate;
                 $payload['worker_id'] = $worker;
                 $process = new Process([PHP_BINARY, base_path('tests/Feature/Concurrency/booking_worker.php'), json_encode($payload, JSON_THROW_ON_ERROR)]);
+                $process->setEnv(['SESSION_DRIVER' => 'database']);
                 $process->setTimeout(30);
                 $process->start();
                 $processes[] = $process;

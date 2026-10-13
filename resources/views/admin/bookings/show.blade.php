@@ -229,7 +229,7 @@
 
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Reason for Reschedule</label>
-                    <input type="text" name="reason" placeholder="e.g. Student requested evening slot"
+                    <x-operational-reason-select category="reschedule" /><input type="text" name="reason" placeholder="e.g. Student requested evening slot"
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
 
@@ -265,7 +265,7 @@
                 <x-operational-reason-select />
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation Reason</label>
-                    <textarea name="cancellation_reason" rows="3" required
+                    <x-operational-reason-select category="cancellation" /><textarea name="cancellation_reason" rows="3" required
                               class="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
                               placeholder="Reason for cancellation..."></textarea>
                 </div>

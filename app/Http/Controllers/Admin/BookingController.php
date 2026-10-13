@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Administration\Services\OperationalReasonCatalog;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Models\Booking;
@@ -285,9 +286,10 @@ class BookingController extends Controller
             'session_type_id' => ['nullable', 'integer', 'exists:session_types,id'],
             'new_date' => ['required', 'date_format:Y-m-d'],
             'new_time' => ['required', 'date_format:H:i'],
-            'reason' => ['nullable', 'string', 'max:255'],
+            'reason' => ['nullable', 'string', 'max:255'], 'reason_code' => ['nullable', 'string', 'max:40'],
         ]);
 
+        OperationalReasonCatalog::validate($validated['reason_code'] ?? null, 'reschedule');
         try {
             $businessTz = $this->timezoneService->getBusinessTimezone();
             $dateTimeString = "{$validated['new_date']} {$validated['new_time']}:00";
@@ -307,7 +309,8 @@ class BookingController extends Controller
                 performedBy: 'admin',
                 performedById: Auth::id(),
                 newSessionTypeId: isset($validated['session_type_id']) ? (int) $validated['session_type_id'] : null,
-                reason: $validated['reason'] ?? 'Rescheduled by tutor'
+                reason: $validated['reason'] ?? 'Rescheduled by tutor',
+                reasonCode: $validated['reason_code'] ?? null
             );
 
             return back()->with('success', 'Lesson rescheduled successfully.');
@@ -323,6 +326,7 @@ class BookingController extends Controller
             'reason_code' => ['nullable', 'string', 'max:40'],
         ]);
 
+        OperationalReasonCatalog::validate($validated['reason_code'] ?? null, 'cancellation');
         try {
             $this->cancellationService->cancel(
                 booking: $booking,

@@ -13,9 +13,11 @@ use App\Domains\Lms\Services\LmsTutoringReadModel;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\EntitlementType;
 use App\Domains\Students\Models\PaymentMethod;
+use App\Domains\Students\Models\ResourceAssignment;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentEmail;
 use App\Domains\Students\Models\StudentOperationalAlert;
+use App\Domains\Students\Models\StudentPortalLogin;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentCompletenessService;
 use App\Domains\Students\Services\StudentIdentityService;
@@ -24,11 +26,13 @@ use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentPackagePresentation;
 use App\Domains\Students\Services\StudentPrivacyService;
 use App\Domains\Students\Services\StudentRecordsQuery;
+use App\Domains\Students\Services\TeachingRecordService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -43,7 +47,8 @@ class StudentController extends Controller
     public function index(Request $request, StudentRecordsQuery $records, StaffSavedViewService $views): View
     {
         $filters = $records->filters($request);
-        $students = $records->query($filters)->paginate(25)->withQueryString();
+        $students = $records->query($filters, $request->user('web')->id)->paginate(25)->withQueryString();
+        $request->session()->put('staff_student_list_query', $filters + ['page' => $students->currentPage()]);
         $pinnedStudentIds = $request->user('web')->pinnedStudents()->pluck('student_id')->all();
 
         return view('admin.students.index', [
@@ -53,6 +58,7 @@ class StudentController extends Controller
             'savedViews' => $views->forSection($request->user('web'), 'students'),
             'totalStudents' => Student::tutoringRoster()->count(),
             'pinnedStudentIds' => $pinnedStudentIds,
+            'bulkResources' => $request->user('web')->isAdmin() ? \App\Domains\Resources\Models\Resource::query()->published()->orderBy('title')->get(['id', 'title']) : collect(),
         ]);
     }
 
@@ -60,7 +66,7 @@ class StudentController extends Controller
     {
         $filters = $records->filters($request);
         $selectedIds = $request->input('student_ids') ?: $request->input('ids');
-        $query = $records->query($filters);
+        $query = $records->query($filters, $request->user('web')->id);
         if (! empty($selectedIds) && is_array($selectedIds)) {
             $query->whereIn('students.id', $selectedIds);
         }
@@ -109,6 +115,28 @@ class StudentController extends Controller
         return back()->with('success', count($data['student_ids']).' tasks created.');
     }
 
+    public function bulkTeaching(Request $request, TeachingRecordService $teaching): RedirectResponse
+    {
+        $data = $request->validate(['student_ids' => ['required', 'array', 'min:1', 'max:100'], 'student_ids.*' => ['required', 'integer', 'distinct'], 'action' => ['required', 'in:resource,tag'],
+            'resource_id' => ['nullable', 'required_if:action,resource', 'integer'], 'label' => ['nullable', 'required_if:action,tag', 'string', 'max:40'], 'student_visible' => ['required', 'boolean']]);
+        DB::transaction(function () use ($request, $data, $teaching): void {
+            $students = Student::query()->whereIn('id', $data['student_ids'])->orderBy('id')->lockForUpdate()->get();
+            abort_unless($students->count() === count($data['student_ids']), 404);
+            foreach ($students as $student) {
+                Gate::authorize('manageTeaching', $student);
+                if ($data['action'] === 'resource') {
+                    $existing = ResourceAssignment::query()->where('student_id', $student->id)->where('resource_id', $data['resource_id'])->whereNull('booking_id')->first();
+                    $payload = ['resource_id' => $data['resource_id'], 'student_visible' => $data['student_visible'], 'record_id' => $existing?->id];
+                } else {
+                    $payload = ['label' => $data['label'], 'student_visible' => $data['student_visible']];
+                }
+                $teaching->save($student, $data['action'], $payload, $request->user('web')->id);
+            }
+        }, 3);
+
+        return back()->with('success', 'Selected students updated.');
+    }
+
     public function show(Request $request, int $student, StudentPackagePresentation $presentation, TimezoneService $timezones, LmsTutoringReadModel $learning): View
     {
         $isAssistant = $request->user('web')?->role === 'assistant';
@@ -121,7 +149,7 @@ class StudentController extends Controller
             ->where('student_id', $studentRecord->id)
             ->with('sessionType:id,title,duration_minutes')
             ->orderByDesc('start_at_utc')
-            ->get(['id', 'student_id', 'session_type_id', 'contact_id', 'start_at_utc', 'end_at_utc', 'business_timezone', 'customer_timezone', 'status', 'admin_reconfirmation_needed']);
+            ->get(['id', 'student_id', 'session_type_id', 'contact_id', 'start_at_utc', 'end_at_utc', 'business_timezone', 'customer_timezone', 'status', 'admin_reconfirmation_needed', ...($isAssistant ? [] : ['meeting_provider_snapshot', 'meeting_url_snapshot'])]);
         $formSubmissions = FormSubmission::query()
             ->where('student_id', $studentRecord->id)
             ->with([
@@ -152,7 +180,7 @@ class StudentController extends Controller
         $verifiedSecondaryEmails = $studentRecord->verifiedEmails()->orderByDesc('verified_at')->get();
         $guardians = $studentRecord->guardians()->orderByDesc('is_primary')->orderBy('name')->get();
         $isPinned = $studentRecord->pinnedByStaff()->where('administrator_id', $request->user('web')->id)->exists();
-        $completeness = app(StudentCompletenessService::class)->assess($studentRecord);
+        $completeness = $isAssistant ? null : app(StudentCompletenessService::class)->assess($studentRecord);
 
         return view('admin.students.show', [
             'learningProfile' => ! $isAssistant && Gate::forUser($request->user('web'))->allows('manageTeaching', $studentRecord->fresh())
@@ -172,6 +200,9 @@ class StudentController extends Controller
             'isAssistant' => $isAssistant,
             'businessTz' => $timezones->getBusinessTimezone(),
             'lifetimeSummary' => $lifetimeSummary,
+            'studentListUrl' => route('admin.students.index', $request->session()->get('staff_student_list_query', [])),
+            'copyBlocks' => $isAssistant ? [] : app(StudentLifetimeSummary::class)->copyBlocks($studentRecord, $bookings, $financial['packages'], $timezones->getBusinessTimezone()),
+            'portalLogins' => $isAssistant ? collect() : StudentPortalLogin::query()->where('student_id', $studentRecord->id)->orderByDesc('authenticated_at')->limit(5)->get(),
             'verifiedSecondaryEmails' => $verifiedSecondaryEmails,
             'guardians' => $guardians,
             'isPinned' => $isPinned,

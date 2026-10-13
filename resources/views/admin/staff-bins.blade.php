@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('content')
+<a href="{{ route('admin.staff-note-templates.library') }}" class="mb-5 inline-flex min-h-11 items-center text-sm font-semibold text-amber-800 underline">Manage Templates &amp; Snippets</a>
 <div class="mx-auto max-w-5xl space-y-6">
     <h1 class="font-serif text-3xl font-bold">Staff Notes</h1><p class="text-sm text-slate-500">Shared text for staff collaboration. Only the author can edit; only Super Admin can delete.</p>
     @if(session('success'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-emerald-800">{{ session('success') }}</p>@endif

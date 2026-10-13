@@ -55,6 +55,7 @@ class RescheduleService
         ?string $slotId = null,
         ?string $slotOwnerToken = null,
         ?int $newSessionTypeId = null,
+        ?string $reasonCode = null,
     ): Booking {
         $startUtc = $this->timezoneService->toUtc($newStartUtc);
         $targetType = $newSessionTypeId !== null ? SessionType::query()->whereKey($newSessionTypeId)->where('active', true)->firstOrFail() : $booking->sessionType;
@@ -79,7 +80,7 @@ class RescheduleService
             $newEndUtc = $issuedSlot['slot_end_utc'];
         }
 
-        return $this->databaseCapability->transaction(function () use ($booking, $startUtc, $newEndUtc, $performedBy, $performedById, $reason, $idempotencyKey, $customerTimezone, $slotId, $slotOwnerToken, $targetType, $newSessionTypeId) {
+        return $this->databaseCapability->transaction(function () use ($booking, $startUtc, $newEndUtc, $performedBy, $performedById, $reason, $reasonCode, $idempotencyKey, $customerTimezone, $slotId, $slotOwnerToken, $targetType, $newSessionTypeId) {
             $candidateConfig = $this->availabilityService->resolveSlotConfiguration(
                 sessionType: $targetType,
                 startUtc: $startUtc,
@@ -243,7 +244,7 @@ class RescheduleService
                 'end_at_utc' => $endUtc->toDateTimeString(),
                 'customer_local_date' => $newSnapshot['customer_local_date_at_booking'],
                 'customer_local_start_time' => $newSnapshot['customer_local_start_time_at_booking'],
-                'reason' => $reason,
+                'reason' => $reason, 'reason_code' => $reasonCode,
             ];
 
             // 7. Record BookingEvent

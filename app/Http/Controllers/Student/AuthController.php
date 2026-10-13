@@ -6,6 +6,7 @@ use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Lms\Services\ProtectedPlaybackService;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentPortalLogin;
 use App\Domains\Students\Services\StudentAuthAttemptTracker;
 use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
@@ -74,7 +75,7 @@ class AuthController extends Controller
                         $query->orWhere('email_normalized', $email)->orWhereHas('verifiedEmails', fn ($emails) => $emails->where('email_normalized', $email));
                     }
                 })
-                ->select(['id', 'name_normalized', 'email_normalized', 'phone_normalized'])
+                ->select(['id', 'name_normalized', 'email_normalized', 'phone_normalized', 'preferred_timezone'])
                 ->orderBy('id')
                 ->get();
 
@@ -103,6 +104,7 @@ class AuthController extends Controller
             return back()->withErrors(['auth' => self::FAILURE_MESSAGE]);
         }
 
+        StudentPortalLogin::query()->create(['student_id' => $student->id, 'timezone' => $student->preferred_timezone, 'authenticated_at' => now('UTC')]);
         Auth::guard('student')->login($student, false);
         $request->session()->regenerate();
         $request->session()->put([

@@ -4,6 +4,8 @@ namespace App\Domains\Reporting\Services;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingPolicyDecision;
+use App\Domains\Students\Models\PackageRenewal;
+use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\ReceivablesReadModel;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -117,7 +119,27 @@ class BusinessLifecycleReport
             'no_shows' => (clone $cancellationQuery)->where('booking_policy_decisions.action', 'no_show')->count(),
         ];
 
-        return ['currencies' => $currencies, 'attending_students' => $attending, 'repeat_students' => $repeat, 'cancellations' => $cancellations];
+        $cancellations['late_cancellations'] = 0;
+        foreach ((clone $cancellationQuery)->select('booking_policy_decisions.*')->with('booking:id,start_at_utc')->where('booking_policy_decisions.action', 'cancellation')->lazyById(200, 'booking_policy_decisions.id', 'id') as $decision) {
+            $cutoff = (int) ($decision->policy_snapshot['cancellation_cutoff_hours'] ?? 0);
+            if ($decision->booking && $decision->created_at->greaterThan($decision->booking->start_at_utc->copy()->subHours($cutoff))) {
+                $cancellations['late_cancellations']++;
+            }
+        }
+        $students = Student::tutoringRoster()
+            ->when(! empty($filters['student_id']), fn ($query) => $query->whereKey($filters['student_id']))
+            ->when(! empty($filters['currency']), fn ($query) => $query->whereHas('packages', fn ($packages) => $packages->where('currency', $filters['currency'])));
+        $attendedPeriod = fn ($query) => $query->where('status', 'completed')->where('start_at_utc', '>=', $from)->where('start_at_utc', '<', $to);
+        $retention = [
+            'active_students' => (clone $students)->whereHas('bookings', $attendedPeriod)->count(),
+            'new_students' => (clone $students)->where('created_at', '>=', $from)->where('created_at', '<', $to)->count(),
+            'returning_students' => (clone $students)->whereHas('bookings', $attendedPeriod)->whereHas('bookings', fn ($query) => $query->where('status', 'completed')->where('start_at_utc', '<', $from))->count(),
+            'renewed_packages' => PackageRenewal::query()->whereBetween('renewal_date', [$filters['date_from'], $filters['date_to']])->whereIn('student_id', (clone $students)->select('students.id'))->count(),
+            'without_future_booking' => (clone $students)->whereDoesntHave('bookings', fn ($query) => $query->whereIn('status', ['confirmed', 'held', 'pending'])->where('start_at_utc', '>', now('UTC')))->count(),
+            'inactive_90_days' => (clone $students)->where('created_at', '<', $to->subDays(90))->whereDoesntHave('bookings', fn ($query) => $query->where('status', 'completed')->where('start_at_utc', '>=', $to->subDays(90))->where('start_at_utc', '<', $to))->count(),
+        ];
+
+        return ['currencies' => $currencies, 'attending_students' => $attending, 'repeat_students' => $repeat, 'cancellations' => $cancellations, 'retention' => $retention];
     }
 
     /** @param array<string, mixed> $row

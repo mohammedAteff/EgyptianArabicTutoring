@@ -10,11 +10,14 @@ use App\Domains\Lms\Services\LmsLearningNotifications;
 use App\Domains\Students\Models\Homework;
 use App\Domains\Students\Models\LearningPlan;
 use App\Domains\Students\Models\ResourceAssignment;
+use App\Domains\Students\Models\ResourceCollectionAssignment;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
 use App\Domains\Students\Models\StudentErrorLog;
 use App\Domains\Students\Models\StudentNotification;
 use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Models\StudentProgressReport;
+use App\Domains\Students\Models\StudentSkillAssessment;
 use App\Domains\Students\Models\TeachingTag;
 use App\Domains\Timezone\Services\TimezoneService;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,7 +51,7 @@ class StudentTeachingReadModel
     public function data(Student $student, Collection $bookings, Collection $packages, Collection $forms, Collection $submissions, bool $readOnly = false): array
     {
         $homework = $this->shared(Homework::query(), $student)->with([
-            'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
+            'submissions', 'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
         ])->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('id')->get();
         $plans = $this->shared(LearningPlan::query(), $student, false)->with('milestones')->orderByDesc('id')->get();
         $resources = $this->resources($student, studentDiscovery: true);
@@ -61,9 +64,9 @@ class StudentTeachingReadModel
             || $submissions->get($form->id)->status !== 'submitted'
             || (int) $submissions->get($form->id)->form_version_id !== (int) $form->published_version_id);
         $unreviewed = $resources->whereNull('reviewed_at')->first();
-        $hasUpcoming = $bookings->contains(fn (Booking $booking): bool => $booking->status === 'confirmed' && $booking->start_at_utc->isFuture());
         $canBook = false;
         $requirements = SessionType::query()->studentDiscoverable()->where('funding_mode', 'package')
+            ->where('required_entitlement_units', '>=', 1)->whereHas('requiredEntitlementType', fn ($types) => $types->where('active', true))
             ->get(['required_entitlement_type_id', 'required_entitlement_units']);
         $notices = [];
         $events = [];
@@ -108,22 +111,16 @@ class StudentTeachingReadModel
         if (! $readOnly) {
             $this->notifications->synchronize($student, array_merge($events, $this->learningNotifications->facts($student)));
         }
-        $formLabel = $outstandingForm ? match ($outstandingForm->slug) {
-            'short-form' => 'Finish Your Learning Goals',
-            'long-form' => 'Finish Your Learning Profile',
-            default => 'Finish Your Questionnaire',
-        } : '';
-        $action = $outstandingForm ? ['label' => $formLabel, 'detail' => $outstandingForm->title, 'button' => 'Continue Questionnaire', 'url' => route('student.forms.show', $outstandingForm->slug)]
-            : ($openHomework ? ['label' => 'Continue your homework', 'detail' => $openHomework->title, 'url' => route('student.teaching.index').'#homework-'.$openHomework->id]
-            : ($unreviewed ? ['label' => 'Review your assigned resource', 'detail' => $unreviewed->resource->title, 'url' => route('student.teaching.index').'#resources']
-            : (! $hasUpcoming && $canBook ? ['label' => 'Book Your Next Lesson', 'detail' => 'Choose a lesson using your eligible credits.', 'url' => route('student.bookings.create')]
-            : ['label' => 'Nothing Needs Your Attention Right Now', 'detail' => 'Your upcoming lessons and learning activity will appear below.', 'button' => 'View My Learning', 'url' => route('student.learning.index')])));
+        $action = app(StudentNextActionService::class)->choose($bookings, $packages, $outstandingForm, $openHomework, $unreviewed, $canBook, $requirements);
 
         return [
             'homework' => $homework, 'learningPlans' => $plans, 'assignedResources' => $resources, 'errorLog' => $errors, 'teachingTags' => $tags,
             'progress' => ['completed_lessons' => $bookings->where('status', 'completed')->count(), 'milestones_completed' => $milestones->where('status', 'completed')->count(), 'milestones_total' => $milestones->count(), 'shared_notes' => $notesCount, 'homework_completed' => $homework->where('status', 'completed')->count(), 'homework_total' => $homework->count(), 'errors_improved' => $errors->whereIn('status', ['improved', 'resolved'])->count(), 'errors_total' => $errors->count()],
             'nextAction' => $action, 'entitlementNotices' => $notices,
             'canBookWithPackage' => $canBook,
+            'skillAssessments' => StudentSkillAssessment::query()->where('student_id', $student->id)->where('student_visible', true)->with('skill')->orderByDesc('assessed_at')->get(),
+            'progressReports' => StudentProgressReport::query()->where('student_id', $student->id)->where('student_visible', true)->orderByDesc('date_to')->get(),
+            'resourceCollections' => ResourceCollectionAssignment::query()->where('student_id', $student->id)->where('student_visible', true)->whereHas('collection', fn ($query) => $query->published())->with(['collection.resources' => fn ($query) => $query->published()->where('student_discoverable', true)])->get(),
             'unreadNotifications' => StudentNotification::query()->where('student_id', $student->id)->whereNull('read_at')->count(),
         ];
     }

@@ -50,12 +50,13 @@
     @endphp
     @foreach($noteGroups as $groupLabel => $groupBins)
     @if($portal)<section class="space-y-4"><h2 class="text-xl font-semibold">{{ $groupLabel }}</h2><p class="text-sm text-stone-500">{{ $groupLabel === 'Shared With You' ? 'Notes and explanations shared with you.' : 'Your study notes, vocabulary and writing practice.' }}</p>@endif
-    @forelse($groupBins as $bin)<article data-bin class="rounded-2xl border border-slate-200 bg-white p-5">
+    @forelse($groupBins as $bin)<article id="note-{{ $bin->id }}" data-bin class="rounded-2xl border border-slate-200 bg-white p-5">
         <div class="flex items-start justify-between gap-3"><h2 class="break-words text-lg font-semibold">{{ $bin->title }}</h2><x-copy-button :bin="true" label="Copy note text" /></div>
         <p class="mt-1 text-xs text-slate-500">{{ $portal ? ($bin->created_by_type === 'student' ? 'My Notes' : 'Shared With You') : ($bin->created_by_type === 'student' ? 'Student-created' : 'Tutor / staff-created') }}{{ ! $portal && ! $bin->student_visible ? ' · Staff only' : '' }} · {{ $portal ? $bin->updated_at->copy()->timezone(session('student_display_timezone', $student->preferred_timezone ?: 'Africa/Cairo'))->format('j M Y, g:i A T') : app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($bin->updated_at) }}</p>
         <div @if($portal) dir="auto" @endif data-bin-body class="mt-4 break-words whitespace-pre-wrap text-sm">{{ $bin->body }}</div>
         <div class="mt-4 flex gap-4">@if(\Illuminate\Support\Facades\Gate::forUser($actor)->allows('update',$bin))<a href="{{ route($prefix.'edit',[...$indexParams,'bin'=>$bin]) }}" class="text-sm font-semibold text-amber-800">Edit</a>@endif
         @if(! $portal && \Illuminate\Support\Facades\Gate::forUser($actor)->allows('delete',$bin))<form method="POST" action="{{ route($prefix.'destroy',[...$indexParams,'bin'=>$bin]) }}">@csrf @method('DELETE')<details class="text-sm"><summary class="cursor-pointer font-semibold text-rose-700">Remove note</summary><p class="mt-2 text-slate-600">Deletion history will be retained.</p><label class="mt-2 flex items-center gap-2"><input type="checkbox" name="confirmation" value="DELETE" required>Confirm removal</label><button class="mt-2 rounded-lg bg-rose-700 px-3 py-2 font-semibold text-white">Delete note</button></details></form>@endif</div>
+        @if($portal)<x-student-bookmark-button kind="note" :target-id="$bin->id" />@endif
     </article>@empty @if(! $editing)<p class="rounded-2xl bg-white p-6 text-slate-500">{{ $portal ? (filled($filters['q'] ?? null) ? 'No Notes Found. Try a different word or phrase.' : 'No notes to display in this section on this page. Create a note or return when notes have been shared with you.') : 'No educational notes match your search.' }}</p>@endif @endforelse
     @if($portal)</section>@endif
     @endforeach

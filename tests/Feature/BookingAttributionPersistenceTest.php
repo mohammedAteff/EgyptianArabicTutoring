@@ -340,7 +340,7 @@ class BookingAttributionPersistenceTest extends TestCase
 
         // Downstream bookings:
         // 1 confirmed booking for video-1
-        Booking::create([
+        Booking::factory()->create([
             'contact_id' => $contact->id,
             'session_type_id' => $this->sessionType->id,
             'start_at_utc' => '2026-09-20 10:00:00',
@@ -367,7 +367,7 @@ class BookingAttributionPersistenceTest extends TestCase
         ]);
 
         // 2 confirmed bookings for video-2
-        Booking::create([
+        Booking::factory()->create([
             'contact_id' => $contact->id,
             'session_type_id' => $this->sessionType->id,
             'start_at_utc' => '2026-09-21 10:00:00',
@@ -393,7 +393,7 @@ class BookingAttributionPersistenceTest extends TestCase
             'created_at' => CarbonImmutable::parse('2026-09-16 11:00:00'),
         ]);
 
-        Booking::create([
+        Booking::factory()->create([
             'contact_id' => $contact->id,
             'session_type_id' => $this->sessionType->id,
             'start_at_utc' => '2026-09-22 10:00:00',
