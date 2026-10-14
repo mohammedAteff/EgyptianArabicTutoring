@@ -2,6 +2,7 @@
 
 namespace App\Domains\System\Services;
 
+use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Mail\StudentSecondaryEmailVerification;
 use Illuminate\Database\Query\Builder;
@@ -33,6 +34,9 @@ class DevelopmentDataGraph
             'students' => ['students', 'student_auth_attempts'],
             'financial' => ['student_packages', 'student_package_entitlements', 'payment_records', 'payment_refunds', 'session_ledger_entries', 'package_installments', 'package_renewals', 'entitlement_mapping_reviews'],
             'resources' => array_merge(! empty($scope['resources']) ? ['resources'] : [], ! empty($scope['categories']) ? ['resource_categories'] : [], ! empty($scope['history']) ? ['resource_requests', 'resource_downloads'] : []),
+            'telegram' => ['telegram_deliveries'],
+            'notifications' => ['admin_notifications'],
+            'leads' => ['contacts', 'resource_requests', 'resource_downloads'],
             default => [],
         };
         if ($domain === 'resources' && $roots === []) {
@@ -42,7 +46,20 @@ class DevelopmentDataGraph
             throw ValidationException::withMessages(['scope' => 'Deleting private resource files requires including their Resource records.']);
         }
         foreach ($roots as $table) {
-            $this->include($rows, $table, $this->query($table, $lock));
+            $query = $this->query($table, $lock);
+            if ($domain === 'leads' && $table === 'contacts') {
+                $query->whereNotExists(fn (Builder $bookings) => $bookings->selectRaw('1')->from('bookings')->whereColumn('bookings.contact_id', 'contacts.id'));
+            }
+            $this->include($rows, $table, $query);
+        }
+        if ($domain === 'telegram') {
+            $warnings[] = 'All Telegram delivery history, including pending deliveries, is cleared. Bots, credentials, destinations, automation rules and rule state remain; historical triggers are not replayed. Messages already sent to Telegram are not deleted.';
+        }
+        if ($domain === 'notifications') {
+            $warnings[] = 'The entire admin notification center is cleared. Student portal notifications and operational records remain.';
+        }
+        if ($domain === 'leads') {
+            $warnings[] = 'All resource request/download history and Contacts without any booking history are cleared. Contacts with bookings, student profiles, the resource library and student-owned forms remain.';
         }
         if ($domain === 'financial') {
             $this->include($rows, 'bookings', $this->query('bookings', $lock)->where(fn (Builder $query) => $query->where('funding_mode', 'package')->orWhereNotNull('student_package_id')->orWhereNotNull('consumed_ledger_entry_id')));
@@ -65,6 +82,19 @@ class DevelopmentDataGraph
                     }
                     $parentValues = array_values(array_unique(array_column($rows[$parent], $foreign['foreign_columns'][0])));
                     $query = $this->query($child, $lock)->whereIn($foreign['columns'][0], $parentValues);
+                    if ($domain === 'leads' && $parent === 'contacts' && $child === 'contacts') {
+                        foreach ($query->get() as $record) {
+                            $detach[$child][(string) $record->id] = ['merged_into_contact_id' => null];
+                        }
+
+                        continue;
+                    }
+                    if ($domain === 'leads' && $parent === 'contacts' && $child === 'form_submissions') {
+                        foreach ((clone $query)->whereNotNull('student_id')->get() as $record) {
+                            $detach[$child][(string) $record->id] = ['contact_id' => null];
+                        }
+                        $query->whereNull('student_id');
+                    }
                     if (in_array($child, ['audit_logs', 'visitors'], true) && $parent === 'students') {
                         continue;
                     }
@@ -106,16 +136,51 @@ class DevelopmentDataGraph
                 $query->where(fn (Builder $students) => $students->where('entity_type', 'student')->whereIn('entity_id', $studentIds))
                     ->orWhere(fn (Builder $bookings) => $bookings->where('entity_type', 'booking')->whereIn('entity_id', $bookingIds));
             }));
-            $this->include($rows, 'telegram_deliveries', $this->query('telegram_deliveries', $lock)->where(function (Builder $query) use ($studentIds, $bookingIds): void {
-                $query->whereIn('payload->source->student_id', $studentIds)->orWhereIn('payload->source->booking_id', $bookingIds);
-            }));
             if ($domain === 'students') {
                 foreach (['jobs', 'failed_jobs'] as $queue) {
                     $this->include($rows, $queue, $this->query($queue, $lock)->where('payload->displayName', StudentSecondaryEmailVerification::class));
                 }
             }
         }
+        $telegramSources = [];
+        foreach (['bookings' => 'booking_id', 'students' => 'student_id', 'contacts' => 'contact_id', 'resource_requests' => 'request_id', 'resources' => 'resource_id'] as $table => $key) {
+            $ids = array_keys($rows[$table] ?? []);
+            if ($ids !== []) {
+                $this->include($rows, 'admin_notifications', $this->query('admin_notifications', $lock)->whereIn('data->'.$key, $ids));
+                $telegramSources[$key] = $ids;
+            }
+        }
+        if ($telegramSources !== []) {
+            $deliveries = TelegramDelivery::query()->orderBy('id')->limit((int) config('development_tools.max_rows') + 1);
+            if ($lock) {
+                $deliveries->lockForUpdate();
+            }
+            $selected = [];
+            foreach ($deliveries->get() as $delivery) {
+                foreach ($telegramSources as $key => $ids) {
+                    if (in_array((string) ($delivery->payload['source'][$key] ?? ''), array_map('strval', $ids), true)) {
+                        $selected[] = $delivery->id;
+                        break;
+                    }
+                }
+            }
+            $this->include($rows, 'telegram_deliveries', $this->query('telegram_deliveries', $lock)->whereIn('id', $selected));
+        }
+        if (array_filter($rows['telegram_deliveries'] ?? [], fn (array $row): bool => $row['status'] === 'sending') !== []) {
+            throw ValidationException::withMessages(['scope' => 'A selected Telegram delivery is currently sending. Wait until delivery finishes and build a new preview.']);
+        }
         $plan = $this->plan($rows, $detach, $warnings, $domain === 'resources' ? ! empty($scope['files']) : true);
+        $candidates = array_keys($rows);
+        if ($domain === 'students') {
+            $candidates = array_merge($candidates, $this->catalog->selectedTables(array_keys(array_filter(DevelopmentDataCatalog::MODULES,
+                fn (array $tables, string $module): bool => str_starts_with($module, 'students.') || str_starts_with($module, 'financial.'), ARRAY_FILTER_USE_BOTH))));
+        }
+        $plan['numbering_tables'] = array_values(array_filter(array_unique($candidates), function (string $table): bool {
+            $meta = $this->schema()[$table];
+
+            return in_array($table, $this->catalog->tables(), true) && count($meta['primary']) === 1
+                && ! empty($meta['columns'][$meta['primary'][0]]['auto_increment']);
+        }));
         if ($domain === 'students') {
             $sessions = app(StudentSessionCleanupService::class)->preview();
             $plan['student_session_count'] = $sessions['count'];

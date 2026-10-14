@@ -71,6 +71,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
                         <span class="font-bold text-slate-900 text-sm">{{ $notification->title }}</span>
+                        <span class="text-xs text-slate-500">Notification #{{ $notification->id }}</span>
                         @if($isUnread)
                             <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">New</span>
                         @endif

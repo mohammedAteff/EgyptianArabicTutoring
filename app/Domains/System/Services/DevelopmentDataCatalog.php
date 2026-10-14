@@ -29,6 +29,9 @@ class DevelopmentDataCatalog
         'resources.collections' => ['resource_collections', 'resource_collection_items'],
         'resources.history' => ['resource_requests', 'resource_downloads'],
         'resources.revisions' => ['content_revisions', 'entity_translation_revisions'],
+        'leads.contacts' => ['contacts'],
+        'notifications.center' => ['admin_notifications'],
+        'telegram.history' => ['telegram_deliveries'],
         'backups.snapshots' => [],
     ];
 
@@ -44,10 +47,20 @@ class DevelopmentDataCatalog
         'resources.history' => 'Resource requests / downloads', 'backups.snapshots' => 'Selected managed snapshots (sanitized portable copies)',
         'resources.collections' => 'Resource collections / ordered learning paths',
         'resources.revisions' => 'Resource / category revision history',
+        'leads.contacts' => 'Contacts / resource inquiries',
+        'notifications.center' => 'Admin notification center',
+        'telegram.history' => 'Telegram delivery history (bot configuration excluded)',
     ];
 
     public const PHRASES = ['analytics' => 'RESET ALL ANALYTICS', 'students' => 'DELETE ALL STUDENTS',
-        'financial' => 'RESET FINANCIAL TEST HISTORY', 'resources' => 'RESET RESOURCE TEST DATA', 'backups' => 'RESET MANAGED BACKUPS'];
+        'financial' => 'RESET FINANCIAL TEST HISTORY', 'resources' => 'RESET RESOURCE TEST DATA', 'backups' => 'RESET MANAGED BACKUPS',
+        'telegram' => 'RESET TELEGRAM DELIVERY HISTORY', 'notifications' => 'RESET ADMIN NOTIFICATIONS', 'leads' => 'RESET RESOURCE INQUIRIES'];
+
+    public const RESET_LABELS = [
+        'analytics' => 'analytics', 'students' => 'students', 'financial' => 'financial test history',
+        'resources' => 'resources', 'backups' => 'managed local backups', 'telegram' => 'Telegram bot delivery history',
+        'notifications' => 'notification center', 'leads' => 'leads / resource inquiries',
+    ];
 
     /** @return list<string> */
     public function tables(): array

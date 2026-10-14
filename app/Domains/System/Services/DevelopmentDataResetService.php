@@ -67,6 +67,9 @@ class DevelopmentDataResetService
                 }
             }
             $clearedSessions = $domain === 'students' ? $this->sessions->clear() : 0;
+            if (isset($plan['rows']['telegram_deliveries']) && ! DB::table('telegram_deliveries')->exists()) {
+                Setting::set('telegram.delivery_history_generation', (string) Str::uuid(), 'development_lifecycle');
+            }
             if ($domain === 'analytics') {
                 Setting::set('analytics_reset_booking_floor', (int) DB::table('bookings')->max('id'), 'development_lifecycle');
                 Setting::set('analytics_collection_generation', (string) Str::uuid(), 'development_lifecycle');
@@ -83,7 +86,8 @@ class DevelopmentDataResetService
             });
 
             return ['deleted_records' => $plan['counts'], 'deleted_files' => count($deletable), 'shared_files_preserved' => count($inventory) - count($deletable),
-                'cleared_student_sessions' => $clearedSessions, 'reconciliation' => $reconciliation];
+                'cleared_student_sessions' => $clearedSessions, 'reconciliation' => $reconciliation,
+                'numbering_tables' => $plan['numbering_tables'], 'numbering_status' => 'pending'];
         } catch (\Throwable $exception) {
             $this->files->compensate($copies);
             throw $exception;

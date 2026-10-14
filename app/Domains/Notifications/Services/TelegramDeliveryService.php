@@ -27,10 +27,11 @@ class TelegramDeliveryService
         return $delivery->refresh();
     }
 
-    public function deliver(int $id, bool $explicit = false): void
+    public function deliver(int $id, bool $explicit = false, ?string $expectedDedupeKey = null): void
     {
         $delivery = TelegramDelivery::with(['bot', 'destination', 'rule'])->find($id);
-        if (! $delivery || $delivery->status !== 'pending' || $delivery->due_at->isFuture()) {
+        if (! $delivery || ($expectedDedupeKey !== null && ! hash_equals($delivery->dedupe_key, $expectedDedupeKey))
+            || $delivery->status !== 'pending' || $delivery->due_at->isFuture()) {
             return;
         }
         if (! $delivery->bot->enabled || ! $delivery->destination->enabled || ($delivery->rule && (! $delivery->rule->enabled || ! filter_var(Setting::get('telegram.automation_enabled', false), FILTER_VALIDATE_BOOLEAN)))) {
@@ -75,7 +76,7 @@ class TelegramDeliveryService
 
                 return;
             }
-            if (TelegramDelivery::whereKey($id)->where('status', 'pending')->where('due_at', '<=', now('UTC'))->update(['status' => 'sending', 'attempted_at' => now('UTC'), 'attempts' => DB::raw('attempts + 1')]) !== 1) {
+            if (TelegramDelivery::whereKey($id)->where('dedupe_key', $delivery->dedupe_key)->where('status', 'pending')->where('due_at', '<=', now('UTC'))->update(['status' => 'sending', 'attempted_at' => now('UTC'), 'attempts' => DB::raw('attempts + 1')]) !== 1) {
                 return;
             }
             $delivery->refresh();

@@ -19,7 +19,7 @@ class DevelopmentToolsService
         private DevelopmentDataFiles $files, private DevelopmentDataArchiveService $archives,
         private DevelopmentDataImportService $imports, private DevelopmentDataResetService $resets,
         private DevelopmentDataSnapshotService $snapshots, private ManagedBackupCatalog $managed,
-        private AuditLogService $audit, private AvailabilityService $availability) {}
+        private AuditLogService $audit, private AvailabilityService $availability, private DevelopmentDataNumbering $numbering) {}
 
     /** @param array<string, mixed> $scope
      * @return array{operation: DevelopmentDataOperation, token: string, preview: array<string, mixed>} */
@@ -91,7 +91,7 @@ class DevelopmentToolsService
             throw ValidationException::withMessages(['operation_token' => 'Another data or backup operation is running. Wait and rebuild the preview.']);
         }
         try {
-            return DB::transaction(function () use ($actor, $sessionId, $token, $password, $code, $recoveryCode, $phrase): array {
+            $summary = DB::transaction(function () use ($actor, $sessionId, $token, $password, $code, $recoveryCode, $phrase): array {
                 $operation = DevelopmentDataOperation::query()->where('token_hash', hash('sha256', $token))->lockForUpdate()->first();
                 $this->assertBinding($actor, $sessionId, $operation);
                 if ($operation->status === 'completed') {
@@ -155,6 +155,8 @@ class DevelopmentToolsService
 
                 return $summary;
             });
+
+            return $this->numbering->finish($actor, DevelopmentDataOperation::query()->findOrFail($summary['operation_id']));
         } finally {
             $lock->release();
         }
@@ -182,6 +184,7 @@ class DevelopmentToolsService
             'student_session_count' => $plan['student_session_count'] ?? 0,
             'shared_files_preserved' => count($inventory) - count($deletable), 'managed_snapshot_count' => count($plan['managed_snapshots']),
             'detached_references' => array_map('count', $plan['detach']), 'warnings' => $plan['warnings'],
+            'numbering_tables' => $plan['numbering_tables'] ?? [],
             'fingerprint' => hash('sha256', json_encode([$plan['fingerprint'], $inventory, $deletable, $plan['managed_snapshots']], JSON_THROW_ON_ERROR))];
     }
 

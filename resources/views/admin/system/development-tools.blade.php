@@ -1,14 +1,17 @@
 @extends('layouts.admin')
 @section('content')
 <div class="mx-auto max-w-5xl space-y-6">
-    <div><p class="text-sm font-semibold text-red-700">System · Super Admin only</p><h1 class="mt-2 font-serif text-3xl font-bold">Development & Launch Tools</h1><p class="mt-2 text-sm text-slate-600">Prepare a clean development environment. Preview first, then confirm with your current password and security factor. These tools permanently remove the selected history.</p></div>
+    <div><p class="text-sm font-semibold text-red-700">System · Super Admin only</p><h1 class="mt-2 font-serif text-3xl font-bold">Development & Launch Tools</h1><p class="mt-2 text-sm text-slate-600">Start fresh in the selected section. Preview first, then confirm with your current password and security factor. These tools permanently remove the selected history.</p><p class="mt-2 text-sm text-slate-600">Numbering restarts at #1 for emptied record groups after a successful reset. Groups with preserved records keep their numbering. Configuration, security settings and the operation audit history remain.</p></div>
     <section class="rounded-2xl border-2 border-red-300 bg-red-50 p-6">
         <h2 class="text-xl font-bold text-red-900">Danger Zone</h2><p class="mt-2 text-sm text-red-900">Irreversible deletion. A protected system recovery snapshot is {{ config('development_tools.require_snapshot') ? 'mandatory' : 'optional' }}. Resets preserve the application and configuration; they do not deploy or change security settings.</p>
         <div class="mt-5 grid gap-4 sm:grid-cols-2">
         @foreach($domains as $domain => $phrase)
             <form method="POST" action="{{ route('admin.development-tools.preview') }}" class="space-y-3 rounded-xl border border-red-200 bg-white p-4">
                 @csrf<input type="hidden" name="type" value="reset"><input type="hidden" name="domain" value="{{ $domain }}">
-                <h3 class="font-bold">Reset {{ $domain === 'financial' ? 'financial test history' : ($domain === 'backups' ? 'managed local backups' : $domain) }}</h3>
+                <h3 class="font-bold">Reset {{ \App\Domains\System\Services\DevelopmentDataCatalog::RESET_LABELS[$domain] }}</h3>
+                @if($domain === 'telegram')<p class="text-sm text-slate-600">Clear delivery records, including pending deliveries. Keep bots, destinations, rules and credentials. Previously sent Telegram messages remain.</p>@endif
+                @if($domain === 'notifications')<p class="text-sm text-slate-600">Clear the admin notification center and restart its numbering at #1. Student portal notifications remain.</p>@endif
+                @if($domain === 'leads')<p class="text-sm text-slate-600">Clear resource inquiry/download history and leads without bookings. Keep booked contacts, student profiles and resources.</p>@endif
                 @if($domain === 'resources')
                 <div class="grid gap-2 text-sm">
                     <label><input type="checkbox" name="scope[resources]" value="1" checked> Resources</label>

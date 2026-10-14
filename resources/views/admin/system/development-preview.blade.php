@@ -8,6 +8,7 @@
         <p>Portable export before reset: <strong>{{ ! empty($operation->scope['export_before']) ? 'Yes' : 'No' }}</strong></p>
         <p class="mt-2">Protected system recovery snapshot: <strong>{{ config('development_tools.require_snapshot') ? 'Required' : (! empty($operation->scope['snapshot']) ? 'Selected' : 'Not selected') }}</strong></p>
         <p class="mt-2">Private files to remove: <strong>{{ $preview['deletable_file_count'] ?? 0 }}</strong></p>
+        <p class="mt-2">Numbering restarts at #1 for emptied record groups after deletion commits. Preserved or newly arriving records keep their numbering. Recovery and audit records are retained.</p>
         @if($operation->domain === 'resources')
         <fieldset class="mt-4 grid gap-2 sm:grid-cols-2"><legend class="mb-2 font-semibold">Confirmed Resource reset scope</legend>
             @foreach(['resources' => 'Resources', 'categories' => 'Categories', 'history' => 'Request / download history', 'files' => 'Private resource files'] as $field => $label)
