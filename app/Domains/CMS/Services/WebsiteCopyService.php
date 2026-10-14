@@ -5,6 +5,7 @@ namespace App\Domains\CMS\Services;
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Analytics\Services\EngagementCounterService;
 use App\Domains\Audit\Services\AuditLogService;
+use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\WebsiteCopy;
 use App\Rules\SafeLessonUrl;
 use Illuminate\Support\Arr;
@@ -23,6 +24,13 @@ class WebsiteCopyService
         $defaults = array_map(fn (array $field): mixed => $field['default'], $this->catalog->fields($page));
         $english = $this->document($page, 'en');
         $values = array_replace($defaults, $english?->published_content ?? []);
+        if ($page === 'about' && $locale !== 'en') {
+            $translation = Page::query()->where('slug', 'about')->where('status', 'published')->first()?->liveTranslation($locale);
+            if ($translation) {
+                $values['about__0__title'] = $translation->title;
+                $values['about__0__blocks__0__text'] = $translation->content;
+            }
+        }
         if ($page === 'shared' && in_array($locale, ['fr', 'de'], true)) {
             $existing = json_decode(file_get_contents(lang_path($locale.'.json')), true, flags: JSON_THROW_ON_ERROR);
             foreach (config('website_copy_labels', []) as $label) {

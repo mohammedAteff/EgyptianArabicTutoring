@@ -57,7 +57,7 @@ class HomeController extends Controller
             : Setting::get($key, $default);
 
         $sections = config('public_content.home');
-        foreach (($isPreview || request()->attributes->get('website_copy_page') !== 'home') ? config('public_content.home_controls') : [] as $index => $controls) {
+        foreach (($isPreview || ! in_array(request()->attributes->get('website_copy_page'), ['home', 'shared'], true)) ? config('public_content.home_controls') : [] as $index => $controls) {
             foreach ($controls as $field => $key) {
                 if ($field === 'intro') {
                     $sections[$index]['blocks'][0]['text'] = $getSetting($key, $sections[$index]['blocks'][0]['text']);

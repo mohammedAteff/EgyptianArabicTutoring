@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\CMS\Models\WebsiteCopy;
 use App\Domains\CMS\Services\WebsiteCopyService;
@@ -84,6 +85,17 @@ class WebsiteCopyWorkspaceTest extends TestCase
         $this->post(route('admin.website-copy.update'), $this->copyFields(changes: [$key => 'English resource link']))->assertSessionHasNoErrors();
         $this->post(route('admin.website-copy.update'), $this->copyFields(locale: 'fr', changes: [$key => '']))->assertSessionHasNoErrors();
         $this->get('/fr')->assertOk()->assertSee('English resource link');
+    }
+
+    public function test_existing_about_translation_survives_an_english_copy_publication(): void
+    {
+        $page = Page::query()->create(['slug' => 'about', 'title' => 'About', 'content' => 'Original English biography', 'status' => 'published', 'published_at' => now()->subDay()]);
+        $page->translations()->create(['locale' => 'fr', 'title' => 'À propos', 'content' => 'Biographie française existante', 'status' => 'published', 'published_at' => now()->subDay()]);
+        $this->actingAs(AdministratorFactory::new()->create(['role' => 'super_admin']));
+        $this->post(route('admin.website-copy.update'), $this->copyFields(page: 'about', changes: ['about__0__blocks__0__text' => 'Updated English biography']))->assertSessionHasNoErrors();
+        $this->get('/fr/a-propos')->assertOk()->assertSee('Biographie française existante')->assertDontSee('Updated English biography');
+        $this->get(route('admin.website-copy.index', ['page' => 'about', 'locale' => 'fr']))->assertSee('Biographie française existante');
+        $this->get(route('admin.website-copy.preview', ['page' => 'shared', 'locale' => 'en']))->assertOk();
     }
 
     #[TestWith(['fr', 'Une nouvelle introduction'])]
