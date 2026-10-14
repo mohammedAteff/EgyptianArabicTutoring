@@ -93,7 +93,7 @@
 
                 <div>
                     <label for="content" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Page Body Content</label>
-                    <x-lms.rich-text-editor id="content" name="content" :html="$editContent" label="Page body" />
+                    <x-lms.rich-text-editor id="content" name="content" :value="$editContent" label="Page body" />
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">

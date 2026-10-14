@@ -72,6 +72,7 @@ class WebsiteCopyWorkspaceTest extends TestCase
         $expected = $this->copyFields();
         $this->assertEqualsCanonicalizing(array_keys($expected['values']), array_keys($values));
         $this->assertSame($expected['values']['home__0__title'], $values['home__0__title']);
+        $this->assertSame($expected['values']['home__0__blocks__0__text'], html_entity_decode($values['home__0__blocks__0__text']));
         $values['home__0__title'] = 'Round trip draft';
         $this->post(route('admin.website-copy.update'), array_replace($expected, ['values' => $values, 'action' => 'draft']))->assertSessionHasNoErrors();
         $this->get('/')->assertDontSee('Round trip draft');

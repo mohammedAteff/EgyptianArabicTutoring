@@ -32,7 +32,7 @@
                 @php $value = old('values.'.$key, $values[$key] ?? $field['default']); @endphp
                 <div class="space-y-2">
                 @if($field['type'] === 'richtext')
-                    <x-lms.rich-text-editor :id="'copy-'.$key" :html="(string) $value" :name="'values['.$key.']'" :label="$field['label']" />
+                    <x-lms.rich-text-editor :id="'copy-'.$key" :value="(string) $value" :name="'values['.$key.']'" :label="$field['label']" />
                 @elseif($field['type'] === 'checkbox')
                     <input type="hidden" name="values[{{ $key }}]" value="0"><label class="flex min-h-11 items-center gap-3 text-sm font-semibold"><input type="checkbox" name="values[{{ $key }}]" value="1" @checked($value)>{{ $field['label'] }}</label>
                 @elseif($field['type'] === 'textarea')
