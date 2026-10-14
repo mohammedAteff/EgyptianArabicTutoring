@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Domains\Administration\Models\AdminNotification;
 use App\Domains\Administration\Models\StaffBin;
 use App\Domains\Administration\Models\StaffNoteTemplate;
 use App\Domains\Administration\Models\StaffTask;
@@ -80,6 +81,46 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        View::composer(['layouts.admin', 'components.staff-quick-actions'], function (\Illuminate\View\View $view): void {
+            $role = auth('web')->user()?->role;
+            $groups = [];
+            foreach (config('admin_navigation.groups', []) as $key => $group) {
+                $items = [];
+                foreach ($group['items'] as $destination => $item) {
+                    if (! in_array($role, $item['roles'] ?? $group['roles'], true)
+                        || (isset($item['enabled']) && ! config($item['enabled']))) {
+                        continue;
+                    }
+                    $items[$destination] = $item + ['destination' => $destination, 'current' => false];
+                }
+                if ($items !== []) {
+                    $groups[$key] = ['label' => $group['label'], 'items' => $items, 'current' => false];
+                }
+            }
+            $destinations = collect($groups)->pluck('items')->collapse();
+            $current = $destinations->first(fn (array $item): bool => request()->routeIs($item['destination']))
+                ?? $destinations->first(fn (array $item): bool => request()->routeIs(...($item['active'] ?? [])));
+            foreach ($groups as &$group) {
+                foreach ($group['items'] as &$item) {
+                    $item['current'] = $item['destination'] === ($current['destination'] ?? null);
+                    $group['current'] = $group['current'] || $item['current'];
+                }
+                unset($item);
+            }
+            unset($group);
+            $view->with('adminNavigation', $groups);
+            if ($view->name() === 'layouts.admin') {
+                $unreadCount = 0;
+                if (in_array($role, ['super_admin', 'admin'], true)) {
+                    $query = AdminNotification::query()->unread();
+                    if ($role !== 'super_admin') {
+                        $query->whereNotIn('type', ['backup_failure', 'system_warning']);
+                    }
+                    $unreadCount = $query->count();
+                }
+                $view->with('sidebarUnreadCount', $unreadCount);
+            }
+        });
         View::composer(['components.staff-template-picker'], function (\Illuminate\View\View $view): void {
             $templates = collect();
             if (request()->routeIs('admin.*') && auth('web')->check()) {

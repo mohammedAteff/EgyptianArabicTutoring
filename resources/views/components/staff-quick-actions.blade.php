@@ -1,16 +1,15 @@
 <button type="button" data-open-quick-actions class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50" aria-label="Quick actions" aria-haspopup="dialog"><svg class="h-4 w-4 sm:hidden" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><span class="hidden sm:inline">Quick actions</span><span class="hidden lg:inline text-xs text-slate-400">Ctrl K</span></button>
-<dialog id="staff-quick-actions" data-search-url="{{ route('admin.search') }}" aria-labelledby="staff-quick-actions-title" class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-900/50">
+<dialog id="staff-quick-actions" data-search-url="{{ route('admin.search') }}" aria-labelledby="staff-quick-actions-title" class="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-900/50">
     <div class="flex items-center justify-between gap-3"><h2 id="staff-quick-actions-title" class="text-xl font-bold">Quick actions</h2><button type="button" data-close-quick-actions aria-label="Close quick actions" class="min-h-11 min-w-11 rounded-lg text-slate-500">×</button></div>
     <label class="mt-3 block text-sm font-semibold">Search Records or Find a Destination<input id="quick-action-query" type="search" autofocus class="mt-2 w-full rounded-xl border border-slate-300 p-3" placeholder="Student, booking, note, payment or destination"></label>
     <p data-quick-search-status role="status" class="mt-3 text-sm text-slate-500"></p>
     <div data-quick-search-results class="mt-3 max-h-72 space-y-2 overflow-y-auto"></div>
-    <nav class="mt-4 space-y-1" aria-label="Quick destinations">
-        @foreach(['admin.operations.index'=>'Today & Operations', 'admin.tasks.index'=>'Staff Tasks', 'admin.staff-bins.index'=>'Staff Notes', 'admin.students.index'=>'Student Records', 'admin.contacts.index'=>'Students & Contacts', 'admin.bookings.index'=>'Bookings & Calendar'] as $destination=>$label)<a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route($destination) }}">{{ $label }}</a>@endforeach
-        @if(auth('web')->user()?->isAdmin())<a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.billing.cashier') }}">Cashier Hub</a><a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.resources.index') }}">Resource Library</a>@endif
-        <a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.forms.completion') }}">Form Completion</a>
-        @if(auth('web')->user()?->isAdmin())<a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.resource-collections.index') }}">Resource Collections</a><a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.reports.activity') }}">Daily Business &amp; Staff Activity</a>@endif
-        <a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.staff-note-templates.library') }}">Templates &amp; Snippets</a>
-        @if(auth('web')->user()?->isSuperAdmin())<a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route('admin.reason-codes.index') }}">Reason Categories</a>@endif
+    <nav class="mt-4 max-h-64 space-y-1 overflow-y-auto" aria-label="Quick destinations">
+        @foreach($adminNavigation as $group)
+            @foreach($group['items'] as $item)
+                <a data-quick-destination class="block rounded-lg p-3 text-sm font-semibold hover:bg-amber-50" href="{{ route($item['destination']) }}">{{ $item['label'] }}</a>
+            @endforeach
+        @endforeach
     </nav>
     <form method="GET" action="{{ route('admin.students.index') }}" class="mt-4 flex gap-2 border-t border-slate-200 pt-4"><label class="min-w-0 flex-1"><span class="sr-only">Find student by name, email or phone</span><input name="q" type="search" required class="min-h-11 w-full rounded-lg border border-slate-300 px-3" placeholder="Student name, email or phone"></label><button class="min-h-11 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white">Find student</button></form>
 </dialog>

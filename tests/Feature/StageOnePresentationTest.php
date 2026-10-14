@@ -35,10 +35,10 @@ class StageOnePresentationTest extends TestCase
         $response = $this->actingAs($staff, 'web')->get(route('admin.students.index'))->assertOk()->assertSeeText($label.' Operations Console')->assertSeeText('Synthetic '.$label);
         $this->assertSame($role, $staff->fresh()->role);
         $xpath = $this->xpath($response->getContent());
-        $security = $xpath->query('//a[@href="'.route('admin.security.show').'"]');
+        $security = $xpath->query('//nav[@id="admin-sidebar-nav"]//a[@href="'.route('admin.security.show').'"]');
         $this->assertSame($role === 'super_admin' ? 1 : 0, $security->length);
         if ($role === 'super_admin') {
-            $this->assertSame(1, $xpath->query('//a[@href="'.route('admin.security.show').'"]/svg')->length);
+            $this->assertSame(1, $xpath->query('//nav[@id="admin-sidebar-nav"]//a[@href="'.route('admin.security.show').'"]/svg')->length);
         }
         $this->assertSame(1, $xpath->query('//button[@id="admin-desktop-sidebar-toggle" and @aria-controls="admin-sidebar"]')->length);
     }
