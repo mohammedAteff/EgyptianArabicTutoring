@@ -94,7 +94,7 @@ class WebsiteCopyWorkspaceTest extends TestCase
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'super_admin']));
         $this->post(route('admin.website-copy.update'), $this->copyFields(page: 'about', changes: ['about__0__blocks__0__text' => 'Updated English biography']))->assertSessionHasNoErrors();
         $this->get('/fr/a-propos')->assertOk()->assertSee('Biographie française existante')->assertDontSee('Updated English biography');
-        $this->get(route('admin.website-copy.index', ['page' => 'about', 'locale' => 'fr']))->assertSee('Biographie française existante');
+        $this->get(route('admin.website-copy.index', ['page' => 'about', 'locale' => 'fr']))->assertOk()->assertViewHas('values', fn (array $values): bool => $values['about__0__blocks__0__text'] === 'Biographie française existante');
         $this->get(route('admin.website-copy.preview', ['page' => 'shared', 'locale' => 'en']))->assertOk();
     }
 
