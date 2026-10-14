@@ -64,6 +64,7 @@ use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\TwoFactorChallengeController;
 use App\Http\Controllers\Admin\TwoFactorSecurityController;
 use App\Http\Controllers\Admin\VideoSettingsController;
+use App\Http\Controllers\Admin\WebsiteCopyController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\BookingController;
@@ -558,6 +559,9 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         // Content & FAQs
         Route::middleware('role:super_admin,admin')->group(function () {
+            Route::get('/website-copy', [WebsiteCopyController::class, 'index'])->name('website-copy.index');
+            Route::post('/website-copy', [WebsiteCopyController::class, 'update'])->name('website-copy.update');
+            Route::get('/website-copy/preview', [WebsiteCopyController::class, 'preview'])->name('website-copy.preview');
             Route::get('/content', [ContentController::class, 'index'])->name('content.index');
             Route::post('/content/faqs', [ContentController::class, 'storeFaq'])->name('content.faq.store');
             Route::put('/content/faqs/{faq}', [ContentController::class, 'updateFaq'])->name('content.faq.update');

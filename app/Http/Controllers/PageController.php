@@ -6,6 +6,7 @@ use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\CMS\Services\RichTextSanitizer;
+use App\Domains\CMS\Services\WebsiteCopyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -22,6 +23,8 @@ class PageController extends Controller
 
         $resolved = $page?->resolveTranslation();
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
+        $copy = app(WebsiteCopyService::class);
+        $hasCopy = request()->attributes->get('website_copy_preview') || $copy->document('about', app()->getLocale())?->published_content !== null || $copy->document('about', 'en')?->published_content !== null;
 
         return view('public.about', [
             'title' => ($resolved['translation'] ?? null)?->getAttribute('title') ?? 'About Abdallah',
@@ -29,13 +32,13 @@ class PageController extends Controller
             'translation' => $resolved['translation'] ?? null,
             'isFallback' => $isFallback,
             'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
-            'biography' => ($resolved && $resolved['effective_locale'] !== 'en')
+            'biography' => $hasCopy ? null : (($resolved && $resolved['effective_locale'] !== 'en')
                 ? $resolved['translation']->getAttribute('content')
-                : (Setting::get('about_biography') ?: (($resolved['translation'] ?? null)?->getAttribute('content') ?? $page?->content)),
+                : (Setting::get('about_biography') ?: (($resolved['translation'] ?? null)?->getAttribute('content') ?? $page?->content))),
             'biographyLocale' => $resolved['effective_locale'] ?? 'en',
             'biographyHeading' => ($resolved && $resolved['effective_locale'] !== 'en') ? $resolved['translation']->getAttribute('title') : null,
-            'philosophy' => Setting::get('about_philosophy'),
-            'imagePath' => $page?->og_image_path ?? Setting::get('about_image_path'),
+            'philosophy' => $hasCopy ? null : Setting::get('about_philosophy'),
+            'imagePath' => $hasCopy ? request()->attributes->get('website_copy_tree')['image'] : ($page?->og_image_path ?? Setting::get('about_image_path')),
         ]);
     }
 

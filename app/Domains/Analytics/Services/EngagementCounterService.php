@@ -3,6 +3,7 @@
 namespace App\Domains\Analytics\Services;
 
 use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Services\WebsiteCopyService;
 use App\Domains\Reporting\Services\ReportService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
@@ -176,6 +177,14 @@ class EngagementCounterService
         $payload['live_users']['count'] = $count;
         $payload['live_users']['enabled'] = (bool) Setting::get('counters.live_users.public_enabled', false);
         $payload['live_users']['text'] = str_replace('{count}', number_format($count), (string) Setting::get('counters.live_users.template', '{count} active visitors online right now'));
+        $copy = app(WebsiteCopyService::class);
+        $text = fn (string $key, string $fallback): string => (string) $copy->value('shared', 'counters.'.str_replace('.', '__', $key), $fallback);
+        $payload['live_users']['text'] = str_replace('{count}', number_format($count), $text('counters.live_users.template', (string) Setting::get('counters.live_users.template', '{count} active visitors online right now')));
+        $trafficKey = $payload['monthly_traffic']['source'] === 'sessions' ? 'counters.monthly_traffic.template_sessions' : 'counters.monthly_traffic.template_visitors';
+        $trafficDefault = $payload['monthly_traffic']['source'] === 'sessions' ? 'We had {count} website sessions last month' : 'We welcomed {count} visitors last month';
+        $payload['monthly_traffic']['text'] = str_replace('{count}', number_format($payload['monthly_traffic']['count']), $text($trafficKey, (string) Setting::get($trafficKey, $trafficDefault)));
+        $payload['learning_hours']['headline'] = str_replace('{time}', $payload['learning_hours']['formatted_time'], $text('counters.learning_hours.headline', (string) Setting::get('counters.learning_hours.headline', 'Globally, students have put in...')));
+        $payload['learning_hours']['subtitle'] = str_replace('{time}', $payload['learning_hours']['formatted_time'], $text('counters.learning_hours.subtitle', (string) Setting::get('counters.learning_hours.subtitle', 'of practice time in the last 7 days')));
 
         return $payload;
     }

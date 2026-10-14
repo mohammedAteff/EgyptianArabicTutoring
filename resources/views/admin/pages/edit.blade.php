@@ -11,7 +11,7 @@
     $editSeoDescription = old('seo_description', $draftContent['seo_description'] ?? $page->seo_description);
     $editOgImagePath = old('og_image_path', $draftContent['og_image_path'] ?? $page->og_image_path);
 @endphp
-<div class="space-y-8">
+<div class="space-y-8">@include('admin.website-copy.navigation')
 
     <div class="flex items-center justify-between">
         <div>
@@ -93,8 +93,7 @@
 
                 <div>
                     <label for="content" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Page Body Content</label>
-                    <textarea id="content" name="content" rows="12"
-                              class="w-full p-4 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none leading-relaxed">{{ $editContent }}</textarea>
+                    <x-lms.rich-text-editor id="content" name="content" :html="$editContent" label="Page body" />
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">

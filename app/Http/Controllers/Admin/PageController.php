@@ -18,17 +18,9 @@ use Illuminate\View\View;
 
 class PageController extends Controller
 {
-    public function index(): View
+    public function index(): RedirectResponse
     {
-        $pages = Page::query()
-            ->withCount('revisions')
-            ->orderBy('title')
-            ->paginate(20);
-
-        return view('admin.pages.index', [
-            'title' => 'Page CMS & Revisions',
-            'pages' => $pages,
-        ]);
+        return redirect()->route('admin.website-copy.index', ['tab' => 'pages']);
     }
 
     public function create(): View
@@ -102,8 +94,11 @@ class PageController extends Controller
             ->with('success', "Page '{$page->title}' created successfully.");
     }
 
-    public function edit(Page $page): View
+    public function edit(Page $page): View|RedirectResponse
     {
+        if ($page->slug === 'about') {
+            return redirect()->route('admin.website-copy.index', ['page' => 'about']);
+        }
         $revisions = $page->revisions()->orderByDesc('revision_number')->get();
         $draftRevision = $page->revisions()
             ->where('status', 'draft')

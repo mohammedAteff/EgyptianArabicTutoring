@@ -459,7 +459,7 @@ class AdminOperationsTest extends TestCase
         $response->assertRedirect();
 
         $this->assertEquals('Ahmad Arabic Academy', Setting::get('site_name'));
-        $this->assertEquals('Speak Street Egyptian Arabic Fluently', Setting::get('hero_title'));
+        $this->assertNotSame('Speak Street Egyptian Arabic Fluently', Setting::get('hero_title'));
         $this->assertSame('https://meet.example.test/arabic-room', Setting::get('video_meeting_url'));
     }
 
@@ -487,9 +487,8 @@ class AdminOperationsTest extends TestCase
         $this->actingAs($this->admin, 'web')
             ->get(route('admin.content.index'))
             ->assertOk()
-            ->assertSee('xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,1fr)]', false)
-            ->assertSeeText('Frequently Asked Questions')
-            ->assertSeeText('Custom Standalone Pages')
+            ->assertDontSeeText('Frequently Asked Questions')
+            ->assertDontSeeText('Custom Standalone Pages')
             ->assertSeeText('Official Social Media & WhatsApp Channels')
             ->assertSeeText('Display Label')
             ->assertSeeText('Default Pre-filled Message')

@@ -26,20 +26,29 @@ class AnnouncementService
     /** @param array<string, mixed> $values */
     public function save(array $values): void
     {
-        foreach (['start_at', 'end_at'] as $field) {
-            if (! empty($values[$field])) {
-                try {
-                    $values[$field] = $this->timezones->resolveLocalWallTime($values[$field], $this->timezones->getBusinessTimezone(), 'reject')->toIso8601String();
-                } catch (DstGapException|DstFoldAmbiguityException) {
-                    throw ValidationException::withMessages([$field => 'Choose an unambiguous time that exists in the Business Timezone.']);
-                }
-            }
-        }
+        $values = $this->normalize($values, $this->timezones->getBusinessTimezone());
         DB::transaction(function () use ($values): void {
             foreach ($values as $key => $value) {
                 Setting::set('announcement.'.$key, $value ?? '', 'announcement', true);
             }
         });
+    }
+
+    /** @param array<string, mixed> $values
+     * @return array<string, mixed> */
+    public function normalize(array $values, string $timezone): array
+    {
+        foreach (['start_at', 'end_at'] as $field) {
+            if (! empty($values[$field])) {
+                try {
+                    $values[$field] = $this->timezones->resolveLocalWallTime($values[$field], $timezone, 'reject')->toIso8601String();
+                } catch (DstGapException|DstFoldAmbiguityException) {
+                    throw ValidationException::withMessages([$field => 'Choose an unambiguous time that exists in the Business Timezone.']);
+                }
+            }
+        }
+
+        return $values;
     }
 
     /** @return array{message: string, severity: string, dismissible: bool, cta_label: string, cta_url: ?string, version: string}|null */

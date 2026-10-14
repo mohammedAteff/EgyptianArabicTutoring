@@ -104,7 +104,7 @@ class PublicCopyRemediationTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
 
         $public = $this->get('/about');
-        $preview = $this->actingAs($admin)->get(route('admin.settings.index'));
+        $preview = $this->actingAs($admin)->get(route('admin.website-copy.index', ['page' => 'about']));
 
         $public->assertSeeText('Book Your Diagnostic');
         $this->assertSame($source, $this->xpath($public->getContent())->evaluate('string(//img[@alt="Abdallah"]/@src)'));
@@ -122,7 +122,7 @@ class PublicCopyRemediationTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
 
         $public = $this->get('/about');
-        $preview = $this->actingAs($admin)->get(route('admin.settings.index'));
+        $preview = $this->actingAs($admin)->get(route('admin.website-copy.index', ['page' => 'about']));
 
         $expected = Storage::disk('public')->url('media/engineering tutor.png');
         $this->assertSame($expected, $this->xpath($public->getContent())->evaluate('string(//img[@alt="Abdallah"]/@src)'));
@@ -139,7 +139,7 @@ class PublicCopyRemediationTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
 
         $public = $this->get('/about');
-        $preview = $this->actingAs($admin)->get(route('admin.settings.index'));
+        $preview = $this->actingAs($admin)->get(route('admin.website-copy.index', ['page' => 'about']));
 
         $public->assertSeeText('Book Your Diagnostic');
         $this->assertSame(0, $this->xpath($public->getContent())->query('//img[@alt="Abdallah"]')->length);

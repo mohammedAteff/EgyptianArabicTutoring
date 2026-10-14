@@ -7,12 +7,14 @@ use App\Domains\Analytics\Services\EngagementCounterService;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\CMS\Services\AnnouncementService;
+use App\Domains\CMS\Services\WebsiteCopyCatalog;
 use App\Domains\Notifications\Services\TelegramNotificationService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use App\Rules\SafeLessonUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -102,6 +104,15 @@ class SettingController extends Controller
     public function index(Request $request): View
     {
         $settings = Setting::all()->keyBy('key');
+        $draft = (array) Setting::get('admin_settings.draft', []);
+        $draftValues = [];
+        foreach ($draft as $key => $value) {
+            if ($key !== 'announcement') {
+                $key = $this->settingKey($key);
+                $draftValues[$key] = $value;
+                $settings[$key] = (new Setting)->forceFill(['key' => $key, 'value' => is_array($value) ? json_encode($value) : (string) $value]);
+            }
+        }
         $timezones = $this->timezoneService->getAvailableTimezones();
 
         return view('admin.settings.index', [
@@ -109,9 +120,39 @@ class SettingController extends Controller
             'settings' => $settings,
             'timezones' => $timezones,
             'canManageMaintenance' => $request->user('web')?->role === 'super_admin',
-            'announcement' => app(AnnouncementService::class)->settings(),
-            'businessTimezone' => $this->timezoneService->getBusinessTimezone(),
+            'announcement' => $draft['announcement'] ?? app(AnnouncementService::class)->settings(),
+            'announcementIsDraft' => isset($draft['announcement']),
+            'hasSettingsDraft' => $draft !== [],
+            'getSetting' => fn (string $key, mixed $default = null): mixed => $draftValues[$key] ?? Setting::get($key, $default),
+            'businessTimezone' => $draft['business_timezone'] ?? $this->timezoneService->getBusinessTimezone(),
         ]);
+    }
+
+    private function settingKey(string $key): string
+    {
+        if ($key === 'goals') {
+            return 'analytics.goals';
+        }
+
+        return str_starts_with($key, 'counters_') ? str_replace(['counters_learning_hours_', 'counters_monthly_traffic_', 'counters_live_users_'], ['counters.learning_hours.', 'counters.monthly_traffic.', 'counters.live_users.'], $key) : $key;
+    }
+
+    /** @return array<string, array<mixed>> */
+    private function announcementRules(Request $request): array
+    {
+        $rules = ['announcement' => ['required', 'array:enabled,audience,severity,dismissible,start_at,end_at,cta_url,message_en,message_fr,message_de,cta_label_en,cta_label_fr,cta_label_de'],
+            'announcement.enabled' => ['required', 'boolean'], 'announcement.audience' => ['required', Rule::in(['public', 'public_student'])],
+            'announcement.severity' => ['required', Rule::in(['information', 'warning', 'urgent'])], 'announcement.dismissible' => ['required', 'boolean'],
+            'announcement.start_at' => ['nullable', 'date_format:Y-m-d\\TH:i'],
+            'announcement.end_at' => ['nullable', 'date_format:Y-m-d\\TH:i', Rule::when($request->filled('announcement.start_at'), 'after:announcement.start_at')],
+            'announcement.cta_url' => ['nullable', 'string', 'max:2048', new SafeLessonUrl, 'required_with:announcement.cta_label_en,announcement.cta_label_fr,announcement.cta_label_de']];
+        foreach (['en', 'fr', 'de'] as $locale) {
+            $rules['announcement.message_'.$locale] = ['nullable', $locale === 'en' ? 'required_if:announcement.enabled,1' : 'sometimes', 'string', 'max:2000'];
+            $rules['announcement.cta_label_'.$locale] = ['nullable', 'string', 'max:100'];
+        }
+        $rules['announcement.cta_label_en'][] = 'required_with:announcement.cta_url';
+
+        return $rules;
     }
 
     public function update(Request $request): RedirectResponse
@@ -176,7 +217,20 @@ class SettingController extends Controller
         if ($request->boolean('operations_present')) {
             $rules = array_merge($rules, $this->operationalRules($request));
         }
+        $copyKeys = array_merge(WebsiteCopyCatalog::SETTINGS, Arr::flatten(config('public_content.home_controls')), ['counters_learning_hours_headline', 'counters_learning_hours_subtitle', 'counters_monthly_traffic_template_visitors', 'counters_monthly_traffic_template_sessions', 'counters_live_users_template']);
+        foreach ($copyKeys as $key) {
+            unset($rules[$key]);
+        }
+        $rules['action'] = ['nullable', Rule::in(['draft', 'publish'])];
+        if ($request->has('announcement')) {
+            $rules += $this->announcementRules($request);
+        }
         $validated = $request->validate($rules);
+        if ($request->boolean('operations_present')) {
+            $validated['goals'] = $validated['goals'] ?? [];
+            $validated['exclude_connection'] = $request->boolean('exclude_connection');
+            $validated['clear_exclusions'] = $request->boolean('clear_exclusions');
+        }
         if ($request->boolean('telegram_settings_present') && Setting::get('telegram.center_migrated', false)) {
             abort(409, 'Manage Telegram automation in Telegram Bots.');
         }
@@ -184,8 +238,25 @@ class SettingController extends Controller
         $action = $request->input('action', 'publish');
         $isDraft = $action === 'draft';
 
+        if (isset($validated['announcement'])) {
+            app(AnnouncementService::class)->normalize($validated['announcement'], $validated['business_timezone']);
+        }
+        unset($validated['action']);
+        if ($isDraft) {
+            if (! empty($validated['telegram_bot_token'])) {
+                $validated['telegram_bot_token'] = Crypt::encryptString($validated['telegram_bot_token']);
+            }
+            DB::transaction(function () use ($validated): void {
+                Setting::set('admin_settings.draft', $validated, 'admin_drafts', false);
+                AuditLog::create(['administrator_id' => Auth::id(), 'action' => 'settings_draft_saved', 'entity_type' => Setting::class, 'entity_id' => 0,
+                    'new_data' => ['fields' => array_keys($validated)], 'created_at' => now()]);
+            });
+
+            return back()->with('success', 'Settings and announcement draft saved. Live settings are unchanged.');
+        }
+
         DB::transaction(function () use ($request, $validated, $isDraft): void {
-            $prev = Setting::all()->pluck('value', 'key')->toArray();
+            $prev = ['fields' => array_keys($validated)];
 
             // Process standard settings
             $counterMap = [
@@ -200,6 +271,7 @@ class SettingController extends Controller
                 'counters_live_users_public_enabled' => ['key' => 'counters.live_users.public_enabled', 'type' => 'bool'],
                 'counters_live_users_template' => ['key' => 'counters.live_users.template', 'type' => 'string'],
             ];
+            $counterMap = array_filter($counterMap, fn (array $meta): bool => $meta['type'] !== 'string' || $meta['key'] === 'counters.monthly_traffic.source');
 
             foreach ($counterMap as $inputKey => $meta) {
                 if ($meta['type'] === 'bool') {
@@ -230,6 +302,9 @@ class SettingController extends Controller
             }
 
             foreach ($validated as $key => $value) {
+                if ($key === 'announcement') {
+                    continue;
+                }
                 if ($request->boolean('operations_present') && array_key_exists($key, $this->operationalRules($request))) {
                     continue;
                 }
@@ -271,6 +346,10 @@ class SettingController extends Controller
             Cache::forget('active_business_tz');
             Cache::forget('maintenance_mode_active');
             Cache::forget(EngagementCounterService::cacheKey());
+            if (isset($validated['announcement'])) {
+                app(AnnouncementService::class)->save($validated['announcement']);
+            }
+            Setting::query()->where('key', 'admin_settings.draft')->delete();
 
             AuditLog::create([
                 'administrator_id' => Auth::id(),
@@ -278,7 +357,7 @@ class SettingController extends Controller
                 'entity_type' => Setting::class,
                 'entity_id' => 0,
                 'previous_data' => $prev,
-                'new_data' => $validated,
+                'new_data' => ['fields' => array_keys($validated)],
                 'created_at' => now(),
             ]);
 

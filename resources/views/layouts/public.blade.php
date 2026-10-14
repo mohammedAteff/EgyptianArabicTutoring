@@ -75,7 +75,7 @@
     @if($isPreview ?? false)
         <div class="bg-amber-500 text-slate-950 font-bold px-4 py-2.5 text-center text-xs tracking-wider uppercase shadow-md sticky top-0 z-50 flex items-center justify-center gap-2">
             <svg class="w-4 h-4 text-slate-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-            <span>Draft Preview Mode — This content is unpublished and not accessible to the public.</span>
+            <span>{{ website_text('shared', 'Draft Preview Mode — This content is unpublished and not accessible to the public.') }}</span>
         </div>
     @endif
 
@@ -84,10 +84,10 @@
     <!-- Top Announcement Bar (Subtle & Informative) -->
     <div class="bg-nile-900 text-stone-200 text-xs py-2 px-4 text-center">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <span class="hidden sm:inline font-medium">Egyptian Arabic · Modern Standard Arabic · Personalized 1-on-1 Lessons</span>
-            <span class="sm:hidden font-medium mx-auto">Personalized Arabic Lessons</span>
+            <span class="hidden sm:inline font-medium">{{ website_text('shared', 'Egyptian Arabic · Modern Standard Arabic · Personalized 1-on-1 Lessons') }}</span>
+            <span class="sm:hidden font-medium mx-auto">{{ website_text('shared', 'Personalized Arabic Lessons') }}</span>
             <div class="hidden sm:flex items-center gap-4 text-stone-300">
-                <span>📍 Cairo, Egypt</span>
+                <span>{{ website_text('shared', '📍 Cairo, Egypt') }}</span>
                 @php $cairoClock = app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->formatSlotForDisplay('Africa/Cairo', now('UTC')); @endphp
                 <span>🕒 {{ now('Africa/Cairo')->format('g:i A') }} Cairo Time ({{ $cairoClock['utc_offset'] }})</span>
             </div>
@@ -107,7 +107,7 @@
                 <!-- Brand Logo / Name -->
                 <a href="{{ localized_url('home') }}" class="flex items-center gap-3 group">
                         <div class="w-11 h-11 rounded-xl bg-terracotta-500 text-white flex items-center justify-center font-bold text-xl shadow-sm transition-transform group-hover:scale-105">
-                        <span aria-hidden="true">A</span>
+                        <span aria-hidden="true">{{ website_text('shared', 'A') }}</span>
                     </div>
                     <div>
                         <div class="font-bold text-lg text-stone-900 leading-snug group-hover:text-terracotta-600 transition-colors">
@@ -125,32 +125,32 @@
                 <nav class="hidden lg:flex items-center gap-7">
                     <a href="{{ localized_url('home') }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('home*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
-                        {{ __('Home') }}
+                        {{ website_label('Home') }}
                     </a>
-                    <a href="{{ localized_url('resources') }}"
+                    <a href="{{ website_link('shared', 'resources', localized_url('resources')) }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('resources*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
-                        {{ __('Resources') }}
-                    </a><a href="{{ route('student.login') }}" class="text-sm font-semibold text-nile-800 hover:underline">{{ ['en'=>'Student Portal','fr'=>'Espace étudiant','de'=>'Schülerportal'][app()->getLocale()] ?? 'Student Portal' }}</a>
-                    <a href="{{ localized_url('games') }}"
+                        {{ website_label('Resources') }}
+                    </a><a href="{{ website_link('shared', 'student', route('student.login')) }}" class="text-sm font-semibold text-nile-800 hover:underline">{{ ['en'=>'Student Portal','fr'=>'Espace étudiant','de'=>'Schülerportal'][app()->getLocale()] ?? 'Student Portal' }}</a>
+                    <a href="{{ website_link('shared', 'games', localized_url('games')) }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('games*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
-                        {{ __('Games') }}
+                        {{ website_label('Games') }}
                     </a>
-                    <a href="{{ localized_url('pricing') }}"
+                    <a href="{{ website_link('shared', 'pricing', localized_url('pricing')) }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('pricing*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
-                        {{ __('Pricing') }}
+                        {{ website_label('Pricing') }}
                     </a>
-                    <a href="{{ localized_url('about') }}"
+                    <a href="{{ website_link('shared', 'about', localized_url('about')) }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('about*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
-                        {{ __('About') }}
+                        {{ website_label('About') }}
                     </a>
-                    <a href="{{ localized_url('faq') }}"
+                    <a href="{{ website_link('shared', 'faq', localized_url('faq')) }}"
                        class="text-sm font-semibold transition-colors {{ request()->routeIs('faq*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">
-                        {{ __('FAQ') }}
+                        {{ website_label('FAQ') }}
                     </a>
                     <a href="{{ localized_url('blogs') }}" class="text-sm font-semibold transition-colors {{ request()->routeIs('blog.*') ? 'text-terracotta-600' : 'text-stone-700 hover:text-stone-900' }}">Blogs</a>
 
                     <!-- Language Switcher (Desktop) -->
-                    <div class="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200/80 text-xs font-semibold" role="group" aria-label="{{ __('Language selector') }}">
+                    <div class="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200/80 text-xs font-semibold" role="group" aria-label="{{ website_label('Language selector') }}">
                         @foreach($availableLocales as $code => $loc)
                             @if($currentLocale === $code)
                                 <span class="px-2.5 py-1 rounded-full bg-terracotta-500 text-white shadow-xs font-bold" aria-current="true">
@@ -171,22 +171,22 @@
                     </div>
 
                     <!-- Prominent Booking CTA -->
-                    <a href="{{ localized_url('booking') }}"
+                    <a href="{{ website_link('shared', 'booking', localized_url('booking')) }}"
                        data-cta="booking"
                        class="inline-flex items-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-sm hover:shadow transition-all transform hover:-translate-y-0.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                         </svg>
-                        <span>{{ __('Book a Lesson') }}</span>
+                        <span>{{ website_label('Book a Lesson') }}</span>
                     </a>
                 </nav>
 
                 <!-- Mobile Menu Button -->
                 <div class="flex items-center gap-3 lg:hidden">
-                    <a href="{{ localized_url('booking') }}"
+                    <a href="{{ website_link('shared', 'booking', localized_url('booking')) }}"
                        data-cta="booking"
                        class="bg-terracotta-500 text-white text-xs font-semibold px-3.5 py-2 rounded-full shadow-sm">
-                        {{ __('Book Now') }}
+                        {{ website_label('Book Now') }}
                     </a>
                     <button type="button"
                             @click="mobileNav = !mobileNav"
@@ -214,22 +214,22 @@
              x-transition:leave-start="opacity-100 translate-y-0"
              x-transition:leave-end="opacity-0 -translate-y-2"
              class="lg:hidden bg-white border-b border-stone-200 px-4 pt-2 pb-6 space-y-3 shadow-lg">
-            <a href="{{ localized_url('home') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('Home') }}</a>
-            <a href="{{ localized_url('booking') }}" data-cta="booking" class="block px-3 py-2 text-base font-semibold rounded-lg bg-terracotta-50 text-terracotta-600">📅 {{ __('Book a Lesson') }}</a>
-            <a href="{{ route('student.login') }}" class="block rounded-lg px-3 py-2 text-base font-semibold text-nile-800">{{ ['en'=>'Student Portal','fr'=>'Espace étudiant','de'=>'Schülerportal'][app()->getLocale()] ?? 'Student Portal' }}</a>
-            <a href="{{ localized_url('resources') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">📚 {{ __('Resources') }}</a>
-            <a href="{{ localized_url('games') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">🎮 {{ __('Games') }}</a>
-            <a href="{{ localized_url('pricing') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ __('Pricing') }}</a>
-            <a href="{{ localized_url('about') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('About') }}</a>
-            <a href="{{ localized_url('faq') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ __('FAQ') }}</a>
-            <a href="{{ localized_url('blogs') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">Blogs</a>
+            <a href="{{ localized_url('home') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ website_label('Home') }}</a>
+            <a href="{{ website_link('shared', 'booking', localized_url('booking')) }}" data-cta="booking" class="block px-3 py-2 text-base font-semibold rounded-lg bg-terracotta-50 text-terracotta-600">📅 {{ website_label('Book a Lesson') }}</a>
+            <a href="{{ website_link('shared', 'student', route('student.login')) }}" class="block rounded-lg px-3 py-2 text-base font-semibold text-nile-800">{{ ['en'=>'Student Portal','fr'=>'Espace étudiant','de'=>'Schülerportal'][app()->getLocale()] ?? 'Student Portal' }}</a>
+            <a href="{{ website_link('shared', 'resources', localized_url('resources')) }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">📚 {{ website_label('Resources') }}</a>
+            <a href="{{ website_link('shared', 'games', localized_url('games')) }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">🎮 {{ website_label('Games') }}</a>
+            <a href="{{ website_link('shared', 'pricing', localized_url('pricing')) }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">💳 {{ website_label('Pricing') }}</a>
+            <a href="{{ website_link('shared', 'about', localized_url('about')) }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ website_label('About') }}</a>
+            <a href="{{ website_link('shared', 'faq', localized_url('faq')) }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ website_label('FAQ') }}</a>
+            <a href="{{ localized_url('blogs') }}" class="block px-3 py-2 text-base font-medium rounded-lg text-stone-800 hover:bg-stone-50">{{ website_text('shared', 'Blogs') }}</a>
 
             <!-- Mobile Language Switcher -->
             <div class="pt-3 border-t border-stone-100">
                 <div class="text-xs font-semibold uppercase tracking-wider text-stone-400 mb-2 px-3">
-                    {{ __('Language') }}
+                    {{ website_label('Language') }}
                 </div>
-                <div class="flex items-center gap-2 px-3" role="group" aria-label="{{ __('Language selector') }}">
+                <div class="flex items-center gap-2 px-3" role="group" aria-label="{{ website_label('Language selector') }}">
                     @foreach($availableLocales as $code => $loc)
                         @if($currentLocale === $code)
                             <span class="flex-1 text-center py-2 rounded-xl bg-terracotta-500 text-white font-bold text-xs shadow-xs" aria-current="true">
@@ -253,7 +253,7 @@
 
     <!-- Main Content Area -->
     <main class="flex-grow">
-        @if($isPreview ?? false)<div role="status" lang="en" class="border-b border-amber-200 bg-amber-50 px-4 py-4 text-center text-sm text-amber-900"><strong>Administrator Preview Mode</strong> — This is a private preview. Changes appear publicly only after you publish.</div>@endif
+        @if($isPreview ?? false)<div role="status" lang="{{ $copyLocale ?? 'en' }}" class="border-b border-amber-200 bg-amber-50 px-4 py-4 text-center text-sm text-amber-900"><strong>{{ website_text('shared', 'Administrator Preview Mode') }}</strong> — This is a private preview. Changes appear publicly only after you publish.</div>@endif
         @if(isset($slot) && ($slot instanceof \Illuminate\Contracts\Support\Htmlable || is_string($slot)))
             {{ $slot }}
         @endif
@@ -268,14 +268,14 @@
                 <div class="md:col-span-2 space-y-4">
                     <div class="flex items-center gap-3">
                         <div class="w-9 h-9 rounded-lg bg-terracotta-500 text-white flex items-center justify-center font-bold text-lg font-cairo">
-                            <span aria-hidden="true">A</span>
+                            <span aria-hidden="true">{{ website_text('shared', 'A') }}</span>
                         </div>
                         <span class="font-bold text-white text-lg tracking-tight">
                             {{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}
                         </span>
                     </div>
                     <p class="text-stone-400 text-sm max-w-md leading-relaxed">
-                        {{ \App\Domains\CMS\Models\Setting::get('site_footer_text', 'Personalized Arabic tutoring, practical learning resources, and creative ways to keep your Arabic active.') }}
+                        {{ app(\App\Domains\CMS\Services\WebsiteCopyService::class)->value('shared', 'footer', \App\Domains\CMS\Models\Setting::get('site_footer_text', config('public_content.footer'))) }}
                     </p>
                     <div class="pt-2 flex items-center gap-4 text-xs text-stone-400">
                         <span class="inline-flex items-center gap-1.5 text-emerald-400">
@@ -283,31 +283,31 @@
                             First-party analytics only
                         </span>
                         <span>•</span>
-                        <span>Zero third-party ad trackers</span>
+                        <span>{{ website_text('shared', 'Zero third-party ad trackers') }}</span>
                     </div>
                 </div>
 
                 <!-- Col 2: Navigation Links -->
                 <div>
-                    <h3 class="text-xs font-semibold text-stone-200 uppercase tracking-wider mb-4">{{ __('Learn & Practice') }}</h3>
+                    <h3 class="text-xs font-semibold text-stone-200 uppercase tracking-wider mb-4">{{ website_label('Learn & Practice') }}</h3>
                     <ul class="space-y-2.5 text-sm">
-                        <li><a href="{{ localized_url('booking') }}" data-cta="booking" class="hover:text-white transition-colors">{{ __('Book a Lesson') }}</a></li>
-                        <li><a href="{{ localized_url('pricing') }}" class="hover:text-white transition-colors">{{ __('Pricing') }}</a></li>
-                        <li><a href="{{ localized_url('resources') }}" class="hover:text-white transition-colors">{{ __('Resources') }}</a></li>
-                        <li><a href="{{ localized_url('games') }}" class="hover:text-white transition-colors">{{ __('Games') }}</a></li>
-                        <li><a href="{{ localized_url('about') }}" class="hover:text-white transition-colors">{{ __('About') }}</a></li>
-                        <li><a href="{{ localized_url('faq') }}" class="hover:text-white transition-colors">{{ __('FAQ') }}</a></li>
-                        <li><a href="{{ localized_url('blogs') }}" class="hover:text-white transition-colors">Blogs</a></li>
-                        <li><a href="{{ route('student.login') }}" class="hover:text-white transition-colors">Student Portal</a></li>
-                        <li><a href="{{ route('policy') }}" class="hover:text-white transition-colors">Booking &amp; Refund Policy</a></li>
-                        <li><a href="{{ localized_url('privacy') }}" class="hover:text-white transition-colors">{{ __('Privacy') }}</a></li>
-                        <li><a href="{{ localized_url('terms') }}" class="hover:text-white transition-colors">{{ __('Terms') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'booking', localized_url('booking')) }}" data-cta="booking" class="hover:text-white transition-colors">{{ website_label('Book a Lesson') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'pricing', localized_url('pricing')) }}" class="hover:text-white transition-colors">{{ website_label('Pricing') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'resources', localized_url('resources')) }}" class="hover:text-white transition-colors">{{ website_label('Resources') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'games', localized_url('games')) }}" class="hover:text-white transition-colors">{{ website_label('Games') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'about', localized_url('about')) }}" class="hover:text-white transition-colors">{{ website_label('About') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'faq', localized_url('faq')) }}" class="hover:text-white transition-colors">{{ website_label('FAQ') }}</a></li>
+                        <li><a href="{{ localized_url('blogs') }}" class="hover:text-white transition-colors">{{ website_text('shared', 'Blogs') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'student', route('student.login')) }}" class="hover:text-white transition-colors">{{ website_text('shared', 'Student Portal') }}</a></li>
+                        <li><a href="{{ website_link('shared', 'policy', route('policy')) }}" class="hover:text-white transition-colors">{{ website_text('shared', 'Booking & Refund Policy') }}</a></li>
+                        <li><a href="{{ localized_url('privacy') }}" class="hover:text-white transition-colors">{{ website_label('Privacy') }}</a></li>
+                        <li><a href="{{ localized_url('terms') }}" class="hover:text-white transition-colors">{{ website_label('Terms') }}</a></li>
                     </ul>
                 </div>
 
                 <!-- Col 3: Direct Connect & Socials -->
                 <div>
-                    <h3 class="text-xs font-semibold text-stone-200 uppercase tracking-wider mb-4">{{ __('Connect Directly') }}</h3>
+                    <h3 class="text-xs font-semibold text-stone-200 uppercase tracking-wider mb-4">{{ website_label('Connect Directly') }}</h3>
                     <ul class="space-y-3 text-sm">
                         @php
                             $socialLinks = \App\Domains\CMS\Models\SocialLink::enabled()->get()->filter(fn ($social) => $social->getFormattedUrl() !== '#');
@@ -363,7 +363,7 @@
                                 </a>
                             </li>
                         @empty
-                            <li><span class="text-stone-500">Public contact details will be added once confirmed.</span></li>
+                            <li><span class="text-stone-500">{{ website_text('shared', 'Public contact details will be added once confirmed.') }}</span></li>
                         @endforelse
                     </ul>
                 </div>
@@ -372,16 +372,16 @@
             <!-- Bottom Legal Bar -->
             <div class="mt-12 pt-8 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
                 <div>
-                    © {{ date('Y') }} {{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}. {{ __('All rights reserved.') }}
+                    © {{ date('Y') }} {{ \App\Domains\CMS\Models\Setting::get('site_name', config('public_content.site_name')) }}. {{ website_label('All rights reserved.') }}
                 </div>
                 <div class="flex items-center gap-6">
-                    <a href="{{ localized_url('terms') }}" class="hover:text-stone-400 transition-colors">{{ __('Terms') }}</a>
-                    <a href="{{ localized_url('privacy') }}" class="hover:text-stone-400 transition-colors">{{ __('Privacy') }}</a>
-                    <span class="text-stone-600">Africa/Cairo System Time</span>
+                    <a href="{{ localized_url('terms') }}" class="hover:text-stone-400 transition-colors">{{ website_label('Terms') }}</a>
+                    <a href="{{ localized_url('privacy') }}" class="hover:text-stone-400 transition-colors">{{ website_label('Privacy') }}</a>
+                    <span class="text-stone-600">{{ website_text('shared', 'Africa/Cairo System Time') }}</span>
                 </div>
             </div>
         </div>
-        <p class="pb-5 text-center text-xs text-stone-400">IP country data by <a href="https://db-ip.com/" class="underline">DB-IP</a> (CC BY 4.0).</p>
+        <p class="pb-5 text-center text-xs text-stone-400">IP country data by <a href="https://db-ip.com/" class="underline">{{ website_text('shared', 'DB-IP') }}</a> (CC BY 4.0).</p>
     </footer>
 
     @livewireScripts

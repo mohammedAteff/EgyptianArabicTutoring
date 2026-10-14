@@ -13,6 +13,8 @@ use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
 use App\Domains\CMS\Services\AnnouncementService;
+use App\Domains\CMS\Services\WebsiteCopyCatalog;
+use App\Domains\CMS\Services\WebsiteCopyService;
 use App\Domains\Lms\Models\AccessGrant;
 use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Enrollment;
@@ -62,6 +64,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(DevelopmentDataSchema::class);
         $this->app->scoped(AnalyticsLifecycle::class);
         $this->app->scoped(LmsSettings::class);
+        $this->app->scoped(WebsiteCopyService::class);
         ini_set('unserialize_callback_func', 'spl_autoload_call');
         $serializable = config('cache.serializable_classes');
         if (is_array($serializable)) {
@@ -81,6 +84,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        View::composer(['public.*', 'blog.index', 'components.public-copy-section', 'layouts.public'], function (\Illuminate\View\View $view): void {
+            $page = request()->attributes->get('website_copy_page');
+            if (! isset(WebsiteCopyCatalog::PAGES[$page ?? ''])) {
+                return;
+            }
+            $copies = app(WebsiteCopyService::class);
+            $locale = app()->getLocale();
+            $published = $copies->document($page, $locale)?->published_content !== null;
+            $preview = request()->attributes->get('website_copy_preview', false);
+            $view->with('copyLocale', ($published || $preview) ? $locale : 'en');
+            if ($published || $preview) {
+                if ($page !== 'faq') {
+                    $view->with('isFallback', false);
+                }
+                $view->with('entityLocales', ['en', ...($locale === 'en' ? [] : [$locale])]);
+            }
+            foreach (['seo.title' => 'title', 'seo.description' => 'metaDescription'] as $key => $variable) {
+                $value = $copies->value($page, $key);
+                if (filled($value)) {
+                    $view->with($variable, $value);
+                }
+            }
+        });
         View::composer(['layouts.admin', 'components.staff-quick-actions'], function (\Illuminate\View\View $view): void {
             $role = auth('web')->user()?->role;
             $groups = [];

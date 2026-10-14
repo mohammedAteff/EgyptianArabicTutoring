@@ -5,8 +5,9 @@
 @php
     $imageUrl = app(\App\Domains\CMS\Services\AboutImageService::class)->url($imagePath ?? null);
 @endphp
-<div lang="en" class="mx-auto max-w-4xl space-y-16 px-4 py-12 sm:px-6 lg:px-8">
+<div lang="{{ $copyLocale ?? 'en' }}" class="mx-auto max-w-4xl space-y-16 px-4 py-12 sm:px-6 lg:px-8">
     @foreach(config('public_content.about') as $index => $section)
+        @if(! ($section['_visible'] ?? true)) @continue @endif
         <section>
             @if($index === 0 && !empty($biography))
                 @php if ($biographyHeading ?? null) { $section['title'] = $biographyHeading; } @endphp
@@ -23,8 +24,8 @@
             @endif
             @if($index === 5)
                 <div class="mt-7 flex flex-wrap gap-4">
-                    <a href="{{ localized_url('booking') }}" data-cta="booking" class="rounded-xl bg-terracotta-500 px-6 py-3 font-bold text-white hover:bg-terracotta-600">Book Your Diagnostic</a>
-                    <a href="{{ localized_url('pricing') }}" class="rounded-xl border border-stone-300 bg-white px-6 py-3 font-semibold">Explore Lessons &amp; Pricing</a>
+                    <a href="{{ website_link('about', 'booking', localized_url('booking')) }}" data-cta="booking" class="rounded-xl bg-terracotta-500 px-6 py-3 font-bold text-white hover:bg-terracotta-600">{{ website_text('about', 'Book Your Diagnostic') }}</a>
+                    <a href="{{ website_link('about', 'pricing', localized_url('pricing')) }}" class="rounded-xl border border-stone-300 bg-white px-6 py-3 font-semibold">{{ website_text('about', 'Explore Lessons & Pricing') }}</a>
                 </div>
             @endif
         </section>

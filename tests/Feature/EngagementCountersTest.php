@@ -17,10 +17,12 @@ use Carbon\CarbonImmutable;
 use Database\Factories\AdministratorFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Tests\Concerns\EditsWebsiteCopy;
 use Tests\TestCase;
 
 class EngagementCountersTest extends TestCase
 {
+    use EditsWebsiteCopy;
     use RefreshDatabase;
 
     protected EngagementCounterService $counterService;
@@ -254,7 +256,8 @@ class EngagementCountersTest extends TestCase
         $response->assertRedirect();
         $this->assertTrue((bool) Setting::get('counters.learning_hours.public_enabled'));
         $this->assertEquals(14, (int) Setting::get('counters.learning_hours.window_days'));
-        $this->assertEquals('Our students completed...', Setting::get('counters.learning_hours.headline'));
+        $this->saveWebsiteCopy($admin, 'shared', ['counters__counters__learning_hours__headline' => 'Our students completed...'])->assertSessionHasNoErrors();
+        $this->assertSame('Our students completed...', $this->counterService->getCachedPublicPayload()['learning_hours']['headline']);
         $this->assertEquals('sessions', Setting::get('counters.monthly_traffic.source'));
     }
 
@@ -281,17 +284,19 @@ class EngagementCountersTest extends TestCase
         $payload = ['site_name' => 'QA', 'business_timezone' => 'Africa/Cairo', 'default_language' => 'en', 'hero_title' => 'QA title', 'hero_subtitle' => 'QA subtitle', 'cancellation_policy' => 'QA policy', 'rescheduling_policy' => 'QA policy', 'booking_instructions' => 'QA instructions', 'booking_cancellation_cutoff_hours' => 4, 'booking_reschedule_cutoff_hours' => 24, 'counters_learning_hours_window_days' => 14, 'counters_learning_hours_headline' => 'Draft headline', 'counters_learning_hours_public_enabled' => 1, 'counters_monthly_traffic_source' => 'sessions', 'counters_monthly_traffic_template_sessions' => '{count} sessions'];
         $this->actingAs($admin, 'web')->post('/admin/settings', [...$payload, 'action' => 'draft'])->assertSessionHasNoErrors();
         $this->assertSame(7, Setting::get('counters.learning_hours.window_days'));
-        $this->assertSame(14, Setting::get('draft:counters.learning_hours.window_days'));
+        $this->assertSame(14, Setting::get('admin_settings.draft')['counters_learning_hours_window_days']);
+        $this->saveWebsiteCopy($admin, 'shared', ['counters__counters__learning_hours__headline' => 'Draft headline'], 'draft')->assertSessionHasNoErrors();
         $this->get('/admin/settings')->assertOk()->assertSee('value="14"', false);
         $this->assertSame('Published headline', $this->counterService->getCachedPublicPayload()['learning_hours']['headline']);
         $this->post('/admin/settings', [...$payload, 'action' => 'publish'])->assertSessionHasNoErrors();
         $this->assertFalse(Cache::has(EngagementCounterService::cacheKey()));
+        $this->saveWebsiteCopy($admin, 'shared', ['counters__counters__learning_hours__headline' => 'Draft headline'])->assertSessionHasNoErrors();
         $published = $this->counterService->getCachedPublicPayload();
         $this->assertSame(14, $published['learning_hours']['window_days']);
         $this->assertSame('Draft headline', $published['learning_hours']['headline']);
         $this->assertTrue($published['learning_hours']['enabled']);
         $this->assertSame('sessions', $published['monthly_traffic']['source']);
-        $this->assertSame('Draft headline', Setting::get('draft:counters.learning_hours.headline'));
+        $this->assertSame('Published headline', Setting::get('counters.learning_hours.headline'));
         $this->post('/admin/settings', [...$payload, 'counters_learning_hours_window_days' => 91, 'action' => 'publish'])->assertSessionHasErrors('counters_learning_hours_window_days');
     }
 

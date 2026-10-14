@@ -14,10 +14,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Tests\Concerns\EditsWebsiteCopy;
 use Tests\TestCase;
 
 class CmsAndMediaWorkflowTest extends TestCase
 {
+    use EditsWebsiteCopy;
     use RefreshDatabase;
 
     protected Administrator $admin;
@@ -303,76 +305,20 @@ class CmsAndMediaWorkflowTest extends TestCase
 
     public function test_home_and_about_support_draft_before_publish_workflow(): void
     {
-        // 1. Admin saves draft for homepage and about
-        $this->actingAs($this->admin, 'web')
-            ->post(route('admin.settings.update'), [
-                'action' => 'draft',
-                'site_name' => 'Egyptian Arabic Academy',
-                'business_timezone' => 'Africa/Cairo',
-                'default_language' => 'en',
-                'hero_title' => 'Secret Draft Hero Headline',
-                'hero_subtitle' => 'Draft subtitle for review only.',
-                'about_biography' => 'Draft Biography text for Ahmed.',
-                'about_philosophy' => 'Draft Philosophy text.',
-                'cancellation_policy' => '24 hours notice required.',
-                'rescheduling_policy' => 'Rescheduling is free.',
-                'booking_instructions' => 'Pick a time.',
-            ])
-            ->assertRedirect();
-
-        // 2. Public homepage and about MUST NOT display the draft copy
-        $this->get('/')
-            ->assertOk()
-            ->assertDontSee('Secret Draft Hero Headline');
-
-        $this->get('/about')
-            ->assertOk()
-            ->assertDontSee('Draft Biography text for Ahmed.');
-
-        // 3. Unauthenticated visitors are rejected from preview
+        $this->saveWebsiteCopy($this->admin, 'home', ['home__0__title' => 'Secret Draft Hero Headline'], 'draft')->assertSessionHasNoErrors();
+        $this->saveWebsiteCopy($this->admin, 'about', ['about__0__blocks__0__text' => 'Draft Biography text for Ahmed.'], 'draft')->assertSessionHasNoErrors();
+        $this->get('/')->assertOk()->assertDontSee('Secret Draft Hero Headline');
+        $this->get('/about')->assertOk()->assertDontSee('Draft Biography text for Ahmed.');
         Auth::logout();
         $this->flushSession();
-        $this->get('/preview/home')->assertForbidden();
-        $this->get('/about/preview')->assertForbidden();
-
-        // 4. Authenticated admin preview displays the draft copy
-        $this->actingAs($this->admin, 'web')
-            ->get('/preview/home')
-            ->assertOk()
-            ->assertSee('Secret Draft Hero Headline')
-            ->assertSee('Draft Preview Mode');
-
-        $this->actingAs($this->admin, 'web')
-            ->get('/about/preview')
-            ->assertOk()
-            ->assertSee('Draft Biography text for Ahmed.')
-            ->assertSee('Draft Preview Mode');
-
-        // 5. Admin publishes settings (action=publish)
-        $this->actingAs($this->admin, 'web')
-            ->post(route('admin.settings.update'), [
-                'action' => 'publish',
-                'site_name' => 'Egyptian Arabic Academy',
-                'business_timezone' => 'Africa/Cairo',
-                'default_language' => 'en',
-                'hero_title' => 'Official Launched Hero Headline',
-                'hero_subtitle' => 'Official launched subtitle.',
-                'about_biography' => 'Official Launched Biography text.',
-                'about_philosophy' => 'Official Philosophy.',
-                'cancellation_policy' => '24 hours notice required.',
-                'rescheduling_policy' => 'Rescheduling is free.',
-                'booking_instructions' => 'Pick a time.',
-            ])
-            ->assertRedirect();
-
-        // Now public pages render the official published settings
-        $this->get('/')
-            ->assertOk()
-            ->assertSee('Official Launched Hero Headline');
-
-        $this->get('/about')
-            ->assertOk()
-            ->assertSee('Official Launched Biography text.');
+        $this->get(route('admin.website-copy.preview', ['page' => 'home', 'locale' => 'en']))->assertRedirect(route('admin.login'));
+        $this->get(route('admin.website-copy.preview', ['page' => 'about', 'locale' => 'en']))->assertRedirect(route('admin.login'));
+        $this->actingAs($this->admin)->get(route('admin.website-copy.preview', ['page' => 'home', 'locale' => 'en']))->assertOk()->assertSee('Secret Draft Hero Headline')->assertSee('Administrator Preview Mode');
+        $this->get(route('admin.website-copy.preview', ['page' => 'about', 'locale' => 'en']))->assertOk()->assertSee('Draft Biography text for Ahmed.');
+        $this->saveWebsiteCopy($this->admin, 'home', ['home__0__title' => 'Official Launched Hero Headline'])->assertSessionHasNoErrors();
+        $this->saveWebsiteCopy($this->admin, 'about', ['about__0__blocks__0__text' => 'Official Launched Biography text.'])->assertSessionHasNoErrors();
+        $this->get('/')->assertOk()->assertSee('Official Launched Hero Headline');
+        $this->get('/about')->assertOk()->assertSee('Official Launched Biography text.');
     }
 
     public function test_admin_forms_contain_media_picker_trigger(): void
@@ -407,11 +353,10 @@ class CmsAndMediaWorkflowTest extends TestCase
 
         // Check Settings
         $this->actingAs($this->admin, 'web')
-            ->get(route('admin.settings.index'))
+            ->get(route('admin.website-copy.index', ['page' => 'about']))
             ->assertOk()
             ->assertSee('openMediaPicker')
-            ->assertSee('Preview Homepage')
-            ->assertSee('Preview About');
+            ->assertSee('Preview saved draft');
     }
 
     public function test_page_publish_and_rollback_restores_exact_prior_revision(): void
@@ -479,6 +424,8 @@ class CmsAndMediaWorkflowTest extends TestCase
             ])
             ->assertRedirect();
 
+        $this->saveWebsiteCopy($this->admin, 'home', ['home__0__title' => 'Custom Fluency in 30 Days', 'home__0__blocks__0__text' => 'Exclusive Egyptian Arabic coaching in Zamalek.', 'home__2__title' => 'Why Our Cairo Method Works', 'home__4__title' => 'Download Premium Curriculums', 'home__8__title' => 'Claim Your Private Consultation Now'])->assertSessionHasNoErrors();
+        $this->saveWebsiteCopy($this->admin, 'shared', ['footer' => 'Custom footer notice for students worldwide.'])->assertSessionHasNoErrors();
         // Create a published resource so the featured resources section is displayed
         Resource::create([
             'category_id' => $this->category->id,

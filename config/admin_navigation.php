@@ -62,8 +62,8 @@ return [
         'website' => [
             'label' => 'Website Content', 'roles' => $admins,
             'items' => [
-                'admin.content.index' => ['label' => 'Content & FAQs', 'active' => ['admin.content.*']],
-                'admin.pages.index' => ['label' => 'Pages CMS', 'active' => ['admin.pages.*']],
+                'admin.website-copy.index' => ['label' => 'Website Copy & Pages', 'active' => ['admin.website-copy.*', 'admin.pages.*', 'admin.content.faq.*', 'admin.translations.*']],
+                'admin.content.index' => ['label' => 'Social Channels', 'active' => ['admin.content.index', 'admin.content.social.*']],
                 'admin.blog.index' => ['label' => 'Blogs', 'active' => ['admin.blog.*']],
                 'admin.media.index' => ['label' => 'Media Library', 'active' => ['admin.media.*']],
                 'admin.promotions.index' => ['label' => 'Promotions Portal', 'active' => ['admin.promotions.*']],

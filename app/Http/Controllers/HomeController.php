@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Services\WebsiteCopyService;
 use App\Domains\Games\Models\Game;
 use App\Domains\Resources\Models\Resource;
 use Illuminate\Http\Request;
@@ -56,7 +57,7 @@ class HomeController extends Controller
             : Setting::get($key, $default);
 
         $sections = config('public_content.home');
-        foreach (config('public_content.home_controls') as $index => $controls) {
+        foreach (($isPreview || request()->attributes->get('website_copy_page') !== 'home') ? config('public_content.home_controls') : [] as $index => $controls) {
             foreach ($controls as $field => $key) {
                 if ($field === 'intro') {
                     $sections[$index]['blocks'][0]['text'] = $getSetting($key, $sections[$index]['blocks'][0]['text']);
@@ -72,7 +73,7 @@ class HomeController extends Controller
             'featuredGames' => $featuredGames,
             'faqs' => $faqs,
             'homeSections' => $sections,
-            'homeCtaButton' => $getSetting('home_cta_button', 'Book Your Diagnostic'),
+            'homeCtaButton' => app(WebsiteCopyService::class)->value('home', 'ui.final_booking_button', $getSetting('home_cta_button', 'Book Your Diagnostic')),
             'isPreview' => $isPreview,
             'isFallback' => app()->getLocale() !== 'en',
             'entityLocales' => ['en'],

@@ -28,7 +28,7 @@ class AdminNavigationOrganizationTest extends TestCase
                 'admin.availability.index', 'admin.recurring.index', 'admin.waitlist.index', 'admin.booking-policy.index', 'admin.meeting-links.index',
                 'admin.billing.cashier', 'admin.billing.reconcile', 'admin.receivables.index', 'admin.payment-methods.index',
                 'admin.lms.courses.index', 'admin.lms.operations', 'admin.resources.index', 'admin.resource-collections.index', 'admin.games.index',
-                'admin.content.index', 'admin.pages.index', 'admin.blog.index', 'admin.media.index', 'admin.promotions.index',
+                'admin.content.index', 'admin.website-copy.index', 'admin.blog.index', 'admin.media.index', 'admin.promotions.index',
                 'admin.reports.lifecycle', 'admin.reports.index', 'admin.analytics', 'admin.analytics.countries', 'admin.analytics.sections',
                 'admin.settings.index', 'admin.telegram.index',
             ]);

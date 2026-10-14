@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
+use App\Http\Middleware\ApplyWebsiteCopy;
 use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsureAdministratorSecondFactor;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
@@ -53,6 +54,7 @@ return Application::configure(basePath: dirname(__DIR__))
             TrackStaffRecentView::class,
             TrackVisitorSession::class,
             EnsureNotUnderMaintenance::class,
+            ApplyWebsiteCopy::class,
         ]);
         $middleware->prependToPriorityList(
             SubstituteBindings::class,

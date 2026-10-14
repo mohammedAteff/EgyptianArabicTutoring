@@ -1,3 +1,5 @@
+@props(['id', 'html' => '', 'name' => 'html', 'label' => 'Lesson text'])
+@php $html = app(\App\Domains\CMS\Services\RichTextSanitizer::class)->sanitize((string) $html); @endphp
 @once
 <script>
 window.courseRichTextEditor = function () {
@@ -82,7 +84,7 @@ window.courseRichTextEditor = function () {
 </script>
 @endonce
 <div x-data="courseRichTextEditor()" class="space-y-2">
-    <label id="{{ $id }}-label" for="{{ $id }}" class="block text-sm font-semibold text-slate-700">Lesson text</label>
+    <label id="{{ $id }}-label" for="{{ $id }}" class="block text-sm font-semibold text-slate-700">{{ $label }}</label>
     <div role="toolbar" aria-label="Text formatting" class="flex flex-wrap gap-1 rounded-t-xl border border-slate-300 bg-slate-50 p-2">
         @foreach(['strong'=>'Bold','em'=>'Italic','h2'=>'Heading','p'=>'Paragraph','ul'=>'List'] as $tag=>$label)
             <button type="button" @mousedown.prevent @click="wrap('{{ $tag }}')" class="min-h-11 rounded-lg px-3 text-xs font-semibold text-slate-700 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-amber-600">{{ $label }}</button>
@@ -93,6 +95,6 @@ window.courseRichTextEditor = function () {
         aria-describedby="{{ $id }}-help" dir="auto" @input="sync()" @keyup="remember()" @mouseup="remember()" @blur="remember()"
         @paste.prevent="paste($event.clipboardData.getData('text/plain'))" @drop.prevent
         class="min-h-40 rounded-b-xl border border-slate-300 bg-white p-4 text-sm leading-7 focus:outline-2 focus:outline-amber-600 [&_h2]:text-xl [&_h2]:font-bold [&_ul]:list-disc [&_ul]:ps-6 [&_a]:text-amber-700 [&_a]:underline [&_p]:my-2"></div>
-    <textarea name="html" x-ref="source" class="hidden" aria-hidden="true" tabindex="-1">{{ $html }}</textarea>
+    <textarea name="{{ $name }}" x-ref="source" class="hidden" aria-hidden="true" tabindex="-1">{{ $html }}</textarea>
     <p id="{{ $id }}-help" class="text-xs text-slate-500">Arabic and English can be mixed. Paste keeps plain text. Add images as separate Image blocks.</p>
 </div>

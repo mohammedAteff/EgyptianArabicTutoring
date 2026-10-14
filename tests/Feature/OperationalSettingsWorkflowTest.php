@@ -36,7 +36,13 @@ class OperationalSettingsWorkflowTest extends TestCase
         $this->assertCount(1, $xpath->query('//form[@id="business-settings"]//button[@name="action" and @value="publish"]'));
         $this->assertCount(1, $xpath->query('//form[@id="business-settings"]//input[@name="whatsapp_public" and @checked]'));
         auth('web')->logout();
-        $this->get('/')->assertOk()->assertSee('aria-label="Chat QA"', false)->assertSee('https://wa.me/201022222222?text=QA%20hello', false);
+        $public = $this->get('/')->assertOk();
+        if ($action === 'publish') {
+            $public->assertSee('aria-label="Chat QA"', false)->assertSee('https://wa.me/201022222222?text=QA%20hello', false);
+        } else {
+            $public->assertDontSee('aria-label="Chat QA"', false);
+            $this->assertSame('https://wa.me/201022222222', Setting::get('admin_settings.draft')['whatsapp_url']);
+        }
     }
 
     public function test_normal_settings_workflow_toggles_maintenance_anonymously_and_restores_live(): void

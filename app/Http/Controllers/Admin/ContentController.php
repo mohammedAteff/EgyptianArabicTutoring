@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Faq;
-use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\SocialLink;
 use App\Domains\CMS\Services\TranslationService;
 use App\Http\Controllers\Controller;
@@ -22,16 +21,10 @@ class ContentController extends Controller
 {
     public function index(): View
     {
-        $faqs = Faq::query()->with(['revisions' => function ($q) {
-            $q->where('status', 'draft')->latest('id');
-        }])->orderBy('sort_order')->get();
-        $pages = Page::query()->orderBy('title')->get();
         $socials = SocialLink::query()->orderBy('sort_order')->get();
 
         return view('admin.content.index', [
-            'title' => 'Content, FAQs & Social Channels',
-            'faqs' => $faqs,
-            'pages' => $pages,
+            'title' => 'Social Channels',
             'socials' => $socials,
         ]);
     }
