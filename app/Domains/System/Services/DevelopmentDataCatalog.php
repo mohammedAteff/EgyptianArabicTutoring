@@ -53,11 +53,11 @@ class DevelopmentDataCatalog
     ];
 
     public const PHRASES = ['analytics' => 'RESET ALL ANALYTICS', 'students' => 'DELETE ALL STUDENTS',
-        'financial' => 'RESET FINANCIAL TEST HISTORY', 'resources' => 'RESET RESOURCE TEST DATA', 'backups' => 'RESET MANAGED BACKUPS',
+        'financial' => 'RESET FINANCIAL TEST HISTORY', 'bookings' => 'RESET ALL BOOKINGS', 'resources' => 'RESET RESOURCE TEST DATA', 'backups' => 'RESET MANAGED BACKUPS',
         'telegram' => 'RESET TELEGRAM DELIVERY HISTORY', 'notifications' => 'RESET ADMIN NOTIFICATIONS', 'leads' => 'RESET RESOURCE INQUIRIES'];
 
     public const RESET_LABELS = [
-        'analytics' => 'analytics', 'students' => 'students', 'financial' => 'financial test history',
+        'analytics' => 'analytics', 'students' => 'students', 'bookings' => 'bookings and numbering', 'financial' => 'financial test history',
         'resources' => 'resources', 'backups' => 'managed local backups', 'telegram' => 'Telegram bot delivery history',
         'notifications' => 'notification center', 'leads' => 'leads / resource inquiries',
     ];

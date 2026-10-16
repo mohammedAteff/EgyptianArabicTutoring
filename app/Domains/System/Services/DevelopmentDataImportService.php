@@ -5,6 +5,7 @@ namespace App\Domains\System\Services;
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\Analytics\Services\AnalyticsLifecycle;
 use App\Domains\Audit\Services\AuditLogService;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\System\Models\DevelopmentDataOperation;
 use Illuminate\Support\Facades\DB;
@@ -284,7 +285,7 @@ class DevelopmentDataImportService
                     $row = $item['row'];
                     $original = $row;
                     if ($table === 'bookings') {
-                        $row['confirmation_token'] = Str::random(64);
+                        $row['confirmation_token'] = Booking::generateConfirmationToken();
                         $row = array_replace($row, ['funding_mode' => 'legacy', 'entitlement_type_id' => null, 'entitlement_code' => null, 'entitlement_units' => null,
                             'student_package_id' => null, 'student_package_entitlement_id' => null, 'consumed_ledger_entry_id' => null, 'request_fingerprint' => null]);
                     }

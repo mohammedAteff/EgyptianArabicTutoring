@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('content')
+<x-lifecycle-feedback />
 <div class="space-y-6">
     <div><h1 class="text-3xl font-bold text-slate-900">Meeting Links</h1><p class="mt-2 text-slate-500">Manage your external meeting rooms and assign one room to each lesson.</p></div>
     <form method="POST" action="{{ route('admin.meeting-links.settings') }}" class="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-6">
@@ -9,17 +10,21 @@
         <p class="w-full text-sm text-slate-500">Telegram countdown lead times are set independently in Telegram Bots → Alert rules.</p>
     </form>
     <section class="rounded-2xl border border-slate-200 bg-white p-6"><h2 class="mb-4 text-xl font-semibold">Providers</h2>
-        @foreach($providers->push(new \App\Domains\Booking\Models\MeetingProvider(['active' => true, 'sort_order' => $providers->count()])) as $provider)
+        @foreach($providers->concat([new \App\Domains\Booking\Models\MeetingProvider(['active' => false, 'sort_order' => $providers->count()])]) as $provider)
             <form method="POST" action="{{ route('admin.meeting-links.providers') }}" class="mb-4 flex flex-wrap items-end gap-3 border-b border-slate-100 pb-4">
                 @csrf @if($provider->id)<input type="hidden" name="id" value="{{ $provider->id }}">@endif
+                @if(! $provider->exists)<h3 class="w-full text-sm font-bold">Add a provider</h3>@endif
                 <label class="flex-1 text-sm">Provider name<input name="name" value="{{ $provider->name }}" required maxlength="80" class="mt-1 w-full rounded-xl border border-slate-300 p-3"></label>
                 <label class="text-sm">Icon (optional)<input name="icon" value="{{ $provider->icon }}" maxlength="20" class="mt-1 block w-24 rounded-xl border border-slate-300 p-3"></label>
                 <label class="text-sm">Order<input name="sort_order" type="number" min="0" max="10000" value="{{ $provider->sort_order }}" required class="mt-1 block w-24 rounded-xl border border-slate-300 p-3"></label>
                 <input type="hidden" name="active" value="0"><label class="pb-3 text-sm"><input name="active" type="checkbox" value="1" @checked($provider->active)> Enabled</label>
                 <input type="hidden" name="is_default" value="0"><label class="pb-3 text-sm"><input name="is_default" type="checkbox" value="1" @checked($provider->is_default)> Default</label>
                 <button class="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white">{{ $provider->id ? 'Save provider' : 'Add provider' }}</button>
+                @if($provider->id)<button form="remove-provider-{{ $provider->id }}" class="rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-700">Remove provider</button>@endif
             </form>
         @endforeach
+        @foreach($providers as $provider)<form id="remove-provider-{{ $provider->id }}" method="POST" action="{{ route('admin.meeting-links.providers.destroy', $provider) }}" onsubmit="return confirm('Remove this provider from future choices? Existing assigned lesson links remain available.');">@csrf @method('DELETE')</form>@endforeach
+        @if($removedProviders->isNotEmpty())<details class="mt-4 text-sm"><summary class="cursor-pointer font-semibold">Removed providers</summary>@foreach($removedProviders as $provider)<form method="POST" action="{{ route('admin.meeting-links.providers.restore', $provider->id) }}" class="mt-3 flex items-center justify-between gap-3">@csrf<span>{{ $provider->name }}</span><button class="rounded-lg border border-slate-300 px-3 py-2 font-semibold">Restore provider</button></form>@endforeach</details>@endif
     </section>
     <section class="rounded-2xl border border-slate-200 bg-white p-6"><h2 class="mb-4 text-xl font-semibold">Room pool</h2>
         @foreach($rooms->push(new \App\Domains\Booking\Models\MeetingRoom(['active' => true])) as $room)

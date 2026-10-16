@@ -34,7 +34,8 @@ class DevelopmentOperationRequest extends FormRequest
         return [
             'type' => ['required', Rule::in(['reset', 'export'])],
             'domain' => ['required', Rule::in([...array_keys(DevelopmentDataCatalog::PHRASES), 'selection'])],
-            'scope' => ['nullable', 'array:resources,categories,history,files,snapshot,export_before,modules,filters,backup_filenames'],
+            'scope' => ['nullable', 'array:resources,categories,history,files,snapshot,export_before,modules,filters,backup_filenames,include_all_bookings'],
+            'scope.include_all_bookings' => ['sometimes', 'boolean'],
             'scope.resources' => ['sometimes', 'boolean'], 'scope.categories' => ['sometimes', 'boolean'],
             'scope.history' => ['sometimes', 'boolean'], 'scope.files' => ['sometimes', 'boolean'],
             'scope.snapshot' => ['sometimes', 'boolean'], 'scope.export_before' => ['sometimes', 'boolean'],

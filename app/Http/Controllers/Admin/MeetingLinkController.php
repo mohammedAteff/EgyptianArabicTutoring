@@ -22,7 +22,43 @@ class MeetingLinkController extends Controller
 {
     public function index(): View
     {
-        return view('admin.bookings.meeting-links', ['title' => 'Meeting Links', 'providers' => MeetingProvider::query()->orderBy('sort_order')->get(), 'rooms' => MeetingRoom::query()->with('provider')->orderBy('id')->get(), 'revealMinutes' => Setting::get('meeting.student_reveal_minutes', 15), 'bookings' => Booking::query()->with(['student', 'contact', 'sessionType'])->where('status', 'confirmed')->where('end_at_utc', '>', now('UTC'))->orderBy('start_at_utc')->limit(100)->get()]);
+        return view('admin.bookings.meeting-links', ['title' => 'Meeting Links', 'providers' => MeetingProvider::query()->orderBy('sort_order')->orderBy('id')->get(), 'removedProviders' => MeetingProvider::onlyTrashed()->orderBy('name')->get(), 'rooms' => MeetingRoom::query()->with('provider')->whereHas('provider')->orderBy('id')->get(), 'revealMinutes' => Setting::get('meeting.student_reveal_minutes', 15), 'bookings' => Booking::query()->with(['student', 'contact', 'sessionType'])->where('status', 'confirmed')->where('end_at_utc', '>', now('UTC'))->orderBy('start_at_utc')->limit(100)->get()]);
+    }
+
+    public function destroyProvider(Request $request, MeetingProvider $provider, AuditLogService $audit): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $provider, $audit): void {
+            $providers = MeetingProvider::query()->orderBy('id')->lockForUpdate()->get();
+            $provider = $providers->firstWhere('id', $provider->id);
+            abort_unless($provider, 404);
+            $replacement = $providers->where('id', '!=', $provider->id)->where('active', true)->sortBy('sort_order')->first();
+            if ($provider->active && ! $replacement) {
+                throw ValidationException::withMessages(['provider' => 'Add or enable another provider before removing the last enabled provider.']);
+            }
+            $old = $provider->only(['name', 'active', 'is_default']);
+            $provider->update(['active' => false, 'is_default' => false]);
+            $provider->delete();
+            if ($old['is_default'] && $replacement) {
+                $replacement->update(['is_default' => true]);
+            }
+            Student::query()->where('preferred_meeting_provider_id', $provider->id)->update(['preferred_meeting_provider_id' => null]);
+            $audit->log('meeting_provider_removed', MeetingProvider::class, $provider->id, $old, null, $request->user('web')->id);
+        }, 5);
+
+        return back()->with('success', 'Provider removed. Existing lesson links are preserved; future assignments use an available provider.');
+    }
+
+    public function restoreProvider(Request $request, int $id, AuditLogService $audit): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $id, $audit): void {
+            MeetingProvider::withTrashed()->orderBy('id')->lockForUpdate()->get(['id']);
+            $provider = MeetingProvider::onlyTrashed()->findOrFail($id);
+            $provider->fill(['active' => false, 'is_default' => false]);
+            $provider->restore();
+            $audit->log('meeting_provider_restored', MeetingProvider::class, $provider->id, adminId: $request->user('web')->id);
+        }, 5);
+
+        return back()->with('success', 'Provider restored. Enable it when ready.');
     }
 
     public function provider(Request $request, AuditLogService $audit): RedirectResponse
@@ -54,7 +90,7 @@ class MeetingLinkController extends Controller
 
     public function room(Request $request, AuditLogService $audit): RedirectResponse
     {
-        $data = $request->validate(['id' => ['nullable', 'integer', 'exists:meeting_rooms,id'], 'meeting_provider_id' => ['required', 'integer', 'exists:meeting_providers,id'], 'name' => ['required', 'string', 'max:160'], 'url' => ['required', 'url:https', 'max:2000'], 'active' => ['required', 'boolean'], 'notes' => ['nullable', 'string', 'max:4000']]);
+        $data = $request->validate(['id' => ['nullable', 'integer', 'exists:meeting_rooms,id'], 'meeting_provider_id' => ['required', 'integer', Rule::exists('meeting_providers', 'id')->whereNull('deleted_at')], 'name' => ['required', 'string', 'max:160'], 'url' => ['required', 'url:https', 'max:2000'], 'active' => ['required', 'boolean'], 'notes' => ['nullable', 'string', 'max:4000']]);
         $hash = hash('sha256', trim($data['url']));
         if (MeetingRoom::query()->where('url_hash', $hash)->when(! empty($data['id']), fn ($q) => $q->where('id', '!=', $data['id']))->exists()) {
             throw ValidationException::withMessages(['url' => 'This URL is already in the room pool. Edit its existing entry.']);

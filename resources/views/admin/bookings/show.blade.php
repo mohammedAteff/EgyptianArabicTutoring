@@ -130,7 +130,7 @@
                 @endif
                 <div>
                     <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Confirmation Token</span>
-                    <span class="text-slate-600 font-mono text-xs select-all">{{ $booking->confirmation_token }}</span>
+                    <span class="block max-w-full break-all text-slate-600 font-mono text-xs select-all">{{ $booking->confirmation_token }}</span>
                 </div>
                 <div>
                     <span class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Self-Service Link</span>
@@ -182,10 +182,11 @@
                         <p class="text-xs text-slate-500 mt-0.5">
                             Performed by: <span class="font-semibold text-slate-700 capitalize">{{ $event->performed_by }}</span>
                         </p>
-                        @if($event->new_data)
-                            <div class="mt-1 text-[11px] font-mono text-slate-600 bg-slate-50 p-2 rounded-lg">
-                                {{ json_encode($event->new_data) }}
-                            </div>
+                        @php($details = $event->displayDetails())
+                        @if($details)
+                            <dl class="mt-2 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                                @foreach($details as $detail)<div class="flex flex-wrap gap-x-2"><dt class="font-semibold">{{ $detail['label'] }}:</dt><dd class="min-w-0 break-words">{{ $detail['value'] }}</dd></div>@endforeach
+                            </dl>
                         @endif
                     </div>
                 </div>

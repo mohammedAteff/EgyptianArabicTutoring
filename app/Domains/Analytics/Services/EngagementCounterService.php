@@ -32,7 +32,7 @@ class EngagementCounterService
      * Derive metrics for previous calendar month using Cairo boundaries converted to UTC.
      * Half-open interval [month_start, month_end).
      *
-     * @return array{unique_visitors: int, sessions: int}
+     * @return array{unique_visitors: int, sessions: int, page_views: int}
      */
     public function getPreviousMonthTraffic(): array
     {
@@ -45,7 +45,7 @@ class EngagementCounterService
 
         $summary = app(ReportService::class)->getTrafficReport($utcMonthStart, $utcMonthEnd->subMicrosecond())['summary'];
 
-        return ['unique_visitors' => $summary['visitors'], 'sessions' => $summary['sessions']];
+        return ['unique_visitors' => $summary['visitors'], 'sessions' => $summary['sessions'], 'page_views' => $summary['page_views']];
     }
 
     /**
@@ -119,10 +119,9 @@ class EngagementCounterService
         $trafficEnabled = (bool) Setting::get('counters.monthly_traffic.public_enabled', false);
         $trafficSource = (string) Setting::get('counters.monthly_traffic.source', 'unique_visitors');
         $monthlyTraffic = $this->getPreviousMonthTraffic();
-        $trafficCount = $trafficSource === 'sessions' ? $monthlyTraffic['sessions'] : $monthlyTraffic['unique_visitors'];
-        $trafficTemplate = $trafficSource === 'sessions'
-            ? (string) Setting::get('counters.monthly_traffic.template_sessions', 'We had {count} website sessions last month')
-            : (string) Setting::get('counters.monthly_traffic.template_visitors', 'We welcomed {count} visitors last month');
+        $trafficCount = $monthlyTraffic[$trafficSource] ?? $monthlyTraffic['unique_visitors'];
+        [$trafficKey, $trafficDefault] = $this->trafficTemplate($trafficSource);
+        $trafficTemplate = (string) Setting::get($trafficKey, $trafficDefault);
         $trafficText = str_replace('{count}', number_format($trafficCount), $trafficTemplate);
 
         // 3. Learning Hours
@@ -168,6 +167,16 @@ class EngagementCounterService
         return 'counters.public.'.hash('sha256', $timezone).'.'.CarbonImmutable::now($timezone)->toDateString();
     }
 
+    /** @return array{string, string} */
+    private function trafficTemplate(string $source): array
+    {
+        return match ($source) {
+            'sessions' => ['counters.monthly_traffic.template_sessions', 'We had {count} website sessions last month'],
+            'page_views' => ['counters.monthly_traffic.template_page_views', 'Our pages were viewed {count} times last month'],
+            default => ['counters.monthly_traffic.template_visitors', 'We welcomed {count} visitors last month'],
+        };
+    }
+
     public function getCachedPublicPayload(): array
     {
         $payload = Cache::remember(self::cacheKey(), self::CACHE_TTL, function () {
@@ -180,8 +189,7 @@ class EngagementCounterService
         $copy = app(WebsiteCopyService::class);
         $text = fn (string $key, string $fallback): string => (string) $copy->value('shared', 'counters.'.str_replace('.', '__', $key), $fallback);
         $payload['live_users']['text'] = str_replace('{count}', number_format($count), $text('counters.live_users.template', (string) Setting::get('counters.live_users.template', '{count} active visitors online right now')));
-        $trafficKey = $payload['monthly_traffic']['source'] === 'sessions' ? 'counters.monthly_traffic.template_sessions' : 'counters.monthly_traffic.template_visitors';
-        $trafficDefault = $payload['monthly_traffic']['source'] === 'sessions' ? 'We had {count} website sessions last month' : 'We welcomed {count} visitors last month';
+        [$trafficKey, $trafficDefault] = $this->trafficTemplate($payload['monthly_traffic']['source']);
         $payload['monthly_traffic']['text'] = str_replace('{count}', number_format($payload['monthly_traffic']['count']), $text($trafficKey, (string) Setting::get($trafficKey, $trafficDefault)));
         $payload['learning_hours']['headline'] = str_replace('{time}', $payload['learning_hours']['formatted_time'], $text('counters.learning_hours.headline', (string) Setting::get('counters.learning_hours.headline', 'Globally, students have put in...')));
         $payload['learning_hours']['subtitle'] = str_replace('{time}', $payload['learning_hours']['formatted_time'], $text('counters.learning_hours.subtitle', (string) Setting::get('counters.learning_hours.subtitle', 'of practice time in the last 7 days')));

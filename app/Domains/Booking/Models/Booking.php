@@ -15,10 +15,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class Booking extends Model
 {
     use HasFactory, SoftDeletes;
+
+    public static function generateConfirmationToken(): string
+    {
+        return Str::random(32);
+    }
 
     protected static function newFactory(): BookingFactory
     {

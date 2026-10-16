@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('content')
+<x-lifecycle-feedback />
 <div class="mx-auto max-w-6xl space-y-6"><h1 class="font-serif text-3xl font-bold">Social Channels</h1><p class="text-sm text-slate-600">Manage official social links, visibility and footer ordering.</p>
     <!-- Social Channels & WhatsApp Support (Spec 50 & 51) -->
         <aside class="min-w-0 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
@@ -22,6 +23,7 @@
                                 <span>{{ $soc->platform }}</span>
                             </label>
                             <span data-toggle-status="{{ $soc->id }}" class="text-[10px] text-slate-500" aria-live="polite"></span>
+                            <button type="submit" form="remove-social-{{ $soc->id }}" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">Remove channel</button>
                         </div>
 
                         <div class="grid grid-cols-1 gap-4">
@@ -61,6 +63,8 @@
                 </button>
             </div>
         </form>
+        @foreach($socials as $soc)<form id="remove-social-{{ $soc->id }}" method="POST" action="{{ route('admin.content.social.destroy', $soc) }}" onsubmit="return confirm('Remove this channel from the website?');">@csrf @method('DELETE')</form>@endforeach
+        @if($removedSocials->isNotEmpty())<details class="text-sm"><summary class="cursor-pointer font-semibold">Removed social channels</summary>@foreach($removedSocials as $soc)<form method="POST" action="{{ route('admin.content.social.restore', $soc->id) }}" class="mt-3 flex items-center justify-between gap-3">@csrf<span>{{ $soc->label }}</span><button class="rounded-lg border border-slate-300 px-3 py-2 font-semibold">Restore channel</button></form>@endforeach</details>@endif
         <form x-data="{ platform: 'youtube' }" action="{{ route('admin.content.social.store') }}" method="POST" class="space-y-4 border-t border-slate-100 pt-5">
             @csrf
             <div class="grid grid-cols-1 gap-4">
@@ -117,6 +121,4 @@
         });
     </script>
 
-
-</div>
 @endsection

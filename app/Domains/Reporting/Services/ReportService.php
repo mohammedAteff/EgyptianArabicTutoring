@@ -83,6 +83,7 @@ class ReportService
      */
     protected function resolvePeriodTrafficMetrics(CarbonInterface $start, CarbonInterface $end, ?string $source = null): array
     {
+        $timezone = $this->timezoneService->getBusinessTimezone();
         $query = $this->nonBotEventQuery()
             ->whereBetween('created_at', [$start, $end]);
 
@@ -135,9 +136,11 @@ class ReportService
             }
         }
         $eventTokens = (clone $query)->get(['visitor_token', 'created_at']);
+        $eventsByDate = $eventTokens->groupBy(fn ($event): string => $event->created_at->copy()->setTimezone($timezone)->toDateString());
+        $sessionsByLocalDate = $sessionRows->groupBy(fn ($session): string => $session->started_at->copy()->setTimezone($timezone)->toDateString());
         foreach ($dailyTotals as $row) {
-            $tokens = $eventTokens->filter(fn ($event) => $event->created_at->copy()->setTimezone($this->timezoneService->getBusinessTimezone())->toDateString() === $row->report_date)->pluck('visitor_token');
-            $row->visitors = $tokens->merge($sessionRows->filter(fn ($session) => $session->started_at->copy()->setTimezone($this->timezoneService->getBusinessTimezone())->toDateString() === $row->report_date)->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique()->count();
+            $tokens = $eventsByDate->get($row->report_date, collect())->pluck('visitor_token');
+            $row->visitors = $tokens->merge($sessionsByLocalDate->get($row->report_date, collect())->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique()->count();
         }
 
         $dailyRows = $dailyTotals->map(function ($row) use ($sourcesByDate, $sessionsByDate) {

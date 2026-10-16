@@ -419,10 +419,14 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->middleware('role:super_admin,admin')->name('payment-methods.index');
         Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->middleware('role:super_admin,admin')->name('payment-methods.store');
         Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update'])->middleware('role:super_admin,admin')->name('payment-methods.update');
+        Route::delete('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'destroy'])->middleware('role:super_admin,admin')->name('payment-methods.destroy');
+        Route::post('/payment-methods/{id}/restore', [PaymentMethodController::class, 'restore'])->whereNumber('id')->middleware('role:super_admin,admin')->name('payment-methods.restore');
         Route::middleware('role:super_admin,admin')->group(function (): void {
             Route::post('/meeting-links/reconcile', [MeetingLinkController::class, 'reconcile'])->name('meeting-links.reconcile');
             Route::get('/meeting-links', [MeetingLinkController::class, 'index'])->name('meeting-links.index');
             Route::post('/meeting-links/providers', [MeetingLinkController::class, 'provider'])->name('meeting-links.providers');
+            Route::delete('/meeting-links/providers/{provider}', [MeetingLinkController::class, 'destroyProvider'])->name('meeting-links.providers.destroy');
+            Route::post('/meeting-links/providers/{id}/restore', [MeetingLinkController::class, 'restoreProvider'])->whereNumber('id')->name('meeting-links.providers.restore');
             Route::post('/meeting-links/rooms', [MeetingLinkController::class, 'room'])->name('meeting-links.rooms');
             Route::post('/meeting-links/settings', [MeetingLinkController::class, 'settings'])->name('meeting-links.settings');
             Route::post('/bookings/{booking}/meeting-room', [MeetingLinkController::class, 'assign'])->name('meeting-links.assign');
@@ -570,6 +574,8 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/content/social', [ContentController::class, 'updateSocial'])->name('content.social.update');
             Route::post('/content/social/add', [ContentController::class, 'storeSocial'])->name('content.social.store');
             Route::post('/content/social/{socialLink}/toggle', [ContentController::class, 'toggleSocial'])->name('content.social.toggle');
+            Route::delete('/content/social/{socialLink}', [ContentController::class, 'destroySocial'])->name('content.social.destroy');
+            Route::post('/content/social/{id}/restore', [ContentController::class, 'restoreSocial'])->whereNumber('id')->name('content.social.restore');
         });
 
         // CMS Custom Pages & Revisions

@@ -19,7 +19,6 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class StudentBookingService
@@ -147,7 +146,7 @@ class StudentBookingService
                     'session_type_id' => $sessionType->id,
                     'status' => 'confirmed',
                     'idempotency_key' => $idempotencyKey,
-                    'confirmation_token' => Str::random(64),
+                    'confirmation_token' => Booking::generateConfirmationToken(),
                     'source' => $occurrence === null ? 'student_portal' : 'staff_recurring',
                     'funding_mode' => $occurrence !== null && $sessionType->funding_mode !== 'package' ? $sessionType->funding_mode : 'legacy',
                     'request_fingerprint' => $fingerprint,

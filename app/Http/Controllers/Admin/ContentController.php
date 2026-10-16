@@ -26,6 +26,7 @@ class ContentController extends Controller
         return view('admin.content.index', [
             'title' => 'Social Channels',
             'socials' => $socials,
+            'removedSocials' => SocialLink::onlyTrashed()->orderBy('label')->get(),
         ]);
     }
 
@@ -238,6 +239,30 @@ class ContentController extends Controller
         $socialLink->update(['enabled' => (bool) $validated['enabled']]);
 
         return response()->json(['enabled' => $socialLink->enabled]);
+    }
+
+    public function destroySocial(SocialLink $socialLink): RedirectResponse
+    {
+        DB::transaction(function () use ($socialLink): void {
+            $link = SocialLink::query()->lockForUpdate()->findOrFail($socialLink->id);
+            $link->update(['enabled' => false]);
+            $link->delete();
+            AuditLog::create(['administrator_id' => Auth::id(), 'action' => 'social_link_removed', 'entity_type' => SocialLink::class, 'entity_id' => $link->id, 'created_at' => now()]);
+        });
+
+        return back()->with('success', 'Social channel removed from the website.');
+    }
+
+    public function restoreSocial(int $id): RedirectResponse
+    {
+        DB::transaction(function () use ($id): void {
+            $link = SocialLink::onlyTrashed()->lockForUpdate()->findOrFail($id);
+            $link->enabled = false;
+            $link->restore();
+            AuditLog::create(['administrator_id' => Auth::id(), 'action' => 'social_link_restored', 'entity_type' => SocialLink::class, 'entity_id' => $link->id, 'created_at' => now()]);
+        });
+
+        return back()->with('success', 'Social channel restored. Enable it when ready.');
     }
 
     public function storeSocial(Request $request): RedirectResponse

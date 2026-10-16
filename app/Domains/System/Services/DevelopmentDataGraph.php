@@ -29,9 +29,11 @@ class DevelopmentDataGraph
         $rows = [];
         $detach = [];
         $warnings = [];
+        $bookingRoots = ['bookings', 'booking_holds', 'recurring_lesson_plans', 'booking_waitlists'];
         $roots = match ($domain) {
             'analytics' => $this->catalog->selectedTables(array_keys(array_filter(DevelopmentDataCatalog::MODULES, fn (array $tables, string $module): bool => str_starts_with($module, 'analytics.'), ARRAY_FILTER_USE_BOTH))),
-            'students' => ['students', 'student_auth_attempts'],
+            'students' => array_merge(['students', 'student_auth_attempts'], ! empty($scope['include_all_bookings']) ? $bookingRoots : []),
+            'bookings' => $bookingRoots,
             'financial' => ['student_packages', 'student_package_entitlements', 'payment_records', 'payment_refunds', 'session_ledger_entries', 'package_installments', 'package_renewals', 'entitlement_mapping_reviews'],
             'resources' => array_merge(! empty($scope['resources']) ? ['resources'] : [], ! empty($scope['categories']) ? ['resource_categories'] : [], ! empty($scope['history']) ? ['resource_requests', 'resource_downloads'] : []),
             'telegram' => ['telegram_deliveries'],
@@ -64,6 +66,9 @@ class DevelopmentDataGraph
         if ($domain === 'financial') {
             $this->include($rows, 'bookings', $this->query('bookings', $lock)->where(fn (Builder $query) => $query->where('funding_mode', 'package')->orWhereNotNull('student_package_id')->orWhereNotNull('consumed_ledger_entry_id')));
             $warnings[] = 'All purchases, allocations, payments, refunds, ledger, installments and renewals are removed. Package-funded lessons and their dependent teaching records are included. Students and unrelated direct/free lessons remain.';
+        }
+        if ($domain === 'bookings' || ($domain === 'students' && ! empty($scope['include_all_bookings']))) {
+            $warnings[] = 'All bookings, including guest/unlinked bookings, holds, recurring lesson plans, waitlists and their dependent teaching/usage history are cleared. Booking numbering restarts at #1. Purchases and payments remain unless owned by another selected reset domain. Existing confirmation links stop working.';
         }
         if ($domain === 'students') {
             $emails = array_values(array_filter(array_column($rows['students'] ?? [], 'email_normalized')));
@@ -129,7 +134,7 @@ class DevelopmentDataGraph
             $this->revisions($rows, $lock);
         } while ($previous !== array_sum(array_map('count', $rows)));
 
-        if (in_array($domain, ['students', 'financial'], true)) {
+        if (in_array($domain, ['students', 'financial', 'bookings'], true)) {
             $studentIds = array_keys($rows['students'] ?? []);
             $bookingIds = array_keys($rows['bookings'] ?? []);
             $this->include($rows, 'staff_recent_views', $this->query('staff_recent_views', $lock)->where(function (Builder $query) use ($studentIds, $bookingIds): void {

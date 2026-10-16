@@ -1,7 +1,6 @@
 @extends('layouts.admin')
 
 @section('content')
-<p class="mb-4 text-xs text-slate-500">Country totals use the current business timezone. Older aggregates from other timezones are preserved separately; periods without retained raw activity or matching aggregates may be incomplete. Multi-day visitor totals from pruned history sum daily unique visitors.</p>
 <div class="space-y-8">
 
     <!-- Top Header & Time Range Filter -->
@@ -16,22 +15,6 @@
             <p class="text-sm text-slate-500 mt-1">First-party audience segmentation measuring visitors, engagement, and conversion by country.</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3">
-
-            <!-- Dual-Format Export Buttons -->
-            <div class="inline-flex items-center gap-1.5">
-                <a href="{{ route('admin.analytics.countries.export', array_merge($filters, ['format' => 'csv'])) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-xs transition-colors">
-                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>CSV</span>
-                </a>
-                <a href="{{ route('admin.analytics.countries.export', array_merge($filters, ['format' => 'xlsx'])) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg text-xs font-semibold text-emerald-800 shadow-xs transition-colors">
-                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>Excel (.xlsx)</span>
-                </a>
-            </div>
-        </div>
     </div>
 
 <x-report-filters :filters="$filters" :fields="array_merge(app(\App\Domains\Reporting\Services\ReportPeriod::class)->fields(), ['search'=>['Country name / code','search'], 'sort'=>['Sort by',array_combine(['country_code','country_name','unique_visitors','sessions','bounce_rate','conversion_rate','booking_cta_clicks','bookings_completed'], ['Country code','Country name','Visitors','Sessions','Bounce rate','Conversion rate','Booking CTAs','Completed bookings'])], 'dir'=>['Sort direction',['asc'=>'Ascending','desc'=>'Descending']]])" :action="route('admin.analytics.countries')" export-route="admin.analytics.countries.export" />

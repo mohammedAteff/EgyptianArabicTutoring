@@ -106,7 +106,6 @@
         </div>
     </div>
 
-    <a href="{{ route('admin.analytics.maintenance') }}" class="block rounded-2xl border border-slate-200 bg-white p-5 font-semibold text-amber-800 hover:bg-amber-50">Maintenance Mode Traffic Diagnostics → Insights &amp; Telemetry</a>
 
     <!-- Server Environment Info -->
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-4">

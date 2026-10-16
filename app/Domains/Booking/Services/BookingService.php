@@ -470,7 +470,7 @@ class BookingService
                 );
 
                 // Generate secure non-guessable confirmation token
-                $confirmationToken = Str::random(64);
+                $confirmationToken = Booking::generateConfirmationToken();
 
                 // Country is a server-derived snapshot.
                 $detectedCountry = null;
@@ -776,7 +776,7 @@ class BookingService
                 businessTimezone: $businessTimezone
             );
 
-            $confirmationToken = Str::random(64);
+            $confirmationToken = Booking::generateConfirmationToken();
 
             try {
                 $booking = Booking::create(array_merge($snapshot, [

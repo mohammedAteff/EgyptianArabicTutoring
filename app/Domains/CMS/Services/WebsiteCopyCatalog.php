@@ -13,7 +13,7 @@ class WebsiteCopyCatalog
 
     public const ROOTS = ['home' => ['home', 'home_expressions', 'home_approach_cards'], 'about' => ['about'], 'pricing' => ['pricing', 'tracks'], 'resources' => ['resources'], 'games' => ['games', 'game_feature'], 'faq' => ['faq_intro'], 'policy' => ['policy'], 'blogs' => [], 'shared' => [], 'booking' => []];
 
-    public const SETTINGS = ['about_image_path', 'about_biography', 'about_philosophy', 'site_footer_text', 'booking_instructions', 'cancellation_policy', 'rescheduling_policy', 'home_cta_button', 'counters.learning_hours.headline', 'counters.learning_hours.subtitle', 'counters.monthly_traffic.template_visitors', 'counters.monthly_traffic.template_sessions', 'counters.live_users.template'];
+    public const SETTINGS = ['about_image_path', 'about_biography', 'about_philosophy', 'site_footer_text', 'booking_instructions', 'cancellation_policy', 'rescheduling_policy', 'home_cta_button', 'counters.learning_hours.headline', 'counters.learning_hours.subtitle', 'counters.monthly_traffic.template_visitors', 'counters.monthly_traffic.template_sessions', 'counters.monthly_traffic.template_page_views', 'counters.live_users.template'];
 
     /** @return array<string, mixed> */
     public function defaults(string $page): array
@@ -49,7 +49,7 @@ class WebsiteCopyCatalog
                     $tree['labels'][sha1($key)] = $value;
                 }
             }
-            foreach (['counters.learning_hours.headline' => 'Globally, students have put in...', 'counters.learning_hours.subtitle' => 'of practice time in the last 7 days', 'counters.monthly_traffic.template_visitors' => 'We welcomed {count} visitors last month', 'counters.monthly_traffic.template_sessions' => 'We had {count} website sessions last month', 'counters.live_users.template' => '{count} active visitors online right now'] as $key => $default) {
+            foreach (['counters.learning_hours.headline' => 'Globally, students have put in...', 'counters.learning_hours.subtitle' => 'of practice time in the last 7 days', 'counters.monthly_traffic.template_visitors' => 'We welcomed {count} visitors last month', 'counters.monthly_traffic.template_sessions' => 'We had {count} website sessions last month', 'counters.monthly_traffic.template_page_views' => 'Our pages were viewed {count} times last month', 'counters.live_users.template' => '{count} active visitors online right now'] as $key => $default) {
                 $tree['counters'][str_replace('.', '__', $key)] = $settings[$key] ?? $default;
             }
         }

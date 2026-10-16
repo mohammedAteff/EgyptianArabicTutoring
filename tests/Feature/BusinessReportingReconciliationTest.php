@@ -106,7 +106,7 @@ class BusinessReportingReconciliationTest extends TestCase
         $this->assertSame(2, $goal['count']);
         $this->assertSame(20.0, (float) $goal['rate']);
         $this->travelTo(CarbonImmutable::parse('2026-10-02', 'Europe/Berlin'));
-        $this->assertSame(['unique_visitors' => 10, 'sessions' => 17], app(EngagementCounterService::class)->getPreviousMonthTraffic());
+        $this->assertSame(['unique_visitors' => 10, 'sessions' => 17, 'page_views' => 42], app(EngagementCounterService::class)->getPreviousMonthTraffic());
         Setting::set('counters.monthly_traffic.source', 'sessions');
         $this->assertSame(17, app(EngagementCounterService::class)->getPublicCountersPayload()['monthly_traffic']['count']);
         Setting::set('counters.monthly_traffic.source', 'unique_visitors');

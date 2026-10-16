@@ -76,7 +76,11 @@ class DevelopmentDataResetService
                 app(AnalyticsLifecycle::class)->forget();
             }
             $this->files->remove($copies);
-            $reconciliation = $this->reconciler->verify(in_array($domain, ['students', 'financial'], true));
+            if (in_array($domain, ['students', 'financial', 'bookings'], true) && ! DB::table('bookings')->exists()) {
+                Setting::set('analytics_reset_booking_floor', 0, 'development_lifecycle');
+                app(AnalyticsLifecycle::class)->forget();
+            }
+            $reconciliation = $this->reconciler->verify(in_array($domain, ['students', 'financial', 'bookings'], true));
             DB::afterCommit(function () use ($copies, $plan): void {
                 $this->files->discard($copies);
                 Cache::forget(EngagementCounterService::cacheKey());

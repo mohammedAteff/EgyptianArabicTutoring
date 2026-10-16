@@ -208,12 +208,61 @@ class DevelopmentResetNumberingTest extends TestCase
         $ledger = app(StudentLedgerService::class);
         $ledger->createPackage($student, 'Old purchase', 1, '30.00', '0.00', 'USD', null, 'old-purchase', $actor->id, null, null, 'one_hour');
 
-        $this->reset($actor, 'financial');
+        $summary = $this->reset($actor, 'financial');
+        foreach (['student_packages', 'student_package_entitlements', 'session_ledger_entries', 'payment_records'] as $table) {
+            $this->assertSame('Restarted: next record #1', $summary['numbering_results'][$table]);
+        }
         $next = $ledger->createPackage($student, 'New purchase', 1, '30.00', '0.00', 'USD', null, 'new-purchase', $actor->id, null, null, 'one_hour');
 
         $this->assertSame(1, $next->id);
         $this->assertModelExists($booking);
         $this->assertModelExists($student);
+    }
+
+    public function test_bookings_reset_restarts_numbering_and_restores_credits_without_removing_purchases(): void
+    {
+        $actor = $this->actor();
+        $student = Student::factory()->verified()->create();
+        $ledger = app(StudentLedgerService::class);
+        $package = $ledger->createPackage($student, 'Keep purchase', 2, '60.00', '0.00', 'USD', null, 'keep-purchase', $actor->id, null, null, 'one_hour');
+        $payment = $ledger->recordPayment($package, '60.00', 'keep-payment', $actor->id);
+        $booking = Booking::factory()->create(['id' => 51, 'student_id' => $student->id, 'session_type_id' => $this->oneHourPackageLesson()->id]);
+        DB::transaction(fn () => $ledger->consumeForBooking($booking, 'old-booking-debit'));
+        Booking::factory()->create(['student_id' => null]);
+        Setting::set('analytics_reset_booking_floor', 51);
+
+        $summary = $this->reset($actor, 'bookings');
+
+        $this->assertDatabaseCount('bookings', 0);
+        $this->assertModelExists($student);
+        $this->assertModelExists($package);
+        $this->assertModelExists($payment);
+        $this->assertDatabaseMissing('session_ledger_entries', ['entry_type' => 'session_consumed']);
+        $this->assertSame(2, (int) DB::table('session_ledger_entries')->where('student_package_id', $package->id)->sum('credit_change'));
+        $this->assertSame(0, (int) Setting::get('analytics_reset_booking_floor'));
+        $this->assertSame('Restarted: next record #1', $summary['numbering_results']['bookings']);
+        $this->assertSame(1, Booking::factory()->create()->id);
+        $this->assertSame(0, $summary['reconciliation']['financial_discrepancies']);
+    }
+
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_student_reset_includes_guest_bookings_only_when_selected(bool $includeAll): void
+    {
+        $actor = $this->actor();
+        $student = Student::factory()->verified()->create();
+        Booking::factory()->create(['student_id' => $student->id]);
+        $guest = Booking::factory()->create(['student_id' => null]);
+
+        $this->reset($actor, 'students', ['include_all_bookings' => $includeAll]);
+
+        $this->assertDatabaseCount('students', 0);
+        if ($includeAll) {
+            $this->assertDatabaseCount('bookings', 0);
+            $this->assertSame(1, Booking::factory()->create()->id);
+        } else {
+            $this->assertModelExists($guest);
+        }
     }
 
     public function test_failed_reconciliation_leaves_history_and_numbering_unchanged(): void

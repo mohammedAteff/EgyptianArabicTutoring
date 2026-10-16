@@ -5,10 +5,12 @@ namespace App\Domains\CMS\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SocialLink extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     public const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'facebook', 'linkedin', 'x', 'reddit', 'custom', 'whatsapp', 'telegram'];
 

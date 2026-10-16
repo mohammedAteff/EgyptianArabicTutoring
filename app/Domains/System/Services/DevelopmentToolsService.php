@@ -30,6 +30,7 @@ class DevelopmentToolsService
             throw ValidationException::withMessages(['type' => 'Choose Reset or Export.']);
         }
         if (($type === 'reset' && array_intersect(array_keys($scope), ['modules', 'filters', 'backup_filenames']) !== [])
+            || ($domain !== 'students' && array_key_exists('include_all_bookings', $scope))
             || ($type === 'reset' && $domain !== 'resources' && array_intersect(array_keys($scope), ['resources', 'categories', 'history', 'files']) !== [])
             || ($type === 'export' && $domain !== 'selection')) {
             throw ValidationException::withMessages(['scope' => 'That selection does not belong to this operation. Only Resource reset has category/file checkboxes; other resets target the complete domain.']);

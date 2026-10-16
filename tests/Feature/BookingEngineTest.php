@@ -88,6 +88,7 @@ class BookingEngineTest extends TestCase
         $this->assertNotNull($booking->id);
         $this->assertEquals('confirmed', $booking->status);
         $this->assertNotEmpty($booking->confirmation_token);
+        $this->assertSame(32, strlen($booking->confirmation_token));
 
         // Verify Contact was normalized & resolved
         $contact = $booking->contact;

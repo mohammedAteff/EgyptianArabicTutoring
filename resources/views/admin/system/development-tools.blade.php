@@ -12,6 +12,9 @@
                 @if($domain === 'telegram')<p class="text-sm text-slate-600">Clear delivery records, including pending deliveries. Keep bots, destinations, rules and credentials. Previously sent Telegram messages remain.</p>@endif
                 @if($domain === 'notifications')<p class="text-sm text-slate-600">Clear the admin notification center and restart its numbering at #1. Student portal notifications remain.</p>@endif
                 @if($domain === 'leads')<p class="text-sm text-slate-600">Clear resource inquiry/download history and leads without bookings. Keep booked contacts, student profiles and resources.</p>@endif
+                @if($domain === 'bookings')<p class="text-sm text-slate-600">Clear all bookings, including guest bookings, recurring plans and related lesson history. Keep students, purchases and payments. Restart booking numbering at #1.</p>@endif
+                @if($domain === 'students')<label class="block text-sm"><input type="checkbox" name="scope[include_all_bookings]" value="1" checked> Also clear all bookings, including guest bookings, and restart booking numbering at #1</label>@endif
+                @if($domain === 'financial')<p class="text-sm text-slate-600">Clear purchases, allocations and debits and restart their numbering at #1. Unrelated free/direct bookings keep their IDs.</p>@endif
                 @if($domain === 'resources')
                 <div class="grid gap-2 text-sm">
                     <label><input type="checkbox" name="scope[resources]" value="1" checked> Resources</label>

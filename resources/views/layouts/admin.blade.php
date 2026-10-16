@@ -90,7 +90,7 @@
                         <span aria-hidden="true">A</span>
                     </div>
                     <div>
-                        <div class="font-bold text-white text-sm leading-tight tracking-tight">{{ auth('web')->user()?->roleLabel() }} Operations Console</div>
+                        <div class="font-bold text-white text-sm leading-tight tracking-tight">Operations Console</div>
                         <div class="text-xs text-amber-400 font-medium">{{ config('business.tutor_name') }}</div>
                     </div>
                 </a>

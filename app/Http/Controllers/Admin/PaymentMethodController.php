@@ -16,7 +16,45 @@ class PaymentMethodController extends Controller
 {
     public function index(): View
     {
-        return view('admin.billing.payment-methods', ['title' => 'Payment Methods', 'methods' => PaymentMethod::query()->orderBy('sort_order')->orderBy('id')->get()]);
+        return view('admin.billing.payment-methods', ['title' => 'Payment Methods', 'methods' => PaymentMethod::query()->orderBy('sort_order')->orderBy('id')->get(), 'removedMethods' => PaymentMethod::onlyTrashed()->orderBy('name')->get()]);
+    }
+
+    public function destroy(Request $request, PaymentMethod $paymentMethod, AuditLogService $audit): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $paymentMethod, $audit): void {
+            $methods = PaymentMethod::query()->orderBy('id')->lockForUpdate()->get();
+            $method = $methods->firstWhere('id', $paymentMethod->id);
+            abort_unless($method, 404);
+            $replacement = $methods->where('id', '!=', $method->id)->where('active', true)->sortBy('sort_order')->first();
+            if ($method->active && ! $replacement) {
+                throw ValidationException::withMessages(['method' => 'Add or enable another payment method before removing the last enabled method.']);
+            }
+            $old = $method->only(['name', 'active', 'is_default', 'sort_order']);
+            $method->update(['active' => false, 'is_default' => false]);
+            $method->delete();
+            if ($old['is_default'] && $replacement) {
+                $replacement->update(['is_default' => true]);
+            }
+            foreach (PaymentMethod::query()->orderBy('sort_order')->orderBy('id')->get() as $position => $remaining) {
+                $remaining->update(['sort_order' => $position]);
+            }
+            $audit->log('payment_method_removed', PaymentMethod::class, $method->id, $old, null, $request->user('web')->id);
+        }, 5);
+
+        return back()->with('success', 'Payment method removed and positions updated. Recorded payments are preserved.');
+    }
+
+    public function restore(Request $request, int $id, AuditLogService $audit): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $id, $audit): void {
+            PaymentMethod::withTrashed()->orderBy('id')->lockForUpdate()->get(['id']);
+            $method = PaymentMethod::onlyTrashed()->findOrFail($id);
+            $method->fill(['active' => false, 'is_default' => false, 'sort_order' => (int) PaymentMethod::query()->max('sort_order') + 1]);
+            $method->restore();
+            $audit->log('payment_method_restored', PaymentMethod::class, $method->id, adminId: $request->user('web')->id);
+        }, 5);
+
+        return back()->with('success', 'Payment method restored. Enable it when ready.');
     }
 
     public function store(Request $request, AuditLogService $audit): RedirectResponse

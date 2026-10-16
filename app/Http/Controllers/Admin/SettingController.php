@@ -199,7 +199,7 @@ class SettingController extends Controller
             'counters_learning_hours_headline' => ['nullable', 'string', 'max:255'],
             'counters_learning_hours_subtitle' => ['nullable', 'string', 'max:255'],
             'counters_monthly_traffic_public_enabled' => ['nullable', 'boolean'],
-            'counters_monthly_traffic_source' => ['nullable', 'string', 'in:unique_visitors,sessions'],
+            'counters_monthly_traffic_source' => ['nullable', 'string', 'in:unique_visitors,sessions,page_views'],
             'counters_monthly_traffic_template_visitors' => ['nullable', 'string', 'max:255'],
             'counters_monthly_traffic_template_sessions' => ['nullable', 'string', 'max:255'],
             'counters_live_users_public_enabled' => ['nullable', 'boolean'],

@@ -38,6 +38,7 @@ class AnalyticsService
         $sessions = $reports->nonBotSessionQuery()->with('visitor')->whereBetween('started_at', [$startUtc, $endUtc])->get();
         $sessionKeys = $sessions->flatMap(fn ($session) => [$session->session_token, $session->session_id])->filter()->unique();
         $sessionEvents = $reports->nonBotEventQuery()->whereIn('session_token', $sessionKeys)->get();
+        $eventsBySession = $sessionEvents->groupBy('session_token');
         $rows = collect();
         $byDate = $events->groupBy(fn ($event) => $event->created_at->copy()->setTimezone($timezone)->toDateString());
         $sessionsByDate = $sessions->groupBy(fn ($session) => $session->started_at->copy()->setTimezone($timezone)->toDateString());
@@ -58,7 +59,7 @@ class AnalyticsService
             }
             $counts['sessions'] = $daySessions->count();
             $counts['unique_visitors'] = $dayEvents->pluck('visitor_token')->merge($daySessions->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique()->count();
-            $counts['bounced_sessions'] = $daySessions->filter(fn ($session): bool => $this->isBounce($session, $sessionEvents->filter(fn ($event): bool => in_array($event->session_token, [$session->session_token, $session->session_id], true))))->count();
+            $counts['bounced_sessions'] = $daySessions->filter(fn ($session): bool => $this->isBounce($session, $this->sessionEvents($session, $eventsBySession)))->count();
             foreach ($counts as $compound => $count) {
                 [$metric, $dimension, $value] = array_pad(explode('|', $compound, 3), 3, '');
                 $key = implode('|', [$date, $metric, $dimension, $value]);
@@ -88,6 +89,12 @@ class AnalyticsService
             && $session->started_at->diffInSeconds($session->last_activity_at, true) < 10;
     }
 
+    private function sessionEvents(VisitorSession $session, Collection $eventsBySession): Collection
+    {
+        return collect([$session->session_token, $session->session_id])->filter()->unique()
+            ->flatMap(fn (string $token): Collection => $eventsBySession->get($token, collect()));
+    }
+
     /** @return Collection<int, object{unique_visitors: int, sessions: int, page_views: int, bounced_sessions_count: int, booking_cta_clicks: int, bookings_completed: int, resource_requests: int, country_code: string}&\stdClass> */
     public function reportingCountries(CarbonInterface $start, CarbonInterface $end): Collection
     {
@@ -100,6 +107,7 @@ class AnalyticsService
         $sessions = $reports->nonBotSessionQuery()->with('visitor')->whereBetween('started_at', [$startUtc, $endUtc])->get();
         $sessionKeys = $sessions->flatMap(fn ($session) => [$session->session_token, $session->session_id])->filter()->unique();
         $sessionEvents = $reports->nonBotEventQuery()->whereIn('session_token', $sessionKeys)->get();
+        $eventsBySession = $sessionEvents->groupBy('session_token');
         $eventTokens = $events->pluck('session_token')->filter()->unique();
         $eventSessions = VisitorSession::query()->where(fn ($query) => $query->whereIn('session_token', $eventTokens)->orWhereIn('session_id', $eventTokens))->get()->flatMap(fn ($session) => [$session->session_token => $session, $session->session_id => $session]);
         $visitors = Visitor::query()->where('is_bot', false)->whereIn('visitor_token', $events->pluck('visitor_token')->merge($sessions->map(fn ($session) => $session->visitor?->visitor_token))->filter()->unique())->get()->keyBy('visitor_token');
@@ -109,7 +117,7 @@ class AnalyticsService
             $date = $session->started_at->copy()->setTimezone($timezone)->toDateString();
             $country = $this->reportCountry($session->detected_country_code);
             $daily[$date][$country]['sessions'] = ($daily[$date][$country]['sessions'] ?? 0) + 1;
-            if ($this->isBounce($session, $sessionEvents->filter(fn ($event): bool => in_array($event->session_token, [$session->session_token, $session->session_id], true)))) {
+            if ($this->isBounce($session, $this->sessionEvents($session, $eventsBySession))) {
                 $daily[$date][$country]['bounced_sessions_count'] = ($daily[$date][$country]['bounced_sessions_count'] ?? 0) + 1;
             }
             if ($session->visitor) {

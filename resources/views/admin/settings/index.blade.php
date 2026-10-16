@@ -81,12 +81,6 @@
 
 
 
-            <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Legacy Lesson Video Meeting Link</label>
-                <input type="url" name="video_meeting_url" value="{{ old('video_meeting_url', $settings['video_meeting_url']->value ?? '') }}" maxlength="2048" placeholder="https://…" autocomplete="url"
-                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                <p class="text-[11px] text-slate-400 mt-1">Manage providers, rooms, and session assignments in Meeting Links. This legacy value is retained for historical compatibility; new sessions use assigned rooms.</p>
-            </div>
 
 
 
@@ -144,7 +138,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <h3 class="text-sm font-bold text-slate-800">Counter 2: Previous Month Traffic</h3>
-                        <p class="text-xs text-slate-500">Displays total visitors or sessions from the previous calendar month.</p>
+                        <p class="text-xs text-slate-500">Displays visitors, sessions or page views from the previous calendar month.</p>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="hidden" name="counters_monthly_traffic_public_enabled" value="0"><input type="checkbox" name="counters_monthly_traffic_public_enabled" value="1" class="sr-only peer"
@@ -160,6 +154,7 @@
                         @php $trafficSrc = old('counters_monthly_traffic_source', $getSetting('counters.monthly_traffic.source', 'unique_visitors')); @endphp
                         <select name="counters_monthly_traffic_source" class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             <option value="unique_visitors" {{ $trafficSrc === 'unique_visitors' ? 'selected' : '' }}>Unique Visitors</option>
+                            <option value="page_views" {{ $trafficSrc === 'page_views' ? 'selected' : '' }}>Page Views</option>
                             <option value="sessions" {{ $trafficSrc === 'sessions' ? 'selected' : '' }}>Total Sessions</option>
                         </select>
                     </div>

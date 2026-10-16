@@ -1,7 +1,6 @@
 @extends('layouts.admin')
 
 @section('content')
-<p class="mb-4 text-xs text-slate-500">Traffic uses eligible public activity and matching business-timezone aggregates. Older periods may be incomplete after a timezone change if raw activity was pruned. The bookings ledger uses lesson dates and all selected statuses; resource records include operational requests. Those scopes differ from public conversion telemetry.</p>
 <div class="space-y-6">
 
     <!-- Top Header -->
@@ -9,20 +8,6 @@
         <div>
             <h1 class="text-2xl font-black text-slate-900 tracking-tight">Operational Reports & Exports</h1>
             <p class="text-sm text-slate-500 mt-1">Six authoritative operational datasets with period comparison and formula-safe CSV/XLSX export.</p>
-        </div>
-
-        <!-- Export Buttons -->
-        <div class="flex items-center gap-2">
-            <a href="{{ route('admin.reports.export', array_merge(request()->query(), ['type' => $reportType, 'format' => 'csv'])) }}"
-               class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 shadow-xs transition-colors">
-                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                <span>Export CSV</span>
-            </a>
-            <a href="{{ route('admin.reports.export', array_merge(request()->query(), ['type' => $reportType, 'format' => 'xlsx'])) }}"
-               class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors">
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                <span>Export XLSX</span>
-            </a>
         </div>
     </div>
 
