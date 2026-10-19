@@ -6,7 +6,7 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Student Leads (Content Inquiries)</h1>
+            <h1 class="text-2xl font-bold font-serif text-slate-900 tracking-tight">Student Leads</h1>
             <p class="text-sm text-slate-500 mt-1">Visitors who requested learning workbooks or worksheets but have not yet booked a private session.</p>
         </div>
     </div>

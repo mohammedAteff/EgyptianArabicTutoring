@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\Analytics\Services\SocialAnalyticsRollup;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Reporting\Services\ReportPeriod;
@@ -44,6 +45,9 @@ class ReportController extends Controller
             'campaigns' => $this->reportService->getCampaignContentReport($start, $end, $filters['campaign'] ?? null, $filters),
             default => $this->reportService->getTrafficReport($start, $end, $filters['source'] ?? null),
         };
+        if ($reportType === 'social') {
+            $data['recent_clicks'] = app(SocialAnalyticsRollup::class)->clickEvents($start, $end, $filters)->simplePaginate(25, ['*'], 'clicks_page')->withQueryString()->fragment('social-click-history');
+        }
 
         return view('admin.reports.index', [
             'title' => 'Operational Reports & Data Exports',
@@ -185,6 +189,16 @@ class ReportController extends Controller
 
     protected function exportSocial(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, array $filters): Response
     {
+        if (($filters['detail'] ?? 'summary') === 'clicks') {
+            $timezone = app(TimezoneService::class)->getBusinessTimezone();
+            $rows = function () use ($start, $end, $filters, $timezone): \Generator {
+                foreach (app(SocialAnalyticsRollup::class)->clickEvents($start, $end, $filters)->lazy(250) as $event) {
+                    yield [$event->created_at->copy()->setTimezone($timezone)->format('Y-m-d H:i:sP'), $event->platform, $event->placement, $event->event_name, $event->page, $event->language, $event->country, $event->source, $event->medium, $event->campaign, $event->context];
+                }
+            };
+
+            return $this->exportService->export('social_click_times_'.$ts, ['Clicked at ('.$timezone.')', 'Platform', 'Placement', 'Event Name', 'Page', 'Language', 'Country', 'Source', 'Medium', 'Campaign', 'Context'], $rows(), $format, 'Social Click Times');
+        }
         $report = $this->reportService->getSocialReport($start, $end, $filters);
         $headers = ['Platform', 'Placement', 'Event Name', 'Page', 'Date', 'Total Clicks', 'Daily Unique Visitors (dimension group)', 'Language', 'Country', 'Source', 'Medium', 'Campaign', 'Context'];
         $rows = $report['rows']->map(fn ($s) => [
@@ -237,6 +251,7 @@ class ReportController extends Controller
         }
         $filters = app(ReportPeriod::class)->filters($request, $rules);
         if ($type === 'social') {
+            $request->validate(['clicks_page' => ['nullable', 'integer', 'between:1,100000']]);
             if (! empty($filters['platform'])) {
                 $filters['platform'] = strtolower(trim($filters['platform']));
             }
@@ -255,7 +270,7 @@ class ReportController extends Controller
         $dimensions = match ($type) {
             'bookings' => ['status' => ['Status', ['confirmed' => 'Confirmed', 'completed' => 'Completed', 'cancelled' => 'Cancelled', 'no_show' => 'No show', 'pending' => 'Pending']], 'source' => ['Source', 'text'], 'campaign' => ['Campaign', 'text']],
             'resources' => ['resource_id' => ['Resource', \App\Domains\Resources\Models\Resource::query()->orderBy('title')->pluck('title', 'id')->all()], 'category_id' => ['Category', ResourceCategory::query()->orderBy('name')->pluck('name', 'id')->all()]],
-            'social' => ['platform' => ['Platform (e.g. whatsapp)', 'text'], 'placement' => ['Placement', ['footer_social' => 'Footer Social', 'floating_cta' => 'Floating CTA', 'unknown' => 'Unknown']], 'page_url' => ['Page (exact URL)', 'text'], 'country' => ['Country code', 'text'], 'source' => ['Source', 'text'], 'medium' => ['Medium', 'text'], 'campaign' => ['Campaign', 'text'], 'language' => ['Language', 'text'], 'context' => ['Context', ['public' => 'Public', 'portal' => 'Student portal', 'unknown' => 'Unknown']]],
+            'social' => ['platform' => ['Platform (e.g. youtube)', 'text'], 'placement' => ['Placement', SocialAnalyticsRollup::PLACEMENTS], 'detail' => ['Export content', ['summary' => 'Daily totals', 'clicks' => 'Individual click times']], 'page_url' => ['Page (exact URL)', 'text'], 'country' => ['Country code', 'text'], 'source' => ['Source', 'text'], 'medium' => ['Medium', 'text'], 'campaign' => ['Campaign', 'text'], 'language' => ['Language', 'text'], 'context' => ['Context', ['public' => 'Public', 'portal' => 'Student portal', 'unknown' => 'Unknown']]],
             'events' => ['event_name' => ['Event', array_combine(AnalyticsService::ALLOWED_EVENTS, AnalyticsService::ALLOWED_EVENTS)], 'page_url' => ['Page (exact URL)', 'text'], 'source' => ['Source', 'text']],
             'campaigns' => ['campaign' => ['Campaign', 'text'], 'source' => ['Source', 'text'], 'content' => ['Content', 'text']],
             default => ['source' => ['Source', 'text']],

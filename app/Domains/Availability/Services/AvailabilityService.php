@@ -518,6 +518,7 @@ class AvailabilityService
 
         // Match slot against authorized intervals and grid steps
         $matchedInterval = null;
+        $gridExplanation = null;
         foreach ($intervals as $interval) {
             $duration = (int) $interval['duration'];
             $buffer = (int) $interval['buffer'];
@@ -544,6 +545,13 @@ class AvailabilityService
             // Must align with grid: difference in minutes from interval start must be a multiple of step
             $diffMinutes = $slotMinutes - $intervalStartMinutes;
             if ($diffMinutes < 0 || ($diffMinutes % $step !== 0)) {
+                $firstStart = substr($interval['start'], 0, 5);
+                $nextMinutes = $intervalStartMinutes + $step;
+                $example = $nextMinutes + $duration <= $intervalEndMinutes
+                    ? $firstStart.' and '.sprintf('%02d:%02d', intdiv($nextMinutes, 60), $nextMinutes % 60)
+                    : $firstStart;
+                $gridExplanation ??= " This window uses {$duration}-minute lessons and a {$buffer}-minute buffer. Start times repeat every {$step} minutes from {$firstStart} (for example, {$example}). Choose an available start time.";
+
                 continue;
             }
 
@@ -557,7 +565,7 @@ class AvailabilityService
         }
 
         if (! $matchedInterval) {
-            throw new SlotUnavailableException('The requested time is outside available tutoring hours or does not align with the schedule grid.');
+            throw new SlotUnavailableException('The requested time is outside available tutoring hours or does not align with the schedule grid.'.($gridExplanation ?? ' Choose a lesson that fits completely within an available window.'));
         }
 
         $expectedDuration = (int) $matchedInterval['duration'];
@@ -647,7 +655,7 @@ class AvailabilityService
             $bEnd = CarbonImmutable::instance($b->end_at_utc);
 
             if ($start < $bEnd->addMinutes($bufferMinutes) && $end > $bStart->subMinutes($bufferMinutes)) {
-                throw new SlotUnavailableException('This time was just taken or conflicts with the required buffer time between sessions.');
+                throw new SlotUnavailableException('This time was just taken or conflicts with the required buffer time between sessions.'.($bufferMinutes > 0 ? " Leave at least {$bufferMinutes} minutes between lessons." : ' Choose another available time.'));
             }
         }
 
@@ -674,7 +682,7 @@ class AvailabilityService
         }
 
         if ($holdQuery->lockForUpdate()->exists()) {
-            throw new SlotUnavailableException('This time is currently reserved by another visitor. Please choose another available time.');
+            throw new SlotUnavailableException('This time is currently reserved by another visitor. Please choose another available time.'.($bufferMinutes > 0 ? " The required gap between lessons is {$bufferMinutes} minutes." : ''));
         }
     }
 }

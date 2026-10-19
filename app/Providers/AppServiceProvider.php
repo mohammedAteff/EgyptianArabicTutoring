@@ -12,6 +12,8 @@ use App\Domains\Audit\Services\PrivacyDatabaseSessionHandler;
 use App\Domains\Audit\Services\TransientRateLimitKey;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\LessonMaterial;
+use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Models\SocialLink;
 use App\Domains\CMS\Services\AnnouncementService;
 use App\Domains\CMS\Services\WebsiteCopyCatalog;
 use App\Domains\CMS\Services\WebsiteCopyService;
@@ -84,6 +86,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        View::composer('layouts.public', function (\Illuminate\View\View $view): void {
+            $view->with('publicSocialLinks', SocialLink::enabled()->orderBy('id')->get()->filter(fn (SocialLink $link): bool => $link->getFormattedUrl() !== '#'));
+            $view->with('socialBannerEnabled', (bool) Setting::get('social.banner_enabled', true));
+        });
         View::composer(['public.*', 'blog.index', 'components.public-copy-section', 'layouts.public'], function (\Illuminate\View\View $view): void {
             $page = request()->attributes->get('website_copy_page');
             if (! isset(WebsiteCopyCatalog::PAGES[$page ?? ''])) {

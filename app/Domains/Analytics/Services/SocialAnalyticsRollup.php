@@ -15,6 +15,21 @@ class SocialAnalyticsRollup
 {
     public const EVENTS = ['whatsapp_clicked', 'telegram_clicked', 'social_link_clicked', 'outbound_link_clicked'];
 
+    public const PLACEMENTS = ['top_banner' => 'Top banner', 'footer_social' => 'Footer', 'floating_cta' => 'Floating WhatsApp', 'unknown' => 'Unknown'];
+
+    /** Individual timestamps are available only while raw events are retained.
+     * @param array<string, mixed> $filters
+     * @return Builder<AnalyticsEvent> */
+    public function clickEvents(CarbonInterface $start, CarbonInterface $end, array $filters = []): Builder
+    {
+        $query = $this->query($start, $end, $filters)->select(['id', 'created_at', 'event_name']);
+        foreach ($this->expressions() as $dimension => $expression) {
+            $query->selectRaw($expression.' as '.$dimension);
+        }
+
+        return $query->orderByDesc('created_at')->orderByDesc('id');
+    }
+
     /** @return array<string, string> */
     private function expressions(): array
     {
@@ -160,6 +175,7 @@ class SocialAnalyticsRollup
             'unique_visitors' => $usesDurableHistory ? null : $this->query($start, $end, $filters)->where('event_name', '!=', 'outbound_link_clicked')->where('visitor_token', '!=', '')->distinct()->count('visitor_token'),
             'uses_durable_history' => $usesDurableHistory,
             'platform_totals' => $rows->groupBy('platform')->map(fn ($group): int => (int) $group->sum('clicks')),
+            'placement_totals' => $social->groupBy('placement')->map(fn ($group): int => (int) $group->sum('clicks')),
             'whatsapp_clicks' => (int) $rows->where('platform', 'WhatsApp')->sum('clicks'),
             'telegram_clicks' => (int) $rows->where('platform', 'Telegram')->sum('clicks'),
         ];

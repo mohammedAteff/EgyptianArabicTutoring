@@ -1,12 +1,19 @@
 @extends('layouts.admin')
 @section('content')
 <x-lifecycle-feedback />
-<div class="mx-auto max-w-6xl space-y-6"><h1 class="font-serif text-3xl font-bold">Social Channels</h1><p class="text-sm text-slate-600">Manage official social links, visibility and footer ordering.</p>
+<div class="mx-auto max-w-6xl space-y-6"><h1 class="font-serif text-3xl font-bold">Social Channels</h1><p class="text-sm text-slate-600">Manage official social links, visibility and ordering in the top banner and footer.</p>
+    <form action="{{ route('admin.content.social.display') }}" method="POST" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+        @csrf
+        <input type="hidden" name="banner_enabled" value="0">
+        <label class="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" name="banner_enabled" value="1" @checked($socialBannerEnabled)> Show social icons in the top banner</label>
+        <button class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">Save banner visibility</button>
+        <p class="w-full text-xs text-slate-500">Choose the placements for each enabled channel below. Click counts and times are in <a class="font-semibold text-amber-800 underline" href="{{ route('admin.reports.index', ['type' => 'social']) }}">Social &amp; Messaging Clicks</a>.</p>
+    </form>
     <!-- Social Channels & WhatsApp Support (Spec 50 & 51) -->
         <aside class="min-w-0 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div>
             <h2 class="text-lg font-bold font-serif text-slate-900">Official Social Media & WhatsApp Channels</h2>
-            <p class="text-xs text-slate-500">Displayed in footer and contact sections. WhatsApp includes pre-filled conversational intent messages.</p>
+            <p class="text-xs text-slate-500">Choose the placements for each channel, then press Save Social Channels. WhatsApp includes a pre-filled message.</p>
         </div>
 
         <form action="{{ route('admin.content.social.update') }}" method="POST" class="space-y-6">
@@ -27,6 +34,10 @@
                         </div>
 
                         <div class="grid grid-cols-1 gap-4">
+                            <div class="flex flex-wrap gap-4 text-sm text-slate-700">
+                                <input type="hidden" name="socials[{{ $soc->id }}][show_in_banner]" value="0"><label><input type="checkbox" name="socials[{{ $soc->id }}][show_in_banner]" value="1" @checked($soc->show_in_banner)> Top banner</label>
+                                <input type="hidden" name="socials[{{ $soc->id }}][show_in_footer]" value="0"><label><input type="checkbox" name="socials[{{ $soc->id }}][show_in_footer]" value="1" @checked($soc->show_in_footer)> Footer</label>
+                            </div>
                             <div>
                                 <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                                     {{ $soc->platform === 'whatsapp' ? 'Phone Number (Intl)' : 'Profile URL' }}

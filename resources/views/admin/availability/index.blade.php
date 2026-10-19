@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="space-y-8" x-data="{ addRuleModalOpen: false, addExceptionModalOpen: false }">
+<div class="space-y-8" x-data="{ addRuleModalOpen: @js($errors->any() && old('availability_form') === 'create'), addExceptionModalOpen: false }">
 
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -44,13 +44,13 @@
 
                         <div class="mt-3 space-y-2">
                             @forelse($dayRules as $r)
-                                <div class="bg-white p-2.5 rounded-xl border border-slate-200 text-xs flex items-center justify-between shadow-2xs">
+                                <div class="bg-white p-2.5 rounded-xl border border-slate-200 text-xs shadow-2xs"><div class="flex items-center justify-between gap-2">
                                     <div>
                                         <div class="font-bold text-slate-900">
                                             {{ substr($r->start_time, 0, 5) }} &ndash; {{ substr($r->end_time, 0, 5) }}
                                         </div>
                                         <div class="text-[10px] text-slate-400 mt-0.5">
-                                            {{ $r->session_duration_minutes }}m lesson + {{ $r->buffer_minutes }}m buffer
+                                            {{ $r->session_duration_minutes ? $r->session_duration_minutes.'m lesson' : 'Lesson type duration' }} · {{ $r->buffer_minutes ?? $defaultBufferMinutes }}m buffer
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5">
@@ -69,6 +69,15 @@
                                             </button>
                                         </form>
                                     </div>
+                                    </div>
+                                    <details class="mt-2 border-t border-slate-100 pt-2" @if($errors->any() && old('availability_form') === 'rule-'.$r->id) open @endif>
+                                        <summary class="cursor-pointer py-2 font-semibold text-amber-800">Edit hours &amp; buffer</summary>
+                                        <form method="POST" action="{{ route('admin.availability.rules.update', $r) }}" class="mt-3 space-y-4">
+                                            @csrf @method('PUT')
+                                            <x-availability-window-fields :rule="$r" :weekdays="$weekdays" :default-buffer-minutes="$defaultBufferMinutes" />
+                                            <button class="min-h-11 w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Save window</button>
+                                        </form>
+                                    </details>
                                 </div>
                             @empty
                                 <div class="py-4 text-center text-xs text-slate-400">
@@ -160,55 +169,13 @@
          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs" 
          style="display: none;">
         
-        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200" @click.away="addRuleModalOpen = false">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full max-h-[90dvh] overflow-y-auto shadow-2xl border border-slate-200" @click.away="addRuleModalOpen = false">
             <h3 class="text-lg font-bold font-serif text-slate-900 mb-1">Add Weekly Time Window</h3>
             <p class="text-xs text-slate-500 mb-6">Create a recurring availability interval in Business Time ({{ $businessTz }}).</p>
 
             <form action="{{ route('admin.availability.rules.store') }}" method="POST" class="space-y-4">
                 @csrf
-
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Weekday</label>
-                    <select name="weekday" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                        @foreach($weekdays as $i => $name)
-                            <option value="{{ $i }}">{{ $name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Start Time (HH:MM)</label>
-                        <input type="time" name="start_time" required value="09:00" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">End Time (HH:MM)</label>
-                        <input type="time" name="end_time" required value="13:00" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Lesson Duration (min)</label>
-                        <input type="number" name="session_duration_minutes" value="60" min="15" max="240" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Buffer After (min)</label>
-                        <input type="number" name="buffer_minutes" value="15" min="0" max="60" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Minimum Notice (hrs)</label>
-                        <input type="number" name="min_notice_hours" value="12" min="0" max="72" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Max Horizon (days)</label>
-                        <input type="number" name="max_horizon_days" value="60" min="1" max="180" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                </div>
-
+                <x-availability-window-fields :weekdays="$weekdays" :default-buffer-minutes="$defaultBufferMinutes" />
                 <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                     <button type="button" @click="addRuleModalOpen = false" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900">
                         Cancel

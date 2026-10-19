@@ -13,6 +13,7 @@ use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Resources\Models\ResourceRequest;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentNotification;
+use App\Domains\Students\Services\CashierReportService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\System\Services\DevelopmentDataCatalog;
 use App\Domains\System\Services\DevelopmentDataReconciler;
@@ -206,7 +207,8 @@ class DevelopmentResetNumberingTest extends TestCase
         $student = Student::factory()->verified()->create();
         $booking = Booking::factory()->create(['student_id' => $student->id, 'funding_mode' => 'free']);
         $ledger = app(StudentLedgerService::class);
-        $ledger->createPackage($student, 'Old purchase', 1, '30.00', '0.00', 'USD', null, 'old-purchase', $actor->id, null, null, 'one_hour');
+        $oldPurchase = $ledger->createPackage($student, 'Old purchase', 1, '30.00', '0.00', 'USD', null, 'old-purchase', $actor->id, null, null, 'one_hour');
+        $ledger->recordPayment($oldPurchase, '30.00', 'old-reset-payment', $actor->id);
 
         $summary = $this->reset($actor, 'financial');
         foreach (['student_packages', 'student_package_entitlements', 'session_ledger_entries', 'payment_records'] as $table) {
@@ -215,6 +217,12 @@ class DevelopmentResetNumberingTest extends TestCase
         $next = $ledger->createPackage($student, 'New purchase', 1, '30.00', '0.00', 'USD', null, 'new-purchase', $actor->id, null, null, 'one_hour');
 
         $this->assertSame(1, $next->id);
+        $payment = $ledger->recordPayment($next, '30.00', 'fresh-reset-payment', $actor->id);
+        $this->assertSame(1, $payment->id);
+        $cashierRows = iterator_to_array(app(CashierReportService::class)->rows(['transaction_type' => 'payment']));
+        $this->assertSame('PAY-1', $cashierRows[0][9]);
+        $this->assertSame(1, $cashierRows[0][14]);
+        $this->assertSame('1', $cashierRows[0][16]);
         $this->assertModelExists($booking);
         $this->assertModelExists($student);
     }

@@ -16,12 +16,16 @@ class SocialLink extends Model
 
     protected $table = 'social_links';
 
+    protected $attributes = ['show_in_banner' => true, 'show_in_footer' => true];
+
     protected $fillable = [
         'platform',
         'url_or_phone',
         'label',
         'default_message',
         'enabled',
+        'show_in_banner',
+        'show_in_footer',
         'sort_order',
     ];
 
@@ -29,6 +33,8 @@ class SocialLink extends Model
     {
         return [
             'enabled' => 'boolean',
+            'show_in_banner' => 'boolean',
+            'show_in_footer' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

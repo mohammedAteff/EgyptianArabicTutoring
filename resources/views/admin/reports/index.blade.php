@@ -39,7 +39,7 @@
         </a>
     </div>
 
-    <x-report-filters :filters="$filters" :fields="$filterFields" :action="route('admin.reports.index')" export-route="admin.reports.export" :fixed="['type' => $reportType]" />
+    <x-report-filters :default-labels="['detail' => 'Daily totals']" :filters="$filters" :fields="$filterFields" :action="route('admin.reports.index')" export-route="admin.reports.export" :fixed="['type' => $reportType]" />
     <p class="text-xs text-slate-500">Active scope: {{ $start->format('Y-m-d') }} — {{ $end->format('Y-m-d') }} ({{ $start->timezoneName }}).</p>
 
     <!-- REPORT CONTENT BASED ON TYPE -->
@@ -251,7 +251,7 @@
     <!-- REPORT 4: SOCIAL & MESSAGING -->
     @elseif($reportType === 'social')
         <div class="space-y-6">
-            <p class="text-xs text-slate-500">Placement separates WhatsApp — Footer (footer_social) from WhatsApp — Floating CTA (floating_cta). Row visitor counts are daily distinct within each dimension group; they must not be added to produce period distinct visitors. Period distinct visitors are unavailable when raw identities were pruned. Historical dimensions missing before this fix remain unknown.</p>
+            <p class="text-sm text-slate-600">Compare social clicks from the top banner, footer and floating WhatsApp button. Filter by platform or placement to see its totals and individual click times.</p>
             <div class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-xs">
                 <span>Social &amp; Messaging Clicks: <strong>{{ number_format($reportData['total_clicks']) }}</strong></span>
                 <span>Unique visitors: <strong>{{ $reportData['unique_visitors'] === null ? 'Unavailable after pruning' : number_format($reportData['unique_visitors']) }}</strong></span>
@@ -259,6 +259,7 @@
                 @foreach($reportData['platform_totals'] as $platform => $count)
                     <span>{{ $platform }}: <strong class="text-amber-700">{{ number_format($count) }}</strong></span>
                 @endforeach
+                @foreach($reportData['placement_totals'] as $placement => $count)<span>{{ \App\Domains\Analytics\Services\SocialAnalyticsRollup::PLACEMENTS[$placement] ?? ucfirst(str_replace('_', ' ', $placement)) }}: <strong>{{ number_format($count) }}</strong></span>@endforeach
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                 <div class="overflow-x-auto">
@@ -276,7 +277,7 @@
                             @forelse($reportData['rows'] as $s)
                                 <tr class="hover:bg-slate-50/80 transition-colors">
                                     <td class="py-3 px-4 font-bold text-slate-900">{{ $s['platform'] }}</td>
-                                    <td class="py-3 px-4">{{ $s['placement'] }}</td><td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $s['event_name'] }}</td>
+                                    <td class="py-3 px-4">{{ \App\Domains\Analytics\Services\SocialAnalyticsRollup::PLACEMENTS[$s['placement']] ?? ucfirst(str_replace('_', ' ', $s['placement'])) }}</td><td class="py-3 px-4 font-mono text-[11px] text-slate-500">{{ $s['event_name'] }}</td>
                                     <td class="py-3 px-4 font-mono text-[11px] text-slate-600 truncate max-w-xs">{{ $s['page'] }}</td>
                                     <td class="py-3 px-4 font-mono text-slate-800">{{ $s['date'] }}</td>
                                     <td class="py-3 px-4 text-right font-black text-amber-700">{{ number_format($s['clicks']) }}</td><td class="py-3 px-4">{{ $s['unique_visitors'] }}</td><td class="py-3 px-4">{{ $s['language'] }} / {{ $s['context'] }} / {{ $s['country'] }}</td><td class="py-3 px-4">{{ $s['source'] ?: 'Direct / unknown' }} / {{ $s['medium'] ?: '—' }} / {{ $s['campaign'] ?: '—' }}</td>
@@ -290,6 +291,15 @@
                     </table>
                 </div>
             </div>
+            <section id="social-click-history" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+                <h2 class="text-lg font-bold text-slate-900">Individual click times</h2>
+                <p class="mt-2 text-xs text-slate-500">Times are shown in {{ $start->timezoneName }}. Detailed events are shown while retained; older daily totals remain in the summary above. Use Export content to choose daily totals or individual click times.</p>
+                <div class="mt-4 overflow-x-auto"><table class="w-full text-left text-sm"><thead class="border-b border-slate-200 bg-slate-50 text-xs text-slate-500"><tr><th class="p-3">Clicked at</th><th class="p-3">Platform</th><th class="p-3">Placement</th><th class="p-3">Originating page</th></tr></thead><tbody class="divide-y divide-slate-100">
+                    @forelse($reportData['recent_clicks'] as $click)<tr><td class="whitespace-nowrap p-3"><time datetime="{{ $click->created_at->toIso8601String() }}" title="{{ $click->created_at->copy()->setTimezone($start->timezoneName)->format('Y-m-d H:i:sP') }}">{{ app(\App\Domains\Timezone\Services\TimezoneDisplayService::class)->administratorDateTime($click->created_at, $start->timezoneName) }}</time></td><td class="p-3 font-semibold">{{ match($click->platform) { 'youtube' => 'YouTube', 'tiktok' => 'TikTok', 'whatsapp' => 'WhatsApp', 'linkedin' => 'LinkedIn', 'x' => 'X', default => ucfirst($click->platform) } }}</td><td class="p-3">{{ \App\Domains\Analytics\Services\SocialAnalyticsRollup::PLACEMENTS[$click->placement] ?? ucfirst(str_replace('_', ' ', $click->placement)) }}</td><td class="max-w-md break-all p-3 text-xs text-slate-600">{{ $click->page }}</td></tr>
+                    @empty<tr><td colspan="4" class="p-5 text-center text-slate-500">No individual clicks are available for these filters.</td></tr>@endforelse
+                </tbody></table></div>
+                <div class="mt-4">{{ $reportData['recent_clicks']->links() }}</div>
+            </section>
         </div>
 
     <!-- REPORT 5: EVENTS LOG -->

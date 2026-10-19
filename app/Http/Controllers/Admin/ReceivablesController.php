@@ -38,6 +38,6 @@ class ReceivablesController extends Controller
             }
         };
 
-        return $exports->export('receivables', ['Purchase', 'Student ID', 'Package', 'Currency', 'Net paid', 'Due now', 'Overdue forecast', 'Overpaid'], $rows(), $filters['format'] ?? 'csv', 'Receivables');
+        return $exports->export('receivables', ['Purchase', 'Student ID', 'Package', 'Currency', 'Net paid', 'Due now', 'Overdue', 'Overpaid'], $rows(), $filters['format'] ?? 'csv', 'Receivables');
     }
 }

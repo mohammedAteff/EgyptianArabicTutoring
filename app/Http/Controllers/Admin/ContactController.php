@@ -63,7 +63,7 @@ class ContactController extends Controller
         $leads = $query->orderByDesc('last_seen_at')->paginate(20)->withQueryString();
 
         return view('admin.contacts.leads', [
-            'title' => 'Student Leads (Content Inquiries)',
+            'title' => 'Student Leads',
             'leads' => $leads,
             'search' => $search,
         ]);

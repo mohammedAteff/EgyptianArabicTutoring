@@ -23,7 +23,7 @@ return [
             'items' => [
                 'admin.students.index' => ['label' => 'Student Records', 'active' => ['admin.students.*'], 'shortcut' => 'Students'],
                 'admin.contacts.index' => ['label' => 'Students & Contacts', 'active' => ['admin.contacts.*']],
-                'admin.leads' => ['label' => 'Leads (Resource Inquiries)'],
+                'admin.leads' => ['label' => 'Student Leads'],
                 'admin.data-quality.index' => ['label' => 'Data Quality Center', 'roles' => $admins, 'active' => ['admin.data-quality.*']],
             ],
         ],

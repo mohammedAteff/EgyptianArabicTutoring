@@ -515,6 +515,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::get('/data-quality', [DataQualityController::class, 'index'])->name('data-quality.index');
             Route::get('/availability', [AvailabilityController::class, 'index'])->name('availability.index');
             Route::post('/availability/rules', [AvailabilityController::class, 'storeRule'])->name('availability.rules.store');
+            Route::put('/availability/rules/{rule}', [AvailabilityController::class, 'updateRule'])->name('availability.rules.update');
             Route::post('/availability/rules/{rule}/toggle', [AvailabilityController::class, 'toggleRule'])->name('availability.toggle');
             Route::delete('/availability/rules/{rule}', [AvailabilityController::class, 'destroyRule'])->name('availability.destroy');
             Route::post('/availability/exceptions', [AvailabilityController::class, 'storeException'])->name('availability.exceptions.store');
@@ -572,6 +573,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::delete('/content/faqs/{faq}', [ContentController::class, 'destroyFaq'])->name('content.faq.destroy');
             Route::delete('/content/faqs/{faq}/draft', [ContentController::class, 'discardFaqDraft'])->name('content.faq.draft.destroy');
             Route::post('/content/social', [ContentController::class, 'updateSocial'])->name('content.social.update');
+            Route::post('/content/social/display', [ContentController::class, 'socialDisplay'])->name('content.social.display');
             Route::post('/content/social/add', [ContentController::class, 'storeSocial'])->name('content.social.store');
             Route::post('/content/social/{socialLink}/toggle', [ContentController::class, 'toggleSocial'])->name('content.social.toggle');
             Route::delete('/content/social/{socialLink}', [ContentController::class, 'destroySocial'])->name('content.social.destroy');

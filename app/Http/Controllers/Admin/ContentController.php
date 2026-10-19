@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domains\Audit\Models\AuditLog;
+use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\CMS\Models\ContentRevision;
 use App\Domains\CMS\Models\Faq;
+use App\Domains\CMS\Models\Setting;
 use App\Domains\CMS\Models\SocialLink;
 use App\Domains\CMS\Services\TranslationService;
 use App\Http\Controllers\Controller;
@@ -27,6 +29,7 @@ class ContentController extends Controller
             'title' => 'Social Channels',
             'socials' => $socials,
             'removedSocials' => SocialLink::onlyTrashed()->orderBy('label')->get(),
+            'socialBannerEnabled' => (bool) Setting::get('social.banner_enabled', true),
         ]);
     }
 
@@ -201,6 +204,8 @@ class ContentController extends Controller
             'socials.*.label' => ['nullable', 'string', 'max:100'],
             'socials.*.default_message' => ['nullable', 'string', 'max:1000'],
             'socials.*.enabled' => ['nullable', 'boolean'],
+            'socials.*.show_in_banner' => ['sometimes', 'boolean'],
+            'socials.*.show_in_footer' => ['sometimes', 'boolean'],
             'socials.*.sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
         ]);
 
@@ -217,6 +222,8 @@ class ContentController extends Controller
                     'label' => trim((string) ($data['label'] ?? $link->label)),
                     'default_message' => $link->platform === 'whatsapp' ? ($data['default_message'] ?? null) : null,
                     'enabled' => (bool) ($data['enabled'] ?? false),
+                    'show_in_banner' => (bool) ($data['show_in_banner'] ?? $link->show_in_banner),
+                    'show_in_footer' => (bool) ($data['show_in_footer'] ?? $link->show_in_footer),
                     'sort_order' => (int) $data['sort_order'],
                 ]);
             }
@@ -239,6 +246,16 @@ class ContentController extends Controller
         $socialLink->update(['enabled' => (bool) $validated['enabled']]);
 
         return response()->json(['enabled' => $socialLink->enabled]);
+    }
+
+    public function socialDisplay(Request $request, AuditLogService $audit): RedirectResponse
+    {
+        $data = $request->validate(['banner_enabled' => ['required', 'boolean']]);
+        $before = (bool) Setting::get('social.banner_enabled', true);
+        Setting::set('social.banner_enabled', (bool) $data['banner_enabled'], 'social');
+        $audit->log('social_banner_visibility_updated', Setting::class, null, ['enabled' => $before], ['enabled' => (bool) $data['banner_enabled']], $request->user('web')->id);
+
+        return back()->with('success', 'Top banner visibility saved. Footer choices are unchanged.');
     }
 
     public function destroySocial(SocialLink $socialLink): RedirectResponse

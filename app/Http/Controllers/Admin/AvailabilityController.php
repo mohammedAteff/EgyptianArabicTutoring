@@ -6,11 +6,13 @@ use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Availability\Models\AvailabilityException;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\CMS\Models\Setting;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AvailabilityController extends Controller
@@ -47,10 +49,41 @@ class AvailabilityController extends Controller
             'exceptions' => $exceptions,
             'weekdays' => $weekdays,
             'businessTz' => $businessTz,
+            'defaultBufferMinutes' => (int) Setting::get('booking_buffer_minutes', 15),
         ]);
     }
 
     public function storeRule(Request $request): RedirectResponse
+    {
+        $validated = $this->ruleValues($request);
+
+        $rule = AvailabilityRule::create([...$validated, 'enabled' => true]);
+
+        AuditLog::create([
+            'administrator_id' => Auth::id(), 'action' => 'availability_rule_created',
+            'entity_type' => AvailabilityRule::class, 'entity_id' => $rule->id,
+            'new_data' => $rule->toArray(), 'created_at' => now(),
+        ]);
+
+        return back()->with('success', 'Weekly availability window added.');
+    }
+
+    public function updateRule(Request $request, AvailabilityRule $rule): RedirectResponse
+    {
+        $validated = $this->ruleValues($request);
+        $before = $rule->toArray();
+        $rule->update($validated);
+        AuditLog::create([
+            'administrator_id' => Auth::id(), 'action' => 'availability_rule_updated',
+            'entity_type' => AvailabilityRule::class, 'entity_id' => $rule->id,
+            'previous_data' => $before, 'new_data' => $rule->toArray(), 'created_at' => now(),
+        ]);
+
+        return back()->with('success', 'Availability window and buffer saved. Existing appointments are unchanged.');
+    }
+
+    /** @return array<string, mixed> */
+    private function ruleValues(Request $request): array
     {
         $validated = $request->validate([
             'weekday' => ['required', 'integer', 'between:0,6'],
@@ -62,23 +95,17 @@ class AvailabilityController extends Controller
             'max_horizon_days' => ['nullable', 'integer', 'min:1', 'max:180'],
         ]);
 
-        $rule = AvailabilityRule::create([
+        $startMinutes = (int) substr($validated['start_time'], 0, 2) * 60 + (int) substr($validated['start_time'], 3, 2);
+        $endMinutes = (int) substr($validated['end_time'], 0, 2) * 60 + (int) substr($validated['end_time'], 3, 2);
+        if (! empty($validated['session_duration_minutes']) && $endMinutes - $startMinutes < (int) $validated['session_duration_minutes']) {
+            throw ValidationException::withMessages(['end_time' => 'This window is shorter than one '.$validated['session_duration_minutes'].'-minute lesson. Extend the window or shorten the lesson. The buffer is the gap between lessons; the last lesson only needs to finish by the window end.']);
+        }
+
+        return [
             ...$validated,
             'start_time' => $validated['start_time'].':00',
             'end_time' => $validated['end_time'].':00',
-            'enabled' => true,
-        ]);
-
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'availability_rule_created',
-            'entity_type' => AvailabilityRule::class,
-            'entity_id' => $rule->id,
-            'new_data' => $rule->toArray(),
-            'created_at' => now(),
-        ]);
-
-        return back()->with('success', 'Weekly availability window added.');
+        ];
     }
 
     public function toggleRule(AvailabilityRule $rule): RedirectResponse
