@@ -88,7 +88,7 @@ class AvailabilityController extends Controller
         $validated = $request->validate([
             'weekday' => ['required', 'integer', 'between:0,6'],
             'start_time' => ['required', 'date_format:H:i'],
-            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+            'end_time' => ['required', 'date_format:H:i'],
             'session_duration_minutes' => ['nullable', 'integer', 'min:15', 'max:240'],
             'buffer_minutes' => ['nullable', 'integer', 'min:0', 'max:60'],
             'min_notice_hours' => ['nullable', 'integer', 'min:0', 'max:72'],
@@ -96,7 +96,10 @@ class AvailabilityController extends Controller
         ]);
 
         $startMinutes = (int) substr($validated['start_time'], 0, 2) * 60 + (int) substr($validated['start_time'], 3, 2);
-        $endMinutes = (int) substr($validated['end_time'], 0, 2) * 60 + (int) substr($validated['end_time'], 3, 2);
+        $endMinutes = $validated['end_time'] === '00:00' ? 1440 : (int) substr($validated['end_time'], 0, 2) * 60 + (int) substr($validated['end_time'], 3, 2);
+        if ($endMinutes <= $startMinutes) {
+            throw ValidationException::withMessages(['end_time' => 'End time must be after start time. Choose 00:00 for midnight at the end of the day.']);
+        }
         if (! empty($validated['session_duration_minutes']) && $endMinutes - $startMinutes < (int) $validated['session_duration_minutes']) {
             throw ValidationException::withMessages(['end_time' => 'This window is shorter than one '.$validated['session_duration_minutes'].'-minute lesson. Extend the window or shorten the lesson. The buffer is the gap between lessons; the last lesson only needs to finish by the window end.']);
         }
@@ -104,7 +107,7 @@ class AvailabilityController extends Controller
         return [
             ...$validated,
             'start_time' => $validated['start_time'].':00',
-            'end_time' => $validated['end_time'].':00',
+            'end_time' => $endMinutes === 1440 ? '24:00:00' : $validated['end_time'].':00',
         ];
     }
 

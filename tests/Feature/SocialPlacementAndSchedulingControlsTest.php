@@ -202,6 +202,51 @@ class SocialPlacementAndSchedulingControlsTest extends TestCase
         $this->assertSame(['09:00', '10:00', '11:00', '12:00'], array_column($slots['2026-10-26'], 'business_start_time'));
     }
 
+    public function test_all_weekdays_can_run_from_eight_until_midnight_with_ten_minute_buffers(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-19 00:00', 'Africa/Cairo'));
+        $admin = AdministratorFactory::new()->create(['role' => 'admin']);
+        $type = SessionType::factory()->create(['duration_minutes' => 60]);
+        foreach (range(0, 6) as $weekday) {
+            $this->actingAs($admin)->post(route('admin.availability.rules.store'), [...$this->ruleInput(), 'weekday' => $weekday, 'start_time' => '08:00', 'end_time' => '00:00', 'session_duration_minutes' => null])->assertSessionHasNoErrors();
+        }
+
+        $slots = app(AvailabilityService::class)->getAvailableSlotsGroupedByDate($type, 'Africa/Cairo', CarbonImmutable::parse('2026-10-26', 'Africa/Cairo'), CarbonImmutable::parse('2026-11-01', 'Africa/Cairo'));
+
+        $this->assertDatabaseCount('availability_rules', 7);
+        $this->assertCount(7, $slots);
+        foreach ($slots as $daySlots) {
+            $this->assertSame('08:00', $daySlots[0]['business_start_time']);
+            $this->assertSame('22:00', end($daySlots)['business_start_time']);
+            $this->assertSame(10, $daySlots[0]['buffer_minutes']);
+        }
+        $this->assertSame(['24:00:00'], AvailabilityRule::query()->distinct()->pluck('end_time')->all());
+    }
+
+    public function test_a_lesson_can_finish_exactly_at_midnight_and_the_editor_round_trips_it(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-19 00:00', 'Africa/Cairo'));
+        $admin = AdministratorFactory::new()->create(['role' => 'admin']);
+        $rule = $this->rule();
+        $type = SessionType::factory()->create(['duration_minutes' => 120]);
+        $this->actingAs($admin)->put(route('admin.availability.rules.update', $rule), [...$this->ruleInput(), 'start_time' => '22:00', 'end_time' => '00:00', 'session_duration_minutes' => null])->assertSessionHasNoErrors();
+        $start = CarbonImmutable::parse('2026-10-26 22:00', 'Africa/Cairo')->utc();
+        $end = $start->addHours(2);
+
+        $configuration = app(AvailabilityService::class)->resolveSlotConfiguration($type, $start, $end);
+
+        $this->assertSame(120, $configuration['duration_minutes']);
+        $this->assertSame(10, $configuration['buffer_minutes']);
+        $this->get(route('admin.availability.index'))->assertSee('value="00:00"', false)->assertSee('midnight at the end of this day');
+    }
+
+    public function test_reversed_non_midnight_window_does_not_create_an_overnight_schedule(): void
+    {
+        $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']))->post(route('admin.availability.rules.store'), [...$this->ruleInput(), 'start_time' => '08:00', 'end_time' => '07:00'])->assertSessionHasErrors('end_time');
+
+        $this->assertDatabaseCount('availability_rules', 0);
+    }
+
     private function channel(string $platform = 'youtube'): SocialLink
     {
         return SocialLink::query()->create(['platform' => $platform, 'label' => ucfirst($platform), 'url_or_phone' => $platform === 'whatsapp' ? '+12025550123' : 'https://example.org/'.$platform, 'enabled' => true, 'sort_order' => 0]);
