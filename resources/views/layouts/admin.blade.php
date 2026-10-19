@@ -254,6 +254,9 @@
                 @endif
                 {{ $slot ?? '' }}
                 @yield('content')
+                @if(request()->routeIs('admin.analytics*', 'admin.reports*'))
+                    <p class="mt-8 text-xs text-slate-500">IP country data by <a href="https://db-ip.com/" class="underline">DB-IP</a> (<a href="https://creativecommons.org/licenses/by/4.0/" class="underline">CC BY 4.0</a>).</p>
+                @endif
             </main>
         </div>
     </div>

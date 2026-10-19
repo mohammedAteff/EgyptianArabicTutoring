@@ -6,6 +6,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\CashierReportService;
 use App\Domains\Students\Services\StudentLedgerService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +37,29 @@ class StudentLedgerTest extends TestCase
         $this->assertDatabaseCount('session_ledger_entries', 1);
         $this->expectException(\RuntimeException::class);
         $package->update(['final_price' => '1.00']);
+    }
+
+    public function test_legacy_single_session_names_display_consistently_without_rewriting_purchase_terms(): void
+    {
+        $student = Student::factory()->verified()->create();
+        $ledger = app(StudentLedgerService::class);
+        $labels = ['Pay-As-You-Go Maintenance' => 'Two-Hour Single Session', 'Advanced Conversational' => 'One-Hour Single Session', 'Advanced Conversation Practice' => 'One-Hour Single Session', 'Custom conversation plan' => 'Custom conversation plan'];
+
+        foreach ($labels as $original => $expected) {
+            $package = $ledger->createPackage($student, $original, 1, '48.00', '0.00', 'USD', null, 'label-'.sha1($original), entitlementCode: 'one_hour');
+            $ledger->recordPayment($package, '48.00', 'payment-'.sha1($original), null);
+            $stored = $package->fresh()->getRawOriginal();
+            $package->refresh();
+
+            $this->assertSame($expected, $package->package_name);
+            $this->assertSame($expected, $package->toArray()['package_name']);
+            $this->assertSame($original, $stored['package_name']);
+            $this->assertSame($stored, $package->getRawOriginal());
+            $this->assertSame(1, $ledger->summary($package)['remaining_credits']);
+        }
+
+        $rows = iterator_to_array(app(CashierReportService::class)->rows([]));
+        $this->assertSame(array_reverse(array_values($labels)), array_column($rows, 4));
     }
 
     public function test_fifo_package_selection_obeys_cairo_end_of_expiration_date(): void

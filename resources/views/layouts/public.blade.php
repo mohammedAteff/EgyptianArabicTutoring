@@ -286,14 +286,6 @@
                     <p class="text-stone-400 text-sm max-w-md leading-relaxed">
                         {{ app(\App\Domains\CMS\Services\WebsiteCopyService::class)->value('shared', 'footer', \App\Domains\CMS\Models\Setting::get('site_footer_text', config('public_content.footer'))) }}
                     </p>
-                    <div class="pt-2 flex items-center gap-4 text-xs text-stone-400">
-                        <span class="inline-flex items-center gap-1.5 text-emerald-400">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            First-party analytics only
-                        </span>
-                        <span>•</span>
-                        <span>{{ website_text('shared', 'Zero third-party ad trackers') }}</span>
-                    </div>
                 </div>
 
                 <!-- Col 2: Navigation Links -->
@@ -353,11 +345,9 @@
                 <div class="flex items-center gap-6">
                     <a href="{{ localized_url('terms') }}" class="hover:text-stone-400 transition-colors">{{ website_label('Terms') }}</a>
                     <a href="{{ localized_url('privacy') }}" class="hover:text-stone-400 transition-colors">{{ website_label('Privacy') }}</a>
-                    <span class="text-stone-600">{{ website_text('shared', 'Africa/Cairo System Time') }}</span>
                 </div>
             </div>
         </div>
-        <p class="pb-5 text-center text-xs text-stone-400">IP country data by <a href="https://db-ip.com/" class="underline">{{ website_text('shared', 'DB-IP') }}</a> (CC BY 4.0).</p>
     </footer>
 
     @livewireScripts

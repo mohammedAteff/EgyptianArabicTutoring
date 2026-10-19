@@ -99,11 +99,8 @@ return [
         '6dcd4ce23d88e2ee9568ba546c007c63d9131c1b' => 'A',
         '5ef4439786692eab160ee60be0da2bb3a8597d9a' => 'Blogs',
         'bc730bf18e4950baddfda2f4ba2e4ba24bcd8741' => 'Administrator Preview Mode',
-        '69766333928a6b8d38fbcd12f39a56109f6058af' => 'Zero third-party ad trackers',
         '6c219532db4c15cb5b79a8f790426af5a6a545bc' => 'Student Portal',
         '748f18efbb298507e6cba4e511329374c523ffd2' => 'Booking & Refund Policy',
         'fbace47afd807eb736fe6ed506ffa5187571caf1' => 'Public contact details will be added once confirmed.',
-        'ab3e6197143f01dab8ea7a28b6255349be84c827' => 'Africa/Cairo System Time',
-        '89b64c5c9b5b8e090ade3f2a8c14f8dedad821bb' => 'DB-IP',
     ],
 ];

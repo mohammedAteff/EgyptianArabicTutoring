@@ -473,7 +473,7 @@ return [
                 ],
                 [
                     'type' => 'heading',
-                    'text' => 'Pay-As-You-Go Maintenance',
+                    'text' => 'Two-Hour Single Session',
                 ],
                 [
                     'type' => 'paragraph',
@@ -493,7 +493,7 @@ return [
                 ],
                 [
                     'type' => 'heading',
-                    'text' => 'Advanced Conversation Practice',
+                    'text' => 'One-Hour Single Session',
                 ],
                 [
                     'type' => 'paragraph',
@@ -1644,11 +1644,11 @@ Unused credits ordinarily expire when the package validity period ends.',
             'question' => 'Can I purchase an individual lesson instead of a package?',
             'answer' => 'Individual lessons are available to eligible learners with specific needs.
 
-Pay-As-You-Go Maintenance — $48
+Two-Hour Single Session — $48
 
 A two-hour lesson for eligible returning students who want occasional practice, revision, or continued guidance.
 
-Advanced Conversation Practice — $28
+One-Hour Single Session — $28
 
 A one-hour session for eligible advanced speakers seeking focused conversation practice.
 

@@ -23,6 +23,16 @@ class StudentPackage extends Model
         return ['validity_started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'paused_at' => 'immutable_datetime', 'expiration_date' => 'date', 'original_price' => 'decimal:2', 'discount_amount' => 'decimal:2', 'final_price' => 'decimal:2'];
     }
 
+    /** Display current offering names without rewriting historical purchase terms. */
+    public function getPackageNameAttribute(?string $value): ?string
+    {
+        return match ($value) {
+            'Pay-As-You-Go Maintenance' => 'Two-Hour Single Session',
+            'Advanced Conversational', 'Advanced Conversation Practice' => 'One-Hour Single Session',
+            default => $value,
+        };
+    }
+
     public function isPaused(): bool
     {
         return $this->paused_at !== null;

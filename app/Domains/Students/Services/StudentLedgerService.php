@@ -57,22 +57,22 @@ class StudentLedgerService
         'payg_maintenance' => [
             'key' => 'payg_maintenance',
             'entitlement_code' => 'two_hour',
-            'name' => 'Pay-As-You-Go Maintenance',
+            'name' => 'Two-Hour Single Session',
             'sessions' => 1,
             'duration_minutes' => 120,
             'price' => '48.00',
             'validity_days' => 30,
-            'audience' => 'Alumni Only (Unlisted)',
+            'audience' => 'Single Sessions',
         ],
         'advanced_conversational' => [
             'key' => 'advanced_conversational',
             'entitlement_code' => 'one_hour',
-            'name' => 'Advanced Conversational',
+            'name' => 'One-Hour Single Session',
             'sessions' => 1,
             'duration_minutes' => 60,
             'price' => '28.00',
             'validity_days' => 30,
-            'audience' => 'C1+ Debate (Unlisted)',
+            'audience' => 'Single Sessions',
         ],
     ];
 
