@@ -2,6 +2,7 @@
 
 namespace App\Domains\System\Services;
 
+use App\Domains\Lms\Models\Course;
 use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Resources\Models\ResourceCategory;
 use App\Mail\StudentSecondaryEmailVerification;
@@ -75,7 +76,8 @@ class DevelopmentDataGraph
             if ($emails !== []) {
                 $this->include($rows, 'booking_holds', $this->query('booking_holds', $lock)->whereIn('lead_details->email', $emails));
             }
-            $warnings[] = 'All students, including archived/merged/deleted history, and owned business/financial records are removed. Independent Contacts and shared Resources remain. Student session keys and transient authentication records are cleared; staff login is retained.';
+            $warnings[] = 'All students, including archived/merged/deleted history, owned business/financial records, learning history and student-owned private courses are removed. Shared catalog courses, Resources, video providers and protection settings remain. Student sessions and devices are cleared; staff login is retained.';
+            $warnings[] = 'Learning records, private courses and their files are covered by the protected recovery snapshot, not the portable export. Portable exports exclude LMS content and device/playback credentials.';
         }
         do {
             $previous = array_sum(array_map('count', $rows));
@@ -121,6 +123,11 @@ class DevelopmentDataGraph
                         throw ValidationException::withMessages(['scope' => 'Resources have required request/download history. Include that checkbox or preserve the Resources.']);
                     }
                     $allowed = array_merge($this->catalog->tables(), ['student_email_verifications', 'student_auth_attempts', 'booking_holds']);
+                    if ($domain === 'students') {
+                        $allowed = array_merge($allowed, DevelopmentDataCatalog::LMS_RESET_TABLES);
+                    } elseif (in_array($domain, ['bookings', 'financial'], true)) {
+                        $allowed = array_merge($allowed, ['lms_learning_assignments', 'lms_access_events']);
+                    }
                     if (! in_array($child, $allowed, true)) {
                         if ($query->exists()) {
                             throw ValidationException::withMessages(['scope' => 'An unreviewed dependent table requires review: '.$child.'. No reset was performed.']);
@@ -133,6 +140,8 @@ class DevelopmentDataGraph
             }
             $this->revisions($rows, $lock);
         } while ($previous !== array_sum(array_map('count', $rows)));
+
+        $this->protectSharedLearning($rows);
 
         if (in_array($domain, ['students', 'financial', 'bookings'], true)) {
             $studentIds = array_keys($rows['students'] ?? []);
@@ -179,11 +188,12 @@ class DevelopmentDataGraph
         if ($domain === 'students') {
             $candidates = array_merge($candidates, $this->catalog->selectedTables(array_keys(array_filter(DevelopmentDataCatalog::MODULES,
                 fn (array $tables, string $module): bool => str_starts_with($module, 'students.') || str_starts_with($module, 'financial.'), ARRAY_FILTER_USE_BOTH))));
+            $candidates = array_merge($candidates, DevelopmentDataCatalog::LMS_RESET_TABLES);
         }
         $plan['numbering_tables'] = array_values(array_filter(array_unique($candidates), function (string $table): bool {
             $meta = $this->schema()[$table];
 
-            return in_array($table, $this->catalog->tables(), true) && count($meta['primary']) === 1
+            return in_array($table, $this->catalog->resetTables(), true) && count($meta['primary']) === 1
                 && ! empty($meta['columns'][$meta['primary'][0]]['auto_increment']);
         }));
         if ($domain === 'students') {
@@ -338,12 +348,41 @@ class DevelopmentDataGraph
     /** @param array<string, array<string, array<string, mixed>>> $rows */
     private function revisions(array &$rows, bool $lock): void
     {
-        foreach (['resources' => ['resource', \App\Domains\Resources\Models\Resource::class], 'resource_categories' => ['resource_category', ResourceCategory::class]] as $table => $types) {
+        foreach (['resources' => ['resource', \App\Domains\Resources\Models\Resource::class], 'resource_categories' => ['resource_category', ResourceCategory::class],
+            'lms_courses' => [Course::class]] as $table => $types) {
             if (empty($rows[$table])) {
                 continue;
             }
             foreach (['content_revisions' => ['revisable_type', 'revisable_id'], 'entity_translation_revisions' => ['entity_type', 'entity_id']] as $history => $keys) {
                 $this->include($rows, $history, $this->query($history, $lock)->whereIn($keys[0], $types)->whereIn($keys[1], array_keys($rows[$table])));
+            }
+        }
+    }
+
+    /** @param array<string, array<string, array<string, mixed>>> $rows */
+    private function protectSharedLearning(array $rows): void
+    {
+        $courses = $rows['lms_courses'] ?? [];
+        foreach ($courses as $course) {
+            if ($course['kind'] !== 'private' || ! isset($rows['students'][(string) $course['owner_student_id']])) {
+                throw ValidationException::withMessages(['scope' => 'Shared learning content cannot be deleted by a student reset.']);
+            }
+        }
+        foreach (['lms_sections', 'lms_lessons', 'lms_course_releases', 'lms_access_rules', 'lms_assets', 'lms_video_assets'] as $table) {
+            foreach ($rows[$table] ?? [] as $row) {
+                if (! isset($courses[(string) $row['course_id']])) {
+                    throw ValidationException::withMessages(['scope' => 'A shared course references private learning content. Review those references before resetting students.']);
+                }
+            }
+        }
+        foreach ($rows['lms_lesson_blocks'] ?? [] as $block) {
+            if (! isset($rows['lms_lessons'][(string) $block['lesson_id']])) {
+                throw ValidationException::withMessages(['scope' => 'A shared lesson references a private asset. Preserve or replace that reference before resetting students.']);
+            }
+        }
+        foreach ($rows['lms_video_assets'] ?? [] as $video) {
+            if ($video['provider'] === 'bunny' && $video['status'] !== 'deleted') {
+                throw ValidationException::withMessages(['scope' => 'Delete privately owned remote video through Video Operations before resetting its student.']);
             }
         }
     }

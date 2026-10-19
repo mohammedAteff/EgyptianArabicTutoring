@@ -25,7 +25,7 @@ class DevelopmentDataFiles
 
     public function privatePath(string $path): string
     {
-        if (! preg_match('~^(resources/[A-Za-z0-9_-]+\.(pdf|zip|doc|docx|mp3|wav|m4a)|lesson-materials/[A-Za-z0-9_-]+\.pdf)$~D', $path)) {
+        if (! preg_match('~^(resources/[A-Za-z0-9_-]+\.(pdf|zip|doc|docx|mp3|wav|m4a)|lesson-materials/[A-Za-z0-9_-]+\.pdf|lms-assets/[0-9a-f-]{36}\.(jpg|png|webp|pdf|zip|doc|docx|mp3|wav|m4a)|lms-submissions/[0-9a-f-]{36}\.(pdf|jpg|png|txt|mp3|wav|ogg|m4a|webm|mp4))$~D', $path)) {
             throw ValidationException::withMessages(['files' => 'An unrecognized private file path requires review.']);
         }
         $disk = Storage::disk('local');
@@ -49,7 +49,7 @@ class DevelopmentDataFiles
             return [];
         }
         $files = [];
-        foreach (['lesson_materials' => 'path', 'resources' => 'file_path'] as $table => $column) {
+        foreach (['lesson_materials' => 'path', 'resources' => 'file_path', 'lms_assets' => 'path', 'lms_assignment_submissions' => 'path'] as $table => $column) {
             foreach ($plan['rows'][$table] ?? [] as $id => $row) {
                 $path = $row[$column] ?? null;
                 if (! is_string($path) || $path === '') {
@@ -58,9 +58,12 @@ class DevelopmentDataFiles
                 if ($table === 'lesson_materials' && ($row['kind'] !== 'private_file' || $row['disk'] !== 'local')) {
                     continue;
                 }
+                if ($table === 'lms_assets' && $row['disk'] !== 'local') {
+                    throw ValidationException::withMessages(['files' => 'A learning asset uses an unreviewed storage disk.']);
+                }
                 $absolute = $this->privatePath($path);
                 $hash = hash_file('sha256', $absolute);
-                if (! is_string($hash)) {
+                if (! is_string($hash) || (isset($row['sha256']) && ! hash_equals($row['sha256'], $hash))) {
                     throw ValidationException::withMessages(['files' => 'A private file could not be verified.']);
                 }
                 $files[] = ['table' => $table, 'id' => (string) $id, 'column' => $column, 'path' => $path, 'sha256' => $hash,
@@ -78,7 +81,9 @@ class DevelopmentDataFiles
     {
         $paths = array_column($files, 'path');
         $shared = DB::table('resources')->whereIn('file_path', $paths)->whereNotIn('id', array_keys($plan['rows']['resources'] ?? []))->pluck('file_path')
-            ->merge(DB::table('lesson_materials')->where('disk', 'local')->whereIn('path', $paths)->whereNotIn('id', array_keys($plan['rows']['lesson_materials'] ?? []))->pluck('path'))->all();
+            ->merge(DB::table('lesson_materials')->where('disk', 'local')->whereIn('path', $paths)->whereNotIn('id', array_keys($plan['rows']['lesson_materials'] ?? []))->pluck('path'))
+            ->merge(DB::table('lms_assets')->where('disk', 'local')->whereIn('path', $paths)->whereNotIn('id', array_keys($plan['rows']['lms_assets'] ?? []))->pluck('path'))
+            ->merge(DB::table('lms_assignment_submissions')->whereIn('path', $paths)->whereNotIn('id', array_keys($plan['rows']['lms_assignment_submissions'] ?? []))->pluck('path'))->all();
 
         return array_values(array_filter($files, fn (array $file): bool => ! in_array($file['path'], $shared, true)));
     }

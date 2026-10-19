@@ -17,7 +17,6 @@ use App\Domains\System\Services\DevelopmentToolsService;
 use Database\Factories\AdministratorFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class LmsLifecycleIntegrationTest extends TestCase
@@ -95,19 +94,15 @@ class LmsLifecycleIntegrationTest extends TestCase
         $this->assertDatabaseCount('student_packages', 0);
     }
 
-    public function test_development_reset_fails_closed_when_lms_ownership_exists(): void
+    public function test_development_reset_previews_reviewed_lms_ownership_without_deleting_it(): void
     {
-        config(['development_tools.enabled' => true, 'development_tools.require_snapshot' => false]);
+        config(['development_tools.enabled' => true, 'development_tools.require_snapshot' => false, 'session.driver' => 'database']);
         $actor = AdministratorFactory::new()->create();
         $student = Student::factory()->verified()->create();
         $course = Course::factory()->create();
         app(LmsAccessOperations::class)->grant($actor, $student, $course, [], 'retain');
-        try {
-            app(DevelopmentToolsService::class)->preview($actor, 'lms-reset', 'reset', 'students', []);
-            $this->fail('LMS dependencies need explicit reset review.');
-        } catch (ValidationException $exception) {
-            $this->assertStringContainsString('unreviewed dependent', $exception->errors()['scope'][0]);
-        }
+        $preview = app(DevelopmentToolsService::class)->preview($actor, 'lms-reset', 'reset', 'students', []);
+        $this->assertSame(1, $preview['preview']['counts']['lms_access_grants']);
         $this->assertModelExists($student);
         $this->assertDatabaseCount('lms_access_grants', 1);
         $this->assertSame(1, (int) DB::selectOne('SELECT @@FOREIGN_KEY_CHECKS AS enabled')->enabled);

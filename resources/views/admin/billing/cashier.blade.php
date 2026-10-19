@@ -203,6 +203,17 @@
 
                 <div class="text-sm font-bold text-slate-800">Enrollment & Terms Details</div>
 
+                <div x-show="selectedPreset === 'diagnostic_roadmap'" x-cloak>
+                    <label for="diagnostic-booking" class="block text-sm font-semibold text-slate-800">Link public diagnostic booking</label>
+                    <select id="diagnostic-booking" name="diagnostic_booking_id" :disabled="selectedPreset !== 'diagnostic_roadmap'" class="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm">
+                        <option value="">No existing booking — book this session later</option>
+                        @foreach($unlinkedDiagnostics as $diagnostic)
+                            <option value="{{ $diagnostic->id }}" @selected((string) old('diagnostic_booking_id') === (string) $diagnostic->id)>Booking #{{ $diagnostic->id }} · {{ $diagnostic->start_at_utc->setTimezone($businessTz)->format('M j, Y H:i') }} · {{ ucfirst($diagnostic->status) }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">Select the diagnostic already booked on the website. It uses this purchase’s session once. Full payment and completion unlock the $25 coaching credit for 48 hours.</p>
+                </div>
+
                 @if($diagnosticEligibility && $diagnosticEligibility['eligible'])
                     <div class="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between"
                          x-show="selectedPreset === 'foundation_track' || selectedPreset === 'fluency_track'">

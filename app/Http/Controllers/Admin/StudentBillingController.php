@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Administration\Services\OperationalReasonCatalog;
 use App\Domains\Audit\Services\AuditLogService;
+use App\Domains\Booking\Models\Booking;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\EntitlementType;
@@ -126,6 +127,10 @@ class StudentBillingController extends Controller
             'search' => $search,
             'selectedStudent' => $selectedStudent,
             'diagnosticEligibility' => $diagnosticEligibility,
+            'unlinkedDiagnostics' => $selectedStudent ? Booking::query()->where('student_id', $selectedStudent->id)
+                ->where('funding_mode', 'direct')->whereNull('student_package_id')->whereNull('consumed_ledger_entry_id')
+                ->whereIn('status', ['confirmed', 'completed'])->whereHas('sessionType', fn ($query) => $query->where('slug', 'diagnostic-session')->where('duration_minutes', 60))
+                ->orderByDesc('start_at_utc')->get(['id', 'start_at_utc', 'status']) : collect(),
             'presets' => StudentLedgerService::PRESETS,
             'paymentMethods' => PaymentMethod::available()->get(),
         ]);
@@ -162,6 +167,7 @@ class StudentBillingController extends Controller
             'expiration_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'package_idempotency_key' => ['required', 'uuid'],
             'override_notes' => ['nullable', 'string', 'max:1000'],
+            'diagnostic_booking_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $studentRecord = Student::query()->findOrFail($student);
@@ -186,6 +192,7 @@ class StudentBillingController extends Controller
                 $validated['preset_key'] ?? null,
                 $validated['override_notes'] ?? null,
                 $validated['entitlement_code'] ?? null,
+                isset($validated['diagnostic_booking_id']) ? (int) $validated['diagnostic_booking_id'] : null,
             );
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['package' => $exception->getMessage()]);

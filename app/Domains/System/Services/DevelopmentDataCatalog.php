@@ -8,6 +8,22 @@ class DevelopmentDataCatalog
 {
     public const VERSION = 1;
 
+    /** Learner-owned reset data; deliberately excluded from portable exports/imports. */
+    public const LMS_RESET_TABLES = [
+        'lms_access_events', 'lms_access_grants', 'lms_enrollments', 'lms_learning_assignments',
+        'lms_learning_visits', 'lms_lesson_notes', 'lms_lesson_bookmarks', 'lms_lesson_progress',
+        'lms_video_progress', 'lms_quiz_attempts', 'lms_assignment_submissions',
+        'lms_authorized_devices', 'lms_playback_leases', 'lms_courses', 'lms_course_releases',
+        'lms_sections', 'lms_lessons', 'lms_lesson_blocks', 'lms_access_rules', 'lms_assets',
+        'lms_video_assets', 'lms_video_webhook_receipts',
+    ];
+
+    /** @return list<string> */
+    public function resetTables(): array
+    {
+        return array_merge($this->tables(), self::LMS_RESET_TABLES);
+    }
+
     public const MODULES = [
         'students.profile' => ['students', 'student_emails', 'student_portal_logins'],
         'students.bookings' => ['bookings', 'booking_events', 'session_reschedules', 'booking_policy_decisions', 'migration_booking_exceptions', 'migration_booking_timezone_exceptions', 'recurring_lesson_plans', 'recurring_lesson_occurrences', 'booking_waitlists', 'student_unavailabilities'],

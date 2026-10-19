@@ -26,7 +26,7 @@ class DevelopmentDataNumbering
         $results = [];
         foreach ($summary['numbering_tables'] as $table) {
             $meta = $this->graph->schema()[$table] ?? null;
-            if (! in_array($table, $this->catalog->tables(), true) || ! preg_match('/^[a-z][a-z0-9_]*$/D', $table)
+            if (! in_array($table, $this->catalog->resetTables(), true) || ! preg_match('/^[a-z][a-z0-9_]*$/D', $table)
                 || $meta === null || count($meta['primary']) !== 1 || empty($meta['columns'][$meta['primary'][0]]['auto_increment'])) {
                 $results[$table] = 'Not restarted: unsupported table';
 

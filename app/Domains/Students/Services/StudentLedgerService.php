@@ -192,7 +192,7 @@ class StudentLedgerService
         return bcsub((string) $package->final_price, $netPaid, 2);
     }
 
-    public function createPackage(Student $student, string $name, int $sessions, string $originalPrice, string $discountAmount, string $currency, ?string $expirationDate, string $idempotencyKey, ?int $administratorId = null, ?string $presetKey = null, ?string $overrideNotes = null, ?string $entitlementCode = null): StudentPackage
+    public function createPackage(Student $student, string $name, int $sessions, string $originalPrice, string $discountAmount, string $currency, ?string $expirationDate, string $idempotencyKey, ?int $administratorId = null, ?string $presetKey = null, ?string $overrideNotes = null, ?string $entitlementCode = null, ?int $diagnosticBookingId = null): StudentPackage
     {
         if ($presetKey !== null && ! isset(self::PRESETS[$presetKey])) {
             throw new InvalidArgumentException('Unknown offering key.');
@@ -202,14 +202,18 @@ class StudentLedgerService
         if (! $type) {
             throw new InvalidArgumentException('Choose an explicit active entitlement type for this purchase.');
         }
-        $fingerprint = hash('sha256', json_encode([$name, $sessions, $originalPrice, $discountAmount, strtoupper($currency), $expirationDate, $presetKey, $overrideNotes, $type->code], JSON_THROW_ON_ERROR));
+        $fingerprintData = [$name, $sessions, $originalPrice, $discountAmount, strtoupper($currency), $expirationDate, $presetKey, $overrideNotes, $type->code];
+        if ($diagnosticBookingId !== null) {
+            $fingerprintData[] = $diagnosticBookingId;
+        }
+        $fingerprint = hash('sha256', json_encode($fingerprintData, JSON_THROW_ON_ERROR));
         $originalCents = $this->toCents($originalPrice);
         $discountCents = $this->toCents($discountAmount);
         if ($sessions < 1 || $originalCents < 0 || $discountCents < 0 || $discountCents > $originalCents) {
             throw new InvalidArgumentException('Invalid package terms.');
         }
 
-        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes, $type, $fingerprint): StudentPackage {
+        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes, $type, $fingerprint, $diagnosticBookingId): StudentPackage {
             $lockedStudent = Student::withTrashed()->whereKey($student->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged') {
                 throw new InvalidArgumentException('Packages cannot be assigned to an inactive student record.');
@@ -278,8 +282,44 @@ class StudentLedgerService
                 'created_at' => now('UTC'),
             ]);
 
+            if ($diagnosticBookingId !== null) {
+                $this->fundPublicDiagnostic($package, $allocation, $diagnosticBookingId, $administratorId);
+            }
+
             return $package;
         }, 5);
+    }
+
+    private function fundPublicDiagnostic(StudentPackage $package, StudentPackageEntitlement $allocation, int $bookingId, ?int $administratorId): void
+    {
+        $booking = Booking::query()->whereKey($bookingId)->lockForUpdate()->first();
+        if ($package->offering_key !== 'diagnostic_roadmap' || (int) $package->total_sessions_allocated !== 1
+            || ! $booking || (int) $booking->student_id !== (int) $package->student_id
+            || ! in_array($booking->status, ['confirmed', 'completed'], true) || $booking->funding_mode !== 'direct'
+            || $booking->student_package_id !== null || $booking->consumed_ledger_entry_id !== null
+            || $booking->sessionType?->slug !== 'diagnostic-session'
+            || (int) $booking->sessionType->duration_minutes !== 60
+            || SessionLedgerEntry::query()->where('booking_id', $bookingId)->exists()) {
+            throw new InvalidArgumentException('Choose an unlinked public diagnostic booking belonging to this student.');
+        }
+        $requirement = $this->entitlements->requirement($booking->sessionType);
+        if ((int) $allocation->entitlement_type_id !== (int) $requirement['type']->id || $requirement['units'] !== 1) {
+            throw new InvalidArgumentException('The diagnostic booking must require one one-hour session.');
+        }
+        $entry = SessionLedgerEntry::create([
+            'student_id' => $package->student_id, 'student_package_id' => $package->id,
+            'student_package_entitlement_id' => $allocation->id, 'entitlement_type_id' => $allocation->entitlement_type_id,
+            'booking_id' => $booking->id, 'idempotency_key' => 'public-diagnostic-'.$booking->id,
+            'entry_type' => 'session_consumed', 'credit_change' => -1,
+            'description' => 'Diagnostic purchase applied to public booking', 'created_by' => $administratorId, 'created_at' => now('UTC'),
+        ]);
+        $booking->update(['funding_mode' => 'package', 'entitlement_type_id' => $allocation->entitlement_type_id,
+            'entitlement_code' => $requirement['type']->code, 'entitlement_units' => 1,
+            'student_package_id' => $package->id, 'student_package_entitlement_id' => $allocation->id,
+            'consumed_ledger_entry_id' => $entry->id]);
+        app(AuditLogService::class)->log('public_diagnostic_purchase_linked', Booking::class, $booking->id,
+            ['funding_mode' => 'direct'], ['student_id' => $package->student_id, 'student_package_id' => $package->id,
+                'consumed_ledger_entry_id' => $entry->id], $administratorId);
     }
 
     public function selectAndLockEligiblePackageForBooking(int $studentId, SessionType $session): ?StudentPackage

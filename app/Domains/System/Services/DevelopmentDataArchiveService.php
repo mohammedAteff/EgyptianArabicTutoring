@@ -25,6 +25,11 @@ class DevelopmentDataArchiveService
     public function create(Administrator $actor, array $plan, array $snapshots = []): array
     {
         $this->access->authorize($actor);
+        $plan['rows'] = array_intersect_key($plan['rows'], array_flip($this->catalog->tables()));
+        if (isset($plan['rows']['content_revisions'])) {
+            $plan['rows']['content_revisions'] = array_filter($plan['rows']['content_revisions'],
+                fn (array $row): bool => strcasecmp($row['revisable_type'], Course::class) !== 0);
+        }
         $identity = (string) Str::uuid();
         $path = $this->files->operationPath($identity, 'exports').'.zip';
         $this->files->disk()->makeDirectory(dirname($path));

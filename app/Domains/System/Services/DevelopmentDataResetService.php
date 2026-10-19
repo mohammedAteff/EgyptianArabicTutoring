@@ -55,6 +55,9 @@ class DevelopmentDataResetService
             if (! empty($plan['rows']['students'])) {
                 DB::table('students')->whereIn('id', array_keys($plan['rows']['students']))->update(['possible_duplicate_of_student_id' => null, 'merged_into_student_id' => null]);
             }
+            if (! empty($plan['rows']['lms_courses'])) {
+                DB::table('lms_courses')->whereIn('id', array_keys($plan['rows']['lms_courses']))->update(['current_release_id' => null]);
+            }
             $this->clearReferences($plan);
             $order = $this->deleteOrder(array_keys($plan['rows']));
             foreach ($order as $table) {
@@ -113,7 +116,8 @@ class DevelopmentDataResetService
                         continue;
                     }
                     foreach ($this->graph->schema()[$child]['foreign_keys'] as $foreign) {
-                        if ($foreign['foreign_table'] === $parent && ! ($child === 'bookings' && $parent === 'session_ledger_entries')) {
+                        if ($foreign['foreign_table'] === $parent && ! ($child === 'bookings' && $parent === 'session_ledger_entries')
+                            && ! ($child === 'lms_courses' && $parent === 'lms_course_releases')) {
                             $blocked = true;
                         }
                     }
