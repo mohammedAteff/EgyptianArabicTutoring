@@ -14,6 +14,7 @@ use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class AvailabilityService
@@ -28,12 +29,12 @@ class AvailabilityService
     {
         return app(DatabaseCapability::class)->transaction(function () use ($values, $administratorId): array {
             $day = CarbonImmutable::parse($values['date'], $this->timezoneService->getBusinessTimezone())->startOfDay();
-            $this->acquireCalendarDateLocks($day->utc(), $day->addDay()->utc(), 0);
+            $this->acquireCalendarDateLocks($day->utc(), $day->addDays(2)->utc(), 0);
             $blocked = (bool) $values['is_blocked'];
             $exception = AvailabilityException::query()->updateOrCreate(['date' => $values['date']], [
                 'type' => $blocked ? 'blocked' : 'special_hours',
                 'start_time' => $blocked ? null : $values['start_time'].':00',
-                'end_time' => $blocked ? null : $values['end_time'].':00',
+                'end_time' => $blocked ? null : $this->exceptionEndTime($values['start_time'], $values['end_time']),
                 'notes' => $values['reason'] ?? null,
             ]);
             app(AuditLogService::class)->log('availability_exception_saved', AvailabilityException::class, $exception->id, null, ['date' => $values['date'], 'status' => $blocked ? 'blocked' : 'special_hours'], $administratorId);
@@ -43,11 +44,21 @@ class AvailabilityService
         }, 3);
     }
 
+    private function exceptionEndTime(string $start, string $end): string
+    {
+        $hour = (int) substr($end, 0, 2);
+        if ($end < $start) {
+            $hour += 24;
+        }
+
+        return sprintf('%02d:%s:00', $hour, substr($end, 3, 2));
+    }
+
     public function removeException(AvailabilityException $exception, ?int $administratorId): void
     {
         app(DatabaseCapability::class)->transaction(function () use ($exception, $administratorId): void {
             $day = CarbonImmutable::parse($exception->date, $this->timezoneService->getBusinessTimezone())->startOfDay();
-            $this->acquireCalendarDateLocks($day->utc(), $day->addDay()->utc(), 0);
+            $this->acquireCalendarDateLocks($day->utc(), $day->addDays(2)->utc(), 0);
             $locked = AvailabilityException::query()->lockForUpdate()->findOrFail($exception->id);
             $locked->delete();
             app(AuditLogService::class)->log('availability_exception_deleted', AvailabilityException::class, $exception->id, ['date' => $day->toDateString()], null, $administratorId);
@@ -73,7 +84,6 @@ class AvailabilityService
         $nowBusiness = $nowUtc->setTimezone($businessTz);
 
         // Window determination
-        $defaultMinNoticeHours = (int) Setting::get('booking_min_notice_hours', 12);
         $defaultBufferMinutes = (int) Setting::get('booking_buffer_minutes', 15);
         $defaultMaxHorizonDays = (int) Setting::get('booking_max_horizon_days', 60);
 
@@ -96,8 +106,8 @@ class AvailabilityService
             ? CarbonImmutable::instance($toDate)->setTimezone($customerTz)->endOfDay()->setTimezone($businessTz)->endOfDay()
             : $nowBusiness->addDays($searchHorizonDays)->endOfDay();
 
-        $startSearchUtc = $startSearchBusiness->setTimezone('UTC');
-        $endSearchUtc = $endSearchBusiness->setTimezone('UTC');
+        $startSearchUtc = $startSearchBusiness->subDay()->setTimezone('UTC');
+        $endSearchUtc = $endSearchBusiness->addDay()->setTimezone('UTC');
 
         // Fetch active bookings in window
         $activeBookings = Booking::query()
@@ -122,7 +132,7 @@ class AvailabilityService
 
         // Fetch exceptions in date range
         $exceptions = AvailabilityException::query()
-            ->whereBetween('date', [$startSearchBusiness->toDateString(), $endSearchBusiness->toDateString()])
+            ->whereBetween('date', [$startSearchBusiness->subDay()->toDateString(), $endSearchBusiness->addDay()->toDateString()])
             ->get()
             ->keyBy(fn ($e) => $e->date->toDateString());
 
@@ -134,10 +144,9 @@ class AvailabilityService
 
         $groupedSlots = [];
 
-        $currentDay = $startSearchBusiness;
+        $currentDay = $startSearchBusiness->subDay();
         while ($currentDay <= $endSearchBusiness) {
             $dateString = $currentDay->toDateString();
-            $weekday = $currentDay->dayOfWeek; // 0=Sunday, 1=Monday...
 
             /** @var AvailabilityException|null $exception */
             $exception = $exceptions->get($dateString);
@@ -149,30 +158,7 @@ class AvailabilityService
                 continue;
             }
 
-            // 2. Determine daily time intervals
-            $intervals = [];
-            if ($exception && $exception->isSpecialHours() && $exception->start_time && $exception->end_time) {
-                $baseRule = $rulesByWeekday->has($weekday) ? $rulesByWeekday->get($weekday)->first() : null;
-                $intervals[] = [
-                    'start' => $exception->start_time,
-                    'end' => $exception->end_time,
-                    'duration' => $baseRule?->session_duration_minutes ?? $sessionType->duration_minutes,
-                    'buffer' => $baseRule?->buffer_minutes ?? $defaultBufferMinutes,
-                    'min_notice' => $baseRule?->min_notice_hours ?? $defaultMinNoticeHours,
-                    'max_horizon' => $baseRule?->max_horizon_days ?? $defaultMaxHorizonDays,
-                ];
-            } elseif ($rulesByWeekday->has($weekday)) {
-                foreach ($rulesByWeekday->get($weekday) as $rule) {
-                    $intervals[] = [
-                        'start' => $rule->start_time,
-                        'end' => $rule->end_time,
-                        'duration' => $rule->session_duration_minutes ?? $sessionType->duration_minutes,
-                        'buffer' => $rule->buffer_minutes ?? $defaultBufferMinutes,
-                        'min_notice' => $rule->min_notice_hours ?? $defaultMinNoticeHours,
-                        'max_horizon' => $rule->max_horizon_days ?? $defaultMaxHorizonDays,
-                    ];
-                }
-            }
+            $intervals = $this->intervalsForDay($currentDay, $sessionType->duration_minutes, $rulesByWeekday, $exceptions);
 
             // 3. Generate candidate slots for each interval
             foreach ($intervals as $interval) {
@@ -184,7 +170,7 @@ class AvailabilityService
 
                 // Special-hours exceptions with nonexistent local times must be rejected/skipped without silent rounding
                 if ($this->timezoneService->isNonexistentLocalTime("{$dateString} {$interval['start']}", $businessTz)) {
-                    if ($exception && $exception->isSpecialHours()) {
+                    if ($interval['special']) {
                         continue;
                     }
                 }
@@ -195,10 +181,7 @@ class AvailabilityService
                 $intervalEndMinutes = ((int) $endParts[0]) * 60 + ((int) $endParts[1]);
 
                 for ($currMin = $intervalStartMinutes; ($currMin + $slotDurationMinutes) <= $intervalEndMinutes; $currMin += $step) {
-                    $slotHour = intdiv($currMin, 60);
-                    $slotMinute = $currMin % 60;
-                    $slotTimeString = sprintf('%02d:%02d:00', $slotHour, $slotMinute);
-                    $localDateTimeString = "{$dateString} {$slotTimeString}";
+                    $localDateTimeString = $this->wallTime($currentDay, $currMin);
 
                     // Check if candidate slot falls into a DST gap (nonexistent local wall time)
                     if ($this->timezoneService->isNonexistentLocalTime($localDateTimeString, $businessTz)) {
@@ -209,17 +192,17 @@ class AvailabilityService
                     $slotStartUtc = $this->timezoneService->resolveLocalWallTime($localDateTimeString, $businessTz, 'first');
 
                     // Compute slot end
-                    $endMin = $currMin + $slotDurationMinutes;
-                    $endHour = intdiv($endMin, 60);
-                    $endMinute = $endMin % 60;
-                    $endLocalString = sprintf('%02d:%02d:00', $endHour, $endMinute);
-                    $endDateTimeString = "{$dateString} {$endLocalString}";
+                    $endDateTimeString = $this->wallTime($currentDay, $currMin + $slotDurationMinutes);
 
                     if ($this->timezoneService->isNonexistentLocalTime($endDateTimeString, $businessTz)) {
                         continue;
                     }
 
                     $slotEndUtc = $this->timezoneService->resolveLocalWallTime($endDateTimeString, $businessTz, 'first');
+
+                    if ($slotEndUtc->getTimestamp() - $slotStartUtc->getTimestamp() !== $slotDurationMinutes * 60) {
+                        continue;
+                    }
 
                     // Check minimum notice and maximum horizon
                     if ($slotStartUtc < $nowUtc->addHours($minNotice) || $slotStartUtc > $nowUtc->addDays($maxHorizon)->endOfDay()) {
@@ -255,6 +238,9 @@ class AvailabilityService
                     $customerStart = $slotStartUtc->setTimezone($customerTz);
                     $customerEnd = $slotEndUtc->setTimezone($customerTz);
                     $customerDate = $customerStart->toDateString();
+                    if ($slotStartUtc->lessThan($startSearchBusiness->utc()) || $slotStartUtc->greaterThan($endSearchBusiness->utc())) {
+                        continue;
+                    }
 
                     $businessStart = $slotStartUtc->setTimezone($businessTz);
                     $businessEnd = $slotEndUtc->setTimezone($businessTz);
@@ -284,7 +270,7 @@ class AvailabilityService
                         'max_horizon_days' => $maxHorizon,
                     ];
 
-                    $groupedSlots[$customerDate][] = $slotData;
+                    $groupedSlots[$customerDate][$slotData['slot_start_utc']] ??= $slotData;
                 }
             }
 
@@ -294,6 +280,7 @@ class AvailabilityService
         // Sort dates and slots
         ksort($groupedSlots);
         foreach ($groupedSlots as &$slots) {
+            $slots = array_values($slots);
             usort($slots, fn ($a, $b) => strcmp($a['slot_start_utc'], $b['slot_start_utc']));
         }
 
@@ -323,6 +310,48 @@ class AvailabilityService
         }
     }
 
+    private function wallTime(CarbonImmutable $day, int $minutes): string
+    {
+        return $day->addDays(intdiv($minutes, 1440))->format('Y-m-d').' '.sprintf('%02d:%02d:00', intdiv($minutes % 1440, 60), $minutes % 60);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function intervalsForDay(CarbonImmutable $day, int $duration, Collection $rules, Collection $exceptions): array
+    {
+        $exception = $exceptions->get($day->toDateString());
+        if ($exception?->isBlocked()) {
+            return [];
+        }
+        $dailyRules = $rules->get($day->dayOfWeek, collect());
+        $source = $exception?->isSpecialHours() ? collect([$exception]) : $dailyRules;
+        $intervals = [];
+        foreach ($source as $window) {
+            $base = $exception?->isSpecialHours() ? $dailyRules->first() : $window;
+            $end = $window->end_time;
+            $parts = explode(':', $end);
+            $endMinutes = (int) $parts[0] * 60 + (int) $parts[1];
+            $startParts = explode(':', $window->start_time);
+            $startMinutes = (int) $startParts[0] * 60 + (int) $startParts[1];
+            if ($endMinutes <= $startMinutes) {
+                $endMinutes += 1440;
+            }
+            if ($endMinutes > 1440 && $exceptions->has($day->addDay()->toDateString())) {
+                $endMinutes = 1440;
+            }
+            $intervals[] = [
+                'special' => (bool) $exception?->isSpecialHours(),
+                'start' => $window->start_time,
+                'end' => sprintf('%02d:%02d:00', intdiv($endMinutes, 60), $endMinutes % 60),
+                'duration' => $base?->session_duration_minutes ?? $duration,
+                'buffer' => $base?->buffer_minutes ?? (int) Setting::get('booking_buffer_minutes', 15),
+                'min_notice' => $base?->min_notice_hours ?? (int) Setting::get('booking_min_notice_hours', 12),
+                'max_horizon' => $base?->max_horizon_days ?? (int) Setting::get('booking_max_horizon_days', 60),
+            ];
+        }
+
+        return $intervals;
+    }
+
     /**
      * Resolve the effective buffer minutes for a given UTC slot start.
      */
@@ -330,31 +359,20 @@ class AvailabilityService
     {
         $businessTz = $this->timezoneService->getBusinessTimezone();
         $startBusiness = CarbonImmutable::instance($startUtc)->setTimezone($businessTz);
-        $dateBusiness = $startBusiness->toDateString();
-        $weekday = $startBusiness->dayOfWeek;
-
-        $exception = AvailabilityException::query()->where('date', $dateBusiness)->first();
-        if ($exception && $exception->isSpecialHours()) {
-            $baseRule = AvailabilityRule::query()->where('weekday', $weekday)->where('enabled', true)->first();
-
-            return $baseRule?->buffer_minutes ?? (int) Setting::get('booking_buffer_minutes', 15);
-        }
-
-        $timeString = $startBusiness->format('H:i:s');
-        $rule = AvailabilityRule::query()
-            ->where('weekday', $weekday)
-            ->where('enabled', true)
-            ->where('start_time', '<=', $timeString)
-            ->where('end_time', '>=', $timeString)
-            ->first();
-
-        if ($rule && $rule->buffer_minutes !== null) {
-            return (int) $rule->buffer_minutes;
-        }
-
-        $anyRule = AvailabilityRule::query()->where('weekday', $weekday)->where('enabled', true)->first();
-        if ($anyRule && $anyRule->buffer_minutes !== null) {
-            return (int) $anyRule->buffer_minutes;
+        $rules = AvailabilityRule::query()->where('enabled', true)->orderBy('id')->get()->groupBy('weekday');
+        $exceptions = AvailabilityException::query()->whereBetween('date', [$startBusiness->subDay()->toDateString(), $startBusiness->addDay()->toDateString()])
+            ->get()->keyBy(fn ($exception) => $exception->date->toDateString());
+        foreach ([$startBusiness->startOfDay()->subDay(), $startBusiness->startOfDay()] as $day) {
+            foreach ($this->intervalsForDay($day, 60, $rules, $exceptions) as $interval) {
+                $parts = explode(':', $interval['start']);
+                $from = (int) $parts[0] * 60 + (int) $parts[1];
+                $parts = explode(':', $interval['end']);
+                $through = (int) $parts[0] * 60 + (int) $parts[1];
+                $minutes = $startBusiness->hour * 60 + $startBusiness->minute + ($day->toDateString() === $startBusiness->toDateString() ? 0 : 1440);
+                if ($minutes >= $from && $minutes < $through) {
+                    return (int) $interval['buffer'];
+                }
+            }
         }
 
         return (int) Setting::get('booking_buffer_minutes', 15);
@@ -469,7 +487,6 @@ class AvailabilityService
         $businessTz = $this->timezoneService->getBusinessTimezone();
         $startBusiness = $start->setTimezone($businessTz);
         $dateBusiness = $startBusiness->toDateString();
-        $weekday = $startBusiness->dayOfWeek;
 
         // Check for date exceptions
         $exception = AvailabilityException::query()->where('date', $dateBusiness)->first();
@@ -477,38 +494,17 @@ class AvailabilityService
             throw new SlotUnavailableException('This date is blocked for appointments.');
         }
 
-        $defaultMinNoticeHours = (int) Setting::get('booking_min_notice_hours', 12);
-        $defaultBufferMinutes = (int) Setting::get('booking_buffer_minutes', 15);
-        $defaultMaxHorizonDays = (int) Setting::get('booking_max_horizon_days', 60);
-
-        // Determine candidate intervals for this date
+        $rules = AvailabilityRule::query()->where('enabled', true)->orderBy('id')->get()->groupBy('weekday');
+        $exceptions = AvailabilityException::query()->whereBetween('date', [$startBusiness->subDay()->toDateString(), $startBusiness->addDay()->toDateString()])
+            ->get()->keyBy(fn ($entry) => $entry->date->toDateString());
         $intervals = [];
-        if ($exception && $exception->isSpecialHours() && $exception->start_time && $exception->end_time) {
-            $baseRule = AvailabilityRule::query()->where('weekday', $weekday)->where('enabled', true)->first();
-            $intervals[] = [
-                'start' => $exception->start_time,
-                'end' => $exception->end_time,
-                'duration' => $baseRule?->session_duration_minutes ?? $sessionType->duration_minutes,
-                'buffer' => $baseRule?->buffer_minutes ?? $defaultBufferMinutes,
-                'min_notice' => $baseRule?->min_notice_hours ?? $defaultMinNoticeHours,
-                'max_horizon' => $baseRule?->max_horizon_days ?? $defaultMaxHorizonDays,
-            ];
-        } else {
-            $rules = AvailabilityRule::query()->where('weekday', $weekday)->where('enabled', true)->get();
-            if ($rules->isEmpty()) {
-                throw new SlotUnavailableException('The tutor is not available on this day.');
+        foreach ([$startBusiness->startOfDay()->subDay(), $startBusiness->startOfDay()] as $day) {
+            foreach ($this->intervalsForDay($day, $sessionType->duration_minutes, $rules, $exceptions) as $interval) {
+                $intervals[] = [...$interval, 'date' => $day];
             }
-
-            foreach ($rules as $rule) {
-                $intervals[] = [
-                    'start' => $rule->start_time,
-                    'end' => $rule->end_time,
-                    'duration' => $rule->session_duration_minutes ?? $sessionType->duration_minutes,
-                    'buffer' => $rule->buffer_minutes ?? $defaultBufferMinutes,
-                    'min_notice' => $rule->min_notice_hours ?? $defaultMinNoticeHours,
-                    'max_horizon' => $rule->max_horizon_days ?? $defaultMaxHorizonDays,
-                ];
-            }
+        }
+        if ($intervals === []) {
+            throw new SlotUnavailableException('The tutor is not available on this day.');
         }
 
         // Check if requested slot falls into a DST gap (nonexistent local wall time)
@@ -525,13 +521,16 @@ class AvailabilityService
             $step = $duration + $buffer;
 
             // Special-hours exceptions with nonexistent local times must not authorize slots
-            if ($this->timezoneService->isNonexistentLocalTime("{$dateBusiness} {$interval['start']}", $businessTz)) {
-                if ($exception && $exception->isSpecialHours()) {
+            if ($this->timezoneService->isNonexistentLocalTime($interval['date']->toDateString().' '.$interval['start'], $businessTz)) {
+                if ($interval['special']) {
                     continue;
                 }
             }
 
             $slotMinutes = $startBusiness->hour * 60 + $startBusiness->minute;
+            if ($interval['date']->toDateString() !== $dateBusiness) {
+                $slotMinutes += 1440;
+            }
             $startParts = explode(':', $interval['start']);
             $intervalStartMinutes = ((int) $startParts[0]) * 60 + ((int) $startParts[1]);
             $endParts = explode(':', $interval['end']);
@@ -560,6 +559,12 @@ class AvailabilityService
                 continue;
             }
 
+            $endWallTime = $this->wallTime($interval['date'], $slotMinutes + $duration);
+            if ($this->timezoneService->isNonexistentLocalTime($endWallTime, $businessTz)
+                || $this->timezoneService->resolveLocalWallTime($endWallTime, $businessTz, 'first')->getTimestamp() !== $start->addMinutes($duration)->getTimestamp()
+                || $this->timezoneService->resolveLocalWallTime($startBusiness->format('Y-m-d H:i:s'), $businessTz, 'first')->getTimestamp() !== $start->getTimestamp()) {
+                continue;
+            }
             $matchedInterval = $interval;
             break;
         }

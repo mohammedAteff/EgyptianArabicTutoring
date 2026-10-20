@@ -65,7 +65,7 @@ class CashierBillingReconciliationTest extends TestCase
         // Diagnostic & Roadmap
         $this->assertEquals('25.00', $presets['diagnostic_roadmap']['price']);
         $this->assertEquals(1, $presets['diagnostic_roadmap']['sessions']);
-        $this->assertEquals(14, $presets['diagnostic_roadmap']['validity_days']);
+        $this->assertNull($presets['diagnostic_roadmap']['validity_days']);
 
         // Foundation Track
         $this->assertEquals('280.00', $presets['foundation_track']['price']);
@@ -82,12 +82,12 @@ class CashierBillingReconciliationTest extends TestCase
         // Pay-As-You-Go Maintenance
         $this->assertEquals('48.00', $presets['payg_maintenance']['price']);
         $this->assertEquals(1, $presets['payg_maintenance']['sessions']);
-        $this->assertEquals(30, $presets['payg_maintenance']['validity_days']);
+        $this->assertNull($presets['payg_maintenance']['validity_days']);
 
         // Advanced Conversational
         $this->assertEquals('28.00', $presets['advanced_conversational']['price']);
         $this->assertEquals(1, $presets['advanced_conversational']['sessions']);
-        $this->assertEquals(30, $presets['advanced_conversational']['validity_days']);
+        $this->assertNull($presets['advanced_conversational']['validity_days']);
     }
 
     public function test_reconciliation_uses_student_booking_audit_evidence_instead_of_marketing_source(): void

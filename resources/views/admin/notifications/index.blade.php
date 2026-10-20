@@ -43,6 +43,10 @@
             @php
                 $isUnread = !$notification->isRead();
                 $level = $notification->level;
+                $bookingId = filter_var($notification->data['booking_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                $detailsLink = str_starts_with($notification->type, 'booking_') && $bookingId
+                    ? route('admin.bookings.show', $bookingId)
+                    : $notification->link;
             @endphp
             <div class="p-4 sm:p-5 flex items-start gap-4 transition-colors {{ $isUnread ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'hover:bg-slate-50/70' }}">
                 
@@ -88,8 +92,8 @@
 
                     <!-- Action buttons -->
                     <div class="flex items-center gap-3 mt-3">
-                        @if($notification->link)
-                            <a href="{{ $notification->link }}" class="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors inline-flex items-center gap-1">
+                        @if($detailsLink)
+                            <a href="{{ $detailsLink }}" class="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors inline-flex items-center gap-1">
                                 <span>View Details</span>
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                             </a>

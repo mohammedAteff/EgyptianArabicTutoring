@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<p class="mb-4 rounded-xl bg-white p-4 text-sm">Funding: {{ ucfirst($booking->funding_mode) }}@if($booking->consumed_ledger_entry_id) · {{ $booking->entitlement_units }} {{ $booking->entitlement_code }} · Purchase #{{ $booking->student_package_id }} · Allocation #{{ $booking->student_package_entitlement_id }} · Debit #{{ $booking->consumed_ledger_entry_id }}@endif</p>
+<p class="mb-4 rounded-xl bg-white p-4 text-sm">Funding: {{ ucfirst($booking->funding_mode) }}@if($booking->consumed_ledger_entry_id) · {{ $booking->entitlement_units }} × {{ $booking->entitlement_code === 'two_hour' ? '2-hour session' : '1-hour session' }} · Purchase #{{ $booking->student_package_id }} · Allocation #{{ $booking->student_package_entitlement_id }} · Credit use · Ledger entry #{{ $booking->consumed_ledger_entry_id }}<span class="mt-1 block text-xs text-slate-500">Ledger entries include credits granted and used. Their numbers are independent of booking and purchase numbers.</span>@endif</p>
 <div class="max-w-6xl mx-auto space-y-8" x-data="{ rescheduleModalOpen: false, cancelModalOpen: false }">
 
     <!-- Top Breadcrumb & Status -->

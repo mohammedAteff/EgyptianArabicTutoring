@@ -163,7 +163,7 @@ class BookingWizard extends Component
         $this->calendarMonth = now($this->customerTimezone)->format('Y-m');
 
         // Check active session types
-        $activeSessions = SessionType::publicBookable()->get();
+        $activeSessions = SessionType::publicBookable()->orderByRaw("CASE WHEN slug = 'diagnostic-session' THEN 0 ELSE 1 END")->orderBy('duration_minutes')->orderBy('id')->get();
         if ($activeSessions->count() === 1) {
             $this->selectedSessionTypeId = $activeSessions->first()->id;
             $this->currentStep = 2; // skip session selection step
@@ -826,7 +826,7 @@ class BookingWizard extends Component
         $sessionType = $this->selectedSessionTypeId
             ? SessionType::query()->whereKey($this->selectedSessionTypeId)->publicBookable()->first()
             : null;
-        $activeSessionTypes = SessionType::publicBookable()->get();
+        $activeSessionTypes = SessionType::publicBookable()->orderByRaw("CASE WHEN slug = 'diagnostic-session' THEN 0 ELSE 1 END")->orderBy('duration_minutes')->orderBy('id')->get();
 
         $availableSlotsByDate = [];
         if ($sessionType) {

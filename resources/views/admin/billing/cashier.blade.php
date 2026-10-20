@@ -67,8 +67,8 @@
 
         // Calculate expiration date (business local + validity days)
         const d = new Date();
-        d.setDate(d.getDate() + preset.validity_days);
-        this.expirationDate = d.toISOString().split('T')[0];
+        if (preset.validity_days !== null) d.setDate(d.getDate() + preset.validity_days);
+        this.expirationDate = preset.validity_days === null ? '' : d.toISOString().split('T')[0];
     },
     toggleDiagnosticCredit() {
         if (!this.selectedPreset) return;
@@ -186,7 +186,7 @@
                         <p class="text-xs text-slate-500 mt-0.5">{{ $preset['sessions'] }} {{ $preset['sessions'] === 1 ? 'Session' : 'Sessions' }} • {{ $preset['duration_minutes'] }} mins each</p>
                     </div>
                     <div class="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>{{ $preset['validity_days'] }} Calendar Days</span>
+                        <span>{{ $preset['validity_days'] === null ? 'No expiry · 4-hour cancellation notice' : $preset['validity_days'].' Calendar Days' }}</span>
                         <span class="font-semibold text-amber-600">Select &rarr;</span>
                     </div>
                 </button>
@@ -264,7 +264,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Expiration Date (Business Time)</label>
-                        <input type="date" name="expiration_date" x-model="expirationDate"
+                        <input type="date" name="expiration_date" x-model="expirationDate" :disabled="selectedPreset && validityDays === null"
                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                     </div>
                 </div>

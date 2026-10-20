@@ -29,7 +29,7 @@ class StudentLedgerService
             'sessions' => 1,
             'duration_minutes' => 60,
             'price' => '25.00',
-            'validity_days' => 14,
+            'validity_days' => null,
             'audience' => 'Mandatory Entry',
         ],
         'foundation_track' => [
@@ -61,7 +61,7 @@ class StudentLedgerService
             'sessions' => 1,
             'duration_minutes' => 120,
             'price' => '48.00',
-            'validity_days' => 30,
+            'validity_days' => null,
             'audience' => 'Single Sessions',
         ],
         'advanced_conversational' => [
@@ -71,7 +71,7 @@ class StudentLedgerService
             'sessions' => 1,
             'duration_minutes' => 60,
             'price' => '28.00',
-            'validity_days' => 30,
+            'validity_days' => null,
             'audience' => 'Single Sessions',
         ],
     ];
@@ -246,6 +246,10 @@ class StudentLedgerService
                 $diagnosticCredit = in_array($presetKey, ['foundation_track', 'fluency_track'], true) ? $this->checkDiagnosticCreditEligibility($student->id) : null;
                 $effectiveDiscountCents = max($discountCents, $diagnosticCredit ? $this->toCents($diagnosticCredit['credit_amount']) : 0);
                 $effectiveCurrency = 'USD';
+                $effectiveExpirationDate = null;
+            }
+
+            if ($presetKey !== null && self::PRESETS[$presetKey]['validity_days'] === null) {
                 $effectiveExpirationDate = null;
             }
 

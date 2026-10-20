@@ -47,7 +47,7 @@
                                 <div class="bg-white p-2.5 rounded-xl border border-slate-200 text-xs shadow-2xs"><div class="flex items-center justify-between gap-2">
                                     <div>
                                         <div class="font-bold text-slate-900">
-                                            {{ substr($r->start_time, 0, 5) }} &ndash; {{ substr($r->end_time, 0, 5) }}
+                                            {{ substr($r->start_time, 0, 5) }} &ndash; {{ sprintf('%02d:%02d', (int) substr($r->end_time, 0, 2) % 24, (int) substr($r->end_time, 3, 2)) }}{{ (int) substr($r->end_time, 0, 2) >= 24 || $r->end_time < $r->start_time ? ' (+1 day)' : '' }}
                                         </div>
                                         <div class="text-[10px] text-slate-400 mt-0.5">
                                             {{ $r->session_duration_minutes ? $r->session_duration_minutes.'m lesson' : 'Lesson type duration' }} · {{ $r->buffer_minutes ?? $defaultBufferMinutes }}m buffer
@@ -127,7 +127,7 @@
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-600">
                                 @if(! $exception->is_blocked && $exception->start_time && $exception->end_time)
-                                    {{ substr($exception->start_time, 0, 5) }} &ndash; {{ substr($exception->end_time, 0, 5) }}
+                                    {{ substr($exception->start_time, 0, 5) }} &ndash; {{ sprintf('%02d:%02d', (int) substr($exception->end_time, 0, 2) % 24, (int) substr($exception->end_time, 3, 2)) }}{{ (int) substr($exception->end_time, 0, 2) >= 24 ? ' (+1 day)' : '' }}
                                 @else
                                     &mdash;
                                 @endif
@@ -227,7 +227,7 @@
                         <input type="time" name="start_time" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">End Time (HH:MM)</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">End Time (HH:MM; earlier means next day)</label>
                         <input type="time" name="end_time" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                 </div>

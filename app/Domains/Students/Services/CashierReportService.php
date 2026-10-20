@@ -59,7 +59,7 @@ class CashierReportService
                 $query->where('entry_type', 'courtesy_adjustment');
             }
             $this->apply($query, $dateColumn, $type, $filters);
-            foreach ($query->orderByDesc($dateColumn)->orderByDesc('id')->lazy(250) as $record) {
+            foreach ($query->orderByDesc('id')->lazy(250) as $record) {
                 $student = $record->getRelation('student');
                 $amount = match ($type) {
                     'payment' => (float) $record->amount_paid,

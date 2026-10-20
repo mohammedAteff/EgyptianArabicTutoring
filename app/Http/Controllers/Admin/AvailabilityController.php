@@ -96,9 +96,12 @@ class AvailabilityController extends Controller
         ]);
 
         $startMinutes = (int) substr($validated['start_time'], 0, 2) * 60 + (int) substr($validated['start_time'], 3, 2);
-        $endMinutes = $validated['end_time'] === '00:00' ? 1440 : (int) substr($validated['end_time'], 0, 2) * 60 + (int) substr($validated['end_time'], 3, 2);
-        if ($endMinutes <= $startMinutes) {
-            throw ValidationException::withMessages(['end_time' => 'End time must be after start time. Choose 00:00 for midnight at the end of the day.']);
+        $endMinutes = (int) substr($validated['end_time'], 0, 2) * 60 + (int) substr($validated['end_time'], 3, 2);
+        if ($endMinutes === $startMinutes) {
+            throw ValidationException::withMessages(['end_time' => 'Choose different start and end times. An earlier end time finishes on the following day.']);
+        }
+        if ($endMinutes < $startMinutes) {
+            $endMinutes += 1440;
         }
         if (! empty($validated['session_duration_minutes']) && $endMinutes - $startMinutes < (int) $validated['session_duration_minutes']) {
             throw ValidationException::withMessages(['end_time' => 'This window is shorter than one '.$validated['session_duration_minutes'].'-minute lesson. Extend the window or shorten the lesson. The buffer is the gap between lessons; the last lesson only needs to finish by the window end.']);
@@ -107,7 +110,7 @@ class AvailabilityController extends Controller
         return [
             ...$validated,
             'start_time' => $validated['start_time'].':00',
-            'end_time' => $endMinutes === 1440 ? '24:00:00' : $validated['end_time'].':00',
+            'end_time' => sprintf('%02d:%02d:00', intdiv($endMinutes, 60), $endMinutes % 60),
         ];
     }
 
@@ -150,7 +153,7 @@ class AvailabilityController extends Controller
             'date' => ['required', 'date_format:Y-m-d'],
             'is_blocked' => ['required', 'boolean'],
             'start_time' => ['nullable', 'required_if:is_blocked,0', 'date_format:H:i'],
-            'end_time' => ['nullable', 'required_if:is_blocked,0', 'date_format:H:i', 'after:start_time'],
+            'end_time' => ['nullable', 'required_if:is_blocked,0', 'date_format:H:i', 'different:start_time'],
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 

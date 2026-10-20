@@ -42,7 +42,7 @@ class AdminNotification extends Model
 
     public function scopeRecent(Builder $query): Builder
     {
-        return $query->orderByDesc('created_at');
+        return $query->orderByDesc('id');
     }
 
     public function isRead(): bool

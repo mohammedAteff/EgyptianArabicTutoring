@@ -148,6 +148,7 @@ class CriticalBookingQAMatrixTest extends TestCase
      */
     public function test_scenario_c_booking_crosses_midnight_between_zones(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-01 00:00:00', 'UTC'));
         // 22:00 Cairo on Oct 15 (UTC+3) -> 19:00 UTC on Oct 15
         $cairoStart = CarbonImmutable::parse('2026-10-15 22:00:00', 'Africa/Cairo');
         $startUtc = $cairoStart->setTimezone('UTC');

@@ -88,9 +88,10 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 @foreach($activeSessionTypes as $type)
-                    <div wire:click="selectSession({{ $type->id }})"
+                    <div wire:key="booking-session-{{ $type->id }}" wire:click="selectSession({{ $type->id }})"
                          class="cursor-pointer border-2 rounded-2xl p-6 transition-all hover:border-terracotta-500 hover:shadow-md {{ $selectedSessionTypeId === $type->id ? 'border-terracotta-500 bg-terracotta-50/30' : 'border-stone-200' }}">
-                        <div class="flex items-start justify-between">
+                        @if($type->slug === 'diagnostic-session')<p class="mb-2 text-xs font-bold uppercase tracking-wide text-terracotta-600">{{ __('Start here · New students') }}</p>@endif
+                        <div class="flex items-start justify-between gap-4">
                             <h3 class="font-bold text-lg text-stone-900">{{ $type->title }}</h3>
                             <span class="font-extrabold text-terracotta-600 text-lg">${{ number_format($type->price, 2) }}</span>
                         </div>

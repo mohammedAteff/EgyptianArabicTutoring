@@ -237,14 +237,14 @@ class SocialPlacementAndSchedulingControlsTest extends TestCase
 
         $this->assertSame(120, $configuration['duration_minutes']);
         $this->assertSame(10, $configuration['buffer_minutes']);
-        $this->get(route('admin.availability.index'))->assertSee('value="00:00"', false)->assertSee('midnight at the end of this day');
+        $this->get(route('admin.availability.index'))->assertSee('value="00:00"', false)->assertSee('the following day');
     }
 
-    public function test_reversed_non_midnight_window_does_not_create_an_overnight_schedule(): void
+    public function test_earlier_end_time_creates_an_overnight_schedule(): void
     {
-        $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']))->post(route('admin.availability.rules.store'), [...$this->ruleInput(), 'start_time' => '08:00', 'end_time' => '07:00'])->assertSessionHasErrors('end_time');
+        $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']))->post(route('admin.availability.rules.store'), [...$this->ruleInput(), 'start_time' => '08:00', 'end_time' => '07:00'])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('availability_rules', 0);
+        $this->assertDatabaseHas('availability_rules', ['start_time' => '08:00:00', 'end_time' => '31:00:00']);
     }
 
     private function channel(string $platform = 'youtube'): SocialLink

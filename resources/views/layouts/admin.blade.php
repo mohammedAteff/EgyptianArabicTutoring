@@ -91,7 +91,7 @@
                     </div>
                     <div>
                         <div class="font-bold text-white text-sm leading-tight tracking-tight">Operations Console</div>
-                        <div class="text-xs text-amber-400 font-medium">{{ config('business.tutor_name') }}</div>
+                        <div class="text-xs text-amber-400 font-medium">{{ auth('web')->user()?->name }}</div>
                     </div>
                 </a>
                 <button type="button"
@@ -255,7 +255,7 @@
                 {{ $slot ?? '' }}
                 @yield('content')
                 @if(request()->routeIs('admin.analytics*', 'admin.reports*'))
-                    <p class="mt-8 text-xs text-slate-500">IP country data by <a href="https://db-ip.com/" class="underline">DB-IP</a> (<a href="https://creativecommons.org/licenses/by/4.0/" class="underline">CC BY 4.0</a>).</p>
+                    <details class="mt-8 text-xs text-slate-500"><summary class="cursor-pointer">Data sources</summary><p class="mt-2">IP country data by <a href="https://db-ip.com/" class="underline">DB-IP</a> (<a href="https://creativecommons.org/licenses/by/4.0/" class="underline">CC BY 4.0</a>).</p></details>
                 @endif
             </main>
         </div>

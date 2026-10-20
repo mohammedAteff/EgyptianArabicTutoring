@@ -174,7 +174,7 @@ class StudentBillingController extends Controller
 
         // Auto-calculate expiration date using Cairo midnight if not provided but preset is known
         $expirationDate = $validated['expiration_date'] ?? null;
-        if (! $expirationDate && $preset) {
+        if (! $expirationDate && $preset && $preset['validity_days'] !== null) {
             $expirationDate = $ledger->calculateExpirationDate(CarbonImmutable::now('UTC'), $preset['validity_days']);
         }
 
