@@ -18,7 +18,7 @@
     <p role="status" class="mt-4 rounded-xl bg-amber-50 p-5 text-sm text-amber-900">You don't have enough eligible credits for this lesson type. You can choose another type if you have compatible credits, or contact Abdallah about your next lesson.</p>
 @endif
 <form method="GET" action="{{ route('student.bookings.create') }}" class="mt-5 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 sm:grid-cols-3">
-    <label class="text-sm font-medium">Lesson type<select name="session_type_id" required class="mt-1 block min-h-11 w-full rounded-lg border border-stone-300 px-3"><option value="" @selected(!$selectedSessionType)>Choose a lesson type</option>@foreach($sessionTypes as $type)<option value="{{ $type->id }}" @disabled(!in_array($type->id, $fundableTypeIds, true)) @selected($selectedSessionType?->id === $type->id)>{{ $type->duration_minutes }}-minute lesson · Uses {{ $type->required_entitlement_units }} matching package credit{{ $type->required_entitlement_units > 1 ? 's' : '' }}{{ in_array($type->id, $fundableTypeIds, true) ? '' : ' · No eligible credits' }}</option>@endforeach</select></label>
+    <label class="text-sm font-medium">Lesson type<select name="session_type_id" required class="mt-1 block min-h-11 w-full rounded-lg border border-stone-300 px-3"><option value="" @selected(!$selectedSessionType)>Choose a lesson type</option>@foreach($sessionTypes as $type)<option value="{{ $type->id }}" @disabled(!in_array($type->id, $fundableTypeIds, true)) @selected($selectedSessionType?->id === $type->id)>{{ $type->title }} ({{ $type->duration_minutes }} min) · Uses {{ $type->required_entitlement_units }} matching package credit{{ $type->required_entitlement_units > 1 ? 's' : '' }}{{ in_array($type->id, $fundableTypeIds, true) ? '' : ' · No eligible credits' }}</option>@endforeach</select></label>
     <input type="hidden" name="timezone" value="{{ $timezone }}">
     <label class="text-sm font-medium">Starting date<input type="date" name="date" min="{{ now($timezone)->toDateString() }}" max="{{ now($timezone)->addDays(60)->toDateString() }}" value="{{ $fromDate->toDateString() }}" required class="mt-1 block min-h-11 w-full rounded-lg border border-stone-300 px-3"></label>
     <div class="sm:col-span-3"><button @disabled($sessionTypes->isEmpty()) class="min-h-11 rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white enabled:hover:bg-nile-900 disabled:cursor-not-allowed disabled:opacity-50">Show Available Times</button></div>
@@ -48,7 +48,7 @@
     <section x-show="reviewing" x-cloak class="rounded-2xl border border-stone-200 bg-white p-6">
         <h2 class="text-xl font-semibold">Review Your Lesson</h2>
         <dl class="mt-4 space-y-3 text-sm">
-            <div><dt class="font-semibold">Lesson</dt><dd>{{ $selectedSessionType->duration_minutes }} minutes</dd></div>
+            <div><dt class="font-semibold">Lesson</dt><dd>{{ $selectedSessionType->title }} · {{ $selectedSessionType->duration_minutes }} minutes</dd></div>
             <div><dt class="font-semibold">Your selected time</dt><dd x-text="selectedLabel"></dd></div>
             <div><dt class="font-semibold">Timezone</dt><dd>{{ $timezone }}</dd></div>
             <div><dt class="font-semibold">Package credit used</dt><dd>{{ $selectedSessionType->required_entitlement_units }} credit{{ $selectedSessionType->required_entitlement_units > 1 ? 's' : '' }} for a {{ $selectedSessionType->duration_minutes }}-minute lesson</dd></div>
