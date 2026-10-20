@@ -353,13 +353,16 @@ class BookingController extends Controller
         $filters = $request->validate(['student_id' => ['nullable', 'integer', 'min:1']]);
         $selectedStudent = empty($filters['student_id']) ? null : Student::query()->where('identity_status', '!=', 'merged')->findOrFail($filters['student_id']);
 
+        $fundableTypes = $selectedStudent ? $sessionTypes->filter(fn (SessionType $type): bool => $type->funding_mode === 'package' && app(EntitlementService::class)->canFund($selectedStudent->id, $type)) : collect();
+
         return view('admin.bookings.create', [
             'title' => 'Create Student Booking',
             'selectedStudent' => $selectedStudent,
             'sessionTypes' => $sessionTypes,
             'businessTz' => $businessTz,
             'students' => Student::query()->where('identity_status', 'verified')->whereNull('suspended_at')->orderBy('first_name')->orderBy('id')->get(['id', 'first_name', 'last_name', 'email', 'preferred_timezone']),
-            'defaultSessionTypeId' => $selectedStudent ? $sessionTypes->first(fn (SessionType $type): bool => $type->funding_mode === 'package' && app(EntitlementService::class)->canFund($selectedStudent->id, $type))?->id : null,
+            'defaultSessionTypeId' => $fundableTypes->first()?->id,
+            'fundableTypeIds' => $fundableTypes->map(fn (SessionType $type): int => $type->id)->all(),
             'entitlementBalances' => $selectedStudent ? app(EntitlementService::class)->forStudent($selectedStudent->id) : [],
             'idempotencyKey' => Str::random(48),
         ]);
