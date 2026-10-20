@@ -90,6 +90,17 @@ class WebsiteCopyCatalog
                 $type = 'url';
             }
             $label = $labelNames[$parts[1] ?? ''] ?? (str_starts_with($path, 'ui.') ? $value : Str::headline(str_replace('.', ' / ', $path)));
+            if (str_starts_with($path, 'counters.')) {
+                $label = match ($path) {
+                    'counters.counters__learning_hours__headline' => 'Learning activity — headline',
+                    'counters.counters__learning_hours__subtitle' => 'Learning activity — subtitle',
+                    'counters.counters__monthly_traffic__template_visitors' => 'Monthly traffic — unique visitors message',
+                    'counters.counters__monthly_traffic__template_sessions' => 'Monthly traffic — sessions message',
+                    'counters.counters__monthly_traffic__template_page_views' => 'Monthly traffic — page views message',
+                    'counters.counters__live_users__template' => 'Live visitors — message',
+                    default => $label,
+                };
+            }
             if (str_contains($path, '.blocks.')) {
                 $blockType = Arr::get($tree, substr($path, 0, -strlen('.text')).'.type');
                 $type = $blockType === 'heading' ? 'text' : 'richtext';

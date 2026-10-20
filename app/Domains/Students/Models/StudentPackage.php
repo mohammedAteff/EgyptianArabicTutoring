@@ -101,7 +101,15 @@ class StudentPackage extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (self $package): void {
+            $timezones = app(TimezoneService::class);
+            $preferred = Student::withTrashed()->whereKey($package->student_id)->value('preferred_timezone');
+            $package->statement_timezone = $timezones->isValid($preferred) ? $preferred : $timezones->getBusinessTimezone();
+        });
         static::updating(function (self $package): void {
+            if ($package->isDirty('statement_timezone')) {
+                throw new RuntimeException('A purchase keeps its original statement timezone.');
+            }
             if ($package->getRawOriginal('validity_started_at') !== null && $package->isDirty('validity_started_at')) {
                 throw new RuntimeException('An activated package keeps its original validity start.');
             }

@@ -33,7 +33,7 @@ class StaffSearchService
                 $actions[] = ['label' => 'Record Payment', 'url' => route('admin.billing.cashier', ['student_id' => $student->id])];
                 $actions[] = ['label' => 'Adjust Credits', 'url' => route('admin.students.show', ['student' => $student->id, 'billing_tab' => 'credits'])];
             }
-            $items[] = ['kind' => 'student', 'title' => $student->name, 'detail' => $student->email ?? '', 'url' => route('admin.students.show', $student), 'email' => $student->email, 'phone' => $student->phone, 'actions' => $actions];
+            $items[] = ['kind' => 'student', 'title' => $student->name, 'detail' => $student->email ?? '', 'url' => route('admin.students.show', $student), 'email' => $student->email, 'phone' => $student->phone, 'whatsapp_url' => $student->phone ? 'https://wa.me/'.preg_replace('/[^0-9]/', '', $student->phone) : null, 'actions' => $actions];
         }
         foreach (Contact::query()->where(fn ($query) => $query->where('name', 'like', $like)->orWhere('email', 'like', $like)->orWhere('display_email', 'like', $like)->orWhere('phone', 'like', $like))->orderBy('id')->limit(10)->get(['id', 'name', 'email']) as $contact) {
             $add('contact', $contact->name ?: 'Contact #'.$contact->id, $contact->email ?? '', route('admin.contacts.show', $contact));

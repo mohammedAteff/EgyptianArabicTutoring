@@ -281,7 +281,7 @@ class BusinessLifecycleDataQualityTest extends TestCase
         $this->studentLogin();
         $this->get(route('student.statements.show', $package))->assertOk()->assertSee('20.00')->assertSee('Not recorded')->assertSee('Cash');
         $receipt = $this->get(route('student.receipts.show', [$package, $payment]));
-        $receipt->assertOk()->assertSee('Payment Recorded')->assertSee('Payment #'.$payment->id)->assertHeader('Cache-Control', 'no-store, private');
+        $receipt->assertOk()->assertSee('Payment Recorded')->assertSee('Payment #1')->assertHeader('Cache-Control', 'no-store, private');
         $csv = $this->get(route('student.statements.export', $package))->assertOk()->streamedContent();
         $this->assertStringContainsString('Actual payment', $csv);
         $this->assertStringContainsString('60.00', $csv);

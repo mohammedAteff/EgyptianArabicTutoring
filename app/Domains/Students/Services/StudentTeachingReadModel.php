@@ -68,6 +68,7 @@ class StudentTeachingReadModel
         $requirements = SessionType::query()->studentDiscoverable()->where('funding_mode', 'package')
             ->where('required_entitlement_units', '>=', 1)->whereHas('requiredEntitlementType', fn ($types) => $types->where('active', true))
             ->get(['required_entitlement_type_id', 'required_entitlement_units']);
+        $purchaseReferences = app(StudentFinancialReferences::class)->forStudent($student->id)['purchases'];
         $notices = [];
         $events = [];
         $teachingLink = route('student.teaching.index', [], false);
@@ -88,7 +89,7 @@ class StudentTeachingReadModel
                     ? $package->expires_at->setTimezone($student->preferred_timezone ?: $this->timezones->getBusinessTimezone())->format('j M Y, g:i:s A T')
                     : $package->expiryLabel();
                 $message = $balance['label'].' · '.$package->package_name.' · Purchase #'.$package->id.' · '.$balance['available'].' available · Valid until: '.$expiryLabel;
-                $notices[] = $message;
+                $notices[] = str_replace('Purchase #'.$package->id.' ·', 'Purchase #'.$purchaseReferences[$package->id].' ·', $message);
                 $events[] = ['key' => 'entitlement:'.$balance['id'].':'.$balance['available'].':'.$expiry.':'.($soon ? 'expiry' : 'low'), 'type' => 'entitlement', 'title' => $soon ? 'Package expiry notice' : 'Low entitlement balance', 'message' => $message, 'link' => route('student.dashboard', [], false).'#credits-title'];
             }
         }

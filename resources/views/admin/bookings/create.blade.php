@@ -1,7 +1,6 @@
 @extends('layouts.admin')
 
 @section('content')
-<p class="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Manual bookings use direct payment. Package entitlements are reserved through the student portal booking flow.</p>
 <div class="max-w-3xl mx-auto space-y-6">
 
     <div class="flex items-center justify-between">
@@ -30,16 +29,30 @@
         </div>
     @endif
 
+    <form method="GET" action="{{ route('admin.bookings.create') }}" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
+        <label for="booking-student" class="block text-sm font-semibold">Book for an existing student</label>
+        <div class="flex flex-wrap gap-3"><select id="booking-student" name="student_id" class="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 p-3"><option value="">New student / direct payment</option>@foreach($students as $candidate)<option value="{{ $candidate->id }}" @selected($selectedStudent?->id === $candidate->id)>{{ $candidate->name }} · {{ $candidate->email }}</option>@endforeach</select><button class="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Choose student</button></div>
+    </form>
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-        <form action="{{ route('admin.bookings.store') }}" method="POST" class="space-y-6">
+        <form action="{{ route('admin.bookings.store') }}" method="POST" class="space-y-6" x-data="{ funding: @js(old('funding_mode', $selectedStudent && array_sum(array_column($entitlementBalances, 'available')) > 0 ? 'package' : 'direct')) }">
             @csrf
+            <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', $idempotencyKey) }}">
+            @if($selectedStudent)<input type="hidden" name="student_id" value="{{ $selectedStudent->id }}">@endif
+            <label class="block text-sm font-semibold">Funding<select name="funding_mode" x-model="funding" @change="$nextTick(() => { const picker = $el.form.querySelector('[name=session_type_id]'); if (picker.selectedOptions[0]?.disabled) picker.value = Array.from(picker.options).find(option => !option.disabled)?.value || ''; })" class="mt-2 block min-h-11 w-full rounded-xl border border-slate-300 p-3"><option value="direct">Direct payment / standalone booking</option><option value="package" @disabled(!$selectedStudent)>Use existing package credits{{ !$selectedStudent ? ' — choose a student above first' : '' }}</option></select></label>
+            @if($selectedStudent)
+            <section x-show="funding === 'package'" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+                <h2 class="font-semibold">{{ $selectedStudent->name }} · Available package credits</h2>
+                @forelse($entitlementBalances as $balance)<p class="mt-2">{{ $balance['label'] }}: <strong>{{ $balance['available'] }}</strong> available</p>@empty<p class="mt-2">No eligible package credits.</p>@endforelse
+                <p class="mt-3">The matching credit is taken from the earliest-expiring eligible package when you confirm. No new payment is recorded. One-hour and two-hour credits remain separate.</p>
+            </section>
+            @endif
 
             <!-- Session Type Selection -->
             <div>
                 <label for="session_type_id" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Lesson Type</label>
                 <select id="session_type_id" name="session_type_id" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     @foreach($sessionTypes as $st)
-                        <option value="{{ $st->id }}" {{ old('session_type_id') == $st->id ? 'selected' : '' }}>
+                        <option value="{{ $st->id }}" :disabled="funding === 'package' && @js($st->funding_mode !== 'package')" x-text="funding === 'package' ? @js($st->duration_minutes.'-minute lesson · Uses '.$st->required_entitlement_units.' '.$st->requiredEntitlementType?->label.' credit') : @js($st->title.' ('.$st->duration_minutes.' min) — $'.number_format($st->price, 2).' '.$st->currency)" {{ old('session_type_id', $defaultSessionTypeId) == $st->id ? 'selected' : '' }}>
                             {{ $st->title }} ({{ $st->duration_minutes }} min) — ${{ number_format($st->price, 2) }} {{ $st->currency }}
                         </option>
                     @endforeach
@@ -47,17 +60,17 @@
             </div>
 
             <!-- Student Identity -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div x-show="funding !== 'package'" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                     <label for="student_name" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Student Full Name</label>
-                    <input type="text" id="student_name" name="student_name" value="{{ old('student_name', $selectedStudent?->name) }}" required
+                    <input type="text" id="student_name" name="student_name" value="{{ old('student_name', $selectedStudent?->name) }}" :required="funding !== 'package'"
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                            placeholder="e.g. David Miller">
                 </div>
 
                 <div>
                     <label for="student_email" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Student Email</label>
-                    <input type="email" id="student_email" name="student_email" value="{{ old('student_email', $selectedStudent?->email) }}" required
+                    <input type="email" id="student_email" name="student_email" value="{{ old('student_email', $selectedStudent?->email) }}" :required="funding !== 'package'"
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono"
                            placeholder="david@example.com">
                 </div>

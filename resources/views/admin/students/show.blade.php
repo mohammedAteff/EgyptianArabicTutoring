@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<div class="mx-auto max-w-7xl">
 <a href="{{ $studentListUrl }}" class="mb-4 inline-flex min-h-11 items-center text-sm font-semibold text-amber-800 underline">← Back to Student Records</a>
 <x-student-quick-actions :student="$student" />
 @if($copyBlocks)<div class="mb-5 flex flex-wrap gap-3">@foreach($copyBlocks as $label=>$text)<button type="button" data-copy-text="{{ $text }}" class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800">Copy {{ $label }}</button>@endforeach</div>@endif
@@ -28,7 +29,7 @@
 </form>
 @endif
 
-<div class="mx-auto max-w-7xl space-y-6">
+<div class="space-y-6">
     @if($learningProfile) @include('admin.students._learning') @endif
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -396,5 +397,6 @@
             </section>
         @endif
     @endif
+</div>
 </div>
 @endsection

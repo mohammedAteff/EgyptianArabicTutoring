@@ -2,7 +2,9 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Administration\Models\Administrator;
 use App\Domains\Administration\Services\AdminNotificationService;
+use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Availability\Services\SlotResolver;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
@@ -32,6 +34,27 @@ class StudentBookingService
         private DatabaseCapability $database,
     ) {}
 
+    public function createForAdministrator(Student $student, SessionType $sessionType, CarbonImmutable $startUtc, string $timezone, string $idempotencyKey, int $administratorId, ?string $notes = null): Booking
+    {
+        abort_unless(Administrator::query()->whereKey($administratorId)->whereIn('role', ['super_admin', 'admin'])->whereNull('suspended_at')->exists(), 403);
+        $timezone = $this->timezones->validate($timezone);
+        $fingerprint = hash('sha256', json_encode(['staff-package', $administratorId, $student->id, $sessionType->id, $startUtc->utc()->toIso8601String(), $timezone, $notes], JSON_THROW_ON_ERROR));
+        if ($existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first()) {
+            return $this->assertOwnedReplay($existing, $student, $fingerprint);
+        }
+        $owner = hash('sha256', 'staff-package:'.$administratorId.':'.$student->id.':'.$idempotencyKey);
+        $date = $startUtc->setTimezone($timezone)->startOfDay();
+        $days = $this->availability->getAvailableSlotsGroupedByDate($sessionType, $timezone, $date, $date, currentVisitorToken: $owner);
+        foreach ($days[$date->toDateString()] ?? [] as $slot) {
+            if (CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')->equalTo($startUtc)) {
+                return $this->book($student, $this->slots->issue($sessionType, $slot, $timezone, $owner), $sessionType->id, $timezone, $idempotencyKey, $owner,
+                    administratorId: $administratorId, staffFingerprint: $fingerprint, notes: $notes);
+            }
+        }
+
+        throw new SlotUnavailableException('This time is unavailable. Choose a time in the tutor’s availability, including the required buffer.');
+    }
+
     public function create(
         Student $student,
         string $slotId,
@@ -42,6 +65,21 @@ class StudentBookingService
         ?RecurringLessonOccurrence $occurrence = null,
         ?int $administratorId = null,
     ): Booking {
+        return $this->book($student, $slotId, $sessionTypeId, $customerTimezone, $idempotencyKey, $slotOwnerToken, $occurrence, $administratorId);
+    }
+
+    private function book(
+        Student $student,
+        string $slotId,
+        int $sessionTypeId,
+        string $customerTimezone,
+        string $idempotencyKey,
+        string $slotOwnerToken,
+        ?RecurringLessonOccurrence $occurrence = null,
+        ?int $administratorId = null,
+        ?string $staffFingerprint = null,
+        ?string $notes = null,
+    ): Booking {
         if ($occurrence !== null) {
             app(RecurringLessonService::class)->authorize($administratorId ?? 0);
             $plan = $occurrence->plan;
@@ -49,7 +87,7 @@ class StudentBookingService
                 throw new InvalidArgumentException('The recurring plan does not match this booking.');
             }
         }
-        $fingerprint = hash('sha256', json_encode($occurrence === null
+        $fingerprint = $staffFingerprint ?? hash('sha256', json_encode($occurrence === null
             ? [$slotId, $sessionTypeId, $customerTimezone, $slotOwnerToken]
             : ['recurring', $occurrence->id, $occurrence->plan->fingerprint, $sessionTypeId, $customerTimezone], JSON_THROW_ON_ERROR));
         $existing = Booking::query()->where('idempotency_key', $idempotencyKey)->first();
@@ -67,7 +105,7 @@ class StudentBookingService
         $bookingCreated = false;
 
         try {
-            $booking = $this->database->transaction(function () use ($student, $slotId, $sessionType, $customerTimezone, $idempotencyKey, $slotOwnerToken, $startUtc, $endUtc, $bufferMinutes, $fingerprint, $occurrence, $administratorId, &$bookingCreated): Booking {
+            $booking = $this->database->transaction(function () use ($student, $slotId, $sessionType, $customerTimezone, $idempotencyKey, $slotOwnerToken, $startUtc, $endUtc, $bufferMinutes, $fingerprint, $occurrence, $administratorId, $notes, &$bookingCreated): Booking {
                 // Lock the canonical scheduling resource before contact, student, and booking rows.
                 $this->availability->acquireCalendarDateLocks($startUtc, $endUtc, $bufferMinutes);
 
@@ -147,10 +185,10 @@ class StudentBookingService
                     'status' => 'confirmed',
                     'idempotency_key' => $idempotencyKey,
                     'confirmation_token' => Booking::generateConfirmationToken(),
-                    'source' => $occurrence === null ? 'student_portal' : 'staff_recurring',
+                    'source' => $occurrence !== null ? 'staff_recurring' : ($administratorId !== null ? 'staff_package' : 'student_portal'),
                     'funding_mode' => $occurrence !== null && $sessionType->funding_mode !== 'package' ? $sessionType->funding_mode : 'legacy',
                     'request_fingerprint' => $fingerprint,
-                    'notes' => null,
+                    'notes' => $notes,
                 ]));
                 $booking = app(MeetingLinkService::class)->assign($booking);
                 $bookingCreated = true;
@@ -158,8 +196,8 @@ class StudentBookingService
                 BookingEvent::query()->create([
                     'booking_id' => $booking->id,
                     'event_type' => 'created',
-                    'performed_by' => $occurrence === null ? 'student' : 'admin',
-                    'performed_by_id' => $occurrence === null ? $lockedStudent->id : $administratorId,
+                    'performed_by' => $administratorId !== null ? 'admin' : 'student',
+                    'performed_by_id' => $administratorId ?? $lockedStudent->id,
                     'new_data' => [
                         'status' => 'confirmed',
                         'start_at_utc' => $authoritativeStart->toDateTimeString(),
@@ -172,7 +210,11 @@ class StudentBookingService
 
                 // FIFO package selection and the ledger debit share this transaction.
                 if ($occurrence === null || $sessionType->funding_mode === 'package') {
-                    $this->ledger->consumeForBooking($booking, 'booking:'.$booking->id.':session-consumed');
+                    $this->ledger->consumeForBooking($booking, 'booking:'.$booking->id.':session-consumed', $administratorId);
+                }
+                if ($administratorId !== null && $occurrence === null) {
+                    app(AuditLogService::class)->log('staff_package_booking_created', Booking::class, $booking->id,
+                        newData: ['student_id' => $lockedStudent->id, 'student_package_id' => $booking->student_package_id, 'consumed_ledger_entry_id' => $booking->consumed_ledger_entry_id], adminId: $administratorId);
                 }
                 $lockedOccurrence?->update(['booking_id' => $booking->id, 'status' => 'booked', 'reason_code' => null]);
 

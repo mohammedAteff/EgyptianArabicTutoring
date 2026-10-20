@@ -7,7 +7,7 @@
 @forelse($notifications as $notification)
 <article class="rounded-2xl border bg-white p-5 {{ $notification->read_at ? 'border-stone-200' : 'border-nile-300' }}">
     <h2 class="font-semibold text-nile-900">{{ $notification->title }}<span class="ml-2 text-xs text-nile-600">{{ $notification->read_at ? 'Read' : 'Unread' }}</span></h2>
-    <p class="mt-2 break-words text-sm text-stone-600">{{ $notification->message }}</p>
+    <p class="mt-2 break-words text-sm text-stone-600">{{ $messages[$notification->id] }}</p>
     <p class="mt-2 text-xs text-stone-500">{{ $notification->created_at->copy()->timezone($timezone ?? config('app.timezone', 'UTC'))->format('j M Y, g:i A T') }}</p>
     <div class="mt-3 flex flex-wrap items-center gap-4"><a href="{{ url($destinations[$notification->id] ?? $notification->link) }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-nile-800 underline">{{ $notification->type === 'lesson' ? 'View Session' : 'View Update' }}</a>
     @if(!$notification->read_at)<form method="POST" action="{{ route('student.notifications.update', $notification->id) }}">@csrf @method('PATCH')<button class="min-h-11 rounded-xl border border-stone-300 px-4 py-2 text-sm font-semibold">Mark as read</button></form>@endif</div>

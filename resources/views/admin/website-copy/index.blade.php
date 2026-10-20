@@ -25,7 +25,7 @@
         @csrf<input type="hidden" name="page" value="{{ $pageKey }}"><input type="hidden" name="locale" value="{{ $locale }}"><input type="hidden" name="state" value="{{ $state }}">
         <div class="flex flex-wrap items-center gap-3"><label class="grow text-sm font-semibold">Find a field<input type="search" x-model="search" placeholder="Search headings, buttons or paragraphs…" class="mt-2 block min-h-11 w-full rounded-xl border border-slate-300 p-3"></label><span x-show="dirty" x-cloak class="text-sm font-semibold text-amber-800">Unsaved changes</span></div>
         @foreach(collect($fields)->groupBy('group', true) as $group => $groupFields)
-        <details @if($loop->first) open @endif class="rounded-2xl border border-slate-200 bg-white p-5" x-show="!search || $el.textContent.toLowerCase().includes(search.toLowerCase())" x-effect="if(search) $el.open = $el.textContent.toLowerCase().includes(search.toLowerCase())">
+        <details id="copy-group-{{ \Illuminate\Support\Str::slug($group) }}" @if($loop->first || $group === 'Counters') open @endif class="rounded-2xl border border-slate-200 bg-white p-5" x-show="!search || $el.textContent.toLowerCase().includes(search.toLowerCase())" x-effect="if(search) $el.open = $el.textContent.toLowerCase().includes(search.toLowerCase())">
             <summary class="cursor-pointer text-lg font-bold text-slate-900">{{ $group }}</summary>
             <div class="mt-5 space-y-6">
             @foreach($groupFields as $key => $field)

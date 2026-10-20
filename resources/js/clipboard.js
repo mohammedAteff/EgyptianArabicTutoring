@@ -19,17 +19,28 @@ export function studentDetails(form) {
 
 export async function copyText(value) {
     if (navigator.clipboard?.writeText && window.isSecureContext) {
-        await navigator.clipboard.writeText(value);
-        return;
+        try {
+            await navigator.clipboard.writeText(value);
+            return;
+        } catch {
+            // Embedded browsers may deny the Clipboard API while allowing a user-initiated copy.
+        }
     }
+    const focused = document.activeElement;
     const input = document.createElement('textarea');
     input.value = value;
     input.style.position = 'fixed';
     input.style.opacity = '0';
-    document.body.append(input);
+    (document.querySelector('dialog[open]') || document.body).append(input);
+    input.focus();
     input.select();
-    const copied = document.execCommand('copy');
-    input.remove();
+    let copied;
+    try {
+        copied = document.execCommand('copy');
+    } finally {
+        input.remove();
+        focused?.focus({ preventScroll: true });
+    }
     if (!copied) throw new Error('Clipboard unavailable');
 }
 
@@ -45,7 +56,14 @@ if (typeof document !== 'undefined') document.addEventListener('click', async ev
     const value = button.hasAttribute('data-copy-text') ? button.dataset.copyText : button.hasAttribute('data-copy-recovery') ? recoveryCodesText(button.closest('[data-recovery-panel]')) : button.hasAttribute('data-copy-bin')
         ? button.closest('[data-bin]')?.querySelector('[data-bin-body]')?.textContent.trim() || ''
         : button.hasAttribute('data-copy-student') ? studentDetails(form) : studentDetailValue(form, button.dataset.copyField);
-    const status = button.querySelector('[data-copy-status]');
+    let status = button.querySelector('[data-copy-status]');
+    if (!status) {
+        status = document.createElement('span');
+        status.dataset.copyStatus = '';
+        status.className = 'ml-1 text-xs';
+        status.setAttribute('role', 'status');
+        button.append(status);
+    }
     try {
         if (!value) { if (status) status.textContent = 'Empty'; } else { await copyText(value); if (status) status.textContent = button.dataset.copySuccess || 'Copied ✓'; }
     } catch { if (status) status.textContent = 'Copy unavailable'; }

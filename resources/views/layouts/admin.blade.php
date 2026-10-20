@@ -73,7 +73,7 @@
          style="display: none;"
          @click="closeSidebar()"></div>
 
-    <div class="h-screen flex overflow-hidden bg-slate-100">
+    <div class="min-h-dvh flex bg-slate-100">
 
         <!-- Sidebar for Desktop & Mobile Drawer (Section 32) -->
         <aside id="admin-sidebar"
@@ -130,7 +130,7 @@
 
 
         <!-- Main Content Area -->
-        <div id="admin-content" class="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-64">
+        <div id="admin-content" class="flex-1 flex flex-col min-w-0 md:ml-64">
             
             <!-- Topbar Header -->
             <header class="h-16 shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between shadow-xs z-10">
@@ -244,7 +244,7 @@
             @endif
 
             <!-- Main Page Content -->
-            <main class="ml-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <main class="ml-0 min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
                 @php($activeLearningPreview = session(\App\Domains\Lms\Services\LmsPreviewService::SESSION_KEY))
                 @if(is_array($activeLearningPreview) && ($activeLearningPreview['actor_id']??null)===auth('web')->id() && auth('web')->user()?->can('preview', \App\Domains\Lms\Models\Course::class) && !request()->routeIs('admin.lms.preview.*'))
                 <div role="status" class="sticky top-0 z-20 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">

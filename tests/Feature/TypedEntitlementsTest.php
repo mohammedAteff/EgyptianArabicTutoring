@@ -384,7 +384,7 @@ class TypedEntitlementsTest extends TestCase
         $response = $this->get(route('student.dashboard'))->assertOk()
             ->assertSeeText('1-hour sessions: 2')->assertSeeText('2-hour sessions: 4')
             ->assertSeeText('2027-01-15')->assertSeeText('2027-03-31')
-            ->assertSeeText('Purchase #'.$one->id)->assertSeeText('Purchase #'.$two->id);
+            ->assertSeeText('Purchase #1')->assertSeeText('Purchase #2');
         $this->assertSame(2, $response->viewData('entitlementBalances')['one_hour']['available']);
         $this->assertSame(4, $response->viewData('entitlementBalances')['two_hour']['available']);
     }

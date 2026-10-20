@@ -69,11 +69,12 @@ if (typeof document !== 'undefined') {
                         button.textContent = action.label;
                         row.append(button);
                     }
-                    for (const field of ['email', 'phone']) {
-                        if (!item[field]) continue;
+                    const copies = { email: item.email, phone: item.phone, 'WhatsApp link': item.whatsapp_url };
+                    for (const [field, value] of Object.entries(copies)) {
+                        if (!value) continue;
                         const button = document.createElement('button');
                         button.type = 'button';
-                        button.dataset.copyText = item[field];
+                        button.dataset.copyText = value;
                         button.className = 'mr-3 min-h-11 text-xs font-semibold text-amber-800';
                         button.textContent = `Copy ${field}`;
                         row.append(button);

@@ -106,6 +106,9 @@
             <h2 class="text-lg font-bold font-serif text-slate-900 pb-3 border-b border-slate-100">3. Social Proof Counters</h2>
             <p class="text-xs text-slate-500">Configure public engagement counters displayed on the website banner. All calculations use the configured business calendar boundaries and flat caching.</p>
 
+            <a href="{{ route('admin.website-copy.index', ['page' => 'shared', 'locale' => 'en']) }}#copy-group-counters" class="inline-flex min-h-11 items-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">Edit counter wording →</a>
+            <p class="text-xs text-slate-500">Customize the learning headline and subtitle, each traffic message, and the live visitor message in English, French or German. Keep {count} for the live number; calculation controls stay here.</p>
+
             <!-- Counter 1: Collective Learning Hours -->
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
                 <div class="flex items-center justify-between">

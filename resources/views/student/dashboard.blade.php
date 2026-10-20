@@ -63,7 +63,7 @@
         <div class="rounded-xl border border-stone-200 bg-white p-5"><p class="text-sm text-stone-600">Available Credits</p><p class="mt-1 text-2xl font-semibold text-nile-900">@foreach($entitlementBalances as $balance)<span class="block text-base">{{ $balance['label'] }}: {{ $balance['available'] }}</span>@endforeach</p></div>
     </div>
     @foreach($packageSummaries as $package)
-        <p class="mt-3 text-sm text-stone-600">{{ $package['name'] }} · {{ $package['summary']['entitlement_status'] }} · {{ $package['summary']['balance_text'] }} · Purchase #{{ $package['id'] }} · Valid until: {{ $package['expiry'] ?? 'No scheduled expiry' }} · {{ $package['summary']['net_paid'] }} {{ $package['currency'] }} paid net · {{ bccomp($package['summary']['overpaid'], '0.00', 2) > 0 ? $package['summary']['overpaid'].' '.$package['currency'].' overpaid' : $package['summary']['balance_due'].' '.$package['currency'].' due' }}</p>
+        <p class="mt-3 text-sm text-stone-600">{{ $package['name'] }} · {{ $package['summary']['entitlement_status'] }} · {{ $package['summary']['balance_text'] }} · Purchase #{{ $package['purchase_number'] }} · Valid until: {{ $package['expiry'] ?? 'No scheduled expiry' }} · {{ $package['summary']['net_paid'] }} {{ $package['currency'] }} paid net · {{ bccomp($package['summary']['overpaid'], '0.00', 2) > 0 ? $package['summary']['overpaid'].' '.$package['currency'].' overpaid' : $package['summary']['balance_due'].' '.$package['currency'].' due' }}</p>
     @endforeach
 </section>
 <section class="mt-8" aria-labelledby="upcoming-title">

@@ -14,6 +14,8 @@ use App\Domains\Booking\Services\NoShowService;
 use App\Domains\Booking\Services\RescheduleService;
 use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Services\EntitlementService;
+use App\Domains\Students\Services\StudentBookingService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -22,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class BookingController extends Controller
@@ -344,7 +347,7 @@ class BookingController extends Controller
 
     public function create(Request $request): View
     {
-        $sessionTypes = SessionType::where('active', true)->orderBy('title')->get();
+        $sessionTypes = SessionType::where('active', true)->with('requiredEntitlementType')->orderBy('title')->get();
         $businessTz = $this->timezoneService->getBusinessTimezone();
 
         $filters = $request->validate(['student_id' => ['nullable', 'integer', 'min:1']]);
@@ -355,6 +358,10 @@ class BookingController extends Controller
             'selectedStudent' => $selectedStudent,
             'sessionTypes' => $sessionTypes,
             'businessTz' => $businessTz,
+            'students' => Student::query()->where('identity_status', 'verified')->whereNull('suspended_at')->orderBy('first_name')->orderBy('id')->get(['id', 'first_name', 'last_name', 'email', 'preferred_timezone']),
+            'defaultSessionTypeId' => $selectedStudent ? $sessionTypes->first(fn (SessionType $type): bool => $type->funding_mode === 'package' && app(EntitlementService::class)->canFund($selectedStudent->id, $type))?->id : null,
+            'entitlementBalances' => $selectedStudent ? app(EntitlementService::class)->forStudent($selectedStudent->id) : [],
+            'idempotencyKey' => Str::random(48),
         ]);
     }
 
@@ -363,13 +370,16 @@ class BookingController extends Controller
         $businessTz = $this->timezoneService->getBusinessTimezone();
 
         $validated = $request->validate([
+            'funding_mode' => ['nullable', Rule::in(['direct', 'package'])],
+            'student_id' => ['nullable', 'required_if:funding_mode,package', 'integer', 'exists:students,id'],
+            'idempotency_key' => ['nullable', 'required_if:funding_mode,package', 'alpha_num', 'size:48'],
             'session_type_id' => ['required', 'exists:session_types,id'],
-            'student_name' => ['required', 'string', 'max:255'],
-            'student_email' => ['required', 'email', 'max:255'],
+            'student_name' => ['exclude_if:funding_mode,package', 'required', 'string', 'max:255'],
+            'student_email' => ['exclude_if:funding_mode,package', 'required', 'email', 'max:255'],
             'student_phone' => ['nullable', 'string', 'max:50'],
             'date' => ['required', 'date_format:Y-m-d'],
             'time' => ['required', 'date_format:H:i'],
-            'customer_timezone' => ['nullable', 'string'],
+            'customer_timezone' => ['nullable', 'timezone'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -378,6 +388,14 @@ class BookingController extends Controller
 
         try {
             $startUtc = $this->timezoneService->toUtc("{$validated['date']} {$validated['time']}:00", $businessTz);
+
+            if (($validated['funding_mode'] ?? 'direct') === 'package') {
+                $student = Student::query()->where('identity_status', 'verified')->whereNull('suspended_at')->findOrFail($validated['student_id']);
+                $booking = app(StudentBookingService::class)->createForAdministrator($student, $sessionType, $startUtc, $customerTimezone,
+                    $validated['idempotency_key'], (int) Auth::id(), $validated['notes'] ?? null);
+
+                return redirect()->route('admin.bookings.show', $booking)->with('success', 'Lesson booked using the student’s existing package credit. No additional payment was recorded.');
+            }
 
             $slotConfig = $this->availabilityService->resolveSlotConfiguration(
                 sessionType: $sessionType,

@@ -49,9 +49,10 @@ class StudentPortalService
         $history = $bookings->reject(fn (Booking $booking): bool => $upcoming->contains('id', $booking->id))->reverse();
         $packages = StudentPackage::query()->where('student_id', $student->id)->with(['entitlements.type', 'ledgerEntries', 'payments', 'refunds'])->orderByDesc('created_at')->get();
         $displayTimezone = $readOnly ? ($student->preferred_timezone ?: $timezones->getBusinessTimezone()) : $request->session()->get('student_display_timezone', $student->preferred_timezone ?: $timezones->getBusinessTimezone());
+        $references = app(StudentFinancialReferences::class)->forStudent($student->id);
         $packageSummaries = $packages->map(fn (StudentPackage $package): array => [
             'name' => $package->package_name,
-            'id' => $package->id, 'offering_key' => $package->offering_key ?? 'legacy_unclassified',
+            'id' => $package->id, 'purchase_number' => $references['purchases'][$package->id], 'offering_key' => $package->offering_key ?? 'legacy_unclassified',
             'expiry' => $package->expires_at
                 ? $package->expires_at->setTimezone($displayTimezone)->format('j M Y, g:i:s A T')
                 : $package->expiryLabel(),

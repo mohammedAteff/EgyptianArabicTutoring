@@ -6,6 +6,7 @@ use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\FinancialStatementService;
+use App\Domains\Students\Services\StudentFinancialReferences;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,7 +18,7 @@ class FinancialStatementController extends Controller
         /** @var Student $student */
         $student = $request->attributes->get('student');
 
-        return response()->view('student.statements', ['packages' => StudentPackage::query()->where('student_id', $student->id)->orderByDesc('id')->paginate(20)])
+        return response()->view('student.statements', ['references' => app(StudentFinancialReferences::class)->forStudent($student->id), 'packages' => StudentPackage::query()->where('student_id', $student->id)->orderByDesc('id')->paginate(20)])
             ->header('Cache-Control', 'private, no-store');
     }
 
@@ -32,13 +33,13 @@ class FinancialStatementController extends Controller
     {
         $this->assertOwner($request, $package);
 
-        return response()->view('admin.billing.statement', $statements->statement($package) + ['receipt' => null, 'studentView' => true])->header('Cache-Control', 'private, no-store');
+        return response()->view('admin.billing.statement', $statements->statement($package, true) + ['receipt' => null, 'studentView' => true])->header('Cache-Control', 'private, no-store');
     }
 
     public function receipt(Request $request, StudentPackage $package, int $payment, FinancialStatementService $statements): Response
     {
         $this->assertOwner($request, $package);
-        $data = $statements->statement($package);
+        $data = $statements->statement($package, true);
         $receipt = $package->payments->firstWhere('id', $payment);
         abort_unless($receipt !== null, 404);
 
@@ -49,7 +50,7 @@ class FinancialStatementController extends Controller
     {
         $this->assertOwner($request, $package);
         $values = $request->validate(['format' => ['nullable', 'in:csv,xlsx']]);
-        $response = $exports->export('package_statement_'.$package->id, ['Record', 'Internal ID', 'Date (business timezone)', 'Amount', 'Currency', 'Description / method', 'Recorded external reference'], $statements->rows($package), $values['format'] ?? 'csv', 'Package Statement');
+        $response = $exports->export('package_statement_'.app(StudentFinancialReferences::class)->forStudent($package->student_id)['purchases'][$package->id], ['Record', 'Your reference', 'Date ('.$statements->studentTimezone($package).')', 'Amount', 'Currency', 'Description / method', 'Recorded external reference'], $statements->rows($package, true), $values['format'] ?? 'csv', 'Package Statement');
         $response->headers->set('Cache-Control', 'private, no-store');
 
         return $response;

@@ -331,7 +331,7 @@ class StudentLedgerService
         return $this->entitlements->selectAndLock($studentId, $session)?->package;
     }
 
-    public function consumeForBooking(Booking $booking, string $idempotencyKey): SessionLedgerEntry
+    public function consumeForBooking(Booking $booking, string $idempotencyKey, ?int $administratorId = null): SessionLedgerEntry
     {
         if (! $booking->student_id || DB::transactionLevel() < 1) {
             throw new InvalidArgumentException('A student booking transaction is required.');
@@ -354,7 +354,7 @@ class StudentLedgerService
             'student_package_entitlement_id' => $allocation->id, 'entitlement_type_id' => $allocation->entitlement_type_id,
             'booking_id' => $booking->id, 'idempotency_key' => $idempotencyKey,
             'entry_type' => 'session_consumed', 'credit_change' => -$requirement['units'],
-            'description' => $requirement['type']->label.' used for booking', 'created_at' => now('UTC'),
+            'description' => $requirement['type']->label.' used for booking', 'created_by' => $administratorId, 'created_at' => now('UTC'),
         ]);
         $booking->update(['funding_mode' => 'package', 'entitlement_type_id' => $allocation->entitlement_type_id,
             'entitlement_code' => $requirement['type']->code, 'entitlement_units' => $requirement['units'],

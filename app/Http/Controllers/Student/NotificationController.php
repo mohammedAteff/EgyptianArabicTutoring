@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Domains\Students\Models\StudentNotification;
+use App\Domains\Students\Services\StudentFinancialReferences;
 use App\Domains\Students\Services\StudentPortalService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,14 @@ class NotificationController extends Controller
                 : $item->link,
         ]);
 
-        return response()->view('student.notifications', ['notifications' => $notifications, 'destinations' => $destinations, 'timezone' => $portalData['timezone']])->header('Cache-Control', 'private, no-store');
+        $references = app(StudentFinancialReferences::class)->forStudent($request->attributes->get('student')->id)['purchases'];
+        $messages = $notifications->getCollection()->mapWithKeys(fn (StudentNotification $item): array => [
+            $item->id => $item->type === 'entitlement'
+                ? preg_replace_callback('/Purchase #(\\d+)/', fn (array $match): string => isset($references[(int) $match[1]]) ? 'Purchase #'.$references[(int) $match[1]] : 'Purchase', $item->message)
+                : $item->message,
+        ]);
+
+        return response()->view('student.notifications', ['notifications' => $notifications, 'messages' => $messages, 'destinations' => $destinations, 'timezone' => $portalData['timezone']])->header('Cache-Control', 'private, no-store');
     }
 
     public function update(Request $request, int $notification): RedirectResponse

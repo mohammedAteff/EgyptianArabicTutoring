@@ -3,8 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Domains\Analytics\Services\AnalyticsService;
-use App\Domains\Availability\Services\AvailabilityService;
-use App\Domains\Availability\Services\SlotResolver;
+use App\Domains\Availability\Services\BookingSlotPresenter;
 use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\SessionType;
@@ -15,7 +14,6 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentUnavailability;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentBookingService;
-use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentPortalService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
@@ -51,7 +49,7 @@ class BookingController extends Controller
         ]);
     }
 
-    public function create(Request $request, AvailabilityService $availability, SlotResolver $resolver, TimezoneService $timezones, StudentLedgerService $ledger): View
+    public function create(Request $request, TimezoneService $timezones): View
     {
         /** @var Student $student */
         $student = $request->attributes->get('student');
@@ -70,18 +68,18 @@ class BookingController extends Controller
         $entitlements = app(EntitlementService::class)->forStudent($student->id);
         $sessionTypes = SessionType::query()->studentDiscoverable()->where('funding_mode', 'package')->with('requiredEntitlementType')->orderBy('duration_minutes')->get();
         $selectedSessionType = $sessionTypes->firstWhere('id', (int) $request->query('session_type_id'));
-        $hasFundableFormat = $sessionTypes->contains(fn (SessionType $type): bool => app(EntitlementService::class)->canFund($student->id, $type));
+        $fundableTypes = $sessionTypes->filter(fn (SessionType $type): bool => app(EntitlementService::class)->canFund($student->id, $type));
+        $hasFundableFormat = $fundableTypes->isNotEmpty();
+        if (! $request->filled('session_type_id')) {
+            $selectedSessionType = $fundableTypes->first();
+        }
         $selectedBalance = $selectedSessionType ? ($entitlements[$selectedSessionType->requiredEntitlementType?->code]['available'] ?? 0) : array_sum(array_column($entitlements, 'available'));
         $availableCredits = $selectedSessionType && ! app(EntitlementService::class)->canFund($student->id, $selectedSessionType) ? 0 : $selectedBalance;
         $slots = [];
         if ($selectedSessionType && $availableCredits > 0) {
             $ownerToken = $this->slotOwnerToken($request, $student);
-            $available = $availability->getAvailableSlotsGroupedByDate(
-                sessionType: $selectedSessionType,
-                customerTimezone: $timezone,
-                fromDate: $fromDate,
-                toDate: $fromDate->endOfMonth()->min($today->addDays(60)),
-                currentVisitorToken: $ownerToken,
+            $available = app(BookingSlotPresenter::class)->forMonth(
+                $selectedSessionType, $timezone, $fromDate, $fromDate->endOfMonth()->min($today->addDays(60)), $ownerToken,
             );
             $unavailablePeriods = StudentUnavailability::query()->where('student_id', $student->id)->where('status', 'active')
                 ->where('ends_at_utc', '>', $fromDate->utc())
@@ -93,10 +91,7 @@ class BookingController extends Controller
                     if ($unavailablePeriods->contains(fn (StudentUnavailability $period): bool => $period->starts_at_utc->lt($end) && $period->ends_at_utc->gt($start))) {
                         continue;
                     }
-                    $slots[$date][] = [
-                        'slot_id' => $resolver->issue($selectedSessionType, $slot, $timezone, $ownerToken),
-                        'label' => CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')->setTimezone($timezone)->format('g:i A'),
-                    ];
+                    $slots[$date][] = $slot;
                 }
             }
         }
@@ -104,6 +99,7 @@ class BookingController extends Controller
         return view('student.bookings.create', [
             'sessionTypes' => $sessionTypes,
             'hasFundableFormat' => $hasFundableFormat,
+            'fundableTypeIds' => $fundableTypes->modelKeys(),
             'selectedSessionType' => $selectedSessionType,
             'timezone' => $timezone,
             'fromDate' => $fromDate,
