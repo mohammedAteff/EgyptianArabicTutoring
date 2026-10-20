@@ -646,6 +646,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         Route::middleware('role:super_admin,admin,assistant')->group(function () {
             Route::get('/birthdays', [BirthdayController::class, 'index'])->name('birthdays.index');
+            Route::get('/birthdays/all', [BirthdayController::class, 'all'])->name('birthdays.all');
             Route::get('/students/export', [StudentController::class, 'export'])->middleware('role:super_admin,admin')->name('students.export');
             Route::post('/students/bulk-teaching', [StudentController::class, 'bulkTeaching'])->middleware('role:super_admin,admin')->name('students.bulk-teaching');
             Route::post('/students/bulk-task', [StudentController::class, 'bulkTask'])->name('students.bulk-task');

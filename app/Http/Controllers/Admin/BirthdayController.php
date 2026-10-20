@@ -29,6 +29,18 @@ class BirthdayController extends Controller
         ]);
     }
 
+    public function all(TimezoneService $timezones, BirthdayService $birthdays): View
+    {
+        $today = CarbonImmutable::now($timezones->getBusinessTimezone())->startOfDay();
+        $records = $birthdays->between($today->startOfYear(), $today->endOfYear())
+            ->sortBy(fn (array $row): string => $row['student']->date_of_birth->format('m-d').':'.$row['student']->name)->values();
+
+        return view('admin.students.birthday-list', [
+            'birthdayGroups' => $records->groupBy(fn (array $row): int => $row['date']->month),
+            'total' => $records->count(),
+        ]);
+    }
+
     public function update(Request $request): RedirectResponse
     {
         $values = $request->validate(['enabled' => ['required', 'boolean'], 'days_before' => ['required', 'integer', 'between:0,365'], 'time' => ['required', 'date_format:H:i']]);

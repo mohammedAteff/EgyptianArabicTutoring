@@ -2,6 +2,7 @@
 @section('content')
 <div class="mx-auto max-w-6xl space-y-6">
     <div><h1 class="font-serif text-3xl font-bold">Student birthdays</h1><p class="mt-2 text-sm text-slate-600">A little reminder to celebrate your students. This calendar is visible to staff; students see only their own birthday. Dates use {{ $businessTimezone }}.</p></div>
+    <a href="{{ route('admin.birthdays.all') }}" class="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white">View all birthdays →</a>
     <x-lifecycle-feedback />
     <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-xl font-bold">{{ $month->format('F Y') }}</h2><nav class="flex gap-2" aria-label="Birthday months"><a class="rounded-xl border border-slate-300 px-4 py-3 text-sm" href="{{ route('admin.birthdays.index', ['month' => $month->subMonth()->format('Y-m')]) }}">← Previous</a><a class="rounded-xl border border-slate-300 px-4 py-3 text-sm" href="{{ route('admin.birthdays.index') }}">Today</a><a class="rounded-xl border border-slate-300 px-4 py-3 text-sm" href="{{ route('admin.birthdays.index', ['month' => $month->addMonth()->format('Y-m')]) }}">Next →</a></nav></div>
