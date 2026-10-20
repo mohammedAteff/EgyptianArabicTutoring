@@ -34,7 +34,7 @@
         <div class="flex flex-wrap gap-3"><select id="booking-student" name="student_id" class="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 p-3"><option value="">New student / direct payment</option>@foreach($students as $candidate)<option value="{{ $candidate->id }}" @selected($selectedStudent?->id === $candidate->id)>{{ $candidate->name }} · {{ $candidate->email }}</option>@endforeach</select><button class="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Choose student</button></div>
     </form>
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-        <form action="{{ route('admin.bookings.store') }}" method="POST" class="space-y-6" x-data="{ funding: @js(old('funding_mode', $selectedStudent && array_sum(array_column($entitlementBalances, 'available')) > 0 ? 'package' : 'direct')) }">
+        <form action="{{ route('admin.bookings.store') }}" method="POST" class="space-y-6" x-data="{ funding: @js(old('funding_mode', $defaultFundingMode)) }">
             @csrf
             <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', $idempotencyKey) }}">
             @if($selectedStudent)<input type="hidden" name="student_id" value="{{ $selectedStudent->id }}">@endif
@@ -87,13 +87,13 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
                 <div>
                     <label for="date" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Session Date ({{ $businessTz }})</label>
-                    <input type="date" id="date" name="date" value="{{ old('date', now($businessTz)->addDay()->format('Y-m-d')) }}" required
+                    <input type="date" id="date" name="date" value="{{ old('date', $preferredDate ?? now($businessTz)->addDay()->format('Y-m-d')) }}" required
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                 </div>
 
                 <div>
                     <label for="time" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Start Time ({{ $businessTz }} 24h)</label>
-                    <input type="text" id="time" name="time" value="{{ old('time', '10:00') }}" required
+                    <input type="text" id="time" name="time" value="{{ old('time', $preferredStartTime ?? '10:00') }}" required
                            placeholder="10:00"
                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono">
                 </div>

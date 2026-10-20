@@ -24,6 +24,26 @@ class WebsiteCopyWorkspaceTest extends TestCase
         return ['page' => $page, 'locale' => $locale, 'values' => array_replace($copies->values($page, $locale, true), $changes), 'state' => $copies->state($page, $locale), 'action' => 'publish', 'reviewed_source' => '1'];
     }
 
+    public function test_english_copy_publishes_without_a_hidden_translation_review_field(): void
+    {
+        $data = $this->copyFields(page: 'shared');
+        unset($data['reviewed_source']);
+        $this->actingAs(AdministratorFactory::new()->create(['role' => 'super_admin']))
+            ->post(route('admin.website-copy.update'), $data)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertNotNull(WebsiteCopy::query()->where('page', 'shared')->where('locale', 'en')->firstOrFail()->published_content);
+    }
+
+    public function test_translation_publication_still_requires_the_visible_source_review(): void
+    {
+        $data = $this->copyFields(locale: 'fr');
+        unset($data['reviewed_source']);
+        $this->actingAs(AdministratorFactory::new()->create(['role' => 'super_admin']))
+            ->post(route('admin.website-copy.update'), $data)->assertSessionHasErrors('reviewed_source');
+        $this->assertDatabaseCount('website_copies', 0);
+        $data['action'] = 'draft';
+        $this->post(route('admin.website-copy.update'), $data)->assertSessionHasNoErrors();
+    }
+
     private function settingsFields(array $changes = []): array
     {
         return array_replace(['site_name' => 'New name', 'business_timezone' => 'Africa/Cairo', 'default_language' => 'en', 'action' => 'publish',

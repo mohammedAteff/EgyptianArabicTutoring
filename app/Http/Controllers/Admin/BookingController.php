@@ -350,7 +350,7 @@ class BookingController extends Controller
         $sessionTypes = SessionType::where('active', true)->with('requiredEntitlementType')->orderBy('title')->get();
         $businessTz = $this->timezoneService->getBusinessTimezone();
 
-        $filters = $request->validate(['student_id' => ['nullable', 'integer', 'min:1']]);
+        $filters = $request->validate(['student_id' => ['nullable', 'integer', 'min:1'], 'session_type_id' => ['nullable', 'integer', 'min:1'], 'funding_mode' => ['nullable', Rule::in(['direct', 'package'])], 'date' => ['nullable', 'date_format:Y-m-d'], 'start_time' => ['nullable', 'date_format:H:i']]);
         $selectedStudent = empty($filters['student_id']) ? null : Student::query()->where('identity_status', '!=', 'merged')->findOrFail($filters['student_id']);
 
         $fundableTypes = $selectedStudent ? $sessionTypes->filter(fn (SessionType $type): bool => $type->funding_mode === 'package' && app(EntitlementService::class)->canFund($selectedStudent->id, $type)) : collect();
@@ -361,7 +361,9 @@ class BookingController extends Controller
             'sessionTypes' => $sessionTypes,
             'businessTz' => $businessTz,
             'students' => Student::query()->where('identity_status', 'verified')->whereNull('suspended_at')->orderBy('first_name')->orderBy('id')->get(['id', 'first_name', 'last_name', 'email', 'preferred_timezone']),
-            'defaultSessionTypeId' => $fundableTypes->first()?->id,
+            'defaultSessionTypeId' => $sessionTypes->firstWhere('id', (int) ($filters['session_type_id'] ?? 0))?->id ?? $fundableTypes->first()?->id,
+            'defaultFundingMode' => $filters['funding_mode'] ?? ($fundableTypes->isNotEmpty() ? 'package' : 'direct'),
+            'preferredDate' => $filters['date'] ?? null, 'preferredStartTime' => $filters['start_time'] ?? null,
             'fundableTypeIds' => $fundableTypes->map(fn (SessionType $type): int => $type->id)->all(),
             'entitlementBalances' => $selectedStudent ? app(EntitlementService::class)->forStudent($selectedStudent->id) : [],
             'idempotencyKey' => Str::random(48),

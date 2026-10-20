@@ -60,6 +60,9 @@ class TelegramReadService
         if (! $service->eligible($package)) {
             return;
         }
+        if ($rule->trigger === 'low_credits' && ! $service->allCreditsLow($package->student->packages()->with(['entitlements.type', 'ledgerEntries'])->get(), $rule->threshold)) {
+            return;
+        }
         $expiry = $package->expiryDeadline();
         foreach ($service->projection($package) as $allocation) {
             if ($allocation['id'] === null) {

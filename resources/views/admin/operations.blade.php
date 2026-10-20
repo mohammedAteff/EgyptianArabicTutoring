@@ -44,7 +44,7 @@
             @empty<p class="text-sm text-slate-500">No available packages nearing expiry.</p>@endforelse
         </x-operations-card>
         <x-operations-card heading="Low-credit students" :count="$counts['lowCreditStudents']" :url="route('admin.students.index')">
-            <p class="text-xs text-slate-500">At least one active entitlement type has 0–2 units available. Types remain separate.</p>
+            <p class="text-xs text-slate-500">All active credit types have 0–2 units available. A higher balance in either type keeps a student off this list.</p>
             @forelse($lowCreditStudents as $student)<a class="block rounded-xl bg-slate-50 p-3" href="{{ route('admin.students.show', $student->id) }}"><strong class="text-sm text-amber-800">{{ $student->name }}</strong>@foreach($studentCredits[$student->id] as $credit)<span class="mt-1 block text-xs text-slate-600">{{ $credit['label'] }}: {{ $credit['available'] }} available</span>@endforeach</a>@empty<p class="text-sm text-slate-500">No low-credit students.</p>@endforelse
         </x-operations-card>
         <x-operations-card heading="Outstanding payment follow-ups" :count="$counts['paymentFollowUps']" :url="route('admin.billing.cashier')">

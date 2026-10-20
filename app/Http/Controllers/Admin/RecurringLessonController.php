@@ -14,7 +14,7 @@ class RecurringLessonController extends Controller
 {
     public function index(): View
     {
-        return view('admin.scheduling.recurring', ['plans' => RecurringLessonPlan::query()->with(['student', 'sessionType'])->orderByDesc('id')->paginate(20)]);
+        return view('admin.scheduling.recurring', ['students' => Student::query()->verified()->where('operational_status', 'active')->whereNull('merged_into_student_id')->whereNull('suspended_at')->orderBy('first_name')->orderBy('id')->get(['id', 'first_name', 'last_name']), 'plans' => RecurringLessonPlan::query()->with(['student', 'sessionType'])->orderByDesc('id')->paginate(20)]);
     }
 
     public function store(Request $request, Student $student, RecurringLessonService $service): RedirectResponse

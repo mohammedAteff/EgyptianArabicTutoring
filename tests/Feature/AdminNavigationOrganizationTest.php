@@ -20,7 +20,7 @@ class AdminNavigationOrganizationTest extends TestCase
         $staff = Administrator::factory()->create(['role' => $role]);
         $expected = [
             'admin.operations.index', 'admin.tasks.index', 'admin.staff-bins.index', 'admin.staff-note-templates.library',
-            'admin.students.index', 'admin.contacts.index', 'admin.leads', 'admin.bookings.index', 'admin.forms.index', 'admin.forms.completion',
+            'admin.students.index', 'admin.contacts.index', 'admin.leads', 'admin.birthdays.index', 'admin.bookings.index', 'admin.forms.index', 'admin.forms.completion',
         ];
         if ($role !== 'assistant') {
             $expected = array_merge($expected, [

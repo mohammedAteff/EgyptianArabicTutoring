@@ -28,7 +28,7 @@
                                 <div class="flex justify-between gap-3"><dt>{{ website_text('pricing', 'Remaining payment when eligible') }}</dt><dd class="font-bold">${{ $track['remaining'] }}</dd></div>
                             </dl>
                             <p class="mt-4 text-sm text-stone-600">${{ $track['session_rate'] }} per session · ${{ $track['hourly_rate'] }} per hour</p>
-                            <p class="mt-3 text-sm text-stone-600">Validity: {{ $track['validity_days'] }} calendar days from full payment receipt.</p>
+                            <p class="mt-3 text-sm text-stone-600">Validity: {{ $track['validity_days'] }} calendar days from the first payment, including a partial payment.</p>
                             <ul class="my-6 grow list-disc space-y-3 pl-5 text-sm leading-relaxed text-stone-600">@foreach($track['benefits'] as $benefit)<li>{{ $benefit }}</li>@endforeach</ul>
                             <a href="{{ website_link('pricing', 'booking', $bookingUrl) }}" data-cta="booking" class="rounded-xl bg-terracotta-500 px-6 py-3 text-center font-bold text-white hover:bg-terracotta-600">{{ website_text('pricing', 'Start with the Diagnostic') }}</a>
                         </article>

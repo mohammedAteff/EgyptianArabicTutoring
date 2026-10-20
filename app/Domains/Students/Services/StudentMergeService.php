@@ -153,6 +153,10 @@ class StudentMergeService
                 DB::table($table)->where('student_id', $secondaryId)->update(['student_id' => $primaryId]);
             }
 
+            foreach (DB::table('student_birthday_reminders')->where('student_id', $secondaryId)->get() as $reminder) {
+                DB::table('student_birthday_reminders')->insertOrIgnore(['student_id' => $primaryId, 'birthday_date' => $reminder->birthday_date, 'days_before' => $reminder->days_before, 'created_at' => $reminder->created_at]);
+            }
+            DB::table('student_birthday_reminders')->where('student_id', $secondaryId)->delete();
             $this->learning->merge($primaryId, $secondaryId);
 
             DB::table('session_reschedules')

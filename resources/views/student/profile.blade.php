@@ -12,7 +12,7 @@
         <div><dt class="text-sm text-stone-500">Phone number</dt><dd class="mt-1"><bdi>{{ $student->phone ?: 'Not provided' }}</bdi></dd></div>
         <div><dt class="text-sm text-stone-500">Date of birth</dt><dd class="mt-1">{{ $student->date_of_birth?->format('j F Y') ?? 'Not provided' }}</dd></div>
     </dl>
-    <p class="mt-4 text-sm text-stone-500">Contact Abdallah if your recorded student details need updating.</p>
+    <p class="mt-4 text-sm text-stone-500">Your birthday is visible to you and staff only. Other students cannot see it. Contact Abdallah if your recorded student details need updating.</p>
 </section>
 <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-6" aria-labelledby="email-addresses">
     <h2 id="email-addresses" class="text-xl font-semibold">Email Addresses</h2>

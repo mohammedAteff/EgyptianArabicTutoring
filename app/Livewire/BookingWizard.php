@@ -17,6 +17,7 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormVersion;
 use App\Domains\Forms\Services\FormValidationService;
+use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Services\StudentIdentityService;
@@ -524,6 +525,8 @@ class BookingWizard extends Component
         $this->name = trim("{$this->first_name} {$this->last_name}");
 
         $this->validate();
+
+        app(EmailQualityService::class)->validate($this->email);
 
         if (! $this->validateIntake()) {
             return;

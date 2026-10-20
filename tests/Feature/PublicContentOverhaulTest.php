@@ -108,7 +108,7 @@ class PublicContentOverhaulTest extends TestCase
     public function test_english_copy_has_honest_fallback_and_no_unavailable_workbook_link(): void
     {
         $this->get('/fr')->assertOk()->assertSeeText('Learn Arabic with a plan built around you.')->assertSeeText('La version anglaise est affichée.');
-        $this->get('/pricing')->assertOk()->assertSeeText('$280')->assertSeeText('$390')->assertSeeText('full payment receipt');
+        $this->get('/pricing')->assertOk()->assertSeeText('$280')->assertSeeText('$390')->assertSeeText('first payment, including a partial payment');
         $this->get('/resources')->assertOk()->assertSeeText('Learning materials are being prepared.')->assertDontSeeText('awaiting its confirmed file')->assertDontSeeText('Explore the Workbook');
         $this->get('/booking-policy')->assertOk()->assertSeeText('Full refund or rescheduling.')->assertSeeText('Online rescheduling requires at least 24 hours');
     }

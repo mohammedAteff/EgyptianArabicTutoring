@@ -14,11 +14,11 @@ class BookingWaitlist extends Model
     /** @use HasFactory<BookingWaitlistFactory> */
     use HasFactory;
 
-    protected $fillable = ['student_id', 'session_type_id', 'date_from', 'date_to', 'timezone', 'status', 'reason_code', 'notes', 'idempotency_key', 'fingerprint'];
+    protected $fillable = ['student_id', 'session_type_id', 'date_from', 'date_to', 'preferred_time_from', 'preferred_time_to', 'last_offered_start_at', 'availability_notified_at', 'timezone', 'status', 'reason_code', 'notes', 'idempotency_key', 'fingerprint'];
 
     protected function casts(): array
     {
-        return ['date_from' => 'immutable_date', 'date_to' => 'immutable_date'];
+        return ['last_offered_start_at' => 'immutable_datetime', 'availability_notified_at' => 'immutable_datetime', 'date_from' => 'immutable_date', 'date_to' => 'immutable_date'];
     }
 
     protected static function newFactory(): BookingWaitlistFactory
@@ -29,7 +29,7 @@ class BookingWaitlist extends Model
     protected static function booted(): void
     {
         static::updating(function (self $record): void {
-            foreach (array_diff($record->getFillable(), ['status', 'reason_code', 'notes']) as $field) {
+            foreach (array_diff($record->getFillable(), ['status', 'reason_code', 'notes', 'last_offered_start_at', 'availability_notified_at']) as $field) {
                 if ($record->isDirty($field)) {
                     throw new RuntimeException('Historical lifecycle terms cannot be changed.');
                 }

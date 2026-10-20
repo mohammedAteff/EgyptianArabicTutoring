@@ -46,7 +46,7 @@ class WebsiteCopyController extends Controller
     {
         $data = $request->validate(['page' => ['required', Rule::in(array_keys(WebsiteCopyCatalog::PAGES))], 'locale' => ['required', Rule::in(['en', 'fr', 'de'])],
             'action' => ['required', Rule::in(['draft', 'publish'])], 'state' => ['required', 'string', 'size:64'], 'values' => ['required', 'array', 'max:800'],
-            'reviewed_source' => [Rule::requiredIf(fn () => $request->input('locale') !== 'en' && $request->input('action') === 'publish'), 'accepted']]);
+            'reviewed_source' => [Rule::when($request->input('locale') !== 'en' && $request->input('action') === 'publish', ['required', 'accepted'])]]);
         $copies->save($request->user('web'), $data['page'], $data['locale'], $data['values'], $data['action'], $data['state']);
 
         return redirect()->route('admin.website-copy.index', ['page' => $data['page'], 'locale' => $data['locale']])->with('success', $data['action'] === 'publish' ? 'Website copy published.' : 'Draft saved. The live website is unchanged.');

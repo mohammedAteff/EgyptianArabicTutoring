@@ -81,7 +81,7 @@ class StudentTeachingReadModel
                 $canBook = $canBook || $requirements->contains(fn ($session): bool => (int) $session->required_entitlement_type_id === (int) $allocation?->entitlement_type_id && $balance['available'] >= (int) $session->required_entitlement_units);
                 $expiry = $package->expiryDeadline();
                 $soon = $package->status === 'active' && $expiry !== null && $expiry->lessThanOrEqualTo(now($this->timezones->getBusinessTimezone())->addDays(14)) && $balance['remaining'] > 0;
-                $low = $this->entitlements->eligible($package) && $balance['available'] <= 2;
+                $low = $this->entitlements->eligible($package) && $this->entitlements->allCreditsLow($packages);
                 if (! $low && ! $soon) {
                     continue;
                 }

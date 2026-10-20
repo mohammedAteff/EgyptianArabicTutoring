@@ -9,6 +9,7 @@ use App\Domains\Booking\Models\SessionType;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentUnavailability;
 use App\Domains\Students\Services\StudentSchedulingService;
+use App\Domains\Students\Services\WaitlistAvailabilityService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class StudentSchedulingController extends Controller
             'plans' => RecurringLessonPlan::query()->where('student_id', $student->id)->with(['sessionType', 'student'])->orderByDesc('id')->paginate(10, ['*'], 'plans_page'),
             'occurrences' => RecurringLessonOccurrence::query()->whereHas('plan', fn ($query) => $query->where('student_id', $student->id))->with('booking')->orderByDesc('id')->limit(100)->get(),
             'holidays' => StudentUnavailability::query()->where('student_id', $student->id)->orderByDesc('id')->paginate(15, ['*'], 'holidays_page'),
+            'waitlistTypes' => SessionType::query()->studentDiscoverable()->orderBy('duration_minutes')->get(),
             'sessionTypes' => SessionType::query()->where('active', true)->orderBy('title')->get()]);
     }
 
@@ -52,7 +54,19 @@ class StudentSchedulingController extends Controller
             $query->whereHas('student', fn ($students) => $students->where('operational_status', 'active'));
         }
 
-        return view('admin.scheduling.waitlist', ['interests' => $query->paginate(25)->withQueryString(), 'status' => $status]);
+        $interests = $query->paginate(25)->withQueryString();
+        $matches = $interests->mapWithKeys(fn (BookingWaitlist $interest): array => [$interest->id => app(WaitlistAvailabilityService::class)->matches($interest)])->all();
+
+        return view('admin.scheduling.waitlist', ['interests' => $interests, 'status' => $status, 'matches' => $matches]);
+    }
+
+    public function waitlistStore(Request $request, Student $student, StudentSchedulingService $scheduling): RedirectResponse
+    {
+        $data = $request->only(['session_type_id', 'date_from', 'date_to', 'preferred_time_from', 'preferred_time_to', 'timezone', 'reason_code', 'notes', 'idempotency_key']);
+        abort_unless(SessionType::query()->studentDiscoverable()->whereKey($request->input('session_type_id'))->exists(), 422);
+        $scheduling->waitlist($student, $data, $request->user('web')->id);
+
+        return back()->with('success', 'Waitlist preference recorded for this student. No booking or credit change made.');
     }
 
     public function waitlistUpdate(Request $request, BookingWaitlist $interest, StudentSchedulingService $service): RedirectResponse

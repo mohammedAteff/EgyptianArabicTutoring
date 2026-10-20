@@ -30,7 +30,7 @@ class DevelopmentDataCatalog
         'students.forms' => ['form_submissions', 'form_answers', 'form_submission_revisions'],
         'students.teaching' => ['student_bins', 'homeworks', 'homework_submissions', 'learning_skills', 'student_skill_assessments', 'student_progress_reports', 'student_bookmarks', 'resource_collection_assignments', 'learning_plans', 'learning_milestones', 'tutor_preparations', 'resource_assignments', 'student_error_logs', 'teaching_tags', 'lesson_feedback', 'staff_tasks', 'student_operational_alerts'],
         'students.materials' => ['lesson_materials'],
-        'students.notifications' => ['student_notifications'],
+        'students.notifications' => ['student_notifications', 'student_birthday_reminders'],
         'financial.packages' => ['student_packages', 'student_package_entitlements', 'entitlement_mapping_reviews', 'package_installments', 'package_renewals'],
         'financial.payments' => ['payment_records', 'payment_refunds'],
         'financial.ledger' => ['session_ledger_entries'],

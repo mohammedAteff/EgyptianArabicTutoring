@@ -17,6 +17,7 @@ use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentOperationalAlert;
+use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentPrivacyService;
@@ -280,11 +281,11 @@ class StaffOperationsProductivityTest extends TestCase
         $payment = PaymentRecord::factory()->create(['student_package_id' => $short->id, 'student_id' => $student->id, 'amount_paid' => '30.00']);
         PaymentRefund::query()->create(['student_id' => $student->id, 'student_package_id' => $short->id, 'payment_record_id' => $payment->id, 'amount_refunded' => '5.00', 'currency' => 'USD', 'refunded_at' => now(), 'created_at' => now(), 'idempotency_key' => 'refund-projection']);
         $data = app(OperationsReadModel::class)->forAdministrator($actor);
-        $this->assertSame([$student->id], $data['lowCreditStudents']->modelKeys());
+        $this->assertSame([], $data['lowCreditStudents']->modelKeys());
         $this->assertSame(2, $data['counts']['expiringPackages']);
         $this->assertSame('15.00', $data['paymentBalances'][$short->id]);
-        $this->assertSame(1, $data['studentCredits'][$student->id]['one_hour']['available']);
-        $this->assertSame(5, $data['studentCredits'][$student->id]['two_hour']['available']);
+        $this->assertSame(1, app(EntitlementService::class)->forStudent($student->id)['one_hour']['available']);
+        $this->assertSame(5, app(EntitlementService::class)->forStudent($student->id)['two_hour']['available']);
         $this->actingAs($actor, 'web')->get(route('admin.operations.index'))->assertOk()->assertSeeText('USD 15.00');
     }
 

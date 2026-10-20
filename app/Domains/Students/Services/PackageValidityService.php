@@ -2,9 +2,11 @@
 
 namespace App\Domains\Students\Services;
 
+use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 class PackageValidityService
 {
@@ -31,24 +33,45 @@ class PackageValidityService
         return null;
     }
 
-    public function activate(StudentPackage $package, bool $hadPreviousSettlement): void
+    /** @return array<string, mixed> */
+    public function firstPaymentTerms(StudentPackage $package): array
     {
-        if ($package->validity_days === null || $package->expiration_date !== null || $package->validity_started_at !== null || $package->expires_at !== null || $hadPreviousSettlement) {
+        if ($package->validity_days === null) {
+            return [];
+        }
+        $first = $package->payments()->where('amount_paid', '>', 0)->orderBy('paid_at')->orderBy('id')->first();
+        if (! $first) {
+            return [];
+        }
+        $start = CarbonImmutable::instance($first->paid_at)->utc();
+        if ($package->validity_started_at && $start->greaterThanOrEqualTo($package->validity_started_at)) {
+            return [];
+        }
+        $timezone = $this->timezones->getBusinessTimezone();
+        $extensionSeconds = 0;
+        if ($package->validity_started_at && $package->expires_at) {
+            $originalDeadline = $package->validity_started_at->setTimezone($timezone)->addDays((int) $package->validity_days)->utc();
+            $extensionSeconds = max(0, $package->expires_at->timestamp - $originalDeadline->timestamp);
+        }
+        $expiry = $start->setTimezone($timezone)->addDays((int) $package->validity_days)->addSeconds($extensionSeconds);
+
+        return ['validity_started_at' => $start->toDateTimeString(), 'expires_at' => $expiry->utc()->toDateTimeString(), 'expiration_date' => $expiry->toDateString()];
+    }
+
+    public function activate(StudentPackage $package): void
+    {
+        if ($package->validity_days === null) {
             return;
         }
-        $paid = (string) $package->payments()->sum('amount_paid');
-        $refunded = (string) $package->refunds()->sum('amount_refunded');
-        if (bccomp(bcsub($paid, $refunded, 2), (string) $package->final_price, 2) < 0) {
-            return;
+        $changes = $this->firstPaymentTerms($package);
+        if ($package->funding_activated_at === null && ($settled = $this->firstFullReceipt($package))) {
+            $changes['funding_activated_at'] = $settled->toDateTimeString();
         }
-        $start = $this->firstFullReceipt($package);
-        if (! $start) {
-            return;
+        if ($changes !== []) {
+            $before = $package->only(array_keys($changes));
+            DB::table('student_packages')->where('id', $package->id)->update($changes);
+            app(AuditLogService::class)->log('package_first_payment_validity', StudentPackage::class, $package->id, $before, $changes);
+            $package->refresh();
         }
-        $expiry = $start->setTimezone($this->timezones->getBusinessTimezone())->addDays((int) $package->validity_days);
-        $package->update([
-            'validity_started_at' => $start, 'expires_at' => $expiry->utc(),
-            'expiration_date' => $expiry->toDateString(),
-        ]);
     }
 }

@@ -19,6 +19,7 @@ use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Models\FormVersion;
 use App\Domains\Forms\Services\FormValidationService;
+use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Models\Student;
@@ -207,6 +208,7 @@ class BookingService
         if ($missingIdentityFields !== []) {
             throw ValidationException::withMessages($missingIdentityFields);
         }
+        app(EmailQualityService::class)->validate($email);
         $phoneCountry = $data['phone_country'] ?? null;
         Validator::make([
             'first_name' => $firstName, 'last_name' => $lastName, 'email' => $email,

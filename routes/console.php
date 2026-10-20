@@ -104,3 +104,5 @@ Schedule::command('telegram:tick')
     ->name('telegram:tick');
 
 Schedule::command('geoip:update')->monthlyOn(2, '04:00')->timezone(app(TimezoneService::class)->getBusinessTimezone())->withoutOverlapping(120);
+
+Schedule::command('students:planning-reminders')->everyFifteenMinutes()->withoutOverlapping(20)->name('students:planning-reminders');

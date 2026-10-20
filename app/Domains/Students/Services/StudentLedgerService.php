@@ -435,7 +435,6 @@ class StudentLedgerService
             if ($receipt->greaterThan(now('UTC'))) {
                 throw new InvalidArgumentException('The payment receipt time cannot be in the future.');
             }
-            $hadPreviousSettlement = $lockedPackage->validity_days !== null && $lockedPackage->expiration_date === null && $this->validity->firstFullReceipt($lockedPackage) !== null;
             $recordedPayment = PaymentRecord::create([
                 'student_package_id' => $package->id,
                 'student_id' => $package->student_id,
@@ -451,7 +450,7 @@ class StudentLedgerService
                 'created_at' => now('UTC'),
             ]);
 
-            $this->validity->activate($lockedPackage, $hadPreviousSettlement);
+            $this->validity->activate($lockedPackage);
 
             return $recordedPayment;
         }, 5);
@@ -705,7 +704,7 @@ class StudentLedgerService
             $state = 'Review required';
         } elseif ($package->isPaused()) {
             $state = 'Paused';
-        } elseif ($package->status === 'active' && $package->expiration_date === null && $package->expires_at === null && $package->validity_days !== null) {
+        } elseif ($package->status === 'active' && $package->validity_days !== null && $package->funding_activated_at === null && ! $package->isExpired($businessTimezone)) {
             $state = 'Awaiting settlement';
         } elseif ($package->status === 'active' && ! $this->entitlements->eligible($package, $businessTimezone)) {
             $state = 'Expired';

@@ -16,11 +16,11 @@ class StudentPackage extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['offering_key', 'identity_state', 'validity_days', 'purchase_fingerprint', 'student_id', 'package_name', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated', 'expiration_date', 'validity_started_at', 'expires_at', 'status', 'paused_at', 'pause_reason', 'paused_by', 'admin_notes'];
+    protected $fillable = ['offering_key', 'identity_state', 'validity_days', 'purchase_fingerprint', 'student_id', 'package_name', 'original_price', 'discount_amount', 'final_price', 'currency', 'total_sessions_allocated', 'expiration_date', 'validity_started_at', 'funding_activated_at', 'expires_at', 'status', 'paused_at', 'pause_reason', 'paused_by', 'admin_notes'];
 
     protected function casts(): array
     {
-        return ['validity_started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'paused_at' => 'immutable_datetime', 'expiration_date' => 'date', 'original_price' => 'decimal:2', 'discount_amount' => 'decimal:2', 'final_price' => 'decimal:2'];
+        return ['funding_activated_at' => 'immutable_datetime', 'validity_started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'paused_at' => 'immutable_datetime', 'expiration_date' => 'date', 'original_price' => 'decimal:2', 'discount_amount' => 'decimal:2', 'final_price' => 'decimal:2'];
     }
 
     /** Display current offering names without rewriting historical purchase terms. */
@@ -107,6 +107,9 @@ class StudentPackage extends Model
             $package->statement_timezone = $timezones->isValid($preferred) ? $preferred : $timezones->getBusinessTimezone();
         });
         static::updating(function (self $package): void {
+            if ($package->getRawOriginal('funding_activated_at') !== null && $package->isDirty('funding_activated_at')) {
+                throw new RuntimeException('An activated funding timestamp cannot be changed.');
+            }
             if ($package->isDirty('statement_timezone')) {
                 throw new RuntimeException('A purchase keeps its original statement timezone.');
             }

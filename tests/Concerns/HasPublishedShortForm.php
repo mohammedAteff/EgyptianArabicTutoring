@@ -6,6 +6,7 @@ use App\Domains\Administration\Models\Administrator;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Services\FormBuilderService;
+use App\Domains\Resources\Services\EmailQualityService;
 use Database\Factories\AdministratorFactory;
 use Illuminate\Support\Str;
 
@@ -14,6 +15,7 @@ trait HasPublishedShortForm
     /** Scheduling tests use an intake with optional answers; required onboarding is tested separately. */
     protected function installShortFormFixture(): Form
     {
+        $this->partialMock(EmailQualityService::class)->shouldReceive('dnsRecords')->andReturn([['type' => 'MX', 'target' => 'mail.fixture.test']]);
         $existing = app(BookingService::class)->publishedIntakeForm();
         if ($existing) {
             return $existing;

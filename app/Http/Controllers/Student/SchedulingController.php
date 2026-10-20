@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Domains\Booking\Models\BookingWaitlist;
+use App\Domains\Booking\Models\RecurringLessonPlan;
 use App\Domains\Booking\Models\SessionType;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentUnavailability;
@@ -23,6 +24,7 @@ class SchedulingController extends Controller
         return response()->view('student.scheduling', ['student' => $student,
             'interests' => BookingWaitlist::query()->where('student_id', $student->id)->with('sessionType')->orderByDesc('id')->paginate(15, ['*'], 'waitlist_page'),
             'holidays' => StudentUnavailability::query()->where('student_id', $student->id)->orderByDesc('id')->paginate(15, ['*'], 'holiday_page'),
+            'recurringPlans' => RecurringLessonPlan::query()->where('student_id', $student->id)->with('sessionType')->orderByDesc('id')->get(),
             'sessionTypes' => SessionType::query()->studentDiscoverable()->orderBy('title')->get()])->header('Cache-Control', 'private, no-store');
     }
 
@@ -30,7 +32,7 @@ class SchedulingController extends Controller
     {
         /** @var Student $student */
         $student = $request->attributes->get('student');
-        $data = $request->only(['session_type_id', 'date_from', 'date_to', 'timezone', 'reason_code', 'notes', 'idempotency_key']);
+        $data = $request->only(['session_type_id', 'date_from', 'date_to', 'preferred_time_from', 'preferred_time_to', 'timezone', 'reason_code', 'notes', 'idempotency_key']);
         if ($kind === 'holiday') {
             $service->holiday($student, $data);
         } else {

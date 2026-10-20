@@ -117,6 +117,7 @@ class SettingController extends Controller
 
         return view('admin.settings.index', [
             'title' => 'System & Business Settings',
+            'emailPinPreference' => Setting::get('email.pin_preference', 'off'),
             'settings' => $settings,
             'timezones' => $timezones,
             'canManageMaintenance' => $request->user('web')?->role === 'super_admin',

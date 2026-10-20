@@ -68,10 +68,10 @@ class DataQualityReadModel
         $invalidExpiry = StudentPackage::query()->where('status', 'active')->where(function ($query): void {
             $query->whereColumn('expires_at', '<=', 'validity_started_at')->orWhere(function ($query): void {
                 $query->whereNotNull('validity_days')->whereNull('expires_at')->whereNull('expiration_date')
-                    ->whereRaw('(select coalesce(sum(amount_paid),0) from payment_records where student_package_id = student_packages.id) - (select coalesce(sum(amount_refunded),0) from payment_refunds where student_package_id = student_packages.id) >= final_price');
+                    ->whereRaw('(select coalesce(sum(amount_paid),0) from payment_records where student_package_id = student_packages.id) > 0');
             });
         })->whereHas('ledgerEntries', fn ($query) => $query->where('credit_change', '>', 0));
-        $add('Settled purchases with invalid or missing validity', $invalidExpiry, $packageLink);
+        $add('Paid purchases with invalid or missing validity', $invalidExpiry, $packageLink);
         $overRefund = PaymentRecord::query()->whereRaw('(select coalesce(sum(amount_refunded),0) from payment_refunds where payment_record_id = payment_records.id) > amount_paid');
         $add('Refund totals exceeding their original payment', $overRefund, fn ($payment): array => ['label' => 'Payment PAY-'.$payment->id, 'url' => route('admin.packages.lifecycle', $payment->student_package_id)]);
         $negative = StudentPackage::query()->whereExists(function ($query): void {

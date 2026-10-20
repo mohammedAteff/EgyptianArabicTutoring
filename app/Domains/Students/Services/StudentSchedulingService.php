@@ -70,11 +70,13 @@ class StudentSchedulingService
     }
 
     /** @param array<string, mixed> $data */
-    public function waitlist(Student $student, array $data): BookingWaitlist
+    public function waitlist(Student $student, array $data, ?int $administratorId = null): BookingWaitlist
     {
         $values = Validator::make($data, [
             'session_type_id' => ['required', 'integer', 'exists:session_types,id'],
             'date_from' => ['required', 'date_format:Y-m-d'], 'date_to' => ['required', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'preferred_time_from' => ['nullable', 'date_format:H:i', 'required_with:preferred_time_to'],
+            'preferred_time_to' => ['nullable', 'date_format:H:i', 'required_with:preferred_time_from'],
             'timezone' => ['required', 'timezone'], 'reason_code' => ['nullable', 'string', 'max:40'],
             'notes' => ['nullable', 'string', 'max:1000'], 'idempotency_key' => ['required', 'string', 'max:100'],
         ])->validate();
@@ -84,7 +86,7 @@ class StudentSchedulingService
         }
         $fingerprint = hash('sha256', json_encode($values, JSON_THROW_ON_ERROR));
 
-        return app(DatabaseCapability::class)->transaction(function () use ($student, $values, $fingerprint): BookingWaitlist {
+        return app(DatabaseCapability::class)->transaction(function () use ($student, $values, $fingerprint, $administratorId): BookingWaitlist {
             Student::query()->lockForUpdate()->findOrFail($student->id);
             $existing = BookingWaitlist::query()->where('idempotency_key', $values['idempotency_key'])->first();
             if ($existing) {
@@ -92,8 +94,15 @@ class StudentSchedulingService
 
                 return $existing;
             }
+            if (BookingWaitlist::query()->where('student_id', $student->id)->whereIn('status', ['open', 'contacted'])->count() >= 5) {
+                throw ValidationException::withMessages(['date_from' => 'Keep at most five open preferences. Withdraw an older preference first.']);
+            }
             $record = BookingWaitlist::query()->create(array_merge($values, ['student_id' => $student->id, 'fingerprint' => $fingerprint]));
-            app(AuditLogService::class)->logStudent($student->id, 'student_waitlist_created', BookingWaitlist::class, $record->id, null, ['status' => 'open']);
+            if ($administratorId === null) {
+                app(AuditLogService::class)->logStudent($student->id, 'student_waitlist_created', BookingWaitlist::class, $record->id, null, ['status' => 'open']);
+            } else {
+                app(AuditLogService::class)->log('student_waitlist_created', BookingWaitlist::class, $record->id, null, ['student_id' => $student->id, 'status' => 'open'], $administratorId);
+            }
 
             return $record;
         }, 3);

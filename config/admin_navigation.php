@@ -24,6 +24,7 @@ return [
                 'admin.students.index' => ['label' => 'Student Records', 'active' => ['admin.students.*'], 'shortcut' => 'Students'],
                 'admin.contacts.index' => ['label' => 'Students & Contacts', 'active' => ['admin.contacts.*']],
                 'admin.leads' => ['label' => 'Student Leads'],
+                'admin.birthdays.index' => ['label' => 'Student Birthdays', 'active' => ['admin.birthdays.*']],
                 'admin.data-quality.index' => ['label' => 'Data Quality Center', 'roles' => $admins, 'active' => ['admin.data-quality.*']],
             ],
         ],

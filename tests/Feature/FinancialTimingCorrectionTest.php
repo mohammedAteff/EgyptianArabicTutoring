@@ -128,30 +128,30 @@ class FinancialTimingCorrectionTest extends TestCase
         $this->assertNull($ledger->checkDiagnosticCreditEligibility($student->id));
     }
 
-    public function test_partial_receipts_do_not_activate_and_full_receipt_retains_cairo_wall_clock_across_daylight_saving(): void
+    public function test_first_partial_receipt_starts_expiry_and_retains_cairo_wall_clock_across_daylight_saving(): void
     {
         $this->freezeAt('2026-02-20 12:00:00');
         $student = Student::factory()->verified()->create();
         $track = $this->purchase($student);
         $ledger = app(StudentLedgerService::class);
         $ledger->recordPayment($track, '140.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-02-14 10:00:00', 'UTC'));
-        $this->assertNull($track->fresh()->validity_started_at);
+        $this->assertNotNull($track->fresh()->validity_started_at);
         $ledger->recordPayment($track, '140.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-02-15 10:00:00', 'UTC'));
         $track->refresh();
-        $this->assertSame('2026-02-15 10:00:00', $track->validity_started_at->toDateTimeString());
-        $this->assertSame('2026-05-01 09:00:00', $track->expires_at->toDateTimeString());
+        $this->assertSame('2026-02-14 10:00:00', $track->validity_started_at->toDateTimeString());
+        $this->assertSame('2026-04-30 09:00:00', $track->expires_at->toDateTimeString());
         $this->assertSame('12:00', $track->expires_at->setTimezone('Africa/Cairo')->format('H:i'));
-        $this->assertSame('2026-05-01', $track->expiration_date->toDateString());
+        $this->assertSame('2026-04-30', $track->expiration_date->toDateString());
     }
 
-    public function test_out_of_order_entry_uses_the_chronological_full_payment_receipt(): void
+    public function test_backdated_receipt_uses_the_chronological_first_payment_receipt(): void
     {
         $this->freezeAt('2026-10-08 12:00:00');
         $track = $this->purchase(Student::factory()->verified()->create());
         $ledger = app(StudentLedgerService::class);
         $ledger->recordPayment($track, '150.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-10-06 15:20:30', 'UTC'));
         $ledger->recordPayment($track, '130.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-10-01 09:00:00', 'UTC'));
-        $this->assertSame('2026-10-06 15:20:30', $track->fresh()->validity_started_at->toDateTimeString());
+        $this->assertSame('2026-10-01 09:00:00', $track->fresh()->validity_started_at->toDateTimeString());
     }
 
     public function test_payment_replay_and_refund_do_not_restart_validity_or_mutate_entitlements(): void
@@ -273,21 +273,22 @@ class FinancialTimingCorrectionTest extends TestCase
         $ledger->refund($first, '40.00', (string) Str::uuid(), null);
         $this->freezeAt('2026-10-04 12:00:00');
         $ledger->recordPayment($track, '140.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-10-03 12:00:00', 'UTC'));
-        $this->assertNull($track->fresh()->expires_at);
+        $this->assertNotNull($track->fresh()->expires_at);
+        $this->assertNull($track->fresh()->funding_activated_at);
         $ledger->recordPayment($track, '40.00', (string) Str::uuid(), null);
-        $this->assertSame('2026-10-04 12:00:00', $track->fresh()->validity_started_at->toDateTimeString());
+        $this->assertSame('2026-10-01 12:00:00', $track->fresh()->validity_started_at->toDateTimeString());
         $this->assertSame(8, (int) $track->ledgerEntries()->sum('credit_change'));
     }
 
-    public function test_historical_paid_undated_packages_are_not_given_a_new_automatic_expiry(): void
+    public function test_historical_paid_undated_packages_use_the_original_receipt_under_the_first_payment_policy(): void
     {
         $this->freezeAt('2026-10-08 12:00:00');
         $track = $this->purchase(Student::factory()->verified()->create());
         PaymentRecord::factory()->create(['student_package_id' => $track->id, 'amount_paid' => '280.00', 'paid_at' => '2026-10-01 12:00:00']);
         app(StudentLedgerService::class)->recordPayment($track, '1.00', (string) Str::uuid(), null);
-        $this->assertNull($track->fresh()->validity_started_at);
-        $this->assertNull($track->fresh()->expires_at);
-        $this->assertNull($track->fresh()->expiration_date);
+        $this->assertSame('2026-10-01 12:00:00', $track->fresh()->validity_started_at->toDateTimeString());
+        $this->assertNotNull($track->fresh()->expires_at);
+        $this->assertNotNull($track->fresh()->expiration_date);
         $this->assertSame('280.00', $track->fresh()->final_price);
         $this->assertSame(8, (int) $track->ledgerEntries()->sum('credit_change'));
     }

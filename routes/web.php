@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AssignLearningController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\AvailabilityController;
 use App\Http\Controllers\Admin\BackupController;
+use App\Http\Controllers\Admin\BirthdayController;
 use App\Http\Controllers\Admin\BookingPolicyController;
 use App\Http\Controllers\Admin\BusinessActivityController;
 use App\Http\Controllers\Admin\BusinessLifecycleReportController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Admin\CourseVideoController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DataQualityController;
 use App\Http\Controllers\Admin\DevelopmentToolsController;
+use App\Http\Controllers\Admin\EmailSafeguardController;
 use App\Http\Controllers\Admin\FormCompletionController;
 use App\Http\Controllers\Admin\FormController;
 use App\Http\Controllers\Admin\LearningOperationsController;
@@ -496,6 +498,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/students/{student}/holidays/{holiday}/cancel', [StudentSchedulingController::class, 'closeHoliday'])->name('students.holidays.cancel');
             Route::patch('/students/{student}/operational-status', [StudentOperationalStatusController::class, 'update'])->name('students.operational-status');
             Route::get('/waitlist', [StudentSchedulingController::class, 'waitlistIndex'])->name('waitlist.index');
+            Route::post('/students/{student}/waitlist', [StudentSchedulingController::class, 'waitlistStore'])->name('students.waitlist.store');
             Route::patch('/waitlist/{interest}', [StudentSchedulingController::class, 'waitlistUpdate'])->name('waitlist.update');
             Route::get('/packages/{package}/lifecycle', [PackageLifecycleController::class, 'show'])->name('packages.lifecycle');
             Route::post('/packages/{package}/installments', [PackageLifecycleController::class, 'installments'])->name('packages.installments');
@@ -642,6 +645,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
         });
 
         Route::middleware('role:super_admin,admin,assistant')->group(function () {
+            Route::get('/birthdays', [BirthdayController::class, 'index'])->name('birthdays.index');
             Route::get('/students/export', [StudentController::class, 'export'])->middleware('role:super_admin,admin')->name('students.export');
             Route::post('/students/bulk-teaching', [StudentController::class, 'bulkTeaching'])->middleware('role:super_admin,admin')->name('students.bulk-teaching');
             Route::post('/students/bulk-task', [StudentController::class, 'bulkTask'])->name('students.bulk-task');
@@ -711,6 +715,8 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
                 Route::post('/test/{destination}', [TelegramController::class, 'test'])->middleware('throttle:5,1')->name('test');
             });
             Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+            Route::post('/settings/email-safeguards', [EmailSafeguardController::class, 'update'])->name('settings.email-safeguards');
+            Route::post('/birthdays/settings', [BirthdayController::class, 'update'])->name('birthdays.update');
             Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
             Route::post('/settings/telegram/test', [SettingController::class, 'testTelegram'])->name('settings.telegram.test');
         });

@@ -104,6 +104,7 @@ class BookingController extends Controller
             'timezone' => $timezone,
             'fromDate' => $fromDate,
             'slots' => $slots,
+            'busyTimes' => Booking::query()->where('status', 'confirmed')->where('start_at_utc', '>=', $fromDate->utc())->where('start_at_utc', '<', $fromDate->endOfMonth()->addDay()->utc())->where('start_at_utc', '>', now('UTC'))->orderBy('start_at_utc')->limit(100)->get(['start_at_utc', 'end_at_utc']),
             'entitlementBalances' => $entitlements,
             'availableCredits' => $availableCredits,
             'idempotencyKey' => Str::random(48),
