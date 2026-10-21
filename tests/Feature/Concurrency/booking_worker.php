@@ -39,6 +39,7 @@ use App\Domains\Lms\Services\StudentLearningStateService;
 use App\Domains\Lms\Services\VideoDeviceService;
 use App\Domains\Notifications\Services\TelegramAutomationService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
+use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentPackage;
@@ -49,6 +50,7 @@ use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentNotificationService;
 use App\Domains\Students\Services\StudentPrivacyService;
+use App\Domains\Students\Services\WaitlistAvailabilityService;
 use App\Domains\System\Services\DevelopmentToolsService;
 use App\Http\Controllers\Admin\AccountSuspensionController;
 use App\Http\Controllers\Student\FormController;
@@ -325,8 +327,21 @@ try {
         echo 'RESULT:SUCCESS:'.$renewal->new_package_id."\n";
         exit(0);
     } elseif ($action === 'record_payment') {
-        $payment = app(StudentLedgerService::class)->recordPayment(StudentPackage::query()->findOrFail((int) $data['package_id']), (string) $data['amount'], (string) $data['idempotency_key'], (int) $data['administrator_id']);
+        $payment = app(StudentLedgerService::class)->recordPayment(StudentPackage::query()->findOrFail((int) $data['package_id']), (string) $data['amount'], (string) $data['idempotency_key'], (int) $data['administrator_id'], receivedAt: isset($data['received_at']) ? CarbonImmutable::parse($data['received_at'], 'UTC') : null);
         echo 'RESULT:SUCCESS:'.$payment->id."\n";
+        exit(0);
+    } elseif (in_array($action, ['purchase_package', 'waitlist_notify_openings'], true)) {
+        if (! app()->environment('testing') || DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Financial and waitlist races require the dedicated test database.');
+        }
+        Queue::fake();
+        Http::preventStrayRequests();
+        if ($action === 'purchase_package') {
+            $package = app(StudentLedgerService::class)->createPackage(Student::query()->findOrFail((int) $data['student_id']), 'Foundation', 8, '280', '0', 'USD', null, $data['idempotency_key'], (int) $data['administrator_id'], presetKey: 'foundation_track');
+            echo 'RESULT:SUCCESS:'.$package->id."\n";
+        } else {
+            echo 'RESULT:SUCCESS:'.app(WaitlistAvailabilityService::class)->notifyOpenings()."\n";
+        }
         exit(0);
     }
     if (in_array($action, ['telegram_emit', 'telegram_deliver'], true)) {
@@ -435,6 +450,16 @@ try {
         echo 'RESULT:SUCCESS:'.$booking->id."\n";
         exit(0);
     } elseif ($action === 'book_public') {
+        if (! app()->environment('testing') || DB::connection()->getDatabaseName() !== 'bolt_landing_test') {
+            throw new RuntimeException('Public booking races require the dedicated test database.');
+        }
+        $app->instance(EmailQualityService::class, new class extends EmailQualityService
+        {
+            public function dnsRecords(string $domain): array|false
+            {
+                return [['type' => 'MX', 'target' => 'mail.fixture.test']];
+            }
+        });
         $booking = app(BookingService::class)->createPublicBooking([
             'hold_id' => (int) $data['hold_id'],
             'hold_token' => (string) $data['hold_token'],

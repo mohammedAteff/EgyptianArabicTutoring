@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Students\Models\PaymentMethod;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
@@ -12,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class StudentLedgerTest extends TestCase
@@ -37,6 +39,52 @@ class StudentLedgerTest extends TestCase
         $this->assertDatabaseCount('session_ledger_entries', 1);
         $this->expectException(\RuntimeException::class);
         $package->update(['final_price' => '1.00']);
+    }
+
+    #[TestWith([['amount' => '90.00']])]
+    #[TestWith([['method' => 'Cash']])]
+    #[TestWith([['reference' => 'different-reference']])]
+    #[TestWith([['notes' => 'Different payment']])]
+    #[TestWith([['received_at' => '2026-10-19 10:00:00 UTC']])]
+    #[TestWith([['payment_method_id' => true]])]
+    public function test_payment_replay_rejects_changed_details_without_changing_money_or_validity(array $changes): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-21 12:00:00 UTC'));
+        $ledger = app(StudentLedgerService::class);
+        $package = $ledger->createPackage(Student::factory()->verified()->create(), 'Foundation', 8, '280', '0', 'USD', null, 'replay-package', presetKey: 'foundation_track');
+        $payment = $ledger->recordPayment($package, '100', 'same-payment', null, 'Bank transfer', 'original-reference', 'Original payment', receivedAt: CarbonImmutable::parse('2026-10-20 10:00:00 UTC'));
+        $before = $package->fresh()->getAttributes();
+        $methodId = isset($changes['payment_method_id']) ? PaymentMethod::factory()->create()->id : null;
+
+        try {
+            $ledger->recordPayment($package, $changes['amount'] ?? '100', 'same-payment', null, $changes['method'] ?? 'Bank transfer', $changes['reference'] ?? 'original-reference', $changes['notes'] ?? 'Original payment', $methodId, CarbonImmutable::parse($changes['received_at'] ?? '2026-10-20 10:00:00 UTC'));
+            $this->fail('Changed payment details must not reuse an existing request key.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('Idempotency key was already used for different payment details.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('payment_records', 1);
+        $this->assertSame('100.00', $payment->fresh()->amount_paid);
+        $this->assertSame($before, $package->fresh()->getAttributes());
+        $this->assertDatabaseCount('session_ledger_entries', 1);
+    }
+
+    public function test_identical_payment_replay_preserves_historical_method_and_receipt_when_entry_time_changes(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 12:00:00 UTC'));
+        $ledger = app(StudentLedgerService::class);
+        $package = $ledger->createPackage(Student::factory()->verified()->create(), 'Custom', 1, '80', '0', 'USD', null, 'replay-grant', entitlementCode: 'one_hour');
+        $method = PaymentMethod::factory()->create(['name' => 'Original method']);
+        $payment = $ledger->recordPayment($package, '80', 'replay-payment', null, paymentMethodId: $method->id);
+        $method->update(['name' => 'Renamed method', 'active' => false]);
+        $this->travel(1)->days();
+
+        $replay = $ledger->recordPayment($package, '80.00', 'replay-payment', null, paymentMethodId: $method->id);
+
+        $this->assertSame($payment->id, $replay->id);
+        $this->assertSame('Original method', $replay->payment_method);
+        $this->assertSame('2026-10-20 12:00:00', $replay->paid_at->toDateTimeString());
+        $this->assertDatabaseCount('payment_records', 1);
     }
 
     public function test_legacy_single_session_names_display_consistently_without_rewriting_purchase_terms(): void

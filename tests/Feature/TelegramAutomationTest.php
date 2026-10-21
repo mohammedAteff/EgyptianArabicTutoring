@@ -309,6 +309,53 @@ class TelegramAutomationTest extends TestCase
         $this->assertStringContainsString('Sessions tomorrow: 1', $text);
     }
 
+    #[TestWith([['expires_at' => '2026-10-21 10:00:00']])]
+    #[TestWith([['expires_at' => '2026-10-21 12:00:00']])]
+    #[TestWith([['paused_at' => '2026-10-21 11:00:00']])]
+    #[TestWith([['status' => 'cancelled']])]
+    public function test_student_digest_excludes_ineligible_packages(array $attributes): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-21 12:00:00 UTC'));
+        Setting::set('business_timezone', 'Africa/Cairo');
+        $student = Student::factory()->verified()->create();
+        $package = app(StudentLedgerService::class)->createPackage($student, 'Digest fixture', 1, '25', '0', 'USD', '2026-10-21', 'digest-ineligible', entitlementCode: 'one_hour');
+        $package->update($attributes);
+
+        $text = app(TelegramReadService::class)->businessDigest(['students']);
+
+        $this->assertSame("Low entitlement allocations (≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
+        Http::assertNothingSent();
+    }
+
+    public function test_student_digest_excludes_unsettled_first_payment_packages(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-21 12:00:00 UTC'));
+        $ledger = app(StudentLedgerService::class);
+        $package = $ledger->createPackage(Student::factory()->verified()->create(), 'Foundation', 8, '280', '0', 'USD', null, 'digest-unsettled', presetKey: 'foundation_track');
+        $ledger->recordPayment($package, '100', 'digest-first-payment', null);
+
+        $text = app(TelegramReadService::class)->businessDigest(['students']);
+
+        $this->assertSame("Low entitlement allocations (≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
+        Http::assertNothingSent();
+    }
+
+    #[TestWith(['2026-11-04 12:00:00', 1])]
+    #[TestWith(['2026-11-04 12:00:01', 0])]
+    public function test_student_digest_uses_the_exact_expiry_deadline(string $deadline, int $expiring): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-21 12:00:00 UTC'));
+        Setting::set('business_timezone', 'Africa/Cairo');
+        $student = Student::factory()->verified()->create();
+        $package = app(StudentLedgerService::class)->createPackage($student, 'Digest fixture', 1, '25', '0', 'USD', '2026-11-04', 'digest-deadline', entitlementCode: 'one_hour');
+        $package->update(['expires_at' => $deadline]);
+
+        $text = app(TelegramReadService::class)->businessDigest(['students']);
+
+        $this->assertSame("Low entitlement allocations (≤1): 1\nUnused entitlement allocations expiring within 14 days: ".$expiring, $text);
+        Http::assertNothingSent();
+    }
+
     public function test_message_splitting_respects_telegram_limit_and_unicode(): void
     {
         $parts = app(TelegramTemplateService::class)->split(str_repeat('م', 8000));

@@ -444,7 +444,7 @@ class BookingAttributionPersistenceTest extends TestCase
             'is_active' => true,
         ]);
 
-        $res = $this->actingAs($admin, 'web')->get(route('admin.reports.index', ['type' => 'campaigns', 'range' => '30d']));
+        $res = $this->actingAs($admin, 'web')->get(route('admin.reports.index', ['type' => 'campaigns', 'range' => 'custom', 'start_date' => '2026-09-01', 'end_date' => '2026-09-30']));
         $res->assertOk();
         $res->assertSee('survival-arabic');
         $res->assertSee('video-1');

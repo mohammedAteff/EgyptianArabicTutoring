@@ -42,6 +42,7 @@ class CriticalBookingQAMatrixTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-10-01 00:00:00', 'UTC'));
         $this->installShortFormFixture();
 
         $this->sessionType = SessionType::create([

@@ -419,6 +419,14 @@ class StudentLedgerService
                 if ($existing->student_package_id !== $package->id) {
                     throw new InvalidArgumentException('Idempotency key was already used.');
                 }
+                if ($this->toCents((string) $existing->amount_paid) !== $cents
+                    || $existing->payment_method_id !== $paymentMethodId
+                    || ($paymentMethodId === null && $existing->payment_method !== $method)
+                    || $existing->transaction_reference !== $reference
+                    || $existing->notes !== $notes
+                    || ($receivedAt !== null && $existing->paid_at->utc()->toDateTimeString() !== CarbonImmutable::instance($receivedAt)->utc()->toDateTimeString())) {
+                    throw new InvalidArgumentException('Idempotency key was already used for different payment details.');
+                }
 
                 return $existing;
             }

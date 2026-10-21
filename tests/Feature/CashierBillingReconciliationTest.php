@@ -174,8 +174,9 @@ class CashierBillingReconciliationTest extends TestCase
         $this->assertEquals($expected, $expDate);
     }
 
-    public function test_preset_package_terms_and_expiry_are_server_authoritative_after_settlement(): void
+    public function test_preset_terms_and_first_payment_expiry_are_authoritative_while_settlement_unlocks_credits(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 12:00:00', 'UTC'));
         $payload = [
             'preset_key' => 'foundation_track',
             'package_name' => 'Tampered name',
@@ -198,22 +199,22 @@ class CashierBillingReconciliationTest extends TestCase
         $this->assertSame('0.00', $package->discount_amount);
         $this->assertSame('USD', $package->currency);
         $this->assertNull($package->expiration_date);
-        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $this->oneHourPackageLesson())));
+        $twoHourLesson = $this->oneHourPackageLesson();
+        $twoHourLesson->update(['required_entitlement_type_id' => EntitlementType::query()->where('code', 'two_hour')->value('id')]);
+        $twoHourLesson->unsetRelation('requiredEntitlementType');
+        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $twoHourLesson)));
         $this->get(route('admin.billing.cashier', ['student_id' => $this->student->id]))
             ->assertOk()->assertSeeText('2-hour sessions')->assertSeeText('0 available');
 
         $this->ledger->recordPayment($package, '140.00', 'partial-payment-foundation', $this->admin->id);
-        $this->assertNull($package->fresh()->expiration_date);
-        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $this->oneHourPackageLesson())));
+        $this->assertSame('2026-10-20 12:00:00', $package->fresh()->validity_started_at->toDateTimeString());
+        $this->assertSame('2027-01-03 13:00:00', $package->fresh()->expires_at->toDateTimeString());
+        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $twoHourLesson)));
 
+        $this->travel(1)->days();
         $this->ledger->recordPayment($package, '140.00', 'settlement-foundation', $this->admin->id);
-        $this->assertSame(
-            $this->ledger->calculateExpirationDate(now('UTC'), 75),
-            $package->fresh()->expiration_date->toDateString(),
-        );
-        $twoHourLesson = $this->oneHourPackageLesson();
-        $twoHourLesson->update(['required_entitlement_type_id' => EntitlementType::query()->where('code', 'two_hour')->value('id')]);
-        $twoHourLesson->unsetRelation('requiredEntitlementType');
+        $this->assertSame('2027-01-03', $package->fresh()->expiration_date->toDateString());
+        $this->assertSame('2027-01-03 13:00:00', $package->fresh()->expires_at->toDateTimeString());
         $this->assertSame($package->id, DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $twoHourLesson))?->id);
         $this->get(route('admin.billing.cashier', ['student_id' => $this->student->id]))
             ->assertOk()->assertSeeText('2-hour sessions')->assertSeeText('8 remaining');

@@ -166,20 +166,27 @@ class TelegramReadService
         if (in_array('students', $sections, true)) {
             $low = 0;
             $expiry = 0;
+            $entitlements = app(EntitlementService::class);
+            $expiryLimit = CarbonImmutable::now('UTC')->addDays(14);
             foreach (StudentPackage::where('status', 'active')->cursor() as $package) {
-                foreach (app(EntitlementService::class)->projection($package) as $allocation) {
+                if (! $entitlements->eligible($package)) {
+                    continue;
+                }
+                $deadline = $package->expiryDeadline();
+                foreach ($entitlements->projection($package) as $allocation) {
                     if ($allocation['id'] === null) {
                         continue;
                     }
                     $remaining = $allocation['available'];
-                    if ($remaining <= 1 && (! $package->expiration_date || $package->expiration_date->gte($today))) {
+                    if ($remaining <= 1) {
                         $low++;
                     }
-                    if ($remaining > 0 && $package->expiration_date && $package->expiration_date->between($today, $today->addDays(14))) {
+                    if ($remaining > 0 && $deadline && $deadline->lessThanOrEqualTo($expiryLimit)) {
                         $expiry++;
                     }
                 }
-            } $lines[] = 'Low entitlement allocations (≤1): '.$low;
+            }
+            $lines[] = 'Low entitlement allocations (≤1): '.$low;
             $lines[] = 'Unused entitlement allocations expiring within 14 days: '.$expiry;
         }
         if (in_array('resources', $sections, true)) {

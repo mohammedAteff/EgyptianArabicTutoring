@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Administration\Models\AdminNotification;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Availability\Models\AvailabilityRule;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingPolicyDecision;
+use App\Domains\Booking\Models\BookingWaitlist;
 use App\Domains\Booking\Models\RecurringLessonOccurrence;
 use App\Domains\Booking\Models\RecurringLessonPlan;
 use App\Domains\Booking\Models\SessionType;
@@ -16,6 +18,7 @@ use App\Domains\Students\Models\PackageRenewal;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentNotification;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\InstallmentScheduleService;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -208,6 +211,66 @@ class BusinessLifecycleConcurrencyTest extends TestCase
         $this->assertSame([0, 2], $codes, json_encode($results));
         $this->assertSame(1, AuditLog::query()->where('action', 'package_resumed')->count());
         $this->assertEqualsWithDelta(7200, $this->package->fresh()->expires_at->timestamp - $before->timestamp, 10);
+    }
+
+    public function test_parallel_partial_receipts_keep_the_earliest_payment_clock_without_unlocking_credits(): void
+    {
+        $package = app(StudentLedgerService::class)->createPackage($this->student, 'Foundation', 8, '280', '0', 'USD', null, 'partial-race', presetKey: 'foundation_track');
+        $payload = ['action' => 'record_payment', 'package_id' => $package->id, 'amount' => '100.00', 'administrator_id' => $this->administratorId];
+
+        $results = $this->race([
+            $payload + ['idempotency_key' => 'earlier-receipt', 'received_at' => '2026-01-01 10:00:00'],
+            $payload + ['idempotency_key' => 'later-receipt', 'received_at' => '2026-01-02 10:00:00'],
+        ]);
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results));
+        $this->assertSame(2, $package->payments()->count());
+        $this->assertSame('200.00', (string) $package->payments()->sum('amount_paid'));
+        $this->assertSame('2026-01-01 10:00:00', $package->fresh()->validity_started_at->toDateTimeString());
+        $this->assertSame('2026-03-17 10:00:00', $package->fresh()->expires_at->toDateTimeString());
+        $this->assertNull($package->fresh()->funding_activated_at);
+        $this->assertSame(8, (int) $package->ledgerEntries()->sum('credit_change'));
+    }
+
+    public function test_parallel_purchases_can_claim_a_completed_diagnostic_credit_only_once(): void
+    {
+        $this->package->update(['status' => 'cancelled']);
+        $ledger = app(StudentLedgerService::class);
+        $diagnostic = $ledger->createPackage($this->student, 'Diagnostic', 1, '25', '0', 'USD', null, 'diagnostic-race', presetKey: 'diagnostic_roadmap');
+        $ledger->recordPayment($diagnostic, '25', 'diagnostic-payment', $this->administratorId);
+        $booking = DB::transaction(function () use ($ledger): Booking {
+            $booking = Booking::factory()->create(['student_id' => $this->student->id, 'session_type_id' => $this->type->id]);
+            $ledger->consumeForBooking($booking, 'diagnostic-consumption');
+
+            return $booking;
+        });
+        $booking->update(['status' => 'completed', 'completed_at' => now('UTC')->subHour()]);
+        $payload = ['action' => 'purchase_package', 'student_id' => $this->student->id, 'administrator_id' => $this->administratorId];
+
+        $results = $this->race([$payload + ['idempotency_key' => 'purchase-one'], $payload + ['idempotency_key' => 'purchase-two']]);
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results));
+        $purchases = StudentPackage::query()->where('offering_key', 'foundation_track')->get();
+        $this->assertSame(['0.00', '25.00'], $purchases->pluck('discount_amount')->sort()->values()->all());
+        $this->assertSame(1, $diagnostic->payments()->count());
+        $this->assertNull($ledger->checkDiagnosticCreditEligibility($this->student->id));
+    }
+
+    public function test_parallel_waitlist_scans_create_one_opening_notice_without_booking_or_debit(): void
+    {
+        $this->type->update(['student_discoverable' => true]);
+        $date = now('UTC')->addWeek()->toDateString();
+        $interest = BookingWaitlist::factory()->create(['student_id' => $this->student->id, 'session_type_id' => $this->type->id,
+            'date_from' => $date, 'date_to' => $date, 'timezone' => 'UTC', 'preferred_time_from' => '09:00', 'preferred_time_to' => '09:00']);
+
+        $results = $this->race([['action' => 'waitlist_notify_openings'], ['action' => 'waitlist_notify_openings']]);
+
+        $this->assertSame([0, 0], array_column($results, 'exit_code'), json_encode($results));
+        $this->assertSame(1, StudentNotification::query()->where('student_id', $this->student->id)->where('type', 'waitlist')->count());
+        $this->assertSame(1, AdminNotification::query()->where('type', 'waitlist_opening')->count());
+        $this->assertSame($date.' 09:00:00', $interest->fresh()->last_offered_start_at->toDateTimeString());
+        $this->assertDatabaseCount('bookings', 0);
+        $this->assertSame(0, SessionLedgerEntry::query()->where('entry_type', 'session_consumed')->count());
     }
 
     /** @param array<int, array<string, mixed>> $payloads

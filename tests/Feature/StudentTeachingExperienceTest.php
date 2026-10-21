@@ -17,6 +17,7 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
 use App\Domains\Students\Models\StudentErrorLog;
 use App\Domains\Students\Models\StudentNotification;
+use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Models\TeachingTag;
 use App\Domains\Students\Models\TutorPreparation;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -395,13 +396,12 @@ class StudentTeachingExperienceTest extends TestCase
         StudentNotification::factory()->create(['student_id' => $student->id, 'link' => '/student/learning#resources']);
         StudentNotification::factory()->create(['student_id' => $student->id, 'link' => '/student/lessons/'.$lesson->id]);
         $this->portal($student);
+        $view = $this->get(route('student.notifications.index'))->assertOk()->baseResponse->getOriginalContent();
         URL::forceRootUrl($applicationRoot);
         URL::forceScheme('https');
 
         try {
-            $response = $this->view('student.notifications', [
-                'notifications' => StudentNotification::query()->where('student_id', $student->id)->paginate(20),
-            ]);
+            $response = $this->view('student.notifications', $view->getData());
 
             $response->assertSee('href="'.$applicationRoot.'/student/learning#resources"', false)
                 ->assertSee('href="'.$applicationRoot.'/student/lessons/'.$lesson->id.'"', false)
@@ -416,16 +416,18 @@ class StudentTeachingExperienceTest extends TestCase
     public function test_typed_notices_identify_purchase_type_and_expiry_without_generic_totals(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-05 12:00:00 UTC'));
+        StudentPackage::factory()->create();
         $student = Student::factory()->verified()->create();
         $ledger = app(StudentLedgerService::class);
-        $one = $ledger->createPackage($student, 'Short practice', 1, '40', '0', 'USD', '2026-10-10', 'one', entitlementCode: 'one_hour');
-        $two = $ledger->createPackage($student, 'Long practice', 5, '40', '0', 'USD', '2026-10-12', 'two', entitlementCode: 'two_hour');
+        $ledger->createPackage($student, 'Short practice', 1, '40', '0', 'USD', '2026-10-10', 'one', entitlementCode: 'one_hour');
+        $ledger->createPackage($student, 'Long practice', 5, '40', '0', 'USD', '2026-10-12', 'two', entitlementCode: 'two_hour');
         $this->portal($student);
 
         $response = $this->get(route('student.dashboard'));
         $notices = $response->viewData('entitlementNotices');
         $this->assertCount(2, $notices);
-        $this->assertStringContainsString('Purchase #'.$one->id, $notices[0]);
+        $this->assertStringContainsString('Purchase #1', $notices[0]);
+        $this->assertStringContainsString('Purchase #2', $notices[1]);
         $this->assertStringContainsString('2026-10-10', $notices[0]);
         $this->assertStringContainsString('Short practice', $notices[0]);
         $this->assertStringContainsString('Long practice', $notices[1]);
