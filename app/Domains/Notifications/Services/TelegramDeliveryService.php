@@ -39,6 +39,16 @@ class TelegramDeliveryService
 
             return;
         }
+        if ($delivery->rule && in_array($delivery->trigger, TelegramFollowUpService::TRIGGERS, true)) {
+            $source = app(TelegramFollowUpService::class)->currentFacts($delivery->rule, $delivery->payload['source'] ?? []);
+            if ($source === null) {
+                $delivery->update(['status' => 'cancelled', 'failure_code' => 'source_no_longer_eligible']);
+
+                return;
+            }
+            $templates = app(TelegramTemplateService::class);
+            $delivery->update(['payload' => ['source' => $source, 'parts' => $templates->split($templates->render($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal'))]]);
+        }
         if (in_array($delivery->trigger, ['session_reminder', 'missing_form'], true)) {
             $source = $delivery->payload['source'] ?? [];
             $booking = Booking::find($source['booking_id'] ?? null);

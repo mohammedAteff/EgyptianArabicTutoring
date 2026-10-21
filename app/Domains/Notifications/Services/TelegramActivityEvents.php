@@ -7,6 +7,8 @@ use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingWaitlist;
 use App\Domains\Booking\Models\RecurringLessonPlan;
+use App\Domains\Students\Models\HomeworkSubmission;
+use App\Domains\Students\Models\LessonFeedback;
 use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
@@ -100,6 +102,19 @@ class TelegramActivityEvents
                 });
             });
         }
+        HomeworkSubmission::created(function (HomeworkSubmission $submission): void {
+            $this->after(function () use ($submission): void {
+                $homework = $submission->homework;
+                if ($homework) {
+                    app(TelegramAutomationService::class)->emit('homework_submitted', 'homework-submission:'.$submission->id,
+                        $this->studentPayload($homework->getAttribute('student_id')) + ['record_id' => $homework->id, 'admin_url' => route('admin.students.teaching', $homework->getAttribute('student_id'))]);
+                }
+            });
+        });
+        LessonFeedback::created(function (LessonFeedback $feedback): void {
+            $this->after(fn () => app(TelegramAutomationService::class)->emit('lesson_feedback', 'feedback:'.$feedback->id,
+                $this->studentPayload($feedback->getAttribute('student_id')) + ['booking_id' => $feedback->booking_id, 'admin_url' => route('admin.bookings.show', $feedback->booking_id)]));
+        });
         Student::saved(function (Student $student): void {
             if ($student->identity_status === 'verified' && ($student->wasRecentlyCreated || $student->wasChanged('identity_status'))) {
                 $this->after(fn () => app(TelegramAutomationService::class)->emit('student_verified', 'student:'.$student->id,
@@ -113,7 +128,7 @@ class TelegramActivityEvents
             $this->after(function () use ($notification): void {
                 $payload = $this->studentPayload($notification->data['student_id'] ?? null);
                 $birthday = $notification->data['birthday_date'] ?? null;
-                $payload += ['notification_id' => $notification->id, 'birthday' => $birthday ? CarbonImmutable::parse($birthday)->format('j F') : null,
+                $payload += ['_session_type_id' => isset($notification->data['waitlist_id']) ? BookingWaitlist::whereKey($notification->data['waitlist_id'])->value('session_type_id') : null, 'notification_id' => $notification->id, 'birthday' => $birthday ? CarbonImmutable::parse($birthday)->format('j F') : null,
                     'details' => $notification->type === 'system_warning' ? 'Review System Health for details.' : $notification->message,
                     'admin_url' => $notification->link];
                 app(TelegramAutomationService::class)->emit($notification->type, 'notification:'.$notification->id, $payload);

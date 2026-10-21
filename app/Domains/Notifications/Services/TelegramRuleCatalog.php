@@ -11,7 +11,7 @@ class TelegramRuleCatalog
         $package = ['student_name', 'email', 'phone', 'package_name', 'offering_key', 'purchase_id', 'entitlement_code', 'entitlement_label', 'allocation_id', 'available_units', 'remaining_credits', 'expiry_date', 'admin_url'];
         $definitions = [
             'booking_created' => ['Booking created', 'Bookings', $booking], 'booking_rescheduled' => ['Booking rescheduled', 'Bookings', $booking], 'booking_cancelled' => ['Booking cancelled', 'Bookings', $booking],
-            'low_credits' => ['Low session credits', 'Students', $package], 'package_expiring' => ['Unused package approaching expiry', 'Students', $package],
+            'low_credits' => ['Low session credits', 'Finance', $package], 'package_expiring' => ['Unused package approaching expiry', 'Finance', $package],
             'form_submitted' => ['Form submitted', 'Forms', ['student_name', 'email', 'phone', 'form_title', 'admin_url']], 'missing_form' => ['Required form missing before lesson', 'Forms', array_merge($booking, ['form_title'])],
             'session_reminder' => ['Lesson countdown', 'Bookings', $booking], 'resource_lead' => ['Resource access requested', 'Resources', ['student_name', 'email', 'phone', 'resource_title', 'country', 'source', 'admin_url']],
             'resource_downloaded' => ['Resource downloaded', 'Resources', ['resource_title', 'country', 'source', 'admin_url']], 'hold_abandoned' => ['Contact left an expired booking hold', 'Bookings', ['student_name', 'email', 'phone', 'tutor_time', 'admin_url']],
@@ -30,16 +30,28 @@ class TelegramRuleCatalog
         foreach (['waitlist_opening' => ['Preferred slot is available', 'Waitlist'], 'student_birthday' => ['Birthday reminder', 'Students'], 'system_warning' => ['System warning or failed background job', 'System']] as $key => [$label, $group]) {
             $definitions[$key] = [$label, $group, ['student_name', 'notification_id', 'birthday', 'details', 'admin_url']];
         }
+        $definitions['homework_submitted'] = ['Homework submitted', 'Learning', ['student_name', 'record_id', 'admin_url']];
+        $definitions['lesson_feedback'] = ['Student lesson feedback submitted', 'Students', ['student_name', 'booking_id', 'admin_url']];
+        $definitions['installment_overdue'] = ['Installment payment overdue', 'Finance', ['student_name', 'record_id', 'amount', 'currency', 'due_date', 'admin_url']];
+        $definitions['staff_task_overdue'] = ['Staff task overdue', 'Staff', ['student_name', 'record_id', 'due_date', 'admin_url']];
+        $definitions['meeting_missing'] = ['Lesson approaching without meeting details', 'Bookings', $booking];
         $result = [];
         foreach ($definitions as $key => [$label,$group,$fields]) {
             $scheduled = in_array($key, ['business_digest', 'analytics_digest'], true);
-            $template = $label."\n".implode("\n", array_map(fn (string $field): string => ucwords(str_replace('_', ' ', $field)).': {'.$field.'}', $fields));
-            $result[$key] = ['label' => $label, 'group' => $group, 'fields' => $fields, 'modes' => $scheduled ? ['scheduled', 'on_demand'] : ['instant', 'delayed'], 'template' => $template, 'defaults' => ['minutes' => match ($key) {
+            $templateFields = match ($key) {
+                'waitlist_opening' => ['student_name', 'details', 'admin_url'],
+                'system_warning' => ['notification_id', 'details', 'admin_url'],
+                default => $fields,
+            };
+            $template = $label."\n".implode("\n", array_map(fn (string $field): string => ucwords(str_replace('_', ' ', $field)).': {'.$field.'}', $templateFields));
+            $result[$key] = ['label' => $label, 'group' => $group, 'fields' => $fields, 'modes' => $scheduled ? ['scheduled', 'on_demand'] : ($key === 'meeting_missing' ? ['instant'] : ['instant', 'delayed']), 'template' => $template, 'defaults' => ['minutes' => match ($key) {
                 'missing_form' => 720, 'scheduler_stale', 'queue_stale' => 15, 'maintenance_duration' => 120, default => 60
             }, 'threshold' => match ($key) {
                 'package_expiring' => 14, 'traffic_spike' => 50, default => 1
             }]];
         }
+
+        uasort($result, fn (array $first, array $second): int => strnatcasecmp($first['group'].':'.$first['label'], $second['group'].':'.$second['label']));
 
         return $result;
     }

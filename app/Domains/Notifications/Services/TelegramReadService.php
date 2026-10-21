@@ -85,7 +85,9 @@ class TelegramReadService
             if (in_array($rule->trigger, ['scheduler_stale', 'queue_stale'], true)) {
                 continue;
             }
-            if (in_array($rule->trigger, ['low_credits', 'package_expiring'], true)) {
+            if (in_array($rule->trigger, TelegramFollowUpService::TRIGGERS, true)) {
+                app(TelegramFollowUpService::class)->scan($rule);
+            } elseif (in_array($rule->trigger, ['low_credits', 'package_expiring'], true)) {
                 StudentPackage::where('status', 'active')->chunkById(100, function ($packages) use ($rule, $now): void {
                     foreach ($packages as $package) {
                         $this->evaluatePackage($package, $rule, $now);
