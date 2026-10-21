@@ -96,6 +96,18 @@ class BookingController extends Controller
             }
         }
 
+        $busyTimes = Booking::query()->where('status', 'confirmed')->where('start_at_utc', '>=', $fromDate->utc())->where('start_at_utc', '<', $fromDate->endOfMonth()->addDay()->utc())->where('start_at_utc', '>', now('UTC'))->orderBy('start_at_utc')->limit(100)->get(['start_at_utc', 'end_at_utc']);
+        $displaySlots = $slots;
+        foreach ($busyTimes as $busy) {
+            $date = $busy->start_at_utc->toImmutable()->setTimezone($timezone)->toDateString();
+            $displaySlots[$date][] = ['booked' => true, 'slot_start_utc' => $busy->start_at_utc->toDateTimeString(), 'slot_end_utc' => $busy->end_at_utc->toDateTimeString()];
+        }
+        ksort($displaySlots);
+        foreach ($displaySlots as &$dailySlots) {
+            usort($dailySlots, fn (array $first, array $second): int => strcmp($first['slot_start_utc'], $second['slot_start_utc']));
+        }
+        unset($dailySlots);
+
         return view('student.bookings.create', [
             'sessionTypes' => $sessionTypes,
             'hasFundableFormat' => $hasFundableFormat,
@@ -104,7 +116,8 @@ class BookingController extends Controller
             'timezone' => $timezone,
             'fromDate' => $fromDate,
             'slots' => $slots,
-            'busyTimes' => Booking::query()->where('status', 'confirmed')->where('start_at_utc', '>=', $fromDate->utc())->where('start_at_utc', '<', $fromDate->endOfMonth()->addDay()->utc())->where('start_at_utc', '>', now('UTC'))->orderBy('start_at_utc')->limit(100)->get(['start_at_utc', 'end_at_utc']),
+            'busyTimes' => $busyTimes,
+            'displaySlots' => $displaySlots,
             'entitlementBalances' => $entitlements,
             'availableCredits' => $availableCredits,
             'idempotencyKey' => Str::random(48),

@@ -17,6 +17,7 @@ class TelegramBusinessEvents
 {
     public function register(): void
     {
+        app(TelegramActivityEvents::class)->register();
         BookingEvent::created(function (BookingEvent $event): void {
             $trigger = match ($event->event_type) {
                 'created' => 'booking_created','rescheduled' => 'booking_rescheduled','cancelled' => 'booking_cancelled', default => null

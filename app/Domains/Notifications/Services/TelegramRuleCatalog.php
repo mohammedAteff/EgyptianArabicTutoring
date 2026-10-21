@@ -20,6 +20,16 @@ class TelegramRuleCatalog
             'maintenance_enabled' => ['Maintenance enabled', 'System', ['enabled_at', 'duration_minutes']], 'maintenance_duration' => ['Maintenance lasting too long', 'System', ['enabled_at', 'duration_minutes']],
             'business_digest' => ['Daily business digest', 'Digests', ['date', 'digest']], 'analytics_digest' => ['Daily analytics digest', 'Digests', ['date', 'digest']],
         ];
+        foreach (TelegramActivityEvents::AUDIT_ALERTS as $key => [$label, $group]) {
+            $definitions[$key] = [$label, $group, ['event', 'student_name', 'record_type', 'record_id', 'status', 'occurred_at', 'admin_url']];
+        }
+        foreach (['payment_recorded' => 'Payment recorded', 'payment_refunded' => 'Payment refunded', 'package_created' => 'Package purchased'] as $key => $label) {
+            $definitions[$key] = [$label, 'Finance', ['student_name', 'record_id', 'amount', 'currency', 'admin_url']];
+        }
+        $definitions['student_verified'] = ['Student profile verified', 'Students', ['student_name', 'admin_url']];
+        foreach (['waitlist_opening' => ['Preferred slot is available', 'Waitlist'], 'student_birthday' => ['Birthday reminder', 'Students'], 'system_warning' => ['System warning or failed background job', 'System']] as $key => [$label, $group]) {
+            $definitions[$key] = [$label, $group, ['student_name', 'notification_id', 'birthday', 'details', 'admin_url']];
+        }
         $result = [];
         foreach ($definitions as $key => [$label,$group,$fields]) {
             $scheduled = in_array($key, ['business_digest', 'analytics_digest'], true);

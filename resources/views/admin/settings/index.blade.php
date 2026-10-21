@@ -256,16 +256,18 @@
             </div>
         </section>
 
+<section id="email-safeguards" class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8"><h2 class="font-serif text-lg font-bold">Email safeguards</h2><p class="text-sm text-slate-600">Public booking and resource requests check email format, reject known disposable domains, and check whether the domain can receive mail. These checks cannot prove ownership of an individual mailbox.</p><p class="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">Email quality checks: active · Six-digit PIN verification: OFF</p><label class="block text-sm font-semibold">Future PIN verification preference<select name="email_pin_preference" class="mt-1 block w-full rounded-xl border border-slate-300 p-3"><option value="off" @selected(old('email_pin_preference', $emailPinPreference) === 'off')>Keep PIN verification off</option><option value="request_activation" @selected(old('email_pin_preference', $emailPinPreference) === 'request_activation')>Mark PIN verification for future activation</option></select></label><p class="text-xs text-slate-500">This saves your preference only. No PIN challenge or email is sent. The PIN flow and reliable email delivery must be completed before it can be activated.</p></section>
+
         @include('admin.settings.announcement')
 
         <div class="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-            <p class="mr-auto text-xs text-slate-500">All settings and the site announcement save together. Drafts do not change the live website. Publish to apply all sections.</p>
+            <p class="mr-auto text-xs text-slate-500">All settings, email preferences and the site announcement save together. Drafts do not change the live website. Publish to apply all sections.</p>
             <button type="submit" name="action" value="draft" class="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-800">Save as Draft</button>
             <button type="submit" name="action" value="publish" class="rounded-xl bg-amber-600 px-6 py-3 text-sm font-bold text-white hover:bg-amber-700">Publish All Settings</button>
         </div>
     </form>
 
-<section id="email-safeguards" class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8"><h2 class="font-serif text-lg font-bold">Email safeguards</h2><p class="text-sm text-slate-600">Public booking and resource requests check email format, reject known disposable domains, and check whether the domain can receive mail. These checks cannot prove ownership of an individual mailbox.</p><p class="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">Email quality checks: active · Six-digit PIN verification: OFF</p><form method="POST" action="{{ route('admin.settings.email-safeguards') }}" class="space-y-4">@csrf<label class="block text-sm font-semibold">Future PIN verification preference<select name="email_pin_preference" class="mt-1 block w-full rounded-xl border border-slate-300 p-3"><option value="off" @selected($emailPinPreference === 'off')>Keep PIN verification off</option><option value="request_activation" @selected($emailPinPreference === 'request_activation')>Mark PIN verification for future activation</option></select></label><p class="text-xs text-slate-500">This saves your preference only. No PIN challenge or email is sent. The PIN flow and reliable email delivery must be completed before it can be activated.</p><button class="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white">Save email preference</button></form></section>
+
 
 </div>
 @endsection

@@ -29,7 +29,7 @@ class StudentPlanningReasonTest extends TestCase
         $response = $this->get(route('student.scheduling.index'));
 
         $response->assertSeeText('Plan Around Your Schedule')->assertSeeText("When You're Unavailable")
-            ->assertSeeText('Preferred Lesson Periods')->assertSeeText('This records a preference. It does not book a lesson or use a credit.');
+            ->assertSeeText('Lesson Waitlist')->assertSeeText('Confirm a booking before the time is reserved; joining uses no credit.');
         $xpath = $this->xpath($response->getContent());
         foreach (['holiday', 'waitlist'] as $kind) {
             $form = '//form[@action="'.route('student.scheduling.store', $kind).'"]';

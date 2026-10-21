@@ -263,10 +263,9 @@
 
             <form action="{{ route('admin.bookings.cancel', $booking->id) }}" method="POST" class="space-y-4">
                 @csrf
-                <x-operational-reason-select />
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cancellation Reason</label>
-                    <x-operational-reason-select category="cancellation" /><textarea name="cancellation_reason" rows="3" required
+                    <x-operational-reason-select category="cancellation" />
+                    <label for="cancellation-notes" class="mt-3 block text-xs font-semibold text-slate-600 mb-1">Additional details (required)</label><textarea id="cancellation-notes" name="cancellation_reason" rows="3" required
                               class="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
                               placeholder="Reason for cancellation..."></textarea>
                 </div>

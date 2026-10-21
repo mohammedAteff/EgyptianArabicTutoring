@@ -23,7 +23,7 @@ class TelegramTemplateService
         $this->validate($trigger, $template);
         $replacements = [];
         foreach ($this->catalog->get($trigger)['fields'] as $field) {
-            $private = in_array($field, ['student_name', 'email', 'phone', 'meeting_url', 'student_time'], true);
+            $private = in_array($field, ['student_name', 'email', 'phone', 'meeting_url', 'student_time', 'details', 'birthday', 'amount'], true);
             $replacements['{'.$field.'}'] = $private && ! $personal ? '[private]' : (string) ($values[$field] ?? 'Unknown');
         }
 

@@ -117,7 +117,7 @@ class SettingController extends Controller
 
         return view('admin.settings.index', [
             'title' => 'System & Business Settings',
-            'emailPinPreference' => Setting::get('email.pin_preference', 'off'),
+            'emailPinPreference' => $draft['email_pin_preference'] ?? Setting::get('email.pin_preference', 'off'),
             'settings' => $settings,
             'timezones' => $timezones,
             'canManageMaintenance' => $request->user('web')?->role === 'super_admin',
@@ -131,6 +131,10 @@ class SettingController extends Controller
 
     private function settingKey(string $key): string
     {
+        if ($key === 'email_pin_preference') {
+            return 'email.pin_preference';
+        }
+
         if ($key === 'goals') {
             return 'analytics.goals';
         }
@@ -165,6 +169,7 @@ class SettingController extends Controller
         );
 
         $rules = [
+            'email_pin_preference' => ['sometimes', 'required', Rule::in(['off', 'request_activation'])],
             'site_name' => ['required', 'string', 'max:100'],
             'business_timezone' => ['required', 'timezone'],
             'default_language' => ['required', 'string', Rule::in(['en', 'fr', 'de'])],
@@ -303,6 +308,11 @@ class SettingController extends Controller
             }
 
             foreach ($validated as $key => $value) {
+                if ($key === 'email_pin_preference') {
+                    Setting::set('email.pin_preference', $value, 'security', false);
+
+                    continue;
+                }
                 if ($key === 'announcement') {
                     continue;
                 }

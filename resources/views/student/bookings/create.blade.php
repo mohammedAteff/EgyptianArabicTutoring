@@ -24,24 +24,33 @@
     <div class="sm:col-span-3"><button @disabled($sessionTypes->isEmpty()) class="min-h-11 rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white enabled:hover:bg-nile-900 disabled:cursor-not-allowed disabled:opacity-50">Show Available Times</button></div>
 </form>
 @if($selectedSessionType && $availableCredits > 0)
-<div class="mt-7" x-data="{ selectedDate: @js(array_key_first($slots) ?? $fromDate->toDateString()), selectedSlot: '', selectedLabel: '', reviewing: false, confirming: false }" @date-selected="selectedSlot = ''; selectedLabel = ''; reviewing = false">
+<div class="mt-7" x-data="{ selectedDate: @js(array_key_first($displaySlots) ?? $fromDate->toDateString()), selectedSlot: '', selectedLabel: '', reviewing: false, confirming: false }" @date-selected="selectedSlot = ''; selectedLabel = ''; reviewing = false">
     <div x-show="!reviewing" class="grid gap-6 lg:grid-cols-2">
-        <x-booking-calendar :month="$fromDate->format('Y-m')" :timezone="$timezone" :slots="$slots" :previous-url="request()->fullUrlWithQuery(['date' => $fromDate->subMonthNoOverflow()->startOfMonth()->toDateString()])" :next-url="request()->fullUrlWithQuery(['date' => $fromDate->addMonthNoOverflow()->startOfMonth()->toDateString()])" />
+        <x-booking-calendar :month="$fromDate->format('Y-m')" :timezone="$timezone" :slots="$displaySlots" :previous-url="request()->fullUrlWithQuery(['date' => $fromDate->subMonthNoOverflow()->startOfMonth()->toDateString()])" :next-url="request()->fullUrlWithQuery(['date' => $fromDate->addMonthNoOverflow()->startOfMonth()->toDateString()])" />
         <section class="rounded-2xl border border-stone-200 bg-white p-5" aria-label="Available lesson times">
             <h2 class="text-lg font-semibold">Choose an available time</h2>
-            @forelse($slots as $date => $daySlots)
+            @forelse($displaySlots as $date => $daySlots)
             <div x-show="selectedDate === '{{ $date }}'" class="mt-4 space-y-3">
                 <h3 class="font-semibold">{{ \Carbon\CarbonImmutable::parse($date, $timezone)->format('l, M j, Y') }}</h3>
                 @foreach($daySlots as $slot)
+                @if($slot['booked'] ?? false)
+                @php($local = \Carbon\CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')->setTimezone($timezone))
+                <div class="rounded-xl border border-stone-200 bg-stone-50 p-3" data-booked-time>
+                    <p class="font-semibold">{{ $local->format('g:i A') }} – {{ \Carbon\CarbonImmutable::parse($slot['slot_end_utc'], 'UTC')->setTimezone($timezone)->format('g:i A') }}</p>
+                    <p class="mt-1 text-sm text-stone-500">{{ $timezone }} · Booked</p>
+                    <a class="mt-2 inline-flex min-h-11 items-center font-semibold text-terracotta-700 underline" href="{{ route('student.scheduling.index', ['session_type_id' => $selectedSessionType->id, 'date_from' => $local->toDateString(), 'date_to' => $local->toDateString(), 'preferred_time_from' => $local->format('H:i'), 'preferred_time_to' => $local->format('H:i'), 'timezone' => $timezone]) }}#waitlist">Join waitlist →</a>
+                </div>
+                @else
                 <button type="button" @click="selectedSlot = @js($slot['slot_id']); selectedLabel = @js(\Carbon\CarbonImmutable::parse($slot['slot_start_utc'], 'UTC')->setTimezone($timezone)->format('D, M j, Y · g:i A').' – '.\Carbon\CarbonImmutable::parse($slot['slot_end_utc'], 'UTC')->setTimezone($timezone)->format('D, M j · g:i A'))" :aria-pressed="selectedSlot === @js($slot['slot_id'])" :class="selectedSlot === @js($slot['slot_id']) ? 'border-terracotta-600 bg-terracotta-50' : 'border-stone-200 bg-white'" class="block w-full rounded-xl border p-3 text-left">
                     <x-booking-slot :appointment="$slot" :timezone="$timezone" />
                 </button>
+                @endif
                 @endforeach
             </div>
             @empty
             <p class="mt-4 text-sm text-stone-500">No Available Times. Choose another starting date.</p>
             @endforelse
-            <p x-show="selectedDate && !@js(array_keys($slots)).includes(selectedDate)" class="mt-4 text-sm text-stone-500">No times available on this date.</p>
+            <p x-show="selectedDate && !@js(array_keys($displaySlots)).includes(selectedDate)" class="mt-4 text-sm text-stone-500">No times available on this date.</p>
             <button type="button" @click="reviewing = true" :disabled="!selectedSlot" class="mt-4 min-h-11 w-full rounded-xl bg-nile-800 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">Review lesson</button>
         </section>
     </div>
@@ -66,6 +75,6 @@
     </section>
 </div>
 @endif
-</div>
 <section class="mt-7 rounded-2xl border border-stone-200 bg-white p-5"><h2 class="text-xl font-semibold">Your preferred time is already booked?</h2><p class="mt-2 text-sm text-stone-600">Join the waitlist for a specific time or a flexible range. We’ll notify you in the portal if a matching opening appears. This does not reserve a lesson.</p><a href="{{ route('student.scheduling.index') }}#waitlist" class="mt-3 inline-block font-semibold text-terracotta-700 underline">Join lesson waitlist →</a><details class="mt-4"><summary class="cursor-pointer text-sm font-semibold">View currently booked times this month</summary><div class="mt-3 grid gap-2 sm:grid-cols-2">@forelse($busyTimes as $busy)@php($local = $busy->start_at_utc->toImmutable()->setTimezone($timezone))<div class="rounded-xl bg-stone-50 p-3 text-sm"><p>{{ $local->format('D j M, g:i A') }}–{{ $busy->end_at_utc->setTimezone($timezone)->format('g:i A') }} · {{ $timezone }}</p><a class="mt-1 inline-block font-semibold text-terracotta-700 underline" href="{{ route('student.scheduling.index', ['session_type_id' => $selectedSessionType?->id, 'date_from' => $local->toDateString(), 'date_to' => $local->toDateString(), 'preferred_time_from' => $local->format('H:i'), 'preferred_time_to' => $local->format('H:i'), 'timezone' => $timezone]) }}#waitlist">Request this start time</a></div>@empty<p class="text-sm text-stone-500">No booked times to show. You can still request any preferred time.</p>@endforelse</div></details></section>
+</div>
 @endsection
