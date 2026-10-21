@@ -24,10 +24,40 @@ class TelegramTemplateService
         $replacements = [];
         foreach ($this->catalog->get($trigger)['fields'] as $field) {
             $private = in_array($field, ['student_name', 'email', 'phone', 'meeting_url', 'student_time', 'details', 'birthday', 'amount'], true);
-            $replacements['{'.$field.'}'] = $private && ! $personal ? '[private]' : (string) ($values[$field] ?? 'Unknown');
+            $value = (string) ($values[$field] ?? 'Unknown');
+            if ($field === 'digest' && in_array($trigger, ['analytics_digest', 'business_digest'], true)) {
+                $value = app(TelegramReportFormatter::class)->format($value)['text'];
+            }
+            $replacements['{'.$field.'}'] = $private && ! $personal ? '[private]' : $value;
         }
 
         return strtr($template, $replacements);
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $values
+     * @return array{parts: list<string>, entities: list<list<array{type: string, offset: int, length: int, url?: string}>>}
+     */
+    public function deliveryParts(string $trigger, string $template, array $values, bool $personal): array
+    {
+        $this->validate($trigger, $template);
+        $formatter = app(TelegramReportFormatter::class);
+        $text = '';
+        $entities = [];
+        foreach (preg_split('/(\{[^{}]+\})/u', $template, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [] as $segment) {
+            if ($segment === '{digest}' && in_array($trigger, ['analytics_digest', 'business_digest'], true)) {
+                $formatted = $formatter->format((string) ($values['digest'] ?? 'Unknown'));
+                $offset = $formatter->units($text);
+                foreach ($formatted['entities'] as $entity) {
+                    $entities[] = array_merge($entity, ['offset' => $entity['offset'] + $offset]);
+                }
+                $text .= $formatted['text'];
+            } else {
+                $text .= $this->render($trigger, $segment, $values, $personal);
+            }
+        }
+
+        return $formatter->split($text, $entities);
     }
 
     /** @return list<string> */

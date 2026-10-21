@@ -17,9 +17,11 @@ use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class TelegramReadService
 {
@@ -202,34 +204,94 @@ class TelegramReadService
         $start = $end->startOfDay()->subDays($days - 1);
         $metrics = $this->analytics->reportingMetrics($start, $end)->where('dimension_key', '');
         $traffic = $this->reports->getTrafficReport($start, $end)['summary'];
-        $lines = ['Analytics — '.$start->toDateString().' to '.$end->toDateString().' ('.app(TimezoneService::class)->getBusinessTimezone().')'];
+        $lines = ['<b>Analytics</b>', $start->format('j M Y').($days > 1 ? ' – '.$end->format('j M Y') : '').' · '.e(app(TimezoneService::class)->getBusinessTimezone()), '', '<b>Traffic</b>'];
         $lines[] = ($traffic['visitors_is_daily_sum'] ? 'Sum of daily unique visitors' : 'Unique visitors').': '.$traffic['visitors'];
         $lines[] = 'Sessions: '.$traffic['sessions'];
         $lines[] = 'Page views: '.$traffic['page_views'];
-        foreach (['bounced_sessions', 'booking_completed', 'resource_requested', 'resource_downloaded'] as $metric) {
-            $lines[] = ucwords(str_replace('_', ' ', $metric)).': '.$metrics->where('metric_name', $metric)->sum('count');
+        $lines[] = 'Bounced sessions: '.$metrics->where('metric_name', 'bounced_sessions')->sum('count');
+        $lines[] = '';
+        $lines[] = '<b>Actions</b>';
+        foreach (['booking_completed' => 'Bookings completed', 'resource_requested' => 'Resources requested', 'resource_downloaded' => 'Resources downloaded'] as $metric => $label) {
+            $lines[] = $label.': '.$metrics->where('metric_name', $metric)->sum('count');
         }
         $social = $this->reports->getSocialReport($start->setTimezone('UTC'), $end->setTimezone('UTC'));
         $lines[] = 'Social clicks: '.$social['total_clicks'];
+        $platforms = [];
         foreach ($social['platform_totals'] as $platform => $clicks) {
-            $lines[] = $platform.': '.$clicks;
+            $platforms[] = e(Str::limit($platform, 60)).': '.$clicks;
         }
-        $lines[] = 'Top content (retained page-view events):';
+        if ($platforms !== []) {
+            $lines[] = implode(' · ', $platforms);
+        }
+        $lines[] = '';
+        $lines[] = '<b>Top pages · views</b>';
         $events = $this->reports->getEventsReport($start->setTimezone('UTC'), $end->setTimezone('UTC'), 'page_view')['rows'];
         foreach ($events->groupBy('page')->map(fn ($rows): int => (int) $rows->sum('event_count'))->sortDesc()->take(5) as $page => $views) {
-            $lines[] = $page.': '.$views;
+            $lines[] = $this->pageLink((string) $page).' — '.$views;
         }
-        $lines[] = 'Traffic sources (dashboard acquisition report):';
+        if ($events->isEmpty()) {
+            $lines[] = 'No page views.';
+        }
+        $lines[] = '';
+        $lines[] = '<b>Sources · visitors</b>';
         foreach ($this->analytics->getAcquisitionPerformance($start->setTimezone('UTC'), $end->setTimezone('UTC'))->take(5) as $source) {
-            $lines[] = $source->source.' / '.$source->medium.' / '.$source->campaign.': '.$source->visitors;
+            $name = strtolower((string) $source->source) === 'direct' ? 'Direct traffic' : (string) $source->source;
+            $details = collect([$source->medium, $source->campaign])->filter(fn ($value): bool => $value !== null && ! in_array(strtolower(trim((string) $value)), ['', 'none', '(none)', 'null', '(not set)'], true));
+            $lines[] = e(Str::limit($name.($details->isNotEmpty() ? ' · '.$details->implode(' · ') : ''), 160)).' — '.$source->visitors;
         }
-        $lines[] = 'Top countries (acquisition visitors):';
-        foreach ($this->analytics->reportingCountries($start, $end)->sortByDesc('unique_visitors')->take(5) as $country) {
-            $lines[] = $country->country_code.': '.$country->unique_visitors;
+        $lines[] = '';
+        $lines[] = '<b>Top countries · visitors</b>';
+        $display = app(TimezoneDisplayService::class);
+        $countries = $this->analytics->reportingCountries($start, $end)->filter(function ($country) use ($display): bool {
+            $code = strtoupper((string) $country->country_code);
+
+            return preg_match('/^[A-Z]{2}$/', $code) && ! in_array($code, ['ZZ', 'XX'], true) && $display->resolveCountryName($code) !== $code;
+        })->sortByDesc('unique_visitors')->take(5);
+        foreach ($countries as $country) {
+            $code = strtoupper($country->country_code);
+            $flag = mb_chr(127397 + ord($code[0])).mb_chr(127397 + ord($code[1]));
+            $lines[] = $flag.' '.e($display->resolveCountryName($code)).' — '.$country->unique_visitors;
         }
-        $lines[] = 'Historical periods before the analytics cutover may not be comparable.';
+        if ($countries->isEmpty()) {
+            $lines[] = 'No country data.';
+        }
 
         return implode("\n", $lines);
+    }
+
+    private function pageLink(string $page): string
+    {
+        $base = rtrim((string) config('app.url'), '/');
+        $basePath = rtrim(parse_url($base, PHP_URL_PATH) ?: '', '/');
+        $root = $basePath !== '' ? substr($base, 0, -strlen($basePath)) : $base;
+        $url = str_starts_with($page, '/') && ! str_starts_with($page, '//')
+            ? ($basePath !== '' && ($page === $basePath || str_starts_with($page, $basePath.'/')) ? $root.$page : $base.$page)
+            : $page;
+        $parts = parse_url($url);
+        if ($parts === false || ! in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true) || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || preg_match('/[\x00-\x20]/', $url)) {
+            return e(Str::limit($page, 80));
+        }
+        $path = $parts['path'] ?? '/';
+        $local = strtolower($parts['host']) === strtolower((string) parse_url($base, PHP_URL_HOST));
+        if ($local && $basePath !== '' && ($path === $basePath || str_starts_with($path, $basePath.'/'))) {
+            $path = substr($path, strlen($basePath)) ?: '/';
+        }
+        $path = trim($path, '/');
+        $label = match ($path) {
+            '', '_arabictutor-landing' => 'Home',
+            'booking' => 'Booking', 'pricing' => 'Pricing', 'resources' => 'Resources', 'games' => 'Games', 'about' => 'About', 'faq' => 'FAQ', 'blogs' => 'Blogs',
+            default => Str::headline(rawurldecode($path)),
+        };
+        if ($local && $path === '_arabictutor-landing') {
+            $url = $base.'/';
+        }
+        if (! $local) {
+            $label = $parts['host'].' / '.$label;
+        }
+
+        $url = str_replace(['"', '<', '>'], ['%22', '%3C', '%3E'], $url);
+
+        return '<a href="'.e($url).'">'.e(Str::limit($label, 80)).'</a>';
     }
 
     public function sessions(bool $tomorrow, bool $personal): string

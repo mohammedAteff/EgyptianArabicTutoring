@@ -77,9 +77,9 @@ class TelegramAutomationService
                     $payload['_legacy_key'] = $legacyKey;
                 }
                 $dedupe = hash('sha256', $rule->id.':'.$destination->id.':'.$identity);
-                $text = $this->templates->render($rule->trigger, $rule->template, $payload, $destination->detail_level === 'personal');
+                $parts = $this->templates->deliveryParts($rule->trigger, $rule->template, $payload, $destination->detail_level === 'personal');
                 try {
-                    $delivery = TelegramDelivery::create(['telegram_bot_id' => $rule->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'telegram_rule_id' => $rule->id, 'dedupe_key' => $dedupe, 'trigger' => $rule->trigger, 'payload' => ['parts' => $this->templates->split($text), 'source' => $payload], 'due_at' => $due]);
+                    $delivery = TelegramDelivery::create(['telegram_bot_id' => $rule->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'telegram_rule_id' => $rule->id, 'dedupe_key' => $dedupe, 'trigger' => $rule->trigger, 'payload' => array_merge($parts, ['source' => $payload]), 'due_at' => $due]);
                     $created = true;
                     DB::afterCommit(fn () => DeliverTelegramMessage::dispatch($delivery->id)->delay($due));
                 } catch (UniqueConstraintViolationException) {

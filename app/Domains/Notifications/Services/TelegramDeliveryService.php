@@ -18,10 +18,13 @@ use Illuminate\Support\Str;
 
 class TelegramDeliveryService
 {
-    /** @param list<string> $parts */
-    public function direct(TelegramDestination $destination, array $parts, string $identity, string $trigger = 'test'): TelegramDelivery
+    /**
+     * @param  list<string>  $parts
+     * @param  list<list<array{type: string, offset: int, length: int, url?: string}>>  $entities
+     */
+    public function direct(TelegramDestination $destination, array $parts, string $identity, string $trigger = 'test', array $entities = []): TelegramDelivery
     {
-        $delivery = TelegramDelivery::firstOrCreate(['dedupe_key' => hash('sha256', $trigger.':'.$destination->id.':'.$identity)], ['telegram_bot_id' => $destination->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'trigger' => $trigger, 'payload' => ['parts' => $parts], 'due_at' => now('UTC')]);
+        $delivery = TelegramDelivery::firstOrCreate(['dedupe_key' => hash('sha256', $trigger.':'.$destination->id.':'.$identity)], ['telegram_bot_id' => $destination->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'trigger' => $trigger, 'payload' => ['parts' => $parts, 'entities' => $entities], 'due_at' => now('UTC')]);
         $this->deliver($delivery->id, true);
 
         return $delivery->refresh();
@@ -99,7 +102,11 @@ class TelegramDeliveryService
                 RateLimiter::hit($chatKey.':minute', 60);
                 RateLimiter::hit('telegram-bot:'.$delivery->telegram_bot_id, 60);
                 try {
-                    $response = Http::connectTimeout(2)->timeout(5)->post('https://api.telegram.org/bot'.$delivery->bot->token.'/sendMessage', ['chat_id' => $delivery->destination->chat_id, 'text' => $part, 'link_preview_options' => ['is_disabled' => true]]);
+                    $message = ['chat_id' => $delivery->destination->chat_id, 'text' => $part, 'link_preview_options' => ['is_disabled' => true]];
+                    if (! empty($delivery->payload['entities'][$index])) {
+                        $message['entities'] = $delivery->payload['entities'][$index];
+                    }
+                    $response = Http::connectTimeout(2)->timeout(5)->post('https://api.telegram.org/bot'.$delivery->bot->token.'/sendMessage', $message);
                 } catch (\Throwable) {
                     $delivery->update(['status' => 'uncertain', 'failure_code' => 'network_outcome_unknown']);
                     $delivery->bot->update(['last_failure_at' => now('UTC'), 'failure_code' => 'network_outcome_unknown']);

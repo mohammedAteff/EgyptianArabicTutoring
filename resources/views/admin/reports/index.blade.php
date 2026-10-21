@@ -63,10 +63,6 @@
                             <span class="text-xs font-semibold {{ $reportData['summary']['visitor_change_pct'] >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">
                                 {{ $reportData['summary']['visitor_change_pct'] >= 0 ? '+' : '' }}{{ $reportData['summary']['visitor_change_pct'] }}% vs prev period
                             </span>
-                        @else
-                            <span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded" title="Non-comparable: periods have different counting bases">
-                                Non-comparable
-                            </span>
                         @endif
                     </div>
                     <div class="text-[11px] text-slate-600 mt-1">
@@ -75,11 +71,6 @@
                             <span class="text-slate-500">(sum of daily uniques)</span>
                         @endif
                     </div>
-                    @if(!empty($reportData['summary']['visitors_is_daily_sum']))
-                        <div class="text-[11px] text-amber-700 mt-1.5 font-medium leading-tight">
-                            Raw events pruned across multi-day range; total represents sum of daily uniques rather than deduplicated visitors.
-                        </div>
-                    @endif
                 </div>
 
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">

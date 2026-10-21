@@ -1033,8 +1033,8 @@ class CairoDailyAnalyticsRollupTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Sum of Daily Unique Visitors');
-        $response->assertSee('Non-comparable');
-        $response->assertSee('Raw events pruned across multi-day range; total represents sum of daily uniques rather than deduplicated visitors.');
+        $response->assertDontSee('Non-comparable');
+        $response->assertDontSee('Raw events pruned across multi-day range; total represents sum of daily uniques rather than deduplicated visitors.');
         $response->assertDontSee('% vs prev period');
     }
 
@@ -1320,7 +1320,7 @@ class CairoDailyAnalyticsRollupTest extends TestCase
         $this->assertFalse($googleReport['summary']['is_comparable_visitors']);
         $this->assertNull($googleReport['summary']['visitor_change_pct']);
 
-        // 3. Assert View / Admin UI: Exact-current vs partial-pruned-previous comparison is marked non-comparable
+        // Keep the visitor basis and totals visible without a historical-data warning.
         $response = $this->actingAs($admin, 'web')->get(route('admin.reports.index', [
             'type' => 'traffic',
             'range' => 'custom',
@@ -1330,7 +1330,7 @@ class CairoDailyAnalyticsRollupTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Unique Visitors'); // current is exact
-        $response->assertSee('Non-comparable');
+        $response->assertDontSee('Non-comparable');
         $response->assertSee('Previous period: 18');
         $response->assertSee('(sum of daily uniques)');
         $response->assertDontSee('% vs prev period');

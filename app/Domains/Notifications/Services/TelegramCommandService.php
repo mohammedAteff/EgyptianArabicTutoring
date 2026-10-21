@@ -86,7 +86,10 @@ class TelegramCommandService
         $reply = match ($command) {
             'today' => $this->read->sessions(false, $personal),'tomorrow' => $this->read->sessions(true, $personal),'stats' => in_array($argument, ['7d', '30d'], true) ? $this->read->stats((int) $argument) : 'Use /stats 7d or /stats 30d.', 'student' => $personal ? $this->student($argument) : 'Student lookups require a trusted personal-detail destination.'
         };
-        $this->delivery->direct($destination, $this->templates->split($reply), 'update:'.(string) $update['update_id'], 'command_'.$command);
+        $formatter = app(TelegramReportFormatter::class);
+        $formatted = $command === 'stats' ? $formatter->format($reply) : null;
+        $parts = $formatted !== null ? $formatter->split($formatted['text'], $formatted['entities']) : ['parts' => $this->templates->split($reply), 'entities' => []];
+        $this->delivery->direct($destination, $parts['parts'], 'update:'.(string) $update['update_id'], 'command_'.$command, $parts['entities']);
     }
 
     private function student(string $name): string
