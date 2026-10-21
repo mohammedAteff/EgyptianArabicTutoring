@@ -168,6 +168,8 @@ class StudentPrivacyService
             DB::table('resource_requests')->where('student_id', $studentId)->update(['submitted_email' => null]);
 
             $student->forceFill([
+                'two_factor_secret' => null, 'two_factor_recovery_codes' => null, 'two_factor_confirmed_at' => null, 'two_factor_last_used_step' => null,
+                'two_factor_pending_secret' => null, 'two_factor_pending_at' => null, 'two_factor_pending_session' => null, 'two_factor_version' => null,
                 'first_name' => 'Anonymized',
                 'last_name' => 'Student',
                 'name_normalized' => 'anonymized student',

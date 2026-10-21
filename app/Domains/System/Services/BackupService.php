@@ -26,7 +26,7 @@ class BackupService
     {
         $this->backupDir = Storage::disk('managed_backups')->path('');
         if (! File::isDirectory($this->backupDir)) {
-            File::makeDirectory($this->backupDir, 0755, true);
+            File::makeDirectory($this->backupDir, 0700, true);
         }
     }
 
@@ -59,12 +59,14 @@ class BackupService
         $zipPath = $this->backupDir.DIRECTORY_SEPARATOR.$zipFilename;
 
         $tempDir = storage_path('app/temp/backup-'.$timestamp);
-        File::makeDirectory($tempDir, 0755, true);
+        File::makeDirectory($tempDir, 0700, true);
 
         try {
             // 1. Generate SQL dump
             $sqlFile = $tempDir.DIRECTORY_SEPARATOR.'database.sql';
             $this->dumpDatabase($sqlFile);
+
+            $objects = json_encode($this->snapshotDatabaseObjects(), JSON_THROW_ON_ERROR);
 
             // 2. Create Zip archive
             $zip = new ZipArchive;
@@ -74,6 +76,7 @@ class BackupService
 
             // Add database dump and calculate checksum
             $zip->addFile($sqlFile, 'database.sql');
+            $zip->addFromString('database-objects.json', $objects);
             $dbSha256 = hash_file('sha256', $sqlFile);
 
             $fileHashes = [];
@@ -101,12 +104,17 @@ class BackupService
                 'php_version' => PHP_VERSION,
                 'db_connection' => config('database.default'),
                 'database_sha256' => $dbSha256,
+                'database_objects_sha256' => hash('sha256', $objects),
+                'database_objects_version' => 1,
                 'files' => $fileHashes,
                 'retention_days' => (int) Setting::get('backup_retention_days', 30),
             ];
             $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT));
 
             $zip->close();
+            if (! File::chmod($zipPath, 0600)) {
+                throw new Exception('The backup archive could not be made private.');
+            }
 
             // Replicate to offsite disk if configured
             $offsiteDisk = config('filesystems.backup_disk') ?: Setting::get('backup_offsite_disk');
@@ -198,7 +206,7 @@ class BackupService
 
         if ($mysqldump && ! empty($database)) {
             $cmd = sprintf(
-                '"%s" --host=%s --port=%s --user=%s %s %s > "%s"',
+                '"%s" --skip-triggers --host=%s --port=%s --user=%s %s %s > "%s"',
                 $mysqldump,
                 escapeshellarg($host),
                 escapeshellarg((string) $port),
@@ -237,6 +245,10 @@ class BackupService
             $handle = fopen($outputPath, 'w');
             if (! $handle) {
                 throw new Exception("Cannot open {$outputPath} for writing.");
+            }
+            if (! File::chmod($outputPath, 0600)) {
+                fclose($handle);
+                throw new Exception('The database export could not be made private.');
             }
 
             fwrite($handle, "-- Egyptian Arabic Tutoring Platform Database Backup\n");
@@ -542,10 +554,13 @@ class BackupService
         // EXECUTION PHASE: Preflight passed; now perform modifications
         // ==========================================
 
+        $databaseObjects = $restoreDatabase ? $this->validatedDatabaseObjects($zipPath, $manifest) : [];
+
         // 4. Restore database if requested
         $databaseRestored = false;
-        if ($restoreDatabase && $sql !== null) {
+        if ($restoreDatabase) {
             DB::connection($connection)->unprepared($sql);
+            $this->restoreDatabaseObjects($databaseObjects, $connection);
             $databaseRestored = true;
         }
 
@@ -594,6 +609,87 @@ class BackupService
             'restored_at' => $nowUtc,
             'manifest' => $manifest,
         ];
+    }
+
+    /** @return list<array<string, string>> */
+    public function snapshotDatabaseObjects(?string $connection = null): array
+    {
+        $db = DB::connection($connection);
+        foreach (['VIEWS' => 'TABLE_SCHEMA', 'ROUTINES' => 'ROUTINE_SCHEMA', 'EVENTS' => 'EVENT_SCHEMA'] as $table => $column) {
+            if ($db->table('information_schema.'.$table)->where($column, $db->getDatabaseName())->exists()) {
+                throw new Exception('Native backup cannot yet preserve '.$table.'. Use a complete database export.');
+            }
+        }
+        $objects = array_map(fn (object $row): array => (array) $row, $db->select('SELECT TRIGGER_NAME name, EVENT_OBJECT_TABLE table_name, ACTION_TIMING timing, EVENT_MANIPULATION event, ACTION_STATEMENT body, SQL_MODE sql_mode FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ? ORDER BY EVENT_OBJECT_TABLE, EVENT_MANIPULATION, ACTION_TIMING, ACTION_ORDER', [$db->getDatabaseName()]));
+        foreach ($objects as $object) {
+            if (! is_string($object['body']) || trim($object['body']) === '' || ! is_string($object['sql_mode'])) {
+                throw new Exception('Trigger definitions cannot be inspected. Native backups require the separate maintenance account with TRIGGER access.');
+            }
+        }
+        if ($db->getSchemaBuilder()->hasColumn('bookings', 'consumed_ledger_entry_id')) {
+            $required = ['booking_typed_insert_guard', 'booking_typed_update_guard', 'ledger_typed_insert_guard', 'ledger_typed_update_guard'];
+            if (array_diff($required, array_column($objects, 'name')) !== []) {
+                throw new Exception('Required integrity triggers are missing or cannot be inspected with this database account. No complete backup can be certified.');
+            }
+        }
+
+        return $objects;
+    }
+
+    /** @param array<string, mixed> $manifest
+     * @return list<array<string, string>> */
+    public function validatedDatabaseObjects(string $zipPath, array $manifest): array
+    {
+        $zip = new ZipArchive;
+        if ($zip->open($zipPath) !== true) {
+            throw new Exception('Database object archive could not be opened.');
+        }
+        try {
+            $json = $zip->getFromName('database-objects.json');
+        } finally {
+            $zip->close();
+        }
+        if (($manifest['database_objects_version'] ?? null) !== 1 || ! is_string($json) || ! is_string($manifest['database_objects_sha256'] ?? null)
+            || ! hash_equals($manifest['database_objects_sha256'], hash('sha256', $json))) {
+            throw new Exception('Archive lacks verified database objects. No restore was started. Older backups need a separately reviewed recovery plan.');
+        }
+        $objects = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        if (! is_array($objects) || ! array_is_list($objects)) {
+            throw new Exception('Invalid database object manifest.');
+        }
+        $names = [];
+        foreach ($objects as $object) {
+            if (! is_array($object) || count($object) !== 6 || array_diff(['name', 'table_name', 'timing', 'event', 'body', 'sql_mode'], array_keys($object)) !== [] || count(array_filter($object, 'is_string')) !== 6
+                || ! preg_match('/\A[A-Za-z0-9_]+\z/', $object['name'] ?? '') || ! preg_match('/\A[A-Za-z0-9_]+\z/', $object['table_name'] ?? '')
+                || ! in_array($object['timing'] ?? '', ['BEFORE', 'AFTER'], true) || ! in_array($object['event'] ?? '', ['INSERT', 'UPDATE', 'DELETE'], true)
+                || ! preg_match('/\A[A-Z0-9_,]*\z/', $object['sql_mode'] ?? '') || ($object['body'] ?? '') === '' || isset($names[$object['name']])) {
+                throw new Exception('Invalid database trigger definition.');
+            }
+            $names[$object['name']] = true;
+        }
+        if (array_diff(['booking_typed_insert_guard', 'booking_typed_update_guard', 'ledger_typed_insert_guard', 'ledger_typed_update_guard'], array_keys($names)) !== []) {
+            throw new Exception('Archive is missing required booking or ledger integrity guards. No restore was started.');
+        }
+
+        return $objects;
+    }
+
+    /** @param list<array<string, string>> $objects */
+    public function restoreDatabaseObjects(array $objects, ?string $connection = null): void
+    {
+        $db = DB::connection($connection);
+        $mode = $db->selectOne('SELECT @@SESSION.sql_mode mode')->mode;
+        try {
+            foreach ($objects as $object) {
+                $db->statement('SET SESSION sql_mode = ?', [$object['sql_mode']]);
+                $db->unprepared('CREATE TRIGGER `'.$object['name'].'` '.$object['timing'].' '.$object['event'].' ON `'.$object['table_name'].'` FOR EACH ROW '.$object['body']);
+            }
+        } finally {
+            $db->statement('SET SESSION sql_mode = ?', [$mode]);
+        }
+        if ($this->snapshotDatabaseObjects($connection) !== $objects) {
+            throw new Exception('Restored trigger verification failed. The database must not be reopened for application use.');
+        }
     }
 
     /**

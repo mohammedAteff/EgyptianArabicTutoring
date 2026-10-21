@@ -32,9 +32,6 @@ class EnsureStudentAuthenticated
         $timezone = $request->input('timezone');
         if (is_string($timezone) && app(TimezoneService::class)->isValid($timezone)) {
             $request->session()->put('student_display_timezone', $timezone);
-            if ($student->preferred_timezone !== $timezone) {
-                $student->update(['preferred_timezone' => $timezone]);
-            }
         }
         $request->attributes->set('student', $student);
 

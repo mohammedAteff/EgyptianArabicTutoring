@@ -16,9 +16,11 @@ class ApplyAdminNoindexHeaders
         $response = $next($request);
 
         $response->headers->set('X-Robots-Tag', 'noindex, nofollow, noarchive');
-        if ($request->routeIs('admin.security.*', 'admin.two-factor.*')) {
+        if ($request->routeIs('admin.security.*', 'admin.two-factor.*', 'student.*', 'booking.confirmation*', 'booking.ics')) {
             $response->headers->set('Cache-Control', 'private, no-store');
-            $response->headers->set('Referrer-Policy', 'no-referrer');
+            if (! $response->headers->has('Referrer-Policy')) {
+                $response->headers->set('Referrer-Policy', 'no-referrer');
+            }
         }
 
         return $response;

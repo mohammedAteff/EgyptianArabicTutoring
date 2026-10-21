@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * @property Carbon|null $suspended_at
@@ -57,6 +58,15 @@ class Administrator extends Authenticatable
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $administrator): void {
+            if ($administrator->isDirty('password')) {
+                $administrator->remember_token = Str::random(60);
+            }
+        });
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->role === 'super_admin';
@@ -79,7 +89,7 @@ class Administrator extends Authenticatable
 
     public function requiresTwoFactor(): bool
     {
-        return $this->isSuperAdmin() && ($this->two_factor_confirmed_at !== null || $this->two_factor_secret !== null);
+        return $this->two_factor_confirmed_at !== null || $this->two_factor_secret !== null;
     }
 
     public function isAssistant(): bool

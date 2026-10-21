@@ -3,7 +3,7 @@
 <div class="mx-auto max-w-3xl space-y-6">
     <div>
         <h1 class="text-3xl font-bold text-slate-900">Account Security</h1>
-        <p class="mt-2 text-slate-600">Optional two-factor authentication for your Super Admin account.</p>
+        <p class="mt-2 text-slate-600">Optional two-factor authentication for your staff account.</p>
     </div>
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
         <div class="flex flex-wrap items-center justify-between gap-3">

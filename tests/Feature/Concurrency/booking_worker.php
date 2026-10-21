@@ -50,6 +50,7 @@ use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Students\Services\StudentMergeService;
 use App\Domains\Students\Services\StudentNotificationService;
 use App\Domains\Students\Services\StudentPrivacyService;
+use App\Domains\Students\Services\StudentTwoFactorService;
 use App\Domains\Students\Services\WaitlistAvailabilityService;
 use App\Domains\System\Services\DevelopmentToolsService;
 use App\Http\Controllers\Admin\AccountSuspensionController;
@@ -358,6 +359,10 @@ try {
     } elseif ($action === 'assign_meeting_room') {
         app(MeetingLinkService::class)->assign(Booking::findOrFail((int) $data['booking_id']), roomId: (int) $data['room_id']);
         echo "RESULT:SUCCESS:assigned\n";
+        exit(0);
+    } elseif ($action === 'student_two_factor_recovery') {
+        app(StudentTwoFactorService::class)->authenticate((int) $data['student_id'], null, $data['recovery_code'], $data['fingerprint']);
+        echo "RESULT:SUCCESS:student-factor\n";
         exit(0);
     } elseif ($action === 'two_factor_recovery') {
         app(AdministratorTwoFactorService::class)->authenticate((int) $data['administrator_id'], null, (string) $data['recovery_code']);

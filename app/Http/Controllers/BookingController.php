@@ -6,6 +6,7 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Services\CancellationService;
 use App\Domains\Booking\Services\IcsGenerator;
 use App\Domains\Booking\Services\MeetingLinkService;
+use App\Domains\Students\Services\StudentSessionContext;
 use App\Domains\Timezone\Services\TimezoneService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,8 @@ class BookingController extends Controller
             ->withExists('reschedules')
             ->firstOrFail();
 
+        abort_if($booking->end_at_utc->copy()->addDays(7)->isPast(), 410, 'This public booking link has expired. Use your student portal for history.');
+
         return view('public.confirmation', [
             'booking' => $booking,
             'timezone' => app(TimezoneService::class)->isValid(is_string($request->query('timezone')) ? $request->query('timezone') : null) ? $request->query('timezone') : $booking->customer_timezone,
@@ -50,6 +53,8 @@ class BookingController extends Controller
             ->with(['sessionType'])
             ->firstOrFail();
 
+        abort_if($booking->end_at_utc->copy()->addDays(7)->isPast(), 410, 'This calendar link has expired.');
+
         $icsContent = $icsGenerator->generate($booking);
 
         return response($icsContent, 200, [
@@ -63,6 +68,9 @@ class BookingController extends Controller
         $booking = Booking::query()
             ->where('confirmation_token', $token)
             ->firstOrFail();
+
+        $student = app(StudentSessionContext::class)->current($request);
+        abort_unless($student && $booking->student_id === $student->id, 403, 'Sign in to the student account that owns this booking to cancel it.');
 
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],

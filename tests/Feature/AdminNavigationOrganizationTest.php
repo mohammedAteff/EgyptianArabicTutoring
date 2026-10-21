@@ -19,7 +19,7 @@ class AdminNavigationOrganizationTest extends TestCase
         config(['development_tools.enabled' => true]);
         $staff = Administrator::factory()->create(['role' => $role]);
         $expected = [
-            'admin.operations.index', 'admin.tasks.index', 'admin.staff-bins.index', 'admin.staff-note-templates.library',
+            'admin.operations.index', 'admin.security.show', 'admin.tasks.index', 'admin.staff-bins.index', 'admin.staff-note-templates.library',
             'admin.students.index', 'admin.contacts.index', 'admin.leads', 'admin.birthdays.index', 'admin.bookings.index', 'admin.forms.index', 'admin.forms.completion',
         ];
         if ($role !== 'assistant') {
@@ -35,7 +35,7 @@ class AdminNavigationOrganizationTest extends TestCase
         }
         if ($role === 'super_admin') {
             $expected = array_merge($expected, [
-                'admin.reason-codes.index', 'admin.security.show', 'admin.health', 'admin.backups.index',
+                'admin.reason-codes.index', 'admin.health', 'admin.backups.index',
                 'admin.administrators.index', 'admin.audit-logs', 'admin.analytics.maintenance', 'admin.development-tools.index',
             ]);
         }

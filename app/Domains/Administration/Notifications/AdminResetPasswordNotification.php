@@ -2,9 +2,11 @@
 
 namespace App\Domains\Administration\Notifications;
 
+use App\Domains\Administration\Services\SecurityMailTransport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
 
 class AdminResetPasswordNotification extends Notification
 {
@@ -22,6 +24,12 @@ class AdminResetPasswordNotification extends Notification
      */
     public function via(object $notifiable): array
     {
+        if (! app()->environment('testing') && ! SecurityMailTransport::canDeliver()) {
+            Log::warning('Security email delivery is unavailable. Configure a delivery transport without a logging fallback.');
+
+            return [];
+        }
+
         return ['mail'];
     }
 

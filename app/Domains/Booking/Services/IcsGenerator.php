@@ -24,14 +24,14 @@ class IcsGenerator
         $meetingUrl = $this->meetingLinks->studentUrl($booking);
 
         $descriptionText = config('business.site_name').' Session\\n'
-            ."Booking Reference: {$booking->confirmation_token}\\n"
+            ."Booking Reference: {$booking->id}\\n"
             ."Student Time: {$booking->customer_local_date_at_booking?->format('Y-m-d')} {$booking->customer_local_start_time_at_booking} ({$booking->customer_timezone})\\n"
             ."Tutor Time: {$booking->business_local_date_at_booking?->format('Y-m-d')} {$booking->business_local_start_time_at_booking} ({$booking->business_timezone})\\n"
             .($meetingUrl ? "Video Classroom: {$meetingUrl}\\n" : '')
-            ."Confirmation & Management: {$confirmationUrl}";
+            ."Booking details: {$confirmationUrl}";
 
         $description = $this->escape($descriptionText);
-        $uid = "booking-{$booking->confirmation_token}@".parse_url(config('app.url'), PHP_URL_HOST);
+        $uid = "booking-{$booking->id}@".parse_url(config('app.url'), PHP_URL_HOST);
 
         $lines = [
             'BEGIN:VCALENDAR',

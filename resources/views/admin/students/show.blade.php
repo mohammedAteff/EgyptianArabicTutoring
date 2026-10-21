@@ -345,6 +345,17 @@
         <!-- Account Security & Verification (Idea 42) -->
         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 class="font-serif text-xl font-bold text-slate-900">Account Security & Verification</h2>
+            @if(auth('web')->user()?->isAdmin())
+            <details class="mt-4"><summary class="cursor-pointer font-semibold">Reset student authenticator after checking their identity</summary>
+                <p class="mt-2 text-sm">This removes the authenticator and recovery codes and invalidates student sessions. Your own staff MFA must be enabled.</p>
+                <form method="POST" action="{{ route('admin.students.security.reset', $student) }}" class="mt-4 space-y-3">@csrf
+                    <x-two-factor-verification-fields prefix="student-security-reset" />
+                    <label for="security-reset-reason">Identity check and reason</label><textarea id="security-reset-reason" name="reason" required minlength="10" maxlength="500" class="block w-full rounded-lg border p-3"></textarea>
+                    <button class="rounded-lg bg-red-800 p-3 text-white">Reset student MFA</button>
+                </form>
+            </details>
+            @endif
+
             <p class="mt-3 text-sm text-slate-600">Last portal login / successful authentication: {{ $portalLogins->first()?->authenticated_at->setTimezone($businessTz)->format('j M Y, g:i A T') ?? 'No recorded login' }} · Primary email: {{ $student->identity_status === 'verified' ? 'Verified student identity' : 'Not verified' }} · {{ $student->suspended_at ? 'Suspended' : 'Account active' }}</p>
             @foreach($portalLogins as $login)<p class="mt-1 text-xs text-slate-500">{{ $login->authenticated_at->setTimezone($businessTz)->format('j M Y, g:i A') }} · Preferred timezone at login: {{ $login->timezone ?: 'Not set' }}</p>@endforeach
             <p class="mt-1 text-sm text-slate-500">Authentication state and verified communication channels for this student.</p>

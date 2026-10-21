@@ -62,6 +62,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        if ($this->app->runningInConsole() && ! $this->app->environment('testing') && config('database.connections.maintenance.username')) {
+            $runtime = DB::connection();
+            $maintenance = DB::connection('maintenance');
+            foreach (['host', 'port', 'database', 'unix_socket'] as $key) {
+                if ((string) $runtime->getConfig($key) !== (string) $maintenance->getConfig($key)) {
+                    throw new \RuntimeException('Maintenance database must target the same application database.');
+                }
+            }
+            DB::setDefaultConnection('maintenance');
+        }
         $this->app->bind(VideoDeliveryProvider::class, BunnyStreamProvider::class);
         $this->app->scoped(DevelopmentDataSchema::class);
         $this->app->scoped(AnalyticsLifecycle::class);
@@ -221,6 +231,15 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(30)->by(TransientRateLimitKey::make('staff-2fa-connection', (string) $request->ip())),
             ];
         });
+        RateLimiter::for('student-two-factor', function (Request $request): array {
+            return [Limit::perMinute(5)->by(TransientRateLimitKey::make('student-factor-session', $request->session()->getId())),
+                Limit::perMinute(10)->by(TransientRateLimitKey::make('student-factor-account', (string) $request->session()->get('student.two_factor_pending.id'))),
+                Limit::perMinute(30)->by(TransientRateLimitKey::make('student-factor-ip', (string) $request->ip()))];
+        });
+        RateLimiter::for('student-security', function (Request $request): array {
+            return [Limit::perMinute(5)->by(TransientRateLimitKey::make('student-security-account', (string) $request->user('student')?->id)),
+                Limit::perMinute(20)->by(TransientRateLimitKey::make('student-security-ip', (string) $request->ip()))];
+        });
         RateLimiter::for('staff-two-factor-security', function (Request $request): array {
             return [
                 Limit::perMinute(10)->by(TransientRateLimitKey::make('staff-2fa-settings', (string) $request->user('web')?->getAuthIdentifier())),
@@ -265,7 +284,7 @@ class AppServiceProvider extends ServiceProvider
 
             return [
                 Limit::perMinute(10)->by($request->ip()),
-                Limit::perMinute(5)->by('cancel:token:'.$token),
+                Limit::perMinute(5)->by(TransientRateLimitKey::make('booking-cancel', $token)),
             ];
         });
 

@@ -35,10 +35,10 @@ class VaultReleaseUpgradeTest extends TestCase
         $this->assertFalse(Schema::hasColumn('student_packages', 'expires_at'));
 
         $student = Student::factory()->verified()->create();
-        $package = StudentPackage::factory()->create(['student_id' => $student->id, 'identity_state' => 'custom', 'expiration_date' => '2026-11-08', 'validity_days' => null, 'total_sessions_allocated' => 3]);
+        $package = StudentPackage::withoutEvents(fn () => StudentPackage::factory()->create(['student_id' => $student->id, 'identity_state' => 'custom', 'expiration_date' => '2026-11-08', 'validity_days' => null, 'total_sessions_allocated' => 3]));
         $allocation = StudentPackageEntitlement::query()->create(['student_id' => $student->id, 'student_package_id' => $package->id, 'entitlement_type_id' => EntitlementType::query()->where('code', 'one_hour')->value('id'), 'granted_quantity' => 3]);
         SessionLedgerEntry::factory()->create(['student_id' => $student->id, 'student_package_id' => $package->id, 'student_package_entitlement_id' => $allocation->id, 'entitlement_type_id' => $allocation->entitlement_type_id, 'credit_change' => 3]);
-        $payment = PaymentRecord::factory()->create(['student_package_id' => $package->id, 'amount_paid' => '240.00']);
+        $payment = PaymentRecord::factory()->create(['student_package_id' => $package->id, 'student_id' => $student->id, 'amount_paid' => '240.00']);
         PaymentRefund::factory()->create(['student_package_id' => $package->id, 'student_id' => $student->id, 'payment_record_id' => $payment->id, 'amount_refunded' => '10.00']);
         Booking::factory()->create(['student_id' => $student->id]);
 

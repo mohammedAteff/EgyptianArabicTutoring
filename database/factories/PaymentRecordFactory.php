@@ -25,7 +25,7 @@ class PaymentRecordFactory extends Factory
             'student_id' => fn (array $attributes) => StudentPackage::findOrFail($attributes['student_package_id'])->student_id,
             'idempotency_key' => fake()->uuid(),
             'amount_paid' => '240.00',
-            'currency' => 'USD',
+            'currency' => fn (array $attributes) => StudentPackage::query()->findOrFail($attributes['student_package_id'])->currency,
             'payment_method' => 'PayPal - Manual',
             'paid_at' => now('UTC'),
             'created_at' => now('UTC'),

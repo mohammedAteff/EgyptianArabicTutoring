@@ -223,7 +223,10 @@ class BookingLifecycleAndPolicyCutoffTest extends TestCase
             $this->assertStringContainsString('4 hours', $e->getMessage());
         }
 
-        // 2. HTTP route rejects with redirect error
+        // The owner must authenticate before the policy boundary is evaluated.
+        $student = Student::factory()->verified()->create();
+        $booking->update(['student_id' => $student->id]);
+        $this->actingAs($student, 'student')->withSession(['student_id' => $student->id, 'student_auth_expires_at' => now('UTC')->addHour()->toIso8601String()]);
         $response = $this->post(route('booking.cancel', ['token' => $booking->confirmation_token]));
         $response->assertRedirect(route('booking.confirmation', ['token' => $booking->confirmation_token]));
         $response->assertSessionHas('error');

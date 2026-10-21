@@ -39,6 +39,7 @@ class AdministratorLoginService
     public function secureCurrentSession(Request $request, Administrator $administrator): void
     {
         $request->session()->regenerate();
+        $request->session()->put('admin.session_fingerprint', $this->twoFactor->fingerprint($administrator));
         if ($administrator->requiresTwoFactor()) {
             $request->session()->put('admin.two_factor_verified', $this->twoFactor->fingerprint($administrator));
         } else {

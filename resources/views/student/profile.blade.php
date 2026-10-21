@@ -27,4 +27,9 @@
         <button class="min-h-11 rounded-xl bg-nile-800 px-5 py-3 font-semibold text-white">Add Email Address</button>
     </form>
 </section>
+<section class="mt-6 rounded-2xl border border-stone-200 bg-white p-6">
+<a href="{{ route('student.security.show') }}" class="font-semibold underline">Account Security: optional authenticator protection</a>
+<form method="POST" action="{{ route('student.profile.timezone') }}" class="mt-4">@csrf @method('PATCH')
+<label for="preferred-timezone">Preferred timezone</label><input id="preferred-timezone" name="timezone" value="{{ $student->preferred_timezone }}" required class="m-2 rounded-lg border p-3">
+<button class="rounded-lg bg-nile-800 p-3 text-white">Save timezone</button></form></section>
 @endsection

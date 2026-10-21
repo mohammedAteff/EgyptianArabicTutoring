@@ -8,9 +8,9 @@ use Illuminate\Console\Command;
 
 class RecoverAdministratorTwoFactor extends Command
 {
-    protected $signature = 'administrator:recover-two-factor {administrator : Exact Super Admin ID} {--operator= : Verified recovery operator} {--reason= : Recovery ticket or reason without secrets}';
+    protected $signature = 'administrator:recover-two-factor {administrator : Exact staff account ID} {--operator= : Verified recovery operator} {--reason= : Recovery ticket or reason without secrets}';
 
-    protected $description = 'Perform explicitly confirmed, trusted-console Super Admin two-factor recovery';
+    protected $description = 'Perform explicitly confirmed, trusted-console staff two-factor recovery';
 
     public function handle(AdministratorTwoFactorService $twoFactor): int
     {
@@ -23,8 +23,8 @@ class RecoverAdministratorTwoFactor extends Command
         $operator = trim((string) $this->option('operator'));
         $reason = trim((string) $this->option('reason'));
         if (! ctype_digit((string) $id) || $operator === '' || $reason === '' || strlen($operator) > 100 || strlen($reason) > 500
-            || ! Administrator::query()->whereKey((int) $id)->where('role', 'super_admin')->exists()) {
-            $this->error('Supply an exact Super Admin ID, operator and non-secret recovery reason.');
+            || ! Administrator::query()->whereKey((int) $id)->whereIn('role', ['super_admin', 'admin', 'assistant'])->exists()) {
+            $this->error('Supply an exact staff account ID, operator and non-secret recovery reason.');
 
             return self::FAILURE;
         }
@@ -35,7 +35,7 @@ class RecoverAdministratorTwoFactor extends Command
             return self::FAILURE;
         }
         $twoFactor->emergencyRecover((int) $id, $operator, $reason);
-        $this->info('Security recovery recorded. The owner must sign in and enroll a new authenticator.');
+        $this->info('Security recovery recorded. The staff member must sign in and enroll a new authenticator.');
 
         return self::SUCCESS;
     }

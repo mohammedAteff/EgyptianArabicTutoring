@@ -95,6 +95,7 @@ use App\Http\Controllers\Student\ResourceAssignmentController;
 use App\Http\Controllers\Student\SchedulingController;
 use App\Http\Controllers\Student\StudentBookmarkController;
 use App\Http\Controllers\Student\TeachingController;
+use App\Http\Controllers\Student\TwoFactorController;
 use App\Http\Controllers\Student\VideoDeviceController;
 use App\Http\Controllers\StudentBinController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
@@ -127,6 +128,8 @@ Route::get('/_arabictutor-landing', [HomeController::class, 'index'])->name('hom
 Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders::class)->group(function () {
     Route::get('/login', [StudentAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
+    Route::get('/two-factor-challenge', [TwoFactorController::class, 'challenge'])->name('two-factor.challenge');
+    Route::post('/two-factor-challenge', [TwoFactorController::class, 'verify'])->middleware('throttle:student-two-factor')->name('two-factor.verify');
     Route::middleware(['lms.preview.readonly', 'student.auth'])->group(function () {
         Route::get('/my-learning', [LearningController::class, 'index'])->name('learning.index');
         Route::post('/learn/courses/{course}/lessons/{lesson}/complete', [LearningEvidenceController::class, 'manual'])->whereNumber(['course', 'lesson'])->middleware('throttle:30,1')->name('evidence.manual');
@@ -184,6 +187,14 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::get('/notes/{bin}/edit', [StudentBinController::class, 'edit'])->name('bins.edit');
         Route::put('/notes/{bin}', [StudentBinController::class, 'update'])->name('bins.update');
 
+        Route::get('/security', [TwoFactorController::class, 'show'])->name('security.show');
+        Route::middleware('throttle:student-security')->group(function (): void {
+            Route::post('/security/enrollment', [TwoFactorController::class, 'enroll'])->name('security.enroll');
+            Route::get('/security/enrollment/approve', [TwoFactorController::class, 'approve'])->middleware('signed')->name('security.approve');
+            Route::post('/security/confirmation', [TwoFactorController::class, 'confirm'])->name('security.confirm');
+            Route::post('/security/change', [TwoFactorController::class, 'change'])->name('security.change');
+        });
+        Route::patch('/profile/timezone', [ProfileController::class, 'timezone'])->name('profile.timezone');
         Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
         Route::post('/profile/emails', [ProfileController::class, 'addEmail'])->middleware('throttle:6,1')->name('profile.email.request');
         Route::get('/profile/emails/verify/{token}', [ProfileController::class, 'verify'])->middleware('throttle:10,1')->name('profile.email.verify');
@@ -213,16 +224,16 @@ Route::get('/book', function (Request $request) {
 Route::get('/fr/reservation', [BookingController::class, 'index'])->name('booking.fr');
 Route::get('/de/buchen', [BookingController::class, 'index'])->name('booking.de');
 
-Route::get('/booking/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation');
+Route::get('/booking/confirmation/{token}', [BookingController::class, 'confirmation'])->middleware(ApplyAdminNoindexHeaders::class)->name('booking.confirmation');
 Route::get('/book/confirmation/{token}', function (string $token, Request $request) {
     $qs = $request->server->get('QUERY_STRING') ?: $request->getQueryString();
 
     return redirect('/booking/confirmation/'.$token.($qs ? '?'.$qs : ''), 301);
 });
-Route::get('/fr/reservation/confirmation/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation.fr');
-Route::get('/de/buchen/bestaetigung/{token}', [BookingController::class, 'confirmation'])->name('booking.confirmation.de');
+Route::get('/fr/reservation/confirmation/{token}', [BookingController::class, 'confirmation'])->middleware(ApplyAdminNoindexHeaders::class)->name('booking.confirmation.fr');
+Route::get('/de/buchen/bestaetigung/{token}', [BookingController::class, 'confirmation'])->middleware(ApplyAdminNoindexHeaders::class)->name('booking.confirmation.de');
 
-Route::get('/booking/confirmation/{token}/ics', [BookingController::class, 'ics'])->name('booking.ics');
+Route::get('/booking/confirmation/{token}/ics', [BookingController::class, 'ics'])->middleware(ApplyAdminNoindexHeaders::class)->name('booking.ics');
 Route::get('/book/confirmation/{token}/ics', function (string $token, Request $request) {
     $qs = $request->getQueryString();
 
@@ -406,7 +417,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             Route::post('/students/{student}/alerts', [StudentOperationalAlertController::class, 'store'])->name('student-alerts.store');
             Route::patch('/students/{student}/alerts/{alert}', [StudentOperationalAlertController::class, 'update'])->name('student-alerts.update');
         });
-        Route::prefix('security')->name('security.')->middleware('role:super_admin')->group(function (): void {
+        Route::prefix('security')->name('security.')->middleware('role:super_admin,admin,assistant')->group(function (): void {
             Route::get('/', [TwoFactorSecurityController::class, 'show'])->name('show');
             Route::middleware('throttle:staff-two-factor-security')->group(function (): void {
                 Route::post('/enrollment', [TwoFactorSecurityController::class, 'store'])->name('enroll');
@@ -417,6 +428,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
             });
         });
         Route::post('/students/{student}/packages/{package}/validity', [StudentBillingController::class, 'extendValidity'])->middleware('role:super_admin,admin')->name('students.packages.validity');
+        Route::post('/students/{student}/security/reset', [TwoFactorController::class, 'resetStudent'])->middleware(['role:super_admin,admin', 'throttle:staff-two-factor-security'])->name('students.security.reset');
         Route::post('/accounts/{type}/{account}/suspension', [AccountSuspensionController::class, 'update'])->middleware('role:super_admin')->name('accounts.suspension');
         Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->middleware('role:super_admin,admin')->name('payment-methods.index');
         Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->middleware('role:super_admin,admin')->name('payment-methods.store');

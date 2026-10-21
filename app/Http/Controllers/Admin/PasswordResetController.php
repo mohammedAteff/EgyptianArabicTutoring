@@ -7,6 +7,7 @@ use App\Domains\Audit\Models\AuditLog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
@@ -30,11 +31,7 @@ class PasswordResetController extends Controller
 
         $email = strtolower(trim($validated['email']));
 
-        $status = Password::broker('administrators')->sendResetLink(['email' => $email]);
-
-        if ($status === Password::RESET_THROTTLED) {
-            return back()->withErrors(['email' => 'Please wait a few moments before requesting another reset link.']);
-        }
+        Password::broker('administrators')->sendResetLink(['email' => $email]);
 
         // Record audit log if administrator exists, without logging secrets or plain tokens
         $admin = Administrator::where('email', $email)->first();
@@ -49,7 +46,7 @@ class PasswordResetController extends Controller
                 'created_at' => now(),
             ]);
 
-            Log::info("Password recovery requested for administrator account: {$email}");
+            Log::info('Administrator password recovery requested.', ['administrator_id' => $admin->id]);
         }
 
         return back()->with('status', 'If an administrator account matches that email address, password recovery instructions have been dispatched.');
@@ -80,6 +77,8 @@ class PasswordResetController extends Controller
                     'remember_token' => Str::random(60),
                 ])->save();
 
+                DB::table('sessions')->where('user_id', $admin->id)->delete();
+
                 if ($request->hasSession()) {
                     $request->session()->invalidate();
                     $request->session()->regenerateToken();
@@ -95,7 +94,7 @@ class PasswordResetController extends Controller
                     'created_at' => now(),
                 ]);
 
-                Log::info("Password successfully reset for administrator account: {$admin->email}");
+                Log::info('Administrator password reset completed.', ['administrator_id' => $admin->id]);
             }
         );
 

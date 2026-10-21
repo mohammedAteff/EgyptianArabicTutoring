@@ -40,6 +40,7 @@ class Student extends Authenticatable
     ];
 
     protected $hidden = [
+        'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_pending_secret', 'two_factor_pending_session', 'two_factor_version', 'two_factor_last_used_step',
         'date_of_birth',
         'internal_notes',
         'possible_duplicate_of_student_id',
@@ -48,7 +49,12 @@ class Student extends Authenticatable
 
     protected function casts(): array
     {
-        return ['date_of_birth' => 'date', 'suspended_at' => 'datetime'];
+        return ['date_of_birth' => 'date', 'suspended_at' => 'datetime', 'two_factor_secret' => 'encrypted', 'two_factor_pending_secret' => 'encrypted', 'two_factor_recovery_codes' => 'encrypted:array', 'two_factor_confirmed_at' => 'datetime', 'two_factor_pending_at' => 'datetime', 'two_factor_last_used_step' => 'integer'];
+    }
+
+    public function requiresTwoFactor(): bool
+    {
+        return $this->two_factor_secret !== null || $this->two_factor_confirmed_at !== null;
     }
 
     protected static function newFactory(): StudentFactory

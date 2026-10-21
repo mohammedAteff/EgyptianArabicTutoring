@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Student;
 
 use App\Domains\Administration\Services\AdminNotificationService;
-use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Lms\Services\ProtectedPlaybackService;
 use App\Domains\Students\Models\Student;
-use App\Domains\Students\Models\StudentPortalLogin;
 use App\Domains\Students\Services\StudentAuthAttemptTracker;
 use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\Students\Services\StudentLoginService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -104,25 +103,14 @@ class AuthController extends Controller
             return back()->withErrors(['auth' => self::FAILURE_MESSAGE]);
         }
 
-        StudentPortalLogin::query()->create(['student_id' => $student->id, 'timezone' => $student->preferred_timezone, 'authenticated_at' => now('UTC')]);
-        Auth::guard('student')->login($student, false);
-        $request->session()->regenerate();
-        $request->session()->put([
-            'student_id' => $student->id,
-            'student_authenticated_at' => now('UTC')->toIso8601String(),
-            'student_auth_expires_at' => now('UTC')->addMinutes(180)->toIso8601String(),
-        ]);
-
-        app(AnalyticsService::class)->linkAuthenticatedStudent($request, $student->id);
-
-        return redirect()->route('student.dashboard');
+        return app(StudentLoginService::class)->complete($request, $student->fresh());
     }
 
     public function logout(Request $request): RedirectResponse
     {
         app(ProtectedPlaybackService::class)->logout($request);
         Auth::guard('student')->logout();
-        $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at']);
+        $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at', 'student.two_factor_pending', 'student.two_factor_verified', 'student.two_factor_setup_approved']);
 
         return redirect()->route('student.login');
     }

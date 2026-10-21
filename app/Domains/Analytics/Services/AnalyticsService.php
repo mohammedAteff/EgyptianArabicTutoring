@@ -242,9 +242,20 @@ class AnalyticsService
         Visitor::query()->where('visitor_token', $token)->whereNull('student_id')->whereHas('sessions', fn ($query) => $query->where('session_token', $sessionToken))->update(['student_id' => $studentId]);
     }
 
+    public static function safeUrl(?string $url): ?string
+    {
+        if ($url === null) {
+            return null;
+        }
+        $url = preg_replace('~(/(?:booking|book)/(?:confirmation/)?)[A-Za-z0-9_-]{20,}~i', '$1[redacted]', $url) ?? '';
+        $url = preg_replace('~(/reset-password/)[^/?#]+~i', '$1[redacted]', $url) ?? '';
+
+        return preg_replace('~([?&](?:token|signature|state|code|recovery_code|watch_token|lease_token)=)[^&#]*~i', '$1[redacted]', $url) ?? '';
+    }
+
     public function excluded(Request $request, bool $learning = false): bool
     {
-        if ((! $learning && $request->routeIs('student.video.*')) || $request->routeIs('bunny-stream.webhook')) {
+        if ((! $learning && $request->routeIs('student.video.*')) || $request->routeIs('bunny-stream.webhook', 'student.security.*', 'student.two-factor.*', 'booking.confirmation*', 'booking.ics', 'booking.cancel')) {
             return true;
         }
         if ($request->user('web') || $request->is('admin*', 'preview*', '*/preview', 'build/*', 'assets/*', 'up') || $request->header('X-Analytics-Synthetic') === '1') {
@@ -499,8 +510,13 @@ class AnalyticsService
                 }
             }
 
-            $pageUrl = $page ?? ($req ? substr($req->fullUrl(), 0, 500) : '/');
-            $referrer = $req ? substr((string) $req->header('referer', ''), 0, 500) : null;
+            foreach ($metadata as $key => $value) {
+                if (is_string($value) && in_array($key, ['url', 'path', 'referrer', 'target', 'target_url', 'destination'], true)) {
+                    $metadata[$key] = self::safeUrl($value);
+                }
+            }
+            $pageUrl = self::safeUrl($page ?? ($req ? substr($req->fullUrl(), 0, 500) : '/'));
+            $referrer = $req ? self::safeUrl(substr((string) $req->header('referer', ''), 0, 500)) : null;
             if ($this->recordingLearning) {
                 $referrer = null;
             }
@@ -1044,8 +1060,8 @@ class AnalyticsService
             'ip_address' => null,
             'user_agent' => substr((string) $request->userAgent(), 0, 500),
             'country_code' => $countryCode ?: 'XX',
-            'url' => substr($request->fullUrl(), 0, 500),
-            'referrer' => substr((string) $request->header('referer'), 0, 500) ?: null,
+            'url' => self::safeUrl(substr($request->fullUrl(), 0, 500)),
+            'referrer' => self::safeUrl(substr((string) $request->header('referer'), 0, 500)) ?: null,
             'is_bounced' => true,
             'created_at' => now(),
             'updated_at' => now(),

@@ -26,6 +26,14 @@ class StudentSessionContext
             return null;
         }
 
-        return Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->find((int) $id);
+        $student = Student::verified()->whereNull('merged_into_student_id')->whereNull('suspended_at')->find((int) $id);
+        if ($student && ($student->requiresTwoFactor() || $student->two_factor_version !== null)) {
+            $proof = $request->session()->get('student.two_factor_verified');
+            if (! is_string($proof) || ! hash_equals(app(StudentTwoFactorService::class)->fingerprint($student), $proof)) {
+                return null;
+            }
+        }
+
+        return $student;
     }
 }

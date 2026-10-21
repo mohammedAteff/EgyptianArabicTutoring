@@ -36,6 +36,15 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        $accountKey = TransientRateLimitKey::make('staff-login-account', Str::lower(trim($credentials['email'])));
+        $connectionKey = TransientRateLimitKey::make('staff-login-connection', (string) $request->ip());
+        foreach ([$accountKey => 20, $connectionKey => 60] as $key => $limit) {
+            if (RateLimiter::tooManyAttempts($key, $limit)) {
+                throw ValidationException::withMessages(['email' => 'Too many sign-in attempts. Please try again later.']);
+            }
+        }
+        RateLimiter::hit($connectionKey, 300);
+
         $throttleKey = TransientRateLimitKey::make('staff-login', Str::transliterate(Str::lower($credentials['email']).'|'.$request->ip()));
 
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
@@ -57,6 +66,7 @@ class AuthController extends Controller
         $admin = $provider->retrieveByCredentials([...$credentials, 'suspended_at' => null]);
         if (! $admin instanceof Administrator || ! in_array($admin->role, ['super_admin', 'admin', 'assistant'], true) || ! $provider->validateCredentials($admin, $credentials)) {
             RateLimiter::hit($throttleKey, 60);
+            RateLimiter::hit($accountKey, 300);
 
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
@@ -64,6 +74,7 @@ class AuthController extends Controller
         }
 
         RateLimiter::clear($throttleKey);
+        RateLimiter::clear($accountKey);
         $provider->rehashPasswordIfRequired($admin, $credentials);
 
         return $admin->requiresTwoFactor() ? $login->beginChallenge($request, $admin) : $login->complete($request, $admin, $remember);

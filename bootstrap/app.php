@@ -13,6 +13,7 @@ use App\Http\Middleware\NormalizeTrailingSlash;
 use App\Http\Middleware\SetRequestLocale;
 use App\Http\Middleware\TrackStaffRecentView;
 use App\Http\Middleware\TrackVisitorSession;
+use App\Http\Middleware\UseMaintenanceDatabase;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -51,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             NormalizeTrailingSlash::class,
             SetRequestLocale::class,
             EnsureAdministratorSecondFactor::class,
+            UseMaintenanceDatabase::class,
             TrackStaffRecentView::class,
             TrackVisitorSession::class,
             EnsureNotUnderMaintenance::class,
@@ -72,7 +74,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['watch_token', 'api_key', 'read_only_key', 'signing_key', 'account_key', 'lease_token', 'token', 'operation_token', 'telegram_bot_token', 'code', 'recovery_code', 'two_factor_secret', 'two_factor_pending_secret']);
         $exceptions->report(function (Throwable $exception): ?bool {
-            if (request()->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit')) {
+            if (request()->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit', 'student.security.*', 'student.two-factor.*', 'student.login.submit', 'admin.students.security.reset')) {
                 Log::error('Staff two-factor security check failed.', ['exception_type' => $exception::class]);
 
                 return false;
@@ -81,7 +83,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
         $exceptions->render(function (Throwable $exception, Request $request): ?Response {
-            if (! $request->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit')
+            if (! $request->routeIs('admin.security.*', 'admin.two-factor.*', 'admin.login.submit', 'student.security.*', 'student.two-factor.*', 'student.login.submit', 'admin.students.security.reset')
                 || $exception instanceof ValidationException
                 || $exception instanceof AuthenticationException) {
                 return null;

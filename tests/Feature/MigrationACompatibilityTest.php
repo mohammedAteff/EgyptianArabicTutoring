@@ -13,6 +13,7 @@ use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Services\FormAssignmentService;
 use App\Domains\Forms\Services\FormBuilderService;
+use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
@@ -156,6 +157,7 @@ class MigrationACompatibilityTest extends TestCase
 
     public function test_public_booking_and_intake_work_under_intermediate_schema(): void
     {
+        $this->mock(EmailQualityService::class)->shouldReceive('validate')->once()->with('schema-compat-student@example.test');
         $admin = Administrator::create([
             'name' => 'Compatibility Admin',
             'email' => 'public-compat-admin@example.test',

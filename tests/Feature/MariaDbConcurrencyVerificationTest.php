@@ -22,6 +22,7 @@ use App\Domains\Students\Models\PaymentRecord;
 use App\Domains\Students\Models\PaymentRefund;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\Students\Services\StudentTwoFactorService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Database\Factories\AdministratorFactory;
@@ -866,6 +867,27 @@ class MariaDbConcurrencyVerificationTest extends TestCase
             $this->assertSame(1, DB::table('audit_logs')->where('administrator_id', $administrator->id)->where('action', 'two_factor_recovery_code_used')->count());
         } finally {
             DB::table('audit_logs')->where('administrator_id', $administrator->id)->delete();
+        }
+    }
+
+    public function test_two_parallel_student_recovery_attempts_have_one_winner(): void
+    {
+        $student = Student::factory()->verified()->create();
+        $this->raceStudentIds[] = $student->id;
+        $code = Str::random(10).'-'.Str::random(10);
+        $student->forceFill(['two_factor_secret' => app(Google2FA::class)->generateSecretKey(), 'two_factor_confirmed_at' => now('UTC'),
+            'two_factor_version' => (string) Str::uuid(), 'two_factor_recovery_codes' => [Hash::make($code)]])->save();
+        $payload = ['action' => 'student_two_factor_recovery', 'student_id' => $student->id, 'recovery_code' => $code,
+            'fingerprint' => app(StudentTwoFactorService::class)->fingerprint($student)];
+        try {
+            $results = $this->runConcurrentWorkers([$payload, $payload]);
+            $codes = array_column($results, 'exit_code');
+            sort($codes);
+            $this->assertSame([0, 2], $codes, json_encode($results, JSON_THROW_ON_ERROR));
+            $this->assertSame([], $student->fresh()->two_factor_recovery_codes);
+            $this->assertSame(1, DB::table('audit_logs')->where('actor_student_id', $student->id)->where('action', 'student_two_factor_recovery_code_used')->count());
+        } finally {
+            DB::table('audit_logs')->where('actor_student_id', $student->id)->delete();
         }
     }
 

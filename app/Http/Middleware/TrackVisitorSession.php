@@ -98,7 +98,7 @@ class TrackVisitorSession
                 $shouldStartNewSession = true;
             }
 
-            $rawReferrer = substr((string) $request->header('referer', ''), 0, 500) ?: null;
+            $rawReferrer = AnalyticsService::safeUrl(substr((string) $request->header('referer', ''), 0, 500)) ?: null;
             $hasUtm = $request->filled('utm_source');
             $hasExternalReferrer = $this->analyticsService->isValidExternalReferrer($rawReferrer);
 
@@ -115,7 +115,7 @@ class TrackVisitorSession
                     'utm_content' => $request->query('utm_content'),
                     'utm_term' => $request->query('utm_term'),
                     'referrer' => $rawReferrer,
-                    'landing_page' => substr($request->fullUrl(), 0, 255),
+                    'landing_page' => AnalyticsService::safeUrl(substr($request->fullUrl(), 0, 255)),
                     'is_bot' => $isBot,
                     // Session geography is a start-of-session snapshot. An
                     // unresolved first request stays NULL rather than being

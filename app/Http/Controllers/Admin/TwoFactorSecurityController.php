@@ -76,7 +76,7 @@ class TwoFactorSecurityController extends Controller
     private function administrator(Request $request): Administrator
     {
         $administrator = $request->user('web');
-        abort_unless($administrator instanceof Administrator && $administrator->isSuperAdmin(), 403);
+        abort_unless($administrator instanceof Administrator && in_array($administrator->role, ['super_admin', 'admin', 'assistant'], true), 403);
 
         return $administrator;
     }

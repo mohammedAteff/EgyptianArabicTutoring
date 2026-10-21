@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Administration\Services\AdministratorTwoFactorService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentIdentityService;
 use Database\Factories\AdministratorFactory;
@@ -143,6 +144,7 @@ class StudentAuthenticationTest extends TestCase
         Auth::guard('student')->login($student, false);
 
         $this->withSession([
+            'admin.session_fingerprint' => app(AdministratorTwoFactorService::class)->fingerprint($admin),
             'student_id' => $student->id,
             'student_authenticated_at' => now('UTC')->toIso8601String(),
             'student_auth_expires_at' => now('UTC')->addMinutes(180)->toIso8601String(),

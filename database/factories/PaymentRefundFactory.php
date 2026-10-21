@@ -26,7 +26,7 @@ class PaymentRefundFactory extends Factory
             'student_id' => fn (array $attributes) => PaymentRecord::findOrFail($attributes['payment_record_id'])->student_id,
             'idempotency_key' => fake()->uuid(),
             'amount_refunded' => '10.00',
-            'currency' => 'USD',
+            'currency' => fn (array $attributes) => PaymentRecord::query()->findOrFail($attributes['payment_record_id'])->currency,
             'refunded_at' => now('UTC'),
             'created_at' => now('UTC'),
         ];

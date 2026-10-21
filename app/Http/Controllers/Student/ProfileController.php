@@ -18,6 +18,15 @@ class ProfileController extends Controller
         return view('student.profile', ['student' => $student, 'emails' => StudentEmail::query()->where('student_id', $student->id)->get()]);
     }
 
+    public function timezone(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['timezone' => ['required', 'timezone:all']]);
+        $request->attributes->get('student')->update(['preferred_timezone' => $data['timezone']]);
+        $request->session()->put('student_display_timezone', $data['timezone']);
+
+        return back()->with('success', 'Timezone preference saved.');
+    }
+
     public function addEmail(Request $request, StudentEmailService $emails): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email:rfc', 'max:255']]);

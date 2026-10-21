@@ -124,7 +124,7 @@ class AdministratorTwoFactorService
     public function emergencyRecover(int $administratorId, string $operator, string $reason): void
     {
         DB::transaction(function () use ($administratorId, $operator, $reason): void {
-            $administrator = Administrator::query()->whereKey($administratorId)->where('role', 'super_admin')->lockForUpdate()->firstOrFail();
+            $administrator = Administrator::query()->whereKey($administratorId)->whereIn('role', ['super_admin', 'admin', 'assistant'])->lockForUpdate()->firstOrFail();
             $this->clearSecurityState($administrator);
             $this->audit->log('two_factor_emergency_recovery', Administrator::class, $administrator->id, newData: ['operator' => $operator, 'reason' => $reason], adminId: $administrator->id);
             DB::table('sessions')->where('user_id', $administrator->id)->delete();
@@ -133,7 +133,7 @@ class AdministratorTwoFactorService
 
     private function lockedAdministrator(int $administratorId): Administrator
     {
-        $administrator = Administrator::query()->whereKey($administratorId)->where('role', 'super_admin')->whereNull('suspended_at')->lockForUpdate()->first();
+        $administrator = Administrator::query()->whereKey($administratorId)->whereIn('role', ['super_admin', 'admin', 'assistant'])->whereNull('suspended_at')->lockForUpdate()->first();
         if (! $administrator) {
             throw ValidationException::withMessages(['code' => 'This account is unavailable. Sign in again.']);
         }

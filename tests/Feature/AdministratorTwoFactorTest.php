@@ -30,9 +30,9 @@ class AdministratorTwoFactorTest extends TestCase
     }
 
     /** @return array{Administrator, string, list<string>} */
-    private function enrolled(): array
+    private function enrolled(string $role = 'super_admin'): array
     {
-        $administrator = $this->administrator();
+        $administrator = $this->administrator($role);
         $secret = app(Google2FA::class)->generateSecretKey();
         $codes = [Str::random(10).'-'.Str::random(10), Str::random(10).'-'.Str::random(10)];
         $administrator->forceFill([
@@ -65,14 +65,27 @@ class AdministratorTwoFactorTest extends TestCase
 
     #[TestWith(['admin'])]
     #[TestWith(['assistant'])]
-    public function test_other_staff_roles_cannot_access_any_security_operation(string $role): void
+    public function test_other_staff_roles_can_enroll_their_own_authenticator(string $role): void
     {
-        $this->actingAs($this->administrator($role), 'web');
-        $this->get(route('admin.security.show'))->assertForbidden();
-        foreach (['enroll', 'confirm', 'regenerate', 'reset'] as $route) {
-            $this->post(route('admin.security.'.$route), ['password' => 'Password123!', 'code' => '123456'])->assertForbidden();
-        }
-        $this->delete(route('admin.security.disable'))->assertForbidden();
+        $actor = $this->administrator($role);
+        $this->actingAs($actor, 'web');
+        $this->get(route('admin.security.show'))->assertOk();
+        $this->post(route('admin.security.enroll'), ['password' => 'wrong'])->assertSessionHasErrors('password');
+        $this->post(route('admin.security.enroll'), ['password' => 'Password123!'])->assertOk()->assertViewHas('setup');
+        $this->assertNotNull($actor->fresh()->two_factor_pending_secret);
+    }
+
+    #[TestWith(['admin'])]
+    #[TestWith(['assistant'])]
+    public function test_other_enrolled_staff_require_a_factor_and_have_trusted_console_recovery(string $role): void
+    {
+        [$actor, , $codes] = $this->enrolled($role);
+        $this->passwordStage($actor);
+        $this->post(route('admin.two-factor.verify'), ['recovery_code' => $codes[0]])->assertRedirect();
+        $this->assertAuthenticatedAs($actor, 'web');
+        app(AdministratorTwoFactorService::class)->emergencyRecover($actor->id, 'Verified test operator', 'Identity checked through trusted console.');
+        $this->assertFalse($actor->fresh()->requiresTwoFactor());
+        $this->get(route('admin.security.show'))->assertRedirect(route('admin.login'));
     }
 
     public function test_student_and_guest_cannot_access_super_admin_security(): void
