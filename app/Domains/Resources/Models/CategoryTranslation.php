@@ -31,11 +31,13 @@ class CategoryTranslation extends Model
         ];
     }
 
+    /** @return BelongsTo<ResourceCategory, $this> */
     public function category(): BelongsTo
     {
         return $this->belongsTo(ResourceCategory::class, 'category_id');
     }
 
+    /** @return BelongsTo<EntityTranslationRevision, $this> */
     public function sourceRevision(): BelongsTo
     {
         return $this->belongsTo(EntityTranslationRevision::class, 'source_revision_id');

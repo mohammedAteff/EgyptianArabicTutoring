@@ -22,26 +22,31 @@ class Form extends Model
         return ['is_mandatory' => 'boolean', 'can_edit_after_submission' => 'boolean', 'lock_version' => 'integer'];
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function author(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'created_by');
     }
 
+    /** @return BelongsTo<FormVersion, $this> */
     public function activeVersion(): BelongsTo
     {
         return $this->belongsTo(FormVersion::class, 'active_version_id');
     }
 
+    /** @return BelongsTo<FormVersion, $this> */
     public function publishedVersion(): BelongsTo
     {
         return $this->belongsTo(FormVersion::class, 'published_version_id');
     }
 
+    /** @return HasMany<FormVersion, $this> */
     public function versions(): HasMany
     {
         return $this->hasMany(FormVersion::class);
     }
 
+    /** @return HasMany<FormTrigger, $this> */
     public function triggers(): HasMany
     {
         return $this->hasMany(FormTrigger::class);

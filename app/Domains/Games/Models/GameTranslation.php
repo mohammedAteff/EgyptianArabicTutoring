@@ -31,11 +31,13 @@ class GameTranslation extends Model
         ];
     }
 
+    /** @return BelongsTo<Game, $this> */
     public function game(): BelongsTo
     {
         return $this->belongsTo(Game::class);
     }
 
+    /** @return BelongsTo<EntityTranslationRevision, $this> */
     public function sourceRevision(): BelongsTo
     {
         return $this->belongsTo(EntityTranslationRevision::class, 'source_revision_id');

@@ -34,9 +34,9 @@ Schedule::call(fn (): bool => Artisan::call('booking:cleanup-holds', []) === 0)
 
 // 2.5. Analytics Country Aggregation: aggregates daily activity by country prior to raw event pruning
 Schedule::call(function (): bool {
-    $cairoYesterday = now('Africa/Cairo')->subDay()->format('Y-m-d');
+    $businessYesterday = now(app(TimezoneService::class)->getBusinessTimezone())->subDay()->format('Y-m-d');
 
-    return Artisan::call('analytics:aggregate-daily-country', ['--date' => $cairoYesterday]) === 0;
+    return Artisan::call('analytics:aggregate-daily-country', ['--date' => $businessYesterday]) === 0;
 })
     ->dailyAt('00:02')
     ->timezone(app(TimezoneService::class)->getBusinessTimezone())

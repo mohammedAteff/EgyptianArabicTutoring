@@ -170,7 +170,7 @@ class TrackVisitorSession
                 foreach ($utmParams as $param) {
                     if ($request->query($param)) {
                         $sessionStore->put($param, (string) $request->query($param));
-                    } elseif (! $sessionStore->has($param) && $session && $session->{$param}) {
+                    } elseif (! $sessionStore->has($param) && $session->{$param}) {
                         $sessionStore->put($param, (string) $session->{$param});
                     }
                 }

@@ -59,6 +59,7 @@ class ResourceRequest extends Model
         return $this->belongsTo(Resource::class, 'resource_id');
     }
 
+    /** @return HasMany<ResourceDownload, $this> */
     public function downloads(): HasMany
     {
         return $this->hasMany(ResourceDownload::class, 'request_id');

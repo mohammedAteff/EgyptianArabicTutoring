@@ -4,9 +4,9 @@ namespace App\Domains\Students\Services;
 
 use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Availability\Services\AvailabilityService;
-use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\BookingWaitlist;
 use App\Domains\Students\Models\Student;
+use App\Domains\Students\Models\StudentUnavailability;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Policies\StudentTeachingPolicy;
 use Carbon\CarbonImmutable;
@@ -30,6 +30,9 @@ class WaitlistAvailabilityService
             return [];
         }
         $days = app(AvailabilityService::class)->getAvailableSlotsGroupedByDate($interest->sessionType, $interest->timezone, $from, $through);
+        $unavailability = StudentUnavailability::query()->where('student_id', $interest->student_id)->where('status', 'active')
+            ->where('starts_at_utc', '<', $through->addDay()->utc())->where('ends_at_utc', '>', $from->utc())
+            ->get(['starts_at_utc', 'ends_at_utc']);
         $matches = [];
         foreach ($days as $slots) {
             foreach ($slots as $slot) {
@@ -42,9 +45,7 @@ class WaitlistAvailabilityService
                 if ($earliest && $latest && ($earliest <= $latest ? ($time < $earliest || $time > $latest) : ($time < $earliest && $time > $latest))) {
                     continue;
                 }
-                try {
-                    app(StudentSchedulingService::class)->assertAvailable($interest->student_id, $start, $end);
-                } catch (SlotUnavailableException) {
+                if ($unavailability->contains(fn (StudentUnavailability $absence): bool => $absence->starts_at_utc->lt($end) && $absence->ends_at_utc->gt($start))) {
                     continue;
                 }
                 $businessStart = $start->setTimezone(app(TimezoneService::class)->getBusinessTimezone());

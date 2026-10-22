@@ -25,7 +25,7 @@ class TranslationController extends Controller
     /**
      * Resolve model instance by entity type and ID.
      */
-    protected function resolveEntity(string $entityType, int|string $id): Model
+    protected function resolveEntity(string $entityType, int|string $id): Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory
     {
         return match ($entityType) {
             'resource', 'resources' => Resource::findOrFail($id),

@@ -8,12 +8,18 @@ use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\System\Services\BackupService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+#[Group('restore-drill')]
 class DisasterRecoveryRestoreDrillTest extends TestCase
 {
     public function test_destructive_restore_drill_into_isolated_disposable_database_and_directory(): void
     {
+        if (getenv('ALLOW_DATABASE_RESTORE_DRILL') !== '1') {
+            $this->markTestSkipped('Separate-database restoration requires explicit ALLOW_DATABASE_RESTORE_DRILL=1 authorization.');
+        }
+
         $backupService = app(BackupService::class);
         $isolatedDbName = 'bolt_landing_restore_drill_'.time();
 

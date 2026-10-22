@@ -12,7 +12,7 @@ class FormValidationService
 
     private const OPERATORS = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in', 'greater_than', 'less_than', 'is_answered', 'is_not_answered'];
 
-    /** @param array<int, array<string, mixed>> $questions */
+    /** @param array<int, mixed> $questions */
     public function validateStructure(array $questions): void
     {
         $keys = [];
@@ -61,7 +61,7 @@ class FormValidationService
             if (isset($questionRules['min'], $questionRules['max']) && $questionRules['min'] > $questionRules['max']) {
                 throw ValidationException::withMessages(["questions.{$index}.validation_rules" => 'Minimum value cannot exceed maximum value.']);
             }
-            if (($question['question_type'] ?? null) === 'rating_scale') {
+            if ($question['question_type'] === 'rating_scale') {
                 $presentation = $question['presentation_config'] ?? [];
                 $min = (int) ($presentation['min'] ?? 1);
                 $max = (int) ($presentation['max'] ?? 5);

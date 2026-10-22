@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Faq extends Model
 {
+    /** @use HasTranslations<FaqTranslation> */
     use HasFactory, HasTranslations;
 
+    /** @return class-string<FaqTranslation> */
     public function getTranslationModelClass(): string
     {
         return FaqTranslation::class;
@@ -47,6 +49,7 @@ class Faq extends Model
         return $query->where('active', true)->orderBy('sort_order');
     }
 
+    /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany
     {
         return $this->morphMany(ContentRevision::class, 'revisable')->orderByDesc('revision_number');

@@ -24,6 +24,7 @@ class BlogSlugRedirect extends Model
         ];
     }
 
+    /** @return BelongsTo<Blog, $this> */
     public function blog(): BelongsTo
     {
         return $this->belongsTo(Blog::class, 'blog_id');

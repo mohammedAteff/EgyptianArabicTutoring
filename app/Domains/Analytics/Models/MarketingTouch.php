@@ -35,6 +35,7 @@ class MarketingTouch extends Model
         ];
     }
 
+    /** @return BelongsTo<Visitor, $this> */
     public function visitor(): BelongsTo
     {
         return $this->belongsTo(Visitor::class);

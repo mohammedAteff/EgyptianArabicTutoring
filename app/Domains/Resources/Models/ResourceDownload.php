@@ -44,6 +44,7 @@ class ResourceDownload extends Model
         return $this->belongsTo(Resource::class, 'resource_id');
     }
 
+    /** @return BelongsTo<Contact, $this> */
     public function contact(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'contact_id');

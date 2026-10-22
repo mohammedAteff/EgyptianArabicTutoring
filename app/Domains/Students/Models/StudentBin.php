@@ -24,6 +24,7 @@ class StudentBin extends Model
         return ['student_visible' => 'boolean'];
     }
 
+    /** @return BelongsTo<Student, $this> */
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);

@@ -23,7 +23,7 @@ class WebsiteCopyService
         $locale ??= app()->getLocale();
         $defaults = array_map(fn (array $field): mixed => $field['default'], $this->catalog->fields($page));
         $english = $this->document($page, 'en');
-        $values = array_replace($defaults, $english?->published_content ?? []);
+        $values = array_replace($defaults, $english->published_content ?? []);
         if ($page === 'about' && $locale !== 'en') {
             $translation = Page::query()->where('slug', 'about')->where('status', 'published')->first()?->liveTranslation($locale);
             if ($translation) {
@@ -89,7 +89,7 @@ class WebsiteCopyService
         $copy = $this->document($page, $locale);
         $draftId = $copy?->revisions()->where('status', 'draft')->max('id');
 
-        return hash('sha256', json_encode([(int) ($copy?->version ?? 0), $draftId, $this->sourceHash($page)], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([(int) ($copy->version ?? 0), $draftId, $this->sourceHash($page)], JSON_THROW_ON_ERROR));
     }
 
     /** @param array<string, mixed> $values */

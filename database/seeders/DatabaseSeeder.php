@@ -23,8 +23,8 @@ class DatabaseSeeder extends Seeder
     {
         // 1. Initial Super Administrator (Non-destructive & secret-safe)
         // Never update or overwrite existing administrator credentials during seeding!
-        $adminEmail = env('ADMIN_DEFAULT_EMAIL', 'admin@boltlanding.test');
-        $adminPassword = env('ADMIN_DEFAULT_PASSWORD');
+        $adminEmail = config('auth.provisioning.email');
+        $adminPassword = config('auth.provisioning.password');
 
         if (! Administrator::where('email', $adminEmail)->exists() && Administrator::count() === 0) {
             if (app()->isProduction()) {
@@ -36,7 +36,9 @@ class DatabaseSeeder extends Seeder
                         'role' => 'super_admin',
                     ]);
                 } else {
-                    $this->command?->info("Production environment: No administrator provisioned. Run 'php artisan admin:create' to provision an initial administrator.");
+                    if (isset($this->command)) {
+                        $this->command->info("Production environment: No administrator provisioned. Run 'php artisan admin:create' to provision an initial administrator.");
+                    }
                 }
             } else {
                 Administrator::create([

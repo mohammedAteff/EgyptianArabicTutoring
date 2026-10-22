@@ -19,7 +19,7 @@ class StudentBookmarkController extends Controller
         $items = StudentBookmark::query()->where('student_id', $student->id)->orderByDesc('id')->get()->map(function (StudentBookmark $bookmark) use ($student, $bookmarks): ?array {
             $target = $bookmarks->target($student, $bookmark->kind, $bookmark->target_id);
 
-            return $target ? ['bookmark' => $bookmark, 'title' => $target->title ?? $target->resource?->title, 'url' => $bookmarks->url($bookmark->kind, $target)] : null;
+            return $target ? ['bookmark' => $bookmark, 'title' => $target->title ?? $target->getRelationValue('resource')?->title, 'url' => $bookmarks->url($bookmark->kind, $target)] : null;
         })->filter();
 
         return response()->view('student.bookmarks', compact('items'))->header('Cache-Control', 'private, no-store');
@@ -30,7 +30,7 @@ class StudentBookmarkController extends Controller
         $data = $request->validate(['kind' => ['required', 'in:resource,note,homework'], 'target_id' => ['required', 'integer', 'min:1']]);
         DB::transaction(function () use ($request, $data, $bookmarks, $records): void {
             $student = $records->lockStudent($request->attributes->get('student')->id);
-            abort_unless($bookmarks->target($student, $data['kind'], $data['target_id']), 404);
+            abort_unless($bookmarks->target($student, $data['kind'], $data['target_id']) !== null, 404);
             StudentBookmark::query()->firstOrCreate(['student_id' => $student->id] + $data);
         }, 3);
 

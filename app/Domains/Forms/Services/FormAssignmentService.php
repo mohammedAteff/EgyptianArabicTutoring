@@ -4,8 +4,10 @@ namespace App\Domains\Forms\Services;
 
 use App\Domains\Forms\Models\Form;
 use App\Domains\Students\Models\Student;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 class FormAssignmentService
 {
@@ -23,10 +25,29 @@ class FormAssignmentService
         return $this->assignedFormQuery($student)->whereKey($form->getKey())->exists();
     }
 
-    /** @return Builder<Form> */
-    private function assignedFormQuery(Student $student): Builder
+    /** @param list<int> $studentIds
+     * @return Collection<int, Form>
+     */
+    public function assignedToStudents(array $studentIds, bool $includeIntake = false): Collection
     {
-        $studentId = $student->getKey();
+        if ($studentIds === []) {
+            return new Collection;
+        }
+        $query = Form::query()->where(function (Builder $query) use ($includeIntake): void {
+            $query->whereIn('forms.id', $this->assignedFormQuery(DB::raw('students.id'))->select('forms.id'));
+            if ($includeIntake) {
+                $query->orWhere(fn (Builder $intake) => $intake->where('forms.slug', 'short-form')->where('forms.status', 'published')->whereNotNull('forms.published_version_id'));
+            }
+        });
+
+        return $query->crossJoin('students')->whereIn('students.id', $studentIds)
+            ->select('forms.*', 'students.id as assigned_student_id')->orderBy('forms.title')->get();
+    }
+
+    /** @return Builder<Form> */
+    private function assignedFormQuery(Student|Expression $student): Builder
+    {
+        $studentId = $student instanceof Student ? $student->getKey() : $student;
         $nowUtc = now('UTC')->toDateTimeString();
 
         return Form::query()

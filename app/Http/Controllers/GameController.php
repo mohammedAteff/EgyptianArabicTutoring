@@ -106,7 +106,7 @@ class GameController extends Controller
             'isFallback' => $resolved['is_fallback'],
             'isStale' => $resolved['is_stale'],
             'entityLocales' => $game->getAvailableLocales(),
-            'title' => ($resolved['translation']?->title ?? $game->title).' — Egyptian Arabic Game',
+            'title' => ($resolved['translation']->title ?? $game->title).' — Egyptian Arabic Game',
         ]);
     }
 

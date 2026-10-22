@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\System\Services\OperationFailureReporter;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -80,12 +81,10 @@ class EnsureNotUnderMaintenance
         try {
             $this->analyticsService->trackMaintenanceVisit($request);
         } catch (\Throwable $e) {
-            Log::warning('Maintenance visit tracking failed.', [
-                'exception' => $e,
-            ]);
+            app(OperationFailureReporter::class)->report($e, 'track_maintenance_visit');
         }
 
-        $view = view()->exists('errors.503') ? 'errors.503' : 'errors.maintenance';
+        $view = 'errors.503';
 
         $response = response()->view($view, ['title' => 'Under Scheduled Maintenance'], 503);
         $token = $request->attributes->get('analytics_maintenance_visitor_token');

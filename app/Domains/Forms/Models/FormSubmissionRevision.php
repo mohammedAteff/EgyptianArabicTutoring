@@ -22,6 +22,7 @@ class FormSubmissionRevision extends Model
         static::deleting(fn (): never => throw new \LogicException('Form submission revisions are append-only.'));
     }
 
+    /** @return BelongsTo<FormSubmission, $this> */
     public function submission(): BelongsTo
     {
         return $this->belongsTo(FormSubmission::class, 'form_submission_id');

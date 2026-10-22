@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Analytics\Services\SocialAnalyticsRollup;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Reporting\Services\BookingReportQuery;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Reporting\Services\ReportPeriod;
 use App\Domains\Reporting\Services\ReportService;
@@ -104,7 +105,7 @@ class ReportController extends Controller
 
     protected function exportBookings(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $status, array $filters): Response
     {
-        $report = $this->reportService->getBookingsReport($start, $end, $status, $filters);
+        $bookings = app(BookingReportQuery::class)->rows($start, $end, $status, $filters);
         $headers = [
             'Booking Code',
             'Customer Name',
@@ -121,22 +122,26 @@ class ReportController extends Controller
             'Touch Time',
             'Booked At',
         ];
-        $rows = $report['rows']->map(fn ($b) => [
-            $b['booking_code'],
-            $b['customer_name'],
-            $b['customer_email'],
-            $b['session_title'],
-            $b['status'],
-            $b['lesson_date_cairo'],
-            $b['lesson_time_cairo'],
-            $b['lesson_time_student'],
-            $b['source'],
-            $b['campaign'],
-            $b['content'],
-            $b['referrer'],
-            $b['touch_at'],
-            $b['created_at'],
-        ]);
+        $rows = (function () use ($bookings): \Generator {
+            foreach ($bookings as $b) {
+                yield [
+                    $b['booking_code'],
+                    $b['customer_name'],
+                    $b['customer_email'],
+                    $b['session_title'],
+                    $b['status'],
+                    $b['lesson_date_cairo'],
+                    $b['lesson_time_cairo'],
+                    $b['lesson_time_student'],
+                    $b['source'],
+                    $b['campaign'],
+                    $b['content'],
+                    $b['referrer'],
+                    $b['touch_at'],
+                    $b['created_at'],
+                ];
+            }
+        })();
 
         $filename = "bookings_report_{$ts}.{$format}";
 
@@ -193,7 +198,7 @@ class ReportController extends Controller
             $timezone = app(TimezoneService::class)->getBusinessTimezone();
             $rows = function () use ($start, $end, $filters, $timezone): \Generator {
                 foreach (app(SocialAnalyticsRollup::class)->clickEvents($start, $end, $filters)->lazy(250) as $event) {
-                    yield [$event->created_at->copy()->setTimezone($timezone)->format('Y-m-d H:i:sP'), $event->platform, $event->placement, $event->event_name, $event->page, $event->language, $event->country, $event->source, $event->medium, $event->campaign, $event->context];
+                    yield [$event->created_at->copy()->setTimezone($timezone)->format('Y-m-d H:i:sP'), $event->getAttribute('platform'), $event->getAttribute('placement'), $event->event_name, $event->page, $event->getAttribute('language'), $event->getAttribute('country'), $event->getAttribute('source'), $event->getAttribute('medium'), $event->getAttribute('campaign'), $event->getAttribute('context')];
                 }
             };
 

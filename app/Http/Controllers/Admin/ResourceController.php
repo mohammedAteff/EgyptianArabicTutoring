@@ -8,6 +8,7 @@ use App\Domains\CMS\Models\Media;
 use App\Domains\CMS\Services\TranslationService;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Resources\Models\ResourceCategory;
+use App\Domains\System\Services\OperationFailureReporter;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -203,13 +204,13 @@ class ResourceController extends Controller
             try {
                 $newlyUploadedFilePath = $uploaded->storeAs('resources', $fileName, 'local');
             } catch (\Throwable $e) {
-                return back()->withInput()->with('error', 'File upload failed: '.$e->getMessage());
+                app(OperationFailureReporter::class)->report($e, 'upload_resource_file');
+
+                return back()->withInput()->with('error', 'Unable to upload the resource file. Please try again.');
             }
 
             if (! $newlyUploadedFilePath || ! Storage::disk('local')->exists($newlyUploadedFilePath)) {
-                if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
-                    Storage::disk('local')->delete($newlyUploadedFilePath);
-                }
+                $this->discardUpload($newlyUploadedFilePath, 'local');
 
                 return back()->withInput()->with('error', 'Failed to store resource file.');
             }
@@ -225,17 +226,15 @@ class ResourceController extends Controller
             try {
                 $newlyUploadedCoverPath = $coverUploaded->storeAs('media', $coverName, 'public');
             } catch (\Throwable $e) {
-                if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
-                    Storage::disk('local')->delete($newlyUploadedFilePath);
-                }
+                $this->discardUpload($newlyUploadedFilePath, 'local');
 
-                return back()->withInput()->with('error', 'Cover image upload failed: '.$e->getMessage());
+                app(OperationFailureReporter::class)->report($e, 'upload_resource_cover');
+
+                return back()->withInput()->with('error', 'Unable to upload the cover image. Please try again.');
             }
 
             if (! $newlyUploadedCoverPath || ! Storage::disk('public')->exists($newlyUploadedCoverPath)) {
-                if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
-                    Storage::disk('local')->delete($newlyUploadedFilePath);
-                }
+                $this->discardUpload($newlyUploadedFilePath, 'local');
 
                 return back()->withInput()->with('error', 'Failed to store cover image.');
             }
@@ -368,14 +367,12 @@ class ResourceController extends Controller
                 ]);
             });
         } catch (\Throwable $e) {
-            if ($newlyUploadedFilePath && Storage::disk('local')->exists($newlyUploadedFilePath)) {
-                Storage::disk('local')->delete($newlyUploadedFilePath);
-            }
-            if ($newlyUploadedCoverPath && Storage::disk('public')->exists($newlyUploadedCoverPath)) {
-                Storage::disk('public')->delete($newlyUploadedCoverPath);
-            }
+            $this->discardUpload($newlyUploadedFilePath, 'local');
+            $this->discardUpload($newlyUploadedCoverPath, 'public');
 
-            return back()->withInput()->with('error', 'Failed to update resource: '.$e->getMessage());
+            app(OperationFailureReporter::class)->report($e, 'update_resource');
+
+            return back()->withInput()->with('error', 'Unable to update the resource. Please try again.');
         }
 
         // Retire old files only after commit and only if unreferenced elsewhere
@@ -398,23 +395,33 @@ class ResourceController extends Controller
 
     public function destroy(Resource $resource): RedirectResponse
     {
-        $prev = $resource->toArray();
+        try {
+            DB::transaction(function () use ($resource): void {
+                $locked = Resource::query()->lockForUpdate()->findOrFail($resource->id);
+                $previous = $locked->toArray();
+                $path = $locked->file_path;
+                $locked->delete();
+                AuditLog::create([
+                    'administrator_id' => Auth::id(), 'action' => 'resource_deleted', 'entity_type' => Resource::class,
+                    'entity_id' => $locked->id, 'previous_data' => $previous, 'created_at' => now(),
+                ]);
+                DB::afterCommit(function () use ($path, $resource): void {
+                    try {
+                        if ($path && ! Media::isPathReferenced($path, $resource->id)) {
+                            if (! Storage::disk('local')->delete($path)) {
+                                throw new \RuntimeException('Retired resource cleanup failed.');
+                            }
+                        }
+                    } catch (\Throwable $exception) {
+                        app(OperationFailureReporter::class)->report($exception, 'retire_deleted_resource_file');
+                    }
+                });
+            }, 5);
+        } catch (\Throwable $exception) {
+            app(OperationFailureReporter::class)->report($exception, 'delete_resource');
 
-        // Delete physical file
-        if ($resource->file_path && Storage::disk('local')->exists($resource->file_path)) {
-            Storage::disk('local')->delete($resource->file_path);
+            return back()->with('error', 'Unable to delete the resource. Please try again.');
         }
-
-        $resource->delete();
-
-        AuditLog::create([
-            'administrator_id' => Auth::id(),
-            'action' => 'resource_deleted',
-            'entity_type' => Resource::class,
-            'entity_id' => $resource->id,
-            'previous_data' => $prev,
-            'created_at' => now(),
-        ]);
 
         return redirect()->route('admin.resources.index')->with('success', 'Resource deleted successfully.');
     }
@@ -476,5 +483,19 @@ class ResourceController extends Controller
                 return;
             }
         };
+    }
+
+    private function discardUpload(string|false|null $path, string $disk): void
+    {
+        if (! $path) {
+            return;
+        }
+        try {
+            if (! Storage::disk($disk)->delete($path)) {
+                throw new \RuntimeException('Upload cleanup failed.');
+            }
+        } catch (\Throwable $exception) {
+            app(OperationFailureReporter::class)->report($exception, 'discard_resource_upload');
+        }
     }
 }

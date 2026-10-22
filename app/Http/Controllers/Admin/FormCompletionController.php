@@ -18,24 +18,39 @@ class FormCompletionController extends Controller
         if (filled($filters['q'] ?? null)) {
             $query->where('name_normalized', 'like', '%'.str_replace(['%', '_'], ['\\%', '\\_'], mb_strtolower($filters['q'])).'%');
         }
-        $items = [];
-        foreach ($query->withExists(['bookings as has_upcoming' => fn ($query) => $query->where('start_at_utc', '>', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending'])])->lazy(100) as $student) {
-            $metadata = $forms->forStudent($student, includeIntake: true);
-            $short = $metadata->firstWhere('slug', 'short-form');
-            $long = $metadata->firstWhere('slug', 'long-form');
-            $matches = match ($filters['filter'] ?? 'all') {
-                'short_missing' => $short && $short['status'] !== 'submitted',
-                'long_draft' => ($long['status'] ?? null) === 'draft',
-                'long_completed' => ($long['status'] ?? null) === 'submitted',
-                'mandatory_upcoming' => $student->has_upcoming && $metadata->contains(fn (array $form): bool => $form['mandatory'] && $form['status'] !== 'submitted'),
-                default => true,
-            };
-            if ($matches) {
-                $items[] = ['student' => $student, 'forms' => $metadata];
-            }
-        }
         $page = max(1, $request->integer('page', 1));
-        $rows = new LengthAwarePaginator(array_slice($items, ($page - 1) * 25, 25), count($items), 25, $page, ['path' => route('admin.forms.completion'), 'query' => $request->query()]);
+        $items = [];
+        $total = 0;
+        $query->withExists(['bookings as has_upcoming' => fn ($query) => $query->where('start_at_utc', '>', now('UTC'))->whereIn('status', ['confirmed', 'held', 'pending'])]);
+        if (($filters['filter'] ?? 'all') === 'all') {
+            $rows = $query->paginate(25)->withQueryString();
+            $metadata = $forms->forStudents($rows->getCollection()->modelKeys(), includeIntake: true);
+            $rows->setCollection($rows->getCollection()->map(fn (Student $student): array => ['student' => $student, 'forms' => $metadata->get($student->id, collect())]));
+
+            return view('admin.forms.completion', compact('rows', 'filters'));
+        }
+        $query->chunk(100, function ($students) use ($forms, $filters, $page, &$items, &$total): void {
+            $batch = $forms->forStudents($students->modelKeys(), includeIntake: true);
+            foreach ($students as $student) {
+                $metadata = $batch->get($student->id, collect());
+                $short = $metadata->firstWhere('slug', 'short-form');
+                $long = $metadata->firstWhere('slug', 'long-form');
+                $matches = match ($filters['filter'] ?? 'all') {
+                    'short_missing' => $short && $short['status'] !== 'submitted',
+                    'long_draft' => ($long['status'] ?? null) === 'draft',
+                    'long_completed' => ($long['status'] ?? null) === 'submitted',
+                    'mandatory_upcoming' => $student->getAttribute('has_upcoming') && $metadata->contains(fn (array $form): bool => $form['mandatory'] && $form['status'] !== 'submitted'),
+                    default => true,
+                };
+                if ($matches) {
+                    if ($total >= ($page - 1) * 25 && $total < $page * 25) {
+                        $items[] = ['student' => $student, 'forms' => $metadata];
+                    }
+                    $total++;
+                }
+            }
+        });
+        $rows = new LengthAwarePaginator($items, $total, 25, $page, ['path' => route('admin.forms.completion'), 'query' => $request->query()]);
 
         return view('admin.forms.completion', compact('rows', 'filters'));
     }

@@ -311,8 +311,8 @@ class ContactService
             $booking->student_id === null ? null : (int) $booking->student_id,
             (string) $booking->status,
             $booking->cancelled_at?->toISOString(),
-            $booking->start_at_utc?->toISOString(),
-            $booking->end_at_utc?->toISOString(),
+            $booking->start_at_utc->toISOString(),
+            $booking->end_at_utc->toISOString(),
             $booking->deleted_at?->toISOString(),
         ])->values()->all();
     }
@@ -322,7 +322,6 @@ class ContactService
         return ! $booking->trashed()
             && in_array($booking->status, ['confirmed', 'pending', 'held'], true)
             && $booking->cancelled_at === null
-            && $booking->end_at_utc !== null
             && $booking->end_at_utc->isFuture();
     }
 

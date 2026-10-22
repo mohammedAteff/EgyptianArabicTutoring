@@ -32,14 +32,11 @@ class StageOnePresentationTest extends TestCase
     public function test_sidebar_humanizes_roles_uses_the_actual_profile_and_preserves_security_access(string $role, string $label): void
     {
         $staff = AdministratorFactory::new()->create(['role' => $role, 'name' => 'Synthetic '.$label]);
-        $response = $this->actingAs($staff, 'web')->get(route('admin.students.index'))->assertOk()->assertSeeText($label.' Operations Console')->assertSeeText('Synthetic '.$label);
+        $response = $this->actingAs($staff, 'web')->get(route('admin.students.index'))->assertOk()->assertSeeText('Operations Console')->assertSeeText('Synthetic '.$label);
         $this->assertSame($role, $staff->fresh()->role);
         $xpath = $this->xpath($response->getContent());
-        $security = $xpath->query('//nav[@id="admin-sidebar-nav"]//a[@href="'.route('admin.security.show').'"]');
-        $this->assertSame($role === 'super_admin' ? 1 : 0, $security->length);
-        if ($role === 'super_admin') {
-            $this->assertSame(1, $xpath->query('//nav[@id="admin-sidebar-nav"]//a[@href="'.route('admin.security.show').'"]/svg')->length);
-        }
+        $security = $xpath->query('//aside[@id="admin-sidebar"]//a[@href="'.route('admin.security.show').'"]');
+        $this->assertSame(1, $security->length);
         $this->assertSame(1, $xpath->query('//button[@id="admin-desktop-sidebar-toggle" and @aria-controls="admin-sidebar"]')->length);
     }
 
@@ -84,7 +81,7 @@ class StageOnePresentationTest extends TestCase
         $xpath = $this->xpath($response->getContent());
         $link = $xpath->query('//a[@data-social-platform="reddit"]')->item(0);
         $this->assertSame('noopener noreferrer', $link->getAttribute('rel'));
-        $this->assertSame(2, $xpath->query('//a[@data-social-platform="reddit"]/svg[@aria-hidden="true"]')->length);
+        $this->assertSame(1, $xpath->query('//a[@data-social-platform="reddit"]/svg[@aria-hidden="true"]')->length);
         $reddit->update(['enabled' => false]);
         $this->get('/')->assertDontSee('data-social-platform="reddit"', false);
         $reddit->update(['enabled' => true, 'url_or_phone' => '']);

@@ -51,19 +51,7 @@ class FormController extends Controller
     public function edit(Form $form)
     {
         $form->load(['activeVersion.questions.options', 'triggers']);
-        $questions = $form->activeVersion?->questions->map(fn (FormQuestion $question): array => [
-            'question_key' => $question->question_key,
-            'label' => $question->label,
-            'description' => $question->description,
-            'question_type' => $question->question_type,
-            'is_required' => $question->is_required,
-            'assistant_visible' => $question->assistant_visible,
-            'sort_order' => $question->sort_order,
-            'validation_rules' => $question->validation_rules,
-            'presentation_config' => $question->presentation_config,
-            'conditional_logic' => $question->conditional_logic,
-            'options' => $question->options->map(fn ($option): array => ['label' => $option->label, 'value' => $option->value, 'sort_order' => $option->sort_order])->all(),
-        ])->all() ?? [];
+        $questions = $form->activeVersion?->questions->map(fn (FormQuestion $question): array => $this->questionData($question))->all() ?? [];
 
         return view('admin.forms.edit', ['form' => $form, 'questionsJson' => json_encode($questions, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)]);
     }
@@ -135,7 +123,7 @@ class FormController extends Controller
                 $answerMap = $submission->answers->keyBy('form_question_id');
                 $row = [(string) $submission->id, (string) $submission->student_id, $submission->submitted_at?->toIso8601String(), $submission->status, $submission->created_at?->timezone($timezone)->toIso8601String()];
                 foreach ($questions as $question) {
-                    $row[] = (string) ($answerMap->get($question->id)?->value_text ?? '');
+                    $row[] = (string) ($answerMap->get($question->id)->value_text ?? '');
                 }
                 yield $row;
             }
@@ -198,5 +186,23 @@ class FormController extends Controller
         abort_unless($administrator instanceof Administrator, 403);
 
         return $administrator;
+    }
+
+    /** @return array<string, mixed> */
+    private function questionData(FormQuestion $question): array
+    {
+        return [
+            'question_key' => $question->question_key,
+            'label' => $question->label,
+            'description' => $question->description,
+            'question_type' => $question->question_type,
+            'is_required' => $question->is_required,
+            'assistant_visible' => $question->assistant_visible,
+            'sort_order' => $question->sort_order,
+            'validation_rules' => $question->validation_rules,
+            'presentation_config' => $question->presentation_config,
+            'conditional_logic' => $question->conditional_logic,
+            'options' => $question->options->map(fn ($option): array => ['label' => $option->label, 'value' => $option->value, 'sort_order' => $option->sort_order])->all(),
+        ];
     }
 }

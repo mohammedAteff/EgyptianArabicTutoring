@@ -12,6 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use RuntimeException;
 
+/**
+ * @property-read Student|null $student
+ */
 class StudentPackage extends Model
 {
     use HasFactory;

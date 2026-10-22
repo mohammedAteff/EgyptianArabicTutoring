@@ -71,68 +71,68 @@ class FunnelProgressionService
             switch ($stage) {
                 case 'booking_cta':
                     if ($progression->booking_cta_provenance !== 'observed') {
-                        $progression->booking_cta_observed_at = $isObserved ? $ts : null;
-                        $progression->booking_cta_qualified_at = $progression->booking_cta_qualified_at ?? $ts;
+                        $progression->setAttribute('booking_cta_observed_at', $isObserved ? $ts : null);
+                        $progression->setAttribute('booking_cta_qualified_at', $progression->booking_cta_qualified_at ?? $ts);
                         $progression->booking_cta_provenance = $isObserved ? 'observed' : 'imputed';
                     }
                     break;
 
                 case 'booking_started':
                     if ($progression->booking_started_provenance !== 'observed') {
-                        $progression->booking_started_observed_at = $isObserved ? $ts : null;
-                        $progression->booking_started_qualified_at = $progression->booking_started_qualified_at ?? $ts;
+                        $progression->setAttribute('booking_started_observed_at', $isObserved ? $ts : null);
+                        $progression->setAttribute('booking_started_qualified_at', $progression->booking_started_qualified_at ?? $ts);
                         $progression->booking_started_provenance = $isObserved ? 'observed' : 'imputed';
                     }
                     // Deterministically impute upstream CTA stage if missing
                     if ($progression->booking_cta_provenance === 'none') {
-                        $progression->booking_cta_observed_at = null;
-                        $progression->booking_cta_qualified_at = $ts;
+                        $progression->setAttribute('booking_cta_observed_at', null);
+                        $progression->setAttribute('booking_cta_qualified_at', $ts);
                         $progression->booking_cta_provenance = 'imputed';
                     }
                     break;
 
                 case 'slot_held':
                     if ($progression->slot_held_provenance !== 'observed') {
-                        $progression->slot_held_observed_at = $isObserved ? $ts : null;
-                        $progression->slot_held_qualified_at = $progression->slot_held_qualified_at ?? $ts;
+                        $progression->setAttribute('slot_held_observed_at', $isObserved ? $ts : null);
+                        $progression->setAttribute('slot_held_qualified_at', $progression->slot_held_qualified_at ?? $ts);
                         $progression->slot_held_provenance = $isObserved ? 'observed' : 'imputed';
                     }
                     // Impute upstream booking_started if missing
                     if ($progression->booking_started_provenance === 'none') {
-                        $progression->booking_started_observed_at = null;
-                        $progression->booking_started_qualified_at = $ts;
+                        $progression->setAttribute('booking_started_observed_at', null);
+                        $progression->setAttribute('booking_started_qualified_at', $ts);
                         $progression->booking_started_provenance = 'imputed';
                     }
                     // Impute upstream CTA if missing
                     if ($progression->booking_cta_provenance === 'none') {
-                        $progression->booking_cta_observed_at = null;
-                        $progression->booking_cta_qualified_at = $ts;
+                        $progression->setAttribute('booking_cta_observed_at', null);
+                        $progression->setAttribute('booking_cta_qualified_at', $ts);
                         $progression->booking_cta_provenance = 'imputed';
                     }
                     break;
 
                 case 'booking_completed':
                     if ($progression->booking_completed_provenance !== 'observed') {
-                        $progression->booking_completed_observed_at = $isObserved ? $ts : null;
-                        $progression->booking_completed_qualified_at = $progression->booking_completed_qualified_at ?? $ts;
+                        $progression->setAttribute('booking_completed_observed_at', $isObserved ? $ts : null);
+                        $progression->setAttribute('booking_completed_qualified_at', $progression->booking_completed_qualified_at ?? $ts);
                         $progression->booking_completed_provenance = $isObserved ? 'observed' : 'imputed';
                     }
                     // Impute slot_held if missing
                     if ($progression->slot_held_provenance === 'none') {
-                        $progression->slot_held_observed_at = null;
-                        $progression->slot_held_qualified_at = $ts;
+                        $progression->setAttribute('slot_held_observed_at', null);
+                        $progression->setAttribute('slot_held_qualified_at', $ts);
                         $progression->slot_held_provenance = 'imputed';
                     }
                     // Impute booking_started if missing
                     if ($progression->booking_started_provenance === 'none') {
-                        $progression->booking_started_observed_at = null;
-                        $progression->booking_started_qualified_at = $ts;
+                        $progression->setAttribute('booking_started_observed_at', null);
+                        $progression->setAttribute('booking_started_qualified_at', $ts);
                         $progression->booking_started_provenance = 'imputed';
                     }
                     // Impute CTA if missing
                     if ($progression->booking_cta_provenance === 'none') {
-                        $progression->booking_cta_observed_at = null;
-                        $progression->booking_cta_qualified_at = $ts;
+                        $progression->setAttribute('booking_cta_observed_at', null);
+                        $progression->setAttribute('booking_cta_qualified_at', $ts);
                         $progression->booking_cta_provenance = 'imputed';
                     }
                     break;
@@ -174,7 +174,7 @@ class FunnelProgressionService
             if ($progression->{$provenanceColumn} === 'imputed') {
                 $progression->{$observedColumn} = $eventTs;
                 $progression->{$provenanceColumn} = 'observed';
-                $progression->reconciled_at = now();
+                $progression->setAttribute('reconciled_at', now());
                 $progression->save();
 
                 Log::info("FunnelProgressionService: reconciled late event for visitor {$visitor->id}, stage {$stage}");
@@ -189,19 +189,19 @@ class FunnelProgressionService
 
                 // Impute missing upstream stages
                 if ($stage === 'booking_completed' && $progression->slot_held_provenance === 'none') {
-                    $progression->slot_held_qualified_at = $eventTs;
+                    $progression->setAttribute('slot_held_qualified_at', $eventTs);
                     $progression->slot_held_provenance = 'imputed';
                 }
                 if (in_array($stage, ['booking_completed', 'slot_held'], true) && $progression->booking_started_provenance === 'none') {
-                    $progression->booking_started_qualified_at = $eventTs;
+                    $progression->setAttribute('booking_started_qualified_at', $eventTs);
                     $progression->booking_started_provenance = 'imputed';
                 }
                 if (in_array($stage, ['booking_completed', 'slot_held', 'booking_started'], true) && $progression->booking_cta_provenance === 'none') {
-                    $progression->booking_cta_qualified_at = $eventTs;
+                    $progression->setAttribute('booking_cta_qualified_at', $eventTs);
                     $progression->booking_cta_provenance = 'imputed';
                 }
 
-                $progression->reconciled_at = now();
+                $progression->setAttribute('reconciled_at', now());
                 $progression->save();
 
                 Log::info("FunnelProgressionService: reconciled missing late event for visitor {$visitor->id}, stage {$stage}");
@@ -245,20 +245,20 @@ class FunnelProgressionService
             }
 
             // 1. Reset all milestones to clean baseline (or saved observed if partially/fully pruned)
-            $progression->booking_cta_observed_at = $savedObserved['booking_cta']['observed_at'] ?? null;
-            $progression->booking_cta_qualified_at = $savedObserved['booking_cta']['qualified_at'] ?? null;
+            $progression->setAttribute('booking_cta_observed_at', $savedObserved['booking_cta']['observed_at'] ?? null);
+            $progression->setAttribute('booking_cta_qualified_at', $savedObserved['booking_cta']['qualified_at'] ?? null);
             $progression->booking_cta_provenance = isset($savedObserved['booking_cta']) ? 'observed' : 'none';
 
-            $progression->booking_started_observed_at = $savedObserved['booking_started']['observed_at'] ?? null;
-            $progression->booking_started_qualified_at = $savedObserved['booking_started']['qualified_at'] ?? null;
+            $progression->setAttribute('booking_started_observed_at', $savedObserved['booking_started']['observed_at'] ?? null);
+            $progression->setAttribute('booking_started_qualified_at', $savedObserved['booking_started']['qualified_at'] ?? null);
             $progression->booking_started_provenance = isset($savedObserved['booking_started']) ? 'observed' : 'none';
 
-            $progression->slot_held_observed_at = $savedObserved['slot_held']['observed_at'] ?? null;
-            $progression->slot_held_qualified_at = $savedObserved['slot_held']['qualified_at'] ?? null;
+            $progression->setAttribute('slot_held_observed_at', $savedObserved['slot_held']['observed_at'] ?? null);
+            $progression->setAttribute('slot_held_qualified_at', $savedObserved['slot_held']['qualified_at'] ?? null);
             $progression->slot_held_provenance = isset($savedObserved['slot_held']) ? 'observed' : 'none';
 
-            $progression->booking_completed_observed_at = $savedObserved['booking_completed']['observed_at'] ?? null;
-            $progression->booking_completed_qualified_at = $savedObserved['booking_completed']['qualified_at'] ?? null;
+            $progression->setAttribute('booking_completed_observed_at', $savedObserved['booking_completed']['observed_at'] ?? null);
+            $progression->setAttribute('booking_completed_qualified_at', $savedObserved['booking_completed']['qualified_at'] ?? null);
             $progression->booking_completed_provenance = isset($savedObserved['booking_completed']) ? 'observed' : 'none';
 
             // 2. Replay retained raw events within [firstVisit, cutoff)
@@ -310,7 +310,7 @@ class FunnelProgressionService
                 }
             }
 
-            $progression->reconciled_at = $reconciledAt ?? now();
+            $progression->setAttribute('reconciled_at', $reconciledAt ?? now());
             $progression->save();
 
             return $progression;
@@ -338,56 +338,56 @@ class FunnelProgressionService
         switch ($stage) {
             case 'booking_cta':
                 if ($prog->booking_cta_provenance !== 'observed') {
-                    $prog->booking_cta_observed_at = $isObserved ? $ts : null;
-                    $prog->booking_cta_qualified_at = $prog->booking_cta_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_cta_observed_at', $isObserved ? $ts : null);
+                    $prog->setAttribute('booking_cta_qualified_at', $prog->booking_cta_qualified_at ?? $ts);
                     $prog->booking_cta_provenance = $isObserved ? 'observed' : 'imputed';
                 }
                 break;
 
             case 'booking_started':
                 if ($prog->booking_started_provenance !== 'observed') {
-                    $prog->booking_started_observed_at = $isObserved ? $ts : null;
-                    $prog->booking_started_qualified_at = $prog->booking_started_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_started_observed_at', $isObserved ? $ts : null);
+                    $prog->setAttribute('booking_started_qualified_at', $prog->booking_started_qualified_at ?? $ts);
                     $prog->booking_started_provenance = $isObserved ? 'observed' : 'imputed';
                 }
                 if ($prog->booking_cta_provenance === 'none') {
-                    $prog->booking_cta_qualified_at = $prog->booking_cta_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_cta_qualified_at', $prog->booking_cta_qualified_at ?? $ts);
                     $prog->booking_cta_provenance = 'imputed';
                 }
                 break;
 
             case 'slot_held':
                 if ($prog->slot_held_provenance !== 'observed') {
-                    $prog->slot_held_observed_at = $isObserved ? $ts : null;
-                    $prog->slot_held_qualified_at = $prog->slot_held_qualified_at ?? $ts;
+                    $prog->setAttribute('slot_held_observed_at', $isObserved ? $ts : null);
+                    $prog->setAttribute('slot_held_qualified_at', $prog->slot_held_qualified_at ?? $ts);
                     $prog->slot_held_provenance = $isObserved ? 'observed' : 'imputed';
                 }
                 if ($prog->booking_started_provenance === 'none') {
-                    $prog->booking_started_qualified_at = $prog->booking_started_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_started_qualified_at', $prog->booking_started_qualified_at ?? $ts);
                     $prog->booking_started_provenance = 'imputed';
                 }
                 if ($prog->booking_cta_provenance === 'none') {
-                    $prog->booking_cta_qualified_at = $prog->booking_cta_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_cta_qualified_at', $prog->booking_cta_qualified_at ?? $ts);
                     $prog->booking_cta_provenance = 'imputed';
                 }
                 break;
 
             case 'booking_completed':
                 if ($prog->booking_completed_provenance !== 'observed') {
-                    $prog->booking_completed_observed_at = $isObserved ? $ts : null;
-                    $prog->booking_completed_qualified_at = $prog->booking_completed_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_completed_observed_at', $isObserved ? $ts : null);
+                    $prog->setAttribute('booking_completed_qualified_at', $prog->booking_completed_qualified_at ?? $ts);
                     $prog->booking_completed_provenance = $isObserved ? 'observed' : 'imputed';
                 }
                 if ($prog->slot_held_provenance === 'none') {
-                    $prog->slot_held_qualified_at = $prog->slot_held_qualified_at ?? $ts;
+                    $prog->setAttribute('slot_held_qualified_at', $prog->slot_held_qualified_at ?? $ts);
                     $prog->slot_held_provenance = 'imputed';
                 }
                 if ($prog->booking_started_provenance === 'none') {
-                    $prog->booking_started_qualified_at = $prog->booking_started_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_started_qualified_at', $prog->booking_started_qualified_at ?? $ts);
                     $prog->booking_started_provenance = 'imputed';
                 }
                 if ($prog->booking_cta_provenance === 'none') {
-                    $prog->booking_cta_qualified_at = $prog->booking_cta_qualified_at ?? $ts;
+                    $prog->setAttribute('booking_cta_qualified_at', $prog->booking_cta_qualified_at ?? $ts);
                     $prog->booking_cta_provenance = 'imputed';
                 }
                 break;
@@ -403,13 +403,9 @@ class FunnelProgressionService
 
         // Canonical reporting interval: half-open [T_start, T_end) in Africa/Cairo
         // Explicitly convert Carbon instances to Africa/Cairo before day rounding
-        $startCairo = ($startDate instanceof CarbonInterface)
-            ? $startDate->copy()->setTimezone($tz)
-            : CarbonImmutable::parse($startDate, $tz);
+        $startCairo = $startDate->copy()->setTimezone($tz);
 
-        $endCairo = ($endDate instanceof CarbonInterface)
-            ? $endDate->copy()->setTimezone($tz)
-            : CarbonImmutable::parse($endDate, $tz);
+        $endCairo = $endDate->copy()->setTimezone($tz);
 
         $tStartCairo = $startCairo->startOfDay();
         $tEndCairo = $endCairo->startOfDay()->addDay();

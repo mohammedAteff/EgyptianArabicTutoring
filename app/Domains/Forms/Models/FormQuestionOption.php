@@ -14,6 +14,7 @@ class FormQuestionOption extends Model
         return ['sort_order' => 'integer'];
     }
 
+    /** @return BelongsTo<FormQuestion, $this> */
     public function question(): BelongsTo
     {
         return $this->belongsTo(FormQuestion::class, 'form_question_id');

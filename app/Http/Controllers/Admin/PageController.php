@@ -175,7 +175,7 @@ class PageController extends Controller
             $draftData = [
                 'revisable_type' => Page::class,
                 'revisable_id' => $page->id,
-                'revision_number' => $draftRevision?->revision_number ?? $nextRevision,
+                'revision_number' => $draftRevision->revision_number ?? $nextRevision,
                 'title' => $validated['title'],
                 'content' => [
                     'slug' => $slug,

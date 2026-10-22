@@ -3,7 +3,6 @@
 namespace App\Domains\CMS\Services;
 
 use DOMDocument;
-use DOMElement;
 use Illuminate\Support\Facades\URL;
 use Mews\Purifier\Purifier;
 
@@ -46,8 +45,8 @@ class RichTextSanitizer
             $document->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
             $images = iterator_to_array($document->getElementsByTagName('img'));
             foreach ($images as $image) {
-                if (! $image instanceof DOMElement || ! $this->isSameOriginStorageUrl($image->getAttribute('src'))) {
-                    $image?->parentNode?->removeChild($image);
+                if (! $this->isSameOriginStorageUrl($image->getAttribute('src'))) {
+                    $image->parentNode?->removeChild($image);
                 }
             }
 
@@ -71,7 +70,7 @@ class RichTextSanitizer
         $source = trim($source);
         $base = parse_url(URL::to('/storage/'));
         $parsed = parse_url($source);
-        if (! $base || ! is_array($base) || ! $parsed || ! is_array($parsed)) {
+        if (! $base || ! $parsed) {
             return false;
         }
 

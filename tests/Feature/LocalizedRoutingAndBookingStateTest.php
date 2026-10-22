@@ -18,11 +18,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Livewire\Livewire;
+use Tests\Concerns\HasPublishedShortForm;
 use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class LocalizedRoutingAndBookingStateTest extends TestCase
 {
+    use HasPublishedShortForm;
     use IssuesBookingSlotIds;
     use RefreshDatabase;
 
@@ -37,6 +39,7 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->installShortFormFixture();
 
         $this->urlService = app(LocalizedUrlService::class);
 

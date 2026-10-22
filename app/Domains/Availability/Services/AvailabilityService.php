@@ -342,10 +342,10 @@ class AvailabilityService
                 'special' => (bool) $exception?->isSpecialHours(),
                 'start' => $window->start_time,
                 'end' => sprintf('%02d:%02d:00', intdiv($endMinutes, 60), $endMinutes % 60),
-                'duration' => $base?->session_duration_minutes ?? $duration,
-                'buffer' => $base?->buffer_minutes ?? (int) Setting::get('booking_buffer_minutes', 15),
-                'min_notice' => $base?->min_notice_hours ?? (int) Setting::get('booking_min_notice_hours', 12),
-                'max_horizon' => $base?->max_horizon_days ?? (int) Setting::get('booking_max_horizon_days', 60),
+                'duration' => $base->session_duration_minutes ?? $duration,
+                'buffer' => $base->buffer_minutes ?? (int) Setting::get('booking_buffer_minutes', 15),
+                'min_notice' => $base->min_notice_hours ?? (int) Setting::get('booking_min_notice_hours', 12),
+                'max_horizon' => $base->max_horizon_days ?? (int) Setting::get('booking_max_horizon_days', 60),
             ];
         }
 

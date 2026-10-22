@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'analytics_authoritative_cutover_date' => env('ANALYTICS_AUTHORITATIVE_CUTOVER_DATE'),
 
     /*
     |--------------------------------------------------------------------------

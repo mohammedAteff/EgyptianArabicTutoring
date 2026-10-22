@@ -86,8 +86,8 @@ class TutorDailySummaryCommand extends Command
             $this->info('Delivered Lessons:');
             $rows = $delivered->map(fn ($b) => [
                 $b->id,
-                $b->student?->name ?? $b->contact?->name ?? 'Student',
-                $b->sessionType?->title ?? 'Lesson',
+                $b->student->name ?? $b->contact->name ?? 'Student',
+                $b->sessionType->title ?? 'Lesson',
                 $b->business_start->format('H:i'),
             ])->all();
             $this->table(['ID', 'Student', 'Session Type', 'Time (Tutor)'], $rows);

@@ -5,6 +5,7 @@ namespace App\Domains\Booking\Models;
 use App\Domains\Booking\Services\BookingPolicyService;
 use App\Domains\CMS\Models\Setting;
 use App\Domains\Contacts\Models\Contact;
+use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\Student;
 use Carbon\Carbon;
 use Database\Factories\BookingFactory;
@@ -12,11 +13,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
+/**
+ * @property-read Contact|null $contact
+ * @property-read SessionType|null $sessionType
+ */
 class Booking extends Model
 {
     use HasFactory, SoftDeletes;
@@ -125,9 +131,16 @@ class Booking extends Model
         return $this->belongsTo(SessionType::class, 'session_type_id');
     }
 
+    /** @return HasMany<BookingEvent, $this> */
     public function events(): HasMany
     {
         return $this->hasMany(BookingEvent::class, 'booking_id');
+    }
+
+    /** @return HasOne<SessionLedgerEntry, $this> */
+    public function consumedEntry(): HasOne
+    {
+        return $this->hasOne(SessionLedgerEntry::class)->where('entry_type', 'session_consumed')->oldest('id');
     }
 
     public function isConfirmed(): bool
@@ -150,6 +163,7 @@ class Booking extends Model
         return $this->status === 'no_show';
     }
 
+    /** @return HasMany<SessionReschedule, $this> */
     public function reschedules(): HasMany
     {
         return $this->hasMany(SessionReschedule::class, 'booking_id');

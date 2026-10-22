@@ -19,6 +19,7 @@ class WebsiteCopy extends Model
         return ['published_content' => 'array', 'version' => 'integer', 'published_at' => 'datetime'];
     }
 
+    /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany
     {
         return $this->morphMany(ContentRevision::class, 'revisable');

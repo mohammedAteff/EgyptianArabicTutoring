@@ -2,7 +2,7 @@
 
 namespace App\Domains\Lms\Models;
 
-use App\Domains\Resources\Models\Resource;
+use App\Domains\Resources\Models\Resource as LearningResource;
 use Database\Factories\LmsLessonBlockFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,10 +41,10 @@ class LessonBlock extends LmsModel
         return $this->belongsTo(Lesson::class);
     }
 
-    /** @return BelongsTo<resource, $this> */
+    /** @return BelongsTo<LearningResource, $this> */
     public function resource(): BelongsTo
     {
-        return $this->belongsTo(Resource::class);
+        return $this->belongsTo(LearningResource::class);
     }
 
     /** @return BelongsTo<LmsAsset, $this> */

@@ -69,6 +69,7 @@ class WebsiteCopyController extends Controller
             'games' => [GameController::class, 'index'], 'faq' => [PageController::class, 'faq'],
             'policy' => [PageController::class, 'policy'], 'blogs' => [BlogController::class, 'index'],
             'booking' => [BookingController::class, 'index'],
+            default => abort(404),
         };
         try {
             $view = $page === 'policy' ? view('public.policy', ['title' => config('public_content.policy.title')]) : app()->call([app($target[0]), $target[1]]);

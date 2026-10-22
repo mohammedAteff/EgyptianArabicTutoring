@@ -107,11 +107,13 @@ class Administrator extends Authenticatable
         $this->notify(new AdminResetPasswordNotification($token));
     }
 
+    /** @return HasMany<Blog, $this> */
     public function blogs(): HasMany
     {
         return $this->hasMany(Blog::class, 'author_id');
     }
 
+    /** @return HasMany<StaffPinnedStudent, $this> */
     public function pinnedStudents(): HasMany
     {
         return $this->hasMany(StaffPinnedStudent::class, 'administrator_id');

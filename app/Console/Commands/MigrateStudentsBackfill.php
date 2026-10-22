@@ -51,7 +51,6 @@ class MigrateStudentsBackfill extends Command
 
                 if ($apply) {
                     $intervals = $page
-                        ->filter(fn (Booking $booking): bool => $booking->start_at_utc !== null && $booking->end_at_utc !== null)
                         ->map(fn (Booking $booking): array => [
                             'start' => CarbonImmutable::instance($booking->start_at_utc),
                             'end' => CarbonImmutable::instance($booking->end_at_utc),
@@ -75,7 +74,6 @@ class MigrateStudentsBackfill extends Command
                             ->load(['contact' => fn ($query) => $query->withTrashed()]);
 
                         $lockedIntervals = $bookings
-                            ->filter(fn (Booking $booking): bool => $booking->start_at_utc !== null && $booking->end_at_utc !== null)
                             ->map(fn (Booking $booking): array => [
                                 'start' => CarbonImmutable::instance($booking->start_at_utc),
                                 'end' => CarbonImmutable::instance($booking->end_at_utc),

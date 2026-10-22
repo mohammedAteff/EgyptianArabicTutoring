@@ -82,7 +82,7 @@ class ResourceController extends Controller
             'isStale' => $resolved['is_stale'],
             'entityLocales' => $resource->getAvailableLocales(),
             'resourceStudent' => $this->authenticatedStudent(request()),
-            'title' => ($resolved['translation']?->title ?? $resource->title).' — Free Arabic Resource',
+            'title' => ($resolved['translation']->title ?? $resource->title).' — Free Arabic Resource',
         ]);
     }
 

@@ -36,6 +36,7 @@ class EntityTranslationRevision extends Model
         ];
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function author(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'created_by');

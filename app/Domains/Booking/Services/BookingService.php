@@ -18,7 +18,7 @@ use App\Domains\Forms\Models\Form;
 use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Forms\Models\FormVersion;
-use App\Domains\Forms\Services\FormValidationService;
+use App\Domains\Forms\Services\BookingIntakeService;
 use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
@@ -27,7 +27,6 @@ use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentSchedulingService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -50,58 +49,14 @@ class BookingService
     /**
      * Create a new confirmed booking atomically.
      *
-     * @param  array{
-     *     session_type_id: int,
-     *     slot_id?: string,
-     *     customer_timezone: string,
-     *     customer_name: string,
-     *     customer_email: string,
-     *     customer_phone?: string|null,
-     *     notes?: string|null,
-     *     idempotency_key: string,
-     *     hold_id?: int|null,
-     *     hold_token?: string|null,
-     *     visitor_token?: string|null,
-     *     session_token?: string|null,
-     *     source?: string|null,
-     *     medium?: string|null,
-     *     campaign?: string|null,
-     *     content?: string|null,
-     *     term?: string|null
-     * }  $data
+     * @param  array<string, mixed>  $data
      *
      * @throws SlotUnavailableException
      */
     /**
      * Create a confirmed booking via public booking flow requiring authenticated hold.
      *
-     * @param  array{
-     *     session_type_id: int,
-     *     slot_id?: string,
-     *     customer_timezone: string,
-     *     customer_name?: string|null,
-     *     customer_email?: string|null,
-     *     customer_phone?: string|null,
-     *     first_name: string,
-     *     last_name: string,
-     *     email?: string|null,
-     *     phone: string,
-     *     date_of_birth: string,
-     *     phone_country?: string|null,
-     *     notes?: string|null,
-     *     idempotency_key: string,
-     *     hold_id: int,
-     *     hold_token: string,
-     *     visitor_token: string,
-     *     session_token?: string|null,
-     *     source?: string|null,
-     *     medium?: string|null,
-     *     campaign?: string|null,
-     *     content?: string|null,
-     *     term?: string|null,
-     *     intake_answers?: array<string|int, mixed>,
-     *     form_version_id?: int|null
-     * }  $data
+     * @param  array<string, mixed>  $data
      * @param  array<string|int, mixed>  $intakeAnswers
      *
      * @throws SlotUnavailableException
@@ -247,7 +202,7 @@ class BookingService
             throw new \LogicException("Named lock key [{$lockKey}] exceeds MariaDB 64-character limit.");
         }
         $acquired = $connection->selectOne('SELECT GET_LOCK(?, 5) AS acquired', [$lockKey], useReadPdo: false);
-        if ((int) ($acquired?->acquired ?? 0) !== 1) {
+        if ((int) ($acquired->acquired ?? 0) !== 1) {
             throw new ConcurrentIdentityProvisioningException(
                 'A booking or provisioning request for this student identity is already in progress. Please retry.'
             );
@@ -533,36 +488,36 @@ class BookingService
                 // Persist FormSubmission and FormAnswers if formVersionId provided
                 if ($effectiveFormVersionId && ! FormSubmission::where('form_version_id', $effectiveFormVersionId)->where('student_id', $studentId)->where('status', 'submitted')->exists()) {
                     $version = FormVersion::with('questions.options')->findOrFail($effectiveFormVersionId);
-                    if ($version) {
-                        $submission = FormSubmission::create([
-                            'form_version_id' => $version->id,
-                            'student_id' => $studentId,
-                            'status' => 'submitted',
-                            'submitted_at' => now('UTC'),
-                            'submission_revision' => 1,
-                        ]);
-                        $submission->contact_id = $contact->id;
-                        $submission->booking_id = $booking->id;
-                        $submission->save();
 
-                        if (! empty($effectiveIntakeAnswers)) {
-                            $questionMap = $version->questions->keyBy(fn ($q): string => (string) $q->id);
-                            $questionKeyMap = $version->questions->keyBy('question_key');
-                            foreach ($effectiveIntakeAnswers as $qIdOrKey => $ansVal) {
-                                $question = $questionMap->get((string) $qIdOrKey) ?? $questionKeyMap->get((string) $qIdOrKey);
-                                if ($question) {
-                                    $storedVal = is_array($ansVal)
-                                        ? json_encode($ansVal, JSON_THROW_ON_ERROR)
-                                        : (is_bool($ansVal) ? ($ansVal ? '1' : '0') : (string) $ansVal);
-                                    FormAnswer::create([
-                                        'form_submission_id' => $submission->id,
-                                        'form_question_id' => $question->id,
-                                        'value_text' => $storedVal,
-                                    ]);
-                                }
+                    $submission = FormSubmission::create([
+                        'form_version_id' => $version->id,
+                        'student_id' => $studentId,
+                        'status' => 'submitted',
+                        'submitted_at' => now('UTC'),
+                        'submission_revision' => 1,
+                    ]);
+                    $submission->contact_id = $contact->id;
+                    $submission->booking_id = $booking->id;
+                    $submission->save();
+
+                    if (! empty($effectiveIntakeAnswers)) {
+                        $questionMap = $version->questions->keyBy(fn ($q): string => (string) $q->id);
+                        $questionKeyMap = $version->questions->keyBy('question_key');
+                        foreach ($effectiveIntakeAnswers as $qIdOrKey => $ansVal) {
+                            $question = $questionMap->get((string) $qIdOrKey) ?? $questionKeyMap->get((string) $qIdOrKey);
+                            if ($question) {
+                                $storedVal = is_array($ansVal)
+                                    ? json_encode($ansVal, JSON_THROW_ON_ERROR)
+                                    : (is_bool($ansVal) ? ($ansVal ? '1' : '0') : (string) $ansVal);
+                                FormAnswer::create([
+                                    'form_submission_id' => $submission->id,
+                                    'form_question_id' => $question->id,
+                                    'value_text' => $storedVal,
+                                ]);
                             }
                         }
                     }
+
                 }
 
                 // Convert hold atomically
@@ -612,7 +567,7 @@ class BookingService
             }, 5);
         } finally {
             $released = $connection->selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockKey], useReadPdo: false);
-            if ((int) ($released?->released ?? 0) !== 1) {
+            if ((int) ($released->released ?? 0) !== 1) {
                 throw new \LogicException("Failed to release named lock [{$lockKey}].");
             }
         }
@@ -630,77 +585,21 @@ class BookingService
 
     public function publishedIntakeForm(): ?Form
     {
-        return Form::query()->where('status', 'published')
-            ->whereNotNull('published_version_id')
-            ->whereHas('triggers', fn ($query) => $query->where('trigger_name', 'pre_booking'))
-            ->with('publishedVersion.questions.options')->first();
+        return app(BookingIntakeService::class)->publishedIntakeForm();
     }
 
-    /** @param array<string|int, mixed> $answers @return array<string, mixed> */
+    /** @param array<string|int, mixed> $answers
+     * @return array<string, mixed>
+     */
     public function validatePublicIntake(?int $versionId, array $answers): array
     {
-        $form = $this->publishedIntakeForm();
-        if ($versionId !== $form?->published_version_id) {
-            throw ValidationException::withMessages([
-                'intakeForm' => 'The intake form was updated while you were booking. Please review the updated questions.',
-            ]);
-        }
-        if (! $form) {
-            if ($answers !== []) {
-                throw ValidationException::withMessages(['intakeForm' => 'No published intake form is available.']);
-            }
-
-            return [];
-        }
-
-        $questions = $form->publishedVersion->questions;
-        $byId = $questions->keyBy(fn ($question): string => (string) $question->id);
-        $byKey = $questions->keyBy('question_key');
-        $normalized = [];
-        foreach ($answers as $key => $value) {
-            $question = $byId->get((string) $key) ?? $byKey->get((string) $key);
-            if (! $question) {
-                throw ValidationException::withMessages(["intakeAnswers.{$key}" => 'Submitted question ID does not belong to the active form version.']);
-            }
-            if (array_key_exists($question->question_key, $normalized)) {
-                throw ValidationException::withMessages(["intakeAnswers.{$question->id}" => 'Submit only one answer per question.']);
-            }
-            $normalized[$question->question_key] = $value;
-        }
-
-        try {
-            return app(FormValidationService::class)->validateAnswers($questions->all(), $normalized);
-        } catch (ValidationException $exception) {
-            $errors = [];
-            foreach ($exception->errors() as $key => $messages) {
-                $parts = explode('.', $key);
-                $question = $byKey->get($parts[1] ?? '');
-                $errors['intakeAnswers.'.($question?->id ?? ($parts[1] ?? $key))] = $messages;
-            }
-            throw ValidationException::withMessages($errors);
-        }
+        return app(BookingIntakeService::class)->validatePublicIntake($versionId, $answers);
     }
 
     /**
      * Create an admin-initiated booking through an explicitly trusted path.
      *
-     * @param  array{
-     *     session_type_id: int,
-     *     start_at_utc: CarbonInterface|string,
-     *     end_at_utc: CarbonInterface|string,
-     *     customer_timezone?: string|null,
-     *     business_timezone?: string|null,
-     *     customer_name: string,
-     *     customer_email: string,
-     *     customer_phone?: string|null,
-     *     notes?: string|null,
-     *     idempotency_key?: string|null,
-     *     source?: string|null,
-     *     medium?: string|null,
-     *     campaign?: string|null,
-     *     content?: string|null,
-     *     term?: string|null
-     * }  $data
+     * @param  array<string, mixed>  $data
      *
      * @throws SlotUnavailableException
      */

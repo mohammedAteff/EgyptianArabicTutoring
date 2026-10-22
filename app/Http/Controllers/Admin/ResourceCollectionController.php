@@ -24,7 +24,7 @@ class ResourceCollectionController extends Controller
     public function save(Request $request, ResourceCollectionService $service, ?ResourceCollection $collection = null): RedirectResponse
     {
         $data = $request->validate(['title' => ['required', 'string', 'max:160'], 'slug' => ['nullable', 'alpha_dash', 'max:160', Rule::unique('resource_collections')->ignore($collection?->id)], 'description' => ['nullable', 'string', 'max:5000'], 'is_published' => ['required', 'boolean'], 'resource_ids' => ['required', 'array', 'min:1', 'max:100'], 'resource_ids.*' => ['required', 'integer', 'distinct']]);
-        $data['slug'] = $data['slug'] ?? $collection?->slug ?? Str::substr(Str::slug($data['title']), 0, 145).'-'.Str::lower(Str::random(8));
+        $data['slug'] = $data['slug'] ?? $collection->slug ?? Str::substr(Str::slug($data['title']), 0, 145).'-'.Str::lower(Str::random(8));
         $service->save($collection, $data, $request->user('web')->id);
 
         return to_route('admin.resource-collections.index')->with('success', 'Resource collection saved.');

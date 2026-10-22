@@ -3,6 +3,10 @@
 namespace App\Domains\CMS\Services;
 
 use App\Domains\CMS\Models\EntityTranslationRevision;
+use App\Domains\CMS\Models\Faq;
+use App\Domains\CMS\Models\Page;
+use App\Domains\Games\Models\Game;
+use App\Domains\Resources\Models\ResourceCategory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +18,7 @@ class TranslationService
      * Update English source content and handle revisioning + staleness marking.
      */
     public function updateEnglishSource(
-        Model $entity,
+        Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity,
         array $translatableData,
         ?int $adminId = null
     ): EntityTranslationRevision {
@@ -92,7 +96,7 @@ class TranslationService
     /**
      * Save an English translation row as published.
      */
-    public function upsertEnglishTranslation(Model $entity, array $translatableData, int $revisionNumber): Model
+    public function upsertEnglishTranslation(Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity, array $translatableData, int $revisionNumber): Model
     {
         $translatableData = $this->sanitizeTranslatableData($entity, $translatableData);
         $transClass = $entity->getTranslationModelClass();
@@ -108,7 +112,7 @@ class TranslationService
             'locale' => 'en',
             'source_revision_id' => $revisionNumber,
             'status' => 'published',
-            'published_at' => $enTrans?->published_at ?? now(),
+            'published_at' => $enTrans->published_at ?? now(),
         ]);
 
         if ($enTrans) {
@@ -124,7 +128,7 @@ class TranslationService
      * Save localized draft for French or German without publishing.
      */
     public function saveDraft(
-        Model $entity,
+        Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity,
         string $locale,
         array $translatableData,
         ?int $sourceRevisionId = null
@@ -160,7 +164,7 @@ class TranslationService
                 $targetRevision = $sourceRevisionId;
             } else {
                 // Retain existing draft revision reference if present, otherwise use current English revision
-                $targetRevision = $draft?->source_revision_id ?? ($entity->currentSourceRevision()?->revision_number ?? 1);
+                $targetRevision = $draft->source_revision_id ?? ($entity->currentSourceRevision()->revision_number ?? 1);
             }
 
             $data = array_merge($translatableData, [
@@ -184,7 +188,7 @@ class TranslationService
      * Explicit Publish Action: atomically archives previous live translation and publishes draft.
      * Enforces that the draft must be reconciled to the latest English revision before publishing.
      */
-    public function publishTranslation(Model $entity, string $locale): Model
+    public function publishTranslation(Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity, string $locale): Model
     {
         return DB::transaction(function () use ($entity, $locale) {
             $entity = $entity->newQuery()->whereKey($entity->getKey())->lockForUpdate()->firstOrFail();
@@ -201,7 +205,7 @@ class TranslationService
                 throw new \RuntimeException("No active draft translation found to publish for {$locale}.");
             }
 
-            $currentEnglishRevision = $entity->currentSourceRevision()?->revision_number ?? 1;
+            $currentEnglishRevision = $entity->currentSourceRevision()->revision_number ?? 1;
 
             // Reject publish if draft is based on an outdated English revision
             if ((int) $draft->source_revision_id < (int) $currentEnglishRevision) {
@@ -230,14 +234,14 @@ class TranslationService
     /**
      * Check if a draft is based on an outdated source revision.
      */
-    public function draftRequiresReconciliation(Model $entity, string $locale): bool
+    public function draftRequiresReconciliation(Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity, string $locale): bool
     {
         $draft = $entity->draftTranslation($locale);
         if (! $draft) {
             return false;
         }
 
-        $currentRevisionNumber = $entity->currentSourceRevision()?->revision_number ?? 1;
+        $currentRevisionNumber = $entity->currentSourceRevision()->revision_number ?? 1;
 
         return (int) $draft->source_revision_id < (int) $currentRevisionNumber;
     }
@@ -249,7 +253,7 @@ class TranslationService
      * @param  array<string, mixed>  $translatableData
      * @return array<string, mixed>
      */
-    private function sanitizeTranslatableData(Model $entity, array $translatableData): array
+    private function sanitizeTranslatableData(Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity, array $translatableData): array
     {
         if ($entity->getEntityType() === 'page' && array_key_exists('content', $translatableData)) {
             $translatableData['content'] = $this->sanitizer->sanitize((string) $translatableData['content']);

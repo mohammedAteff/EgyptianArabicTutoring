@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Administration\Services\OperationalReasonCatalog;
 use App\Domains\Audit\Models\AuditLog;
 use App\Domains\Availability\Services\AvailabilityService;
+use App\Domains\Booking\Exceptions\SlotUnavailableException;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Models\SessionType;
@@ -16,6 +17,7 @@ use App\Domains\Contacts\Services\ContactService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentBookingService;
+use App\Domains\System\Services\OperationFailureReporter;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -25,6 +27,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class BookingController extends Controller
@@ -266,8 +269,8 @@ class BookingController extends Controller
             });
 
             return back()->with('success', 'Booking marked as completed.');
-        } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->with('error', $this->failureMessage($e, 'update_booking'));
         }
     }
 
@@ -278,8 +281,8 @@ class BookingController extends Controller
             app(NoShowService::class)->mark($booking, Auth::id(), $values['reason_code'] ?? null);
 
             return back()->with('success', 'Booking marked as student no-show.');
-        } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->with('error', $this->failureMessage($e, 'update_booking'));
         }
     }
 
@@ -317,8 +320,8 @@ class BookingController extends Controller
             );
 
             return back()->with('success', 'Lesson rescheduled successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Reschedule failed: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Reschedule failed: '.$this->failureMessage($e, 'reschedule_booking'));
         }
     }
 
@@ -340,8 +343,8 @@ class BookingController extends Controller
             );
 
             return back()->with('success', 'Booking cancelled successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Cancellation failed: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Cancellation failed: '.$this->failureMessage($e, 'cancel_booking'));
         }
     }
 
@@ -361,7 +364,7 @@ class BookingController extends Controller
             'sessionTypes' => $sessionTypes,
             'businessTz' => $businessTz,
             'students' => Student::query()->where('identity_status', 'verified')->whereNull('suspended_at')->orderBy('first_name')->orderBy('id')->get(['id', 'first_name', 'last_name', 'email', 'preferred_timezone']),
-            'defaultSessionTypeId' => $sessionTypes->firstWhere('id', (int) ($filters['session_type_id'] ?? 0))?->id ?? $fundableTypes->first()?->id,
+            'defaultSessionTypeId' => $sessionTypes->firstWhere('id', (int) ($filters['session_type_id'] ?? 0))->id ?? $fundableTypes->first()?->id,
             'defaultFundingMode' => $filters['funding_mode'] ?? ($fundableTypes->isNotEmpty() ? 'package' : 'direct'),
             'preferredDate' => $filters['date'] ?? null, 'preferredStartTime' => $filters['start_time'] ?? null,
             'fundableTypeIds' => $fundableTypes->map(fn (SessionType $type): int => $type->id)->all(),
@@ -436,8 +439,21 @@ class BookingController extends Controller
 
             return redirect()->route('admin.bookings.show', $booking->id)
                 ->with('success', 'Booking #'.substr($booking->confirmation_token, 0, 8).' created successfully.');
-        } catch (\Exception $e) {
-            return back()->withInput()->with('error', 'Booking creation failed: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', 'Booking creation failed: '.$this->failureMessage($e, 'create_staff_booking'));
         }
+    }
+
+    private function failureMessage(\Throwable $exception, string $operation): string
+    {
+        if ($exception instanceof ValidationException) {
+            throw $exception;
+        }
+        if ($exception instanceof \DomainException || $exception instanceof \InvalidArgumentException || $exception instanceof SlotUnavailableException) {
+            return $exception->getMessage();
+        }
+        app(OperationFailureReporter::class)->report($exception, $operation);
+
+        return 'Unable to save this change. Please try again.';
     }
 }

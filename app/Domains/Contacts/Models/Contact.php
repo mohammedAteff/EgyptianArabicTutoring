@@ -59,26 +59,31 @@ class Contact extends Model
         return mb_strtolower(trim($email));
     }
 
+    /** @return HasMany<Booking, $this> */
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'contact_id');
     }
 
+    /** @return HasMany<ResourceRequest, $this> */
     public function resourceRequests(): HasMany
     {
         return $this->hasMany(ResourceRequest::class, 'contact_id');
     }
 
+    /** @return HasMany<ResourceDownload, $this> */
     public function resourceDownloads(): HasMany
     {
         return $this->hasMany(ResourceDownload::class, 'contact_id');
     }
 
+    /** @return BelongsTo<self, $this> */
     public function mergedInto(): BelongsTo
     {
         return $this->belongsTo(self::class, 'merged_into_contact_id');
     }
 
+    /** @return HasMany<self, $this> */
     public function mergedContacts(): HasMany
     {
         return $this->hasMany(self::class, 'merged_into_contact_id');

@@ -18,15 +18,15 @@ class IcsGenerator
         $dtStart = CarbonImmutable::instance($booking->start_at_utc)->setTimezone('UTC')->format('Ymd\THis\Z');
         $dtEnd = CarbonImmutable::instance($booking->end_at_utc)->setTimezone('UTC')->format('Ymd\THis\Z');
 
-        $sessionTitle = $this->escape($booking->sessionType?->title ?? config('business.site_name').' Session');
+        $sessionTitle = $this->escape($booking->sessionType->title ?? config('business.site_name').' Session');
         $confirmationUrl = url("/booking/confirmation/{$booking->confirmation_token}");
 
         $meetingUrl = $this->meetingLinks->studentUrl($booking);
 
         $descriptionText = config('business.site_name').' Session\\n'
             ."Booking Reference: {$booking->id}\\n"
-            ."Student Time: {$booking->customer_local_date_at_booking?->format('Y-m-d')} {$booking->customer_local_start_time_at_booking} ({$booking->customer_timezone})\\n"
-            ."Tutor Time: {$booking->business_local_date_at_booking?->format('Y-m-d')} {$booking->business_local_start_time_at_booking} ({$booking->business_timezone})\\n"
+            ."Student Time: {$booking->customer_local_date_at_booking->format('Y-m-d')} {$booking->customer_local_start_time_at_booking} ({$booking->customer_timezone})\\n"
+            ."Tutor Time: {$booking->business_local_date_at_booking->format('Y-m-d')} {$booking->business_local_start_time_at_booking} ({$booking->business_timezone})\\n"
             .($meetingUrl ? "Video Classroom: {$meetingUrl}\\n" : '')
             ."Booking details: {$confirmationUrl}";
 

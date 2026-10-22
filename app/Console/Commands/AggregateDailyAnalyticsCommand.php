@@ -132,14 +132,14 @@ class AggregateDailyAnalyticsCommand extends Command
             ->groupBy('page')
             ->orderByDesc('count')
             ->take(50)
-            ->get();
+            ->toBase()->get();
 
         // 8. Visitors by Source
         $visitorsBySource = (clone $baseQuery)
             ->whereNotNull('utm_source')
             ->select('utm_source', DB::raw('count(distinct visitor_token) as count'))
             ->groupBy('utm_source')
-            ->get();
+            ->toBase()->get();
 
         // 9. Sessions by Source
         $sessionsBySource = VisitorSession::query()
@@ -152,7 +152,7 @@ class AggregateDailyAnalyticsCommand extends Command
             ->whereNotNull('utm_source')
             ->select('utm_source', DB::raw('count(*) as count'))
             ->groupBy('utm_source')
-            ->get();
+            ->toBase()->get();
 
         // 10. Page Views by Source
         $pageViewsBySource = (clone $baseQuery)
@@ -160,7 +160,7 @@ class AggregateDailyAnalyticsCommand extends Command
             ->whereNotNull('utm_source')
             ->select('utm_source', DB::raw('count(*) as count'))
             ->groupBy('utm_source')
-            ->get();
+            ->toBase()->get();
 
         // 11. Section Dwell Seconds and Views by Section ID (V4 Phase 1 §4 & Phase 2 §2)
         $sectionDwells = (clone $baseQuery)
@@ -367,7 +367,7 @@ class AggregateDailyAnalyticsCommand extends Command
                 foreach ($visitors as $visitor) {
                     $funnelService->rebuildVisitorFunnel($visitor, $reconciledAt);
                     $rebuiltCount++;
-                    if ($visitor->first_seen_at && CarbonImmutable::parse($visitor->first_seen_at)->addDays(30)->lt($pruneCutoff)) {
+                    if (CarbonImmutable::parse($visitor->first_seen_at)->addDays(30)->lt($pruneCutoff)) {
                         $preservedCount++;
                     }
                 }

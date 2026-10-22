@@ -158,9 +158,7 @@ class ReportService
         $historicalMetrics = DailyMetric::where('reporting_timezone', $this->timezoneService->getBusinessTimezone())->whereBetween('metric_date', [$startCairoDate, $endCairoDate])
             ->get()
             ->groupBy(function ($metric) {
-                return $metric->metric_date instanceof CarbonInterface
-                    ? $metric->metric_date->toDateString()
-                    : substr((string) $metric->metric_date, 0, 10);
+                return $metric->metric_date->toDateString();
             });
 
         $hasPrunedDates = false;
@@ -185,7 +183,7 @@ class ReportService
                 : (int) ($metricsForDate->where('dimension_key', '')->where('metric_name', 'page_view')->sum('count') ?: $metricsForDate->where('metric_name', 'page_views')->sum('count'));
 
             $topSourceRow = $metricsForDate->where('metric_name', 'visitors_by_source')->sortByDesc('count')->first();
-            $topSource = $source ?: ($topSourceRow?->dimension_value ?: 'direct');
+            $topSource = $source ?: ($topSourceRow?->getAttribute('dimension_value') ?: 'direct');
 
             $hasMetrics = ($visitorsMetric > 0 || $sessionsMetric > 0 || $pvMetric > 0);
 
@@ -258,43 +256,10 @@ class ReportService
 
     public function getBookingsReport(CarbonInterface $start, CarbonInterface $end, ?string $status = null, array $filters = []): array
     {
-        $query = Booking::query()
-            ->with(['contact', 'sessionType'])
-            ->whereBetween('start_at_utc', [$start, $end])
-            ->when($filters['source'] ?? null, fn ($q, $source) => $q->where('source', $source))
-            ->when($filters['campaign'] ?? null, fn ($q, $campaign) => $q->where('campaign', $campaign));
-
-        if ($status && $status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        $bookings = $query->orderByDesc('start_at_utc')->get();
-
-        $businessTz = $this->timezoneService->getBusinessTimezone();
-
-        $rows = $bookings->map(function (Booking $b) use ($businessTz) {
-            $cairoStart = $b->start_at_utc->copy()->setTimezone($businessTz);
-            $studentStart = $b->customer_timezone
-                ? $b->start_at_utc->copy()->setTimezone($b->customer_timezone)
-                : $cairoStart;
-
-            return [
-                'booking_code' => $b->confirmation_token,
-                'customer_name' => $b->contact?->name ?? 'Unknown',
-                'customer_email' => $b->contact?->display_email ?? $b->contact?->email ?? '',
-                'session_title' => $b->sessionType?->title ?? 'Arabic Lesson',
-                'status' => ucfirst(str_replace('_', ' ', $b->status)),
-                'lesson_date_cairo' => $cairoStart->format('Y-m-d'),
-                'lesson_time_cairo' => $cairoStart->format('H:i').' Cairo',
-                'lesson_time_student' => $studentStart->format('H:i').' ('.($b->customer_timezone ?: 'Cairo').')',
-                'source' => $b->source ?: 'Direct / Organic',
-                'campaign' => $b->campaign ?: '—',
-                'content' => $b->content ?: '—',
-                'referrer' => $b->referrer ?: '—',
-                'touch_at' => $b->touch_at ? $b->touch_at->format('Y-m-d H:i') : '—',
-                'created_at' => $b->created_at->format('Y-m-d H:i'),
-            ];
-        });
+        $report = app(BookingReportQuery::class);
+        $bookings = $report->query($start, $end, $status, $filters)->get();
+        $timezone = $this->timezoneService->getBusinessTimezone();
+        $rows = $bookings->map(fn (Booking $booking): array => $report->row($booking, $timezone));
 
         return [
             'rows' => $rows,
@@ -407,7 +372,7 @@ class ReportService
                 DB::raw('COALESCE(utm_source, "direct") as utm_source'),
                 'created_at as touch_time'
             )
-            ->toBase()->get();
+            ->orderBy('id')->toBase()->lazy(500);
 
         // 2. Discover marketing touches in [$start, $end] via MarketingTouch
         $touchesQuery = MarketingTouch::query()
@@ -432,7 +397,7 @@ class ReportService
                 DB::raw('COALESCE(utm_source, "direct") as utm_source'),
                 'touch_at as touch_time'
             )
-            ->get();
+            ->orderBy('id')->toBase()->lazy(500);
 
         // 3. Assemble visitor cohorts by (source, campaign, content)
         $cohorts = [];
@@ -454,7 +419,7 @@ class ReportService
 
             if ($ev->visitor_token) {
                 $time = CarbonImmutable::parse($ev->touch_time);
-                $cohorts[$key]['visitors'][$ev->visitor_token][] = $time;
+                $cohorts[$key]['visitors'][$ev->visitor_token][$time->toIso8601String()] = $time;
             }
         }
 
@@ -475,7 +440,7 @@ class ReportService
 
             if ($t->visitor_token) {
                 $time = CarbonImmutable::parse($t->touch_time);
-                $cohorts[$key]['visitors'][$t->visitor_token][] = $time;
+                $cohorts[$key]['visitors'][$t->visitor_token][$time->toIso8601String()] = $time;
             }
         }
 
@@ -547,52 +512,50 @@ class ReportService
                         $q->where('source', $src);
                     }
                 })
-                ->get();
+                ->orderBy('id')->lazy(500);
 
             $downstreamBookings = 0;
             $confirmedDownstreamBookings = 0;
             $unlinkedBookings = 0;
             $confirmedUnlinkedBookings = 0;
 
-            if ($candidateBookings->isNotEmpty()) {
-                foreach ($candidateBookings as $b) {
-                    $isDownstream = false;
+            foreach ($candidateBookings as $b) {
+                $isDownstream = false;
 
-                    // Restrict downstream cohort counts strictly to bookings joined to a qualifying cohort visitor
-                    // where an eligible touch for that visitor in this cohort lies in the booking's 30-day lookback
-                    if ($b->visitor_token && isset($visitors[$b->visitor_token])) {
-                        $createdAt = CarbonImmutable::parse($b->created_at);
-                        $touchTimes = $visitors[$b->visitor_token];
-                        foreach ($touchTimes as $touchTime) {
-                            if ($createdAt->gte($touchTime) && $createdAt->lte($touchTime->addDays(30))) {
-                                $isDownstream = true;
-                                break;
-                            }
-                        }
-
-                        // Also check authoritative attributed touch_at on booking if recorded in period
-                        if (! $isDownstream && $b->touch_at) {
-                            $touchTime = CarbonImmutable::parse($b->touch_at);
-                            if ($touchTime->gte($start) && $touchTime->lte($end) && $createdAt->gte($touchTime) && $createdAt->lte($touchTime->addDays(30))) {
-                                $isDownstream = true;
-                            }
+                // Restrict downstream cohort counts strictly to bookings joined to a qualifying cohort visitor
+                // where an eligible touch for that visitor in this cohort lies in the booking's 30-day lookback
+                if ($b->visitor_token && isset($visitors[$b->visitor_token])) {
+                    $createdAt = CarbonImmutable::parse($b->created_at);
+                    $touchTimes = $visitors[$b->visitor_token];
+                    foreach ($touchTimes as $touchTime) {
+                        if ($createdAt->gte($touchTime) && $createdAt->lte($touchTime->addDays(30))) {
+                            $isDownstream = true;
+                            break;
                         }
                     }
 
-                    if ($isDownstream) {
-                        $downstreamBookings++;
-                        if (in_array($b->status, ['confirmed', 'completed'], true)) {
-                            $confirmedDownstreamBookings++;
+                    // Also check authoritative attributed touch_at on booking if recorded in period
+                    if (! $isDownstream && $b->touch_at) {
+                        $touchTime = CarbonImmutable::parse($b->touch_at);
+                        if ($touchTime->gte($start) && $touchTime->lte($end) && $createdAt->gte($touchTime) && $createdAt->lte($touchTime->addDays(30))) {
+                            $isDownstream = true;
                         }
-                    } else {
-                        // Unlinked/non-cohort booking activity: either touch_at occurred in period or booking created in period
-                        $bCreatedAt = CarbonImmutable::parse($b->created_at);
-                        $bTouchTime = $b->touch_at ? CarbonImmutable::parse($b->touch_at) : null;
-                        if (($bTouchTime && $bTouchTime->gte($start) && $bTouchTime->lte($end)) || ($bCreatedAt->gte($start) && $bCreatedAt->lte($end))) {
-                            $unlinkedBookings++;
-                            if (in_array($b->status, ['confirmed', 'completed'], true)) {
-                                $confirmedUnlinkedBookings++;
-                            }
+                    }
+                }
+
+                if ($isDownstream) {
+                    $downstreamBookings++;
+                    if (in_array($b->status, ['confirmed', 'completed'], true)) {
+                        $confirmedDownstreamBookings++;
+                    }
+                } else {
+                    // Unlinked/non-cohort booking activity: either touch_at occurred in period or booking created in period
+                    $bCreatedAt = CarbonImmutable::parse($b->created_at);
+                    $bTouchTime = $b->touch_at ? CarbonImmutable::parse($b->touch_at) : null;
+                    if (($bTouchTime && $bTouchTime->gte($start) && $bTouchTime->lte($end)) || ($bCreatedAt->gte($start) && $bCreatedAt->lte($end))) {
+                        $unlinkedBookings++;
+                        if (in_array($b->status, ['confirmed', 'completed'], true)) {
+                            $confirmedUnlinkedBookings++;
                         }
                     }
                 }

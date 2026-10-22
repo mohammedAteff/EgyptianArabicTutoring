@@ -39,12 +39,10 @@ class CancellationService
         $snapshot = Booking::query()->whereKey($booking->id)->firstOrFail();
 
         return $this->databaseCapability->transaction(function () use ($snapshot, $performedBy, $performedById, $reason, $reasonCode) {
-            if ($snapshot->start_at_utc && $snapshot->end_at_utc) {
-                $this->availabilityService->acquireCalendarDateLocks(
-                    CarbonImmutable::instance($snapshot->start_at_utc),
-                    CarbonImmutable::instance($snapshot->end_at_utc),
-                );
-            }
+            $this->availabilityService->acquireCalendarDateLocks(
+                CarbonImmutable::instance($snapshot->start_at_utc),
+                CarbonImmutable::instance($snapshot->end_at_utc),
+            );
 
             if ($snapshot->student_id !== null) {
                 Student::withTrashed()->whereKey($snapshot->student_id)->lockForUpdate()->firstOrFail();

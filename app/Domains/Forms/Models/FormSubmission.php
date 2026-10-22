@@ -28,11 +28,13 @@ class FormSubmission extends Model
         return $this->belongsTo(Student::class);
     }
 
+    /** @return HasMany<FormAnswer, $this> */
     public function answers(): HasMany
     {
         return $this->hasMany(FormAnswer::class);
     }
 
+    /** @return HasMany<FormSubmissionRevision, $this> */
     public function revisions(): HasMany
     {
         return $this->hasMany(FormSubmissionRevision::class)->orderBy('revision_number');

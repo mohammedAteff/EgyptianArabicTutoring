@@ -11,8 +11,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Game extends Model
 {
+    /** @use HasTranslations<GameTranslation> */
     use HasFactory, HasTranslations;
 
+    /** @return class-string<GameTranslation> */
     public function getTranslationModelClass(): string
     {
         return GameTranslation::class;
@@ -60,6 +62,7 @@ class Game extends Model
         return $this->status === 'available';
     }
 
+    /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany
     {
         return $this->morphMany(ContentRevision::class, 'revisable');

@@ -55,11 +55,13 @@ class Visitor extends Model
         ];
     }
 
+    /** @return HasMany<VisitorSession, $this> */
     public function sessions(): HasMany
     {
         return $this->hasMany(VisitorSession::class, 'visitor_id');
     }
 
+    /** @return HasOne<VisitorFunnelProgression, $this> */
     public function funnelProgression(): HasOne
     {
         return $this->hasOne(VisitorFunnelProgression::class, 'visitor_id');

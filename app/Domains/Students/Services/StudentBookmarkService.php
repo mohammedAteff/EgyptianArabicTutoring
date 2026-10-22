@@ -24,9 +24,9 @@ class StudentBookmarkService
     public function url(string $kind, Model $target): string
     {
         return match ($kind) {
-            'resource' => route('student.resources.open', $target->id),
-            'note' => route('student.bins.index').'#note-'.$target->id,
-            default => route('student.teaching.index').'#homework-'.$target->id,
+            'resource' => route('student.resources.open', $target->getKey()),
+            'note' => route('student.bins.index').'#note-'.$target->getKey(),
+            default => route('student.teaching.index').'#homework-'.$target->getKey(),
         };
     }
 }

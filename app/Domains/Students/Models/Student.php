@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property Carbon|null $suspended_at
  * @property int $bookings_count
+ * @property Carbon|null $date_of_birth
  */
 class Student extends Authenticatable
 {
@@ -75,21 +76,25 @@ class Student extends Authenticatable
         return $this->hasMany(StudentPackage::class);
     }
 
+    /** @return HasMany<StudentEmail, $this> */
     public function verifiedEmails(): HasMany
     {
         return $this->hasMany(StudentEmail::class)->whereNotNull('verified_at');
     }
 
+    /** @return HasMany<Booking, $this> */
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
     }
 
+    /** @return HasMany<PaymentRecord, $this> */
     public function payments(): HasMany
     {
         return $this->hasMany(PaymentRecord::class);
     }
 
+    /** @return HasMany<PaymentRefund, $this> */
     public function refunds(): HasMany
     {
         return $this->hasMany(PaymentRefund::class);
@@ -119,11 +124,13 @@ class Student extends Authenticatable
         return $this->hasMany(FormSubmission::class);
     }
 
+    /** @return BelongsTo<self, $this> */
     public function possibleDuplicateOf(): BelongsTo
     {
         return $this->belongsTo(self::class, 'possible_duplicate_of_student_id');
     }
 
+    /** @return BelongsTo<self, $this> */
     public function mergedInto(): BelongsTo
     {
         return $this->belongsTo(self::class, 'merged_into_student_id');

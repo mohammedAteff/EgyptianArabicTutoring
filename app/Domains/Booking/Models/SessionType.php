@@ -66,11 +66,13 @@ class SessionType extends Model
         return $this->title ?? '';
     }
 
+    /** @return HasMany<Booking, $this> */
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'session_type_id');
     }
 
+    /** @return HasMany<BookingHold, $this> */
     public function holds(): HasMany
     {
         return $this->hasMany(BookingHold::class, 'session_type_id');

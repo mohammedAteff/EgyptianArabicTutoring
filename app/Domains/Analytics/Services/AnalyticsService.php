@@ -474,23 +474,23 @@ class AnalyticsService
 
         try {
             $req = $request ?? request();
-            if ($req && $this->excluded($req, $this->recordingLearning)) {
+            if ($this->excluded($req, $this->recordingLearning)) {
                 return null;
             }
 
             $sessionVisitorToken = null;
-            if ($req && $req->hasSession()) {
+            if ($req->hasSession()) {
                 $sessionVisitorToken = $req->session()->get('visitor_id') ?? $req->session()->get('analytics_visitor_token');
             }
 
             $vToken = $sessionVisitorToken
                 ?? $visitorToken
-                ?? ($req ? $req->attributes->get('analytics_visitor_token') : null)
-                ?? ($req ? $req->cookie('_va_visitor') : null);
+                ?? $req->attributes->get('analytics_visitor_token')
+                ?? $req->cookie('_va_visitor');
 
             $sToken = $sessionToken
-                ?? ($req ? $req->attributes->get('analytics_session_token') : null)
-                ?? ($req ? $req->cookie('_va_session') : null);
+                ?? $req->attributes->get('analytics_session_token')
+                ?? $req->cookie('_va_session');
 
             if ($sToken && in_array($eventName, self::RAPID_DEDUPLICATED_EVENTS, true)) {
                 $dedupMetadata = $metadata;
@@ -515,12 +515,12 @@ class AnalyticsService
                     $metadata[$key] = self::safeUrl($value);
                 }
             }
-            $pageUrl = self::safeUrl($page ?? ($req ? substr($req->fullUrl(), 0, 500) : '/'));
-            $referrer = $req ? self::safeUrl(substr((string) $req->header('referer', ''), 0, 500)) : null;
+            $pageUrl = self::safeUrl($page ?? substr($req->fullUrl(), 0, 500));
+            $referrer = self::safeUrl(substr((string) $req->header('referer', ''), 0, 500));
             if ($this->recordingLearning) {
                 $referrer = null;
             }
-            $isBot = $req ? (bool) ($req->attributes->get('analytics_is_bot', false)) : false;
+            $isBot = (bool) $req->attributes->get('analytics_is_bot', false);
 
             $visSession = null;
             if ($sToken) {
@@ -541,11 +541,11 @@ class AnalyticsService
             if ($this->recordingLearning && $isBot) {
                 return null;
             }
-            $utmSource = $req ? $req->query('utm_source') : null;
-            $utmMedium = $req ? $req->query('utm_medium') : null;
-            $utmCampaign = $req ? $req->query('utm_campaign') : null;
-            $utmContent = $req ? $req->query('utm_content') : null;
-            $utmTerm = $req ? $req->query('utm_term') : null;
+            $utmSource = $req->query('utm_source');
+            $utmMedium = $req->query('utm_medium');
+            $utmCampaign = $req->query('utm_campaign');
+            $utmContent = $req->query('utm_content');
+            $utmTerm = $req->query('utm_term');
 
             if (! $utmSource) {
                 if ($visSession && $visSession->utm_source) {
@@ -554,7 +554,7 @@ class AnalyticsService
                     $utmCampaign = $visSession->utm_campaign;
                     $utmContent = $visSession->utm_content;
                     $utmTerm = $visSession->utm_term;
-                } elseif ($req && $req->hasSession()) {
+                } elseif ($req->hasSession()) {
                     $utmSource = $req->session()->get('utm_source');
                     $utmMedium = $req->session()->get('utm_medium');
                     $utmCampaign = $req->session()->get('utm_campaign');
@@ -564,11 +564,10 @@ class AnalyticsService
             }
 
             $ipHash = null;
-            if ($req) {
-                $rawIp = $req->ip() ?? '127.0.0.1';
-                $appKey = (string) config('app.key', 'secret-fallback');
-                $ipHash = hash('sha256', $rawIp.$appKey);
-            }
+
+            $rawIp = $req->ip() ?? '127.0.0.1';
+            $appKey = (string) config('app.key', 'secret-fallback');
+            $ipHash = hash('sha256', $rawIp.$appKey);
 
             $eventTime = $occurredAt
                 ?? (isset($metadata['_occurred_at']) ? CarbonImmutable::parse($metadata['_occurred_at']) : null)
@@ -577,9 +576,9 @@ class AnalyticsService
 
             // Detect server-authoritative country
             $detectedCountry = null;
-            if ($req) {
-                $detectedCountry = app(GeoIpService::class)->detectCountryFromRequest($req);
-            }
+
+            $detectedCountry = app(GeoIpService::class)->detectCountryFromRequest($req);
+
             if (! $detectedCountry && $visSession) {
                 $detectedCountry = $visSession->detected_country_code;
             }
@@ -605,7 +604,7 @@ class AnalyticsService
                     'utm_campaign' => $utmCampaign ? substr($utmCampaign, 0, 100) : null,
                     'utm_content' => $utmContent ? substr($utmContent, 0, 100) : null,
                     'utm_term' => $utmTerm ? substr($utmTerm, 0, 100) : null,
-                    'metadata' => ! empty($metadata) ? $metadata : null,
+                    'metadata' => $metadata,
                     'ip_hash' => $ipHash,
                     'is_bot' => $isBot,
                     'created_at' => $eventTime,
@@ -626,79 +625,79 @@ class AnalyticsService
                             'is_bot' => $isBot,
                         ]
                     );
-                    if ($visitor) {
-                        $this->funnelProgressionService->recordVisit($visitor, $eventTime);
 
-                        // First Non-Direct Touch acquisition attribution (Section 18)
-                        // Atomic conditional update to eliminate race condition between concurrent first arrivals
-                        if ($utmSource || $this->isValidExternalReferrer($referrer)) {
-                            $updated = Visitor::query()
-                                ->where('id', $visitor->id)
-                                ->whereNull('acquisition_source')
-                                ->update([
-                                    'acquisition_source' => $utmSource ?: parse_url((string) $referrer, PHP_URL_HOST),
-                                    'acquisition_medium' => $utmMedium,
-                                    'acquisition_campaign' => $utmCampaign,
-                                    'acquisition_content' => $utmContent,
-                                    'acquisition_term' => $utmTerm,
-                                    'acquisition_touch_at' => $eventTime,
-                                ]);
-                            if ($updated) {
-                                $visitor->refresh();
-                            }
-                        }
+                    $this->funnelProgressionService->recordVisit($visitor, $eventTime);
 
-                        // Record timestamped non-direct marketing touch (Section 18B & 19)
-                        $hasArrivalUtm = $req ? $req->filled('utm_source') : ! empty($utmSource);
-                        if ($hasArrivalUtm || $this->isValidExternalReferrer($referrer)) {
-                            $touchSource = $req && $req->filled('utm_source') ? $req->query('utm_source') : $utmSource;
-                            $touchMedium = $req && $req->filled('utm_medium') ? $req->query('utm_medium') : $utmMedium;
-                            $touchCampaign = $req && $req->filled('utm_campaign') ? $req->query('utm_campaign') : $utmCampaign;
-                            $touchContent = $req && $req->filled('utm_content') ? $req->query('utm_content') : $utmContent;
-                            $touchTerm = $req && $req->filled('utm_term') ? $req->query('utm_term') : $utmTerm;
-
-                            $this->recordMarketingTouch(
-                                visitor: $visitor,
-                                sessionToken: $sToken,
-                                utmSource: $touchSource,
-                                utmMedium: $touchMedium,
-                                utmCampaign: $touchCampaign,
-                                utmContent: $touchContent,
-                                utmTerm: $touchTerm,
-                                referrer: $referrer,
-                                touchAt: $eventTime
-                            );
-                        }
-
-                        // Milestone stages
-                        $stageMap = [
-                            'booking_cta_clicked' => 'booking_cta',
-                            'booking_started' => 'booking_started',
-                            'booking_slot_held' => 'slot_held',
-                            'booking_completed' => 'booking_completed',
-                        ];
-
-                        if (isset($stageMap[$eventName])) {
-                            $this->funnelProgressionService->recordStage(
-                                $visitor,
-                                $stageMap[$eventName],
-                                $eventTime,
-                                true
-                            );
-                        } elseif ($eventName === 'page_view' && (
-                            str_contains((string) $pageUrl, '/booking') ||
-                            str_contains((string) $pageUrl, '/reservation') ||
-                            str_contains((string) $pageUrl, '/buchen')
-                        )) {
-                            // Direct visit to booking qualifies booking_started and imputes booking_cta
-                            $this->funnelProgressionService->recordStage(
-                                $visitor,
-                                'booking_started',
-                                $eventTime,
-                                false
-                            );
+                    // First Non-Direct Touch acquisition attribution (Section 18)
+                    // Atomic conditional update to eliminate race condition between concurrent first arrivals
+                    if ($utmSource || $this->isValidExternalReferrer($referrer)) {
+                        $updated = Visitor::query()
+                            ->where('id', $visitor->id)
+                            ->whereNull('acquisition_source')
+                            ->update([
+                                'acquisition_source' => $utmSource ?: parse_url((string) $referrer, PHP_URL_HOST),
+                                'acquisition_medium' => $utmMedium,
+                                'acquisition_campaign' => $utmCampaign,
+                                'acquisition_content' => $utmContent,
+                                'acquisition_term' => $utmTerm,
+                                'acquisition_touch_at' => $eventTime,
+                            ]);
+                        if ($updated) {
+                            $visitor->refresh();
                         }
                     }
+
+                    // Record timestamped non-direct marketing touch (Section 18B & 19)
+                    $hasArrivalUtm = $req->filled('utm_source');
+                    if ($hasArrivalUtm || $this->isValidExternalReferrer($referrer)) {
+                        $touchSource = $req->filled('utm_source') ? $req->query('utm_source') : $utmSource;
+                        $touchMedium = $req->filled('utm_medium') ? $req->query('utm_medium') : $utmMedium;
+                        $touchCampaign = $req->filled('utm_campaign') ? $req->query('utm_campaign') : $utmCampaign;
+                        $touchContent = $req->filled('utm_content') ? $req->query('utm_content') : $utmContent;
+                        $touchTerm = $req->filled('utm_term') ? $req->query('utm_term') : $utmTerm;
+
+                        $this->recordMarketingTouch(
+                            visitor: $visitor,
+                            sessionToken: $sToken,
+                            utmSource: $touchSource,
+                            utmMedium: $touchMedium,
+                            utmCampaign: $touchCampaign,
+                            utmContent: $touchContent,
+                            utmTerm: $touchTerm,
+                            referrer: $referrer,
+                            touchAt: $eventTime
+                        );
+                    }
+
+                    // Milestone stages
+                    $stageMap = [
+                        'booking_cta_clicked' => 'booking_cta',
+                        'booking_started' => 'booking_started',
+                        'booking_slot_held' => 'slot_held',
+                        'booking_completed' => 'booking_completed',
+                    ];
+
+                    if (isset($stageMap[$eventName])) {
+                        $this->funnelProgressionService->recordStage(
+                            $visitor,
+                            $stageMap[$eventName],
+                            $eventTime,
+                            true
+                        );
+                    } elseif ($eventName === 'page_view' && (
+                        str_contains((string) $pageUrl, '/booking') ||
+                        str_contains((string) $pageUrl, '/reservation') ||
+                        str_contains((string) $pageUrl, '/buchen')
+                    )) {
+                        // Direct visit to booking qualifies booking_started and imputes booking_cta
+                        $this->funnelProgressionService->recordStage(
+                            $visitor,
+                            'booking_started',
+                            $eventTime,
+                            false
+                        );
+                    }
+
                 } catch (\Throwable $fe) {
                     Log::warning('FunnelProgressionService update failed: '.$fe->getMessage());
                 }

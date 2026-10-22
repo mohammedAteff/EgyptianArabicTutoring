@@ -4,6 +4,10 @@ use App\Domains\Administration\Models\Administrator;
 use App\Domains\Students\Models\Student;
 
 return [
+    'provisioning' => [
+        'email' => env('ADMIN_DEFAULT_EMAIL', 'admin@boltlanding.test'),
+        'password' => env('ADMIN_DEFAULT_PASSWORD'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

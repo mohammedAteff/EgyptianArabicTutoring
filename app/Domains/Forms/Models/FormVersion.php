@@ -21,11 +21,13 @@ class FormVersion extends Model
         return $this->belongsTo(Form::class);
     }
 
+    /** @return HasMany<FormQuestion, $this> */
     public function questions(): HasMany
     {
         return $this->hasMany(FormQuestion::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    /** @return HasMany<FormSubmission, $this> */
     public function submissions(): HasMany
     {
         return $this->hasMany(FormSubmission::class);

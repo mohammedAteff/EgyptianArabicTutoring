@@ -30,11 +30,13 @@ class FaqTranslation extends Model
         ];
     }
 
+    /** @return BelongsTo<Faq, $this> */
     public function faq(): BelongsTo
     {
         return $this->belongsTo(Faq::class);
     }
 
+    /** @return BelongsTo<EntityTranslationRevision, $this> */
     public function sourceRevision(): BelongsTo
     {
         return $this->belongsTo(EntityTranslationRevision::class, 'source_revision_id');

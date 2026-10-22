@@ -135,8 +135,8 @@ class TelegramNotificationService
 
         $studentName = $booking->student?->name
             ?: ($booking->contact->name ?? 'Student');
-        $studentEmail = $booking->student?->email ?: ($booking->contact?->email ?? 'N/A');
-        $studentPhone = $booking->student?->phone ?: ($booking->contact?->phone ?? 'N/A');
+        $studentEmail = $booking->student?->email ?: ($booking->contact->email ?? 'N/A');
+        $studentPhone = $booking->student?->phone ?: ($booking->contact->phone ?? 'N/A');
         $sessionTitle = $booking->sessionType?->title ?: '1-on-1 Egyptian Arabic Session';
 
         $startUtc = Carbon::parse($booking->start_at_utc, 'UTC');

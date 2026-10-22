@@ -38,7 +38,7 @@ class PageController extends Controller
             'biographyLocale' => $resolved['effective_locale'] ?? 'en',
             'biographyHeading' => ($resolved && $resolved['effective_locale'] !== 'en') ? $resolved['translation']->getAttribute('title') : null,
             'philosophy' => $hasCopy ? null : Setting::get('about_philosophy'),
-            'imagePath' => $hasCopy ? request()->attributes->get('website_copy_tree')['image'] : ($page?->og_image_path ?? Setting::get('about_image_path')),
+            'imagePath' => $hasCopy ? request()->attributes->get('website_copy_tree')['image'] : ($page->og_image_path ?? Setting::get('about_image_path')),
         ]);
     }
 
@@ -53,7 +53,7 @@ class PageController extends Controller
             ->firstOrFail();
 
         $draftRevision = $page->revisions()->where('status', 'draft')->latest('id')->first();
-        $title = $draftRevision?->title ?? $page->title;
+        $title = $draftRevision->title ?? $page->title;
         $content = $sanitizer->sanitize((string) ($draftRevision?->content['body'] ?? $page->content));
         $excerpt = $draftRevision?->content['excerpt'] ?? $page->excerpt;
         $ogImagePath = $draftRevision?->content['og_image_path'] ?? $page->og_image_path;
@@ -68,7 +68,7 @@ class PageController extends Controller
             return view('public.about', [
                 'title' => '[PREVIEW] '.$title,
                 'page' => $previewPage,
-                'biography' => Setting::get('draft:about_biography') ?? $content ?? Setting::get('about_biography'),
+                'biography' => Setting::get('draft:about_biography') ?? $content,
                 'philosophy' => Setting::get('draft:about_philosophy') ?? Setting::get('about_philosophy'),
                 'imagePath' => Setting::get('draft:about_image_path') ?? $ogImagePath ?? Setting::get('about_image_path'),
                 'isPreview' => true,
@@ -91,14 +91,14 @@ class PageController extends Controller
 
         $page = Page::query()->where('slug', 'about')->first();
         $draftRevision = $page?->revisions()->where('status', 'draft')->latest('id')->first();
-        $title = $draftRevision?->title ?? ($page ? $page->title : 'About Abdallah & The Teaching Methodology');
+        $title = $draftRevision->title ?? ($page ? $page->title : 'About Abdallah & The Teaching Methodology');
         $content = $draftRevision?->content['body'] ?? $page?->content;
         $ogImagePath = $draftRevision?->content['og_image_path'] ?? $page?->og_image_path;
 
         return view('public.about', [
             'title' => '[PREVIEW] '.$title,
             'page' => $page,
-            'biography' => Setting::get('draft:about_biography') ?? $content ?? Setting::get('about_biography'),
+            'biography' => Setting::get('draft:about_biography') ?? $content,
             'philosophy' => Setting::get('draft:about_philosophy') ?? Setting::get('about_philosophy'),
             'imagePath' => Setting::get('draft:about_image_path') ?? $ogImagePath ?? Setting::get('about_image_path'),
             'isPreview' => true,
@@ -198,10 +198,10 @@ class PageController extends Controller
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.terms', [
-            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'Terms of Service & Booking Policy'),
+            'title' => $resolved['translation']->title ?? ($page ? $page->title : 'Terms of Service & Booking Policy'),
             'page' => $page,
             'translation' => $resolved['translation'] ?? null,
-            'content' => $resolved['translation']?->content ?? ($page?->content ?? null),
+            'content' => $resolved['translation']->content ?? ($page->content ?? null),
             'isFallback' => $isFallback,
             'entityLocales' => $page ? array_values(array_unique(array_merge(['en'], $page->translations->where('status', 'published')->pluck('locale')->all()))) : ['en'],
         ]);
@@ -219,10 +219,10 @@ class PageController extends Controller
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
 
         return view('public.privacy', [
-            'title' => $resolved['translation']?->title ?? ($page ? $page->title : 'Privacy Policy & Data Ethics'),
+            'title' => $resolved['translation']->title ?? ($page ? $page->title : 'Privacy Policy & Data Ethics'),
             'page' => $page,
             'translation' => $resolved['translation'] ?? null,
-            'content' => $resolved['translation']?->content ?? ($page?->content ?? null),
+            'content' => $resolved['translation']->content ?? ($page->content ?? null),
             'isFallback' => $isFallback,
             'entityLocales' => $page ? $page->getAvailableLocales() : ['en'],
         ]);
@@ -237,7 +237,7 @@ class PageController extends Controller
             ->firstOrFail();
 
         $resolved = $page->resolveTranslation();
-        $content = $sanitizer->sanitize((string) ($resolved['translation']?->content ?? $page->content));
+        $content = $sanitizer->sanitize((string) ($resolved['translation']->content ?? $page->content));
 
         return view('public.page', [
             'page' => $page,
@@ -245,7 +245,7 @@ class PageController extends Controller
             'content' => $content,
             'isFallback' => $resolved['is_fallback'],
             'entityLocales' => $page->getAvailableLocales(),
-            'title' => $resolved['translation']?->title ?? $page->title,
+            'title' => $resolved['translation']->title ?? $page->title,
         ]);
     }
 }

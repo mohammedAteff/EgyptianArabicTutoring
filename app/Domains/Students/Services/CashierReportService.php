@@ -17,6 +17,24 @@ class CashierReportService
 {
     public function __construct(private TimezoneService $timezones) {}
 
+    public function preparePackages(Student $student, StudentLedgerService $ledger, bool $withRefundablePayments = false): void
+    {
+        foreach ($student->packages as $pkg) {
+            $summary = $ledger->summary($pkg, true);
+            $pkg->setAttribute('remaining_balance', $summary['balance_due']);
+            $pkg->setAttribute('overpaid', $summary['overpaid']);
+            $pkg->setAttribute('net_paid', $summary['net_paid']);
+            $pkg->setAttribute('available_credits', $summary['remaining_credits']);
+            $pkg->setAttribute('credit_summary', $summary);
+            $pkg->setAttribute('is_paid_in_full', bccomp($summary['balance_due'], '0.00', 2) <= 0);
+            if ($withRefundablePayments) {
+                foreach ($pkg->payments as $payment) {
+                    $payment->setAttribute('refundable_amount', $ledger->refundableAmount($payment, $pkg));
+                }
+            }
+        }
+    }
+
     public function filters(Request $request): array
     {
         return $request->validate([

@@ -37,6 +37,7 @@ class StaffBin extends Model
         return StaffBinFactory::new();
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function author(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'author_id')->withTrashed();

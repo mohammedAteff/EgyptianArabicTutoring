@@ -6,17 +6,21 @@ use App\Domains\CMS\Models\EntityTranslationRevision;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/** @template TTranslation of Model */
 trait HasTranslations
 {
+    /** @return class-string<TTranslation> */
     abstract public function getTranslationModelClass(): string;
 
     abstract public function getEntityType(): string;
 
+    /** @return HasMany<TTranslation, $this> */
     public function translations(): HasMany
     {
         return $this->hasMany($this->getTranslationModelClass(), $this->getForeignKey());
     }
 
+    /** @return TTranslation|null */
     public function liveTranslation(?string $locale = null): ?Model
     {
         $targetLocale = $locale ?? app()->getLocale();
@@ -34,6 +38,7 @@ trait HasTranslations
             ->first();
     }
 
+    /** @return TTranslation|null */
     public function draftTranslation(?string $locale = null): ?Model
     {
         $targetLocale = $locale ?? app()->getLocale();
@@ -51,6 +56,7 @@ trait HasTranslations
             ->first();
     }
 
+    /** @return HasMany<EntityTranslationRevision, $this> */
     public function sourceRevisions(): HasMany
     {
         return $this->hasMany(EntityTranslationRevision::class, 'entity_id')
@@ -93,7 +99,7 @@ trait HasTranslations
             return [
                 'translation' => $locTrans,
                 'is_fallback' => false,
-                'is_stale' => $locTrans->status === 'stale',
+                'is_stale' => $locTrans->getAttribute('status') === 'stale',
                 'effective_locale' => $reqLocale,
             ];
         }

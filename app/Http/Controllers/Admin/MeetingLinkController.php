@@ -30,7 +30,7 @@ class MeetingLinkController extends Controller
         DB::transaction(function () use ($request, $provider, $audit): void {
             $providers = MeetingProvider::query()->orderBy('id')->lockForUpdate()->get();
             $provider = $providers->firstWhere('id', $provider->id);
-            abort_unless($provider, 404);
+            abort_unless($provider !== null, 404);
             $replacement = $providers->where('id', '!=', $provider->id)->where('active', true)->sortBy('sort_order')->first();
             if ($provider->active && ! $replacement) {
                 throw ValidationException::withMessages(['provider' => 'Add or enable another provider before removing the last enabled provider.']);

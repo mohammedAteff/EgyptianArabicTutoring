@@ -40,7 +40,7 @@ class WebsiteCopyCatalog
                     $tree['about'][$index]['blocks'] = [['type' => 'richtext', 'text' => (string) $body]];
                 }
             }
-            $tree['image'] = $about?->og_image_path ?? $settings['about_image_path'] ?? '';
+            $tree['image'] = $about->og_image_path ?? $settings['about_image_path'] ?? '';
         }
         if ($page === 'shared') {
             $tree['footer'] = $settings['site_footer_text'] ?? config('public_content.footer');

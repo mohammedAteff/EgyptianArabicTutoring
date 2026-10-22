@@ -261,7 +261,7 @@ class SettingController extends Controller
             return back()->with('success', 'Settings and announcement draft saved. Live settings are unchanged.');
         }
 
-        DB::transaction(function () use ($request, $validated, $isDraft): void {
+        DB::transaction(function () use ($request, $validated): void {
             $prev = ['fields' => array_keys($validated)];
 
             // Process standard settings
@@ -282,16 +282,16 @@ class SettingController extends Controller
             foreach ($counterMap as $inputKey => $meta) {
                 if ($meta['type'] === 'bool') {
                     $val = $request->boolean($inputKey);
-                    Setting::set(($isDraft ? 'draft:' : '').$meta['key'], $val, 'counters', ! $isDraft);
-                    if (! $isDraft) {
-                        Setting::set('draft:'.$meta['key'], $val, 'counters', false);
-                    }
+                    Setting::set($meta['key'], $val, 'counters', true);
+
+                    Setting::set('draft:'.$meta['key'], $val, 'counters', false);
+
                 } elseif (array_key_exists($inputKey, $validated) && $validated[$inputKey] !== null) {
                     $val = $meta['type'] === 'int' ? (int) $validated[$inputKey] : (string) $validated[$inputKey];
-                    Setting::set(($isDraft ? 'draft:' : '').$meta['key'], $val, 'counters', ! $isDraft);
-                    if (! $isDraft) {
-                        Setting::set('draft:'.$meta['key'], $val, 'counters', false);
-                    }
+                    Setting::set($meta['key'], $val, 'counters', true);
+
+                    Setting::set('draft:'.$meta['key'], $val, 'counters', false);
+
                 }
             }
 
@@ -331,14 +331,11 @@ class SettingController extends Controller
                     default => 'general',
                 };
 
-                if ($isDraft && in_array($group, ['homepage', 'about'])) {
+                Setting::set($key, (string) ($value ?? ''), $group, true);
+                if (in_array($group, ['homepage', 'about'])) {
                     Setting::set('draft:'.$key, (string) ($value ?? ''), $group, false);
-                } else {
-                    Setting::set($key, (string) ($value ?? ''), $group, true);
-                    if (in_array($group, ['homepage', 'about'])) {
-                        Setting::set('draft:'.$key, (string) ($value ?? ''), $group, false);
-                    }
                 }
+
             }
 
             if ($request->boolean('operations_present')) {
@@ -364,7 +361,7 @@ class SettingController extends Controller
 
             AuditLog::create([
                 'administrator_id' => Auth::id(),
-                'action' => $isDraft ? 'settings_draft_saved' : 'settings_published',
+                'action' => 'settings_published',
                 'entity_type' => Setting::class,
                 'entity_id' => 0,
                 'previous_data' => $prev,
@@ -374,9 +371,7 @@ class SettingController extends Controller
 
         });
 
-        $message = $isDraft
-            ? 'Settings draft saved successfully. Preview changes at /preview/home and /about/preview.'
-            : 'Settings published successfully.';
+        $message = 'Settings published successfully.';
 
         return back()->with('success', $message);
     }

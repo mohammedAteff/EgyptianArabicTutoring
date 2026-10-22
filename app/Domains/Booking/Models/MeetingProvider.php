@@ -27,6 +27,7 @@ class MeetingProvider extends Model
         return ['active' => 'boolean', 'is_default' => 'boolean'];
     }
 
+    /** @return HasMany<MeetingRoom, $this> */
     public function rooms(): HasMany
     {
         return $this->hasMany(MeetingRoom::class);

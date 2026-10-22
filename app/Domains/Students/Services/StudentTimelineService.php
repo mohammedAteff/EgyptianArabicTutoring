@@ -57,8 +57,8 @@ class StudentTimelineService
                 ->get();
 
             foreach ($ledgerEntries as $entry) {
-                $pkgName = $entry->package?->package_name ?? 'Package';
-                $badge = match ($entry->entry_type) {
+                $pkgName = $entry->package->package_name ?? 'Package';
+                $badge = match ($entry->getAttribute('entry_type')) {
                     'package_grant' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
                     'courtesy_adjustment', 'cancellation_restore', 'transfer_in' => 'bg-amber-50 text-amber-700 border border-amber-200',
                     'expiration_forfeit', 'transfer_out' => 'bg-rose-50 text-rose-700 border border-rose-200',
@@ -130,7 +130,7 @@ class StudentTimelineService
             ->get();
 
         foreach ($bookings as $b) {
-            $sessName = $b->sessionType?->title ?? 'Tutoring session';
+            $sessName = $b->sessionType->title ?? 'Tutoring session';
             $add(
                 "booking:{$b->id}:created",
                 'bookings',

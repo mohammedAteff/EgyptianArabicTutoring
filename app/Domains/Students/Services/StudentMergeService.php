@@ -215,7 +215,6 @@ class StudentMergeService
         return ! $booking->trashed()
             && in_array($booking->status, ['confirmed', 'pending', 'held'], true)
             && $booking->cancelled_at === null
-            && $booking->end_at_utc !== null
             && $booking->end_at_utc->isFuture();
     }
 }

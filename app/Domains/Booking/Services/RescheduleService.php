@@ -196,11 +196,11 @@ class RescheduleService
 
             // 4. Capture previous snapshot
             $previousData = [
-                'start_at_utc' => $lockedBooking->start_at_utc?->toDateTimeString(),
-                'end_at_utc' => $lockedBooking->end_at_utc?->toDateTimeString(),
-                'customer_local_date' => $lockedBooking->customer_local_date_at_booking?->toDateString(),
+                'start_at_utc' => $lockedBooking->start_at_utc->toDateTimeString(),
+                'end_at_utc' => $lockedBooking->end_at_utc->toDateTimeString(),
+                'customer_local_date' => $lockedBooking->customer_local_date_at_booking->toDateString(),
                 'customer_local_start_time' => $lockedBooking->customer_local_start_time_at_booking,
-                'business_local_date' => $lockedBooking->business_local_date_at_booking?->toDateString(),
+                'business_local_date' => $lockedBooking->business_local_date_at_booking->toDateString(),
                 'business_local_start_time' => $lockedBooking->business_local_start_time_at_booking,
                 'status' => $lockedBooking->status,
             ];

@@ -126,16 +126,19 @@ class AuditLog extends Model
         return '[redacted:'.hash_hmac('sha256', $value, $secret).']';
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function administrator(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'administrator_id');
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function actorUser(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'actor_user_id');
     }
 
+    /** @return BelongsTo<Student, $this> */
     public function actorStudent(): BelongsTo
     {
         return $this->belongsTo(Student::class, 'actor_student_id');

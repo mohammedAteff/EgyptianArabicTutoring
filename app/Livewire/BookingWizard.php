@@ -21,6 +21,7 @@ use App\Domains\Resources\Services\EmailQualityService;
 use App\Domains\Students\Exceptions\ConcurrentIdentityProvisioningException;
 use App\Domains\Students\Exceptions\StudentIdentityConflictException;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\System\Services\OperationFailureReporter;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
@@ -689,6 +690,7 @@ class BookingWizard extends Component
             }
             $this->currentStep = 3;
         } catch (\Throwable $e) {
+            app(OperationFailureReporter::class)->report($e, 'confirm_public_booking');
             $this->errorMessage = 'An error occurred while confirming your booking. Please try again.';
         }
     }
@@ -723,7 +725,7 @@ class BookingWizard extends Component
     private function intakeDefaults(?Form $form): array
     {
         $defaults = [];
-        foreach ($form?->publishedVersion?->questions ?? [] as $question) {
+        foreach ($form?->publishedVersion->questions ?? [] as $question) {
             if ($question->question_type === 'multiple_choice') {
                 $defaults[$question->id] = [];
             }
@@ -843,7 +845,7 @@ class BookingWizard extends Component
             $version = FormVersion::with('questions.options')
                 ->where('form_id', $this->preBookingFormId)->find($this->initialPublishedVersionId);
             $answers = [];
-            foreach ($version?->questions ?? [] as $question) {
+            foreach ($version->questions ?? [] as $question) {
                 $answers[$question->question_key] = $this->intakeAnswers[$question->id] ?? $this->intakeAnswers[$question->question_key] ?? null;
             }
             $preBookingQuestions = collect(app(FormValidationService::class)

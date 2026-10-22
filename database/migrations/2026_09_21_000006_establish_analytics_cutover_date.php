@@ -16,7 +16,7 @@ return new class extends Migration
             return;
         }
 
-        $configuredDate = env('ANALYTICS_AUTHORITATIVE_CUTOVER_DATE');
+        $configuredDate = config('app.analytics_authoritative_cutover_date');
         $cutoverDate = is_string($configuredDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $configuredDate)
             ? $configuredDate
             : CarbonImmutable::now('Africa/Cairo')->toDateString();

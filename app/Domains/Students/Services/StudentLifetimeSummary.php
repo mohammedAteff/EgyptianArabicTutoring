@@ -42,7 +42,7 @@ class StudentLifetimeSummary
     }
 
     /** @param Collection<int, Booking> $bookings
-     * @param  Collection<int, array<string, mixed>>  $packageRows
+     * @param  Collection<int, array{package: StudentPackage, summary: array<string, mixed>, status: string}>  $packageRows
      * @return array<string, string>
      */
     public function copyBlocks(Student $student, Collection $bookings, Collection $packageRows, string $timezone): array

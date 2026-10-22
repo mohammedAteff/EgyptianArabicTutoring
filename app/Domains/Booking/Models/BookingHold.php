@@ -38,6 +38,7 @@ class BookingHold extends Model
         ];
     }
 
+    /** @return BelongsTo<SessionType, $this> */
     public function sessionType(): BelongsTo
     {
         return $this->belongsTo(SessionType::class, 'session_type_id');

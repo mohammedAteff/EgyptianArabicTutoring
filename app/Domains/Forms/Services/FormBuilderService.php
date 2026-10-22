@@ -141,14 +141,14 @@ class FormBuilderService
             throw new \LogicException('Publication lock key exceeds 64 characters.');
         }
         $lock = $connection->selectOne('SELECT GET_LOCK(?, 10) AS acquired', [$lockKey], useReadPdo: false);
-        if ((int) ($lock?->acquired ?? 0) !== 1) {
+        if ((int) ($lock->acquired ?? 0) !== 1) {
             throw new \DomainException('Another form publication is currently in progress. Please retry.');
         }
         try {
             return $callback();
         } finally {
             $released = $connection->selectOne('SELECT RELEASE_LOCK(?) AS released', [$lockKey], useReadPdo: false);
-            if ((int) ($released?->released ?? 0) !== 1) {
+            if ((int) ($released->released ?? 0) !== 1) {
                 throw new \LogicException('Failed to release publication lock.');
             }
         }

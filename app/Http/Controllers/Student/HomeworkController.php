@@ -27,7 +27,7 @@ class HomeworkController extends Controller
             $item = $read->shared(Homework::query(), $student)->lockForUpdate()->findOrFail($homework);
             abort_if($item->status === 'completed', 409, 'Completed homework is locked.');
             if ($item->submissions()->doesntExist() && filled($item->student_response) && in_array($item->status, ['submitted', 'reviewed'], true)) {
-                HomeworkSubmission::query()->create(['homework_id' => $item->id, 'body' => $item->student_response, 'submission_key' => Str::uuid()->toString(), 'submitted_at' => $item->updated_at]);
+                HomeworkSubmission::query()->create(['homework_id' => $item->id, 'body' => $item->student_response, 'submission_key' => Str::uuid()->toString(), 'submitted_at' => $item->getAttribute('updated_at')]);
             }
             if ($data['status'] === 'submitted') {
                 $key = $data['submission_key'] ?? Str::uuid()->toString();

@@ -27,11 +27,13 @@ class BlogRevision extends Model
         ];
     }
 
+    /** @return BelongsTo<Blog, $this> */
     public function blog(): BelongsTo
     {
         return $this->belongsTo(Blog::class, 'blog_id');
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function revisedBy(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'revised_by');

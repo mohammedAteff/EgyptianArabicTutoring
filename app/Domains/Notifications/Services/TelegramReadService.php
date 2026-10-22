@@ -7,13 +7,11 @@ use App\Domains\Booking\Models\Booking;
 use App\Domains\Booking\Models\BookingEvent;
 use App\Domains\Booking\Services\MeetingLinkService;
 use App\Domains\CMS\Models\Setting;
-use App\Domains\Forms\Models\FormSubmission;
-use App\Domains\Forms\Services\FormAssignmentService;
+use App\Domains\Forms\Services\FormCompletionReadModel;
 use App\Domains\Notifications\Models\TelegramRule;
 use App\Domains\Reporting\Services\ReportService;
 use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest;
-use App\Domains\Students\Models\SessionLedgerEntry;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Students\Services\StudentLedgerService;
@@ -25,15 +23,17 @@ use Illuminate\Support\Str;
 
 class TelegramReadService
 {
-    public function __construct(private StudentLedgerService $ledger, private AnalyticsService $analytics, private TelegramAutomationService $automation, private FormAssignmentService $assignments, private ReportService $reports) {}
+    public function __construct(private StudentLedgerService $ledger, private AnalyticsService $analytics, private TelegramAutomationService $automation, private ReportService $reports) {}
 
     /** @return array<string, scalar|null> */
     public function booking(Booking $booking): array
     {
         $booking->loadMissing(['student', 'contact', 'sessionType']);
-        $entry = SessionLedgerEntry::where('booking_id', $booking->id)->where('entry_type', 'session_consumed')->first();
+        $booking->loadMissing('consumedEntry.package');
+        $entry = $booking->consumedEntry;
         $package = $entry?->package;
-        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('Y-m-d g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package)['balance_text'] : 'Direct booking', 'session_number' => $package ? (int) $package->ledgerEntries()->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
+        $package?->loadMissing(['payments', 'refunds', 'ledgerEntries', 'entitlements.type']);
+        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('Y-m-d g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package, true)['balance_text'] : 'Direct booking', 'session_number' => $package ? (int) $package->ledgerEntries->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
 
         return $data;
     }
@@ -41,9 +41,9 @@ class TelegramReadService
     /** @return array<string, scalar|null> */
     public function package(StudentPackage $package): array
     {
-        $package->loadMissing('student');
+        $package->loadMissing(['student', 'payments', 'refunds', 'ledgerEntries', 'entitlements.type']);
 
-        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => $package->expiryLabel(), 'admin_url' => route('admin.students.show', $package->student_id)];
+        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package, true)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => $package->expiryLabel(), 'admin_url' => route('admin.students.show', $package->student_id)];
     }
 
     public function scanPackage(StudentPackage $package): void
@@ -62,7 +62,8 @@ class TelegramReadService
         if (! $service->eligible($package)) {
             return;
         }
-        if ($rule->trigger === 'low_credits' && ! $service->allCreditsLow($package->student->packages()->with(['entitlements.type', 'ledgerEntries'])->get(), $rule->threshold)) {
+        $package->loadMissing(['student.packages.entitlements.type', 'student.packages.ledgerEntries']);
+        if ($rule->trigger === 'low_credits' && ! $service->allCreditsLow($package->student->packages, $rule->threshold)) {
             return;
         }
         $expiry = $package->expiryDeadline();
@@ -83,36 +84,55 @@ class TelegramReadService
     public function tick(): void
     {
         $now = CarbonImmutable::now('UTC');
-        foreach (TelegramRule::where('enabled', true)->whereHas('bot', fn ($q) => $q->where('enabled', true))->get() as $rule) {
-            if (in_array($rule->trigger, ['scheduler_stale', 'queue_stale'], true)) {
-                continue;
-            }
-            if (in_array($rule->trigger, TelegramFollowUpService::TRIGGERS, true)) {
-                app(TelegramFollowUpService::class)->scan($rule);
-            } elseif (in_array($rule->trigger, ['low_credits', 'package_expiring'], true)) {
-                StudentPackage::where('status', 'active')->chunkById(100, function ($packages) use ($rule, $now): void {
+        $rules = TelegramRule::where('enabled', true)->whereHas('bot', fn ($q) => $q->where('enabled', true))->get();
+        $packageRules = $rules->whereIn('trigger', ['low_credits', 'package_expiring']);
+        if ($packageRules->isNotEmpty()) {
+            StudentPackage::where('status', 'active')->with(['student.packages.entitlements.type', 'student.packages.ledgerEntries', 'payments', 'refunds', 'ledgerEntries', 'entitlements.type'])
+                ->chunkById(100, function ($packages) use ($packageRules, $now): void {
                     foreach ($packages as $package) {
-                        $this->evaluatePackage($package, $rule, $now);
+                        foreach ($packageRules as $rule) {
+                            $this->evaluatePackage($package, $rule, $now);
+                        }
                     }
                 });
-            } elseif (in_array($rule->trigger, ['session_reminder', 'missing_form'], true)) {
-                Booking::where('status', 'confirmed')->where('start_at_utc', '>', $now)->where('start_at_utc', '<=', $now->addMinutes($rule->minutes))->chunkById(100, function ($bookings) use ($rule): void {
+        }
+        $bookingRules = $rules->whereIn('trigger', ['session_reminder', 'missing_form']);
+        if ($bookingRules->isNotEmpty()) {
+            Booking::where('status', 'confirmed')->where('start_at_utc', '>', $now)->where('start_at_utc', '<=', $now->addMinutes((int) $bookingRules->max('minutes')))
+                ->with(['student', 'contact', 'sessionType', 'consumedEntry.package.payments', 'consumedEntry.package.refunds', 'consumedEntry.package.entitlements.type', 'consumedEntry.package.ledgerEntries'])
+                ->chunkById(100, function ($bookings) use ($bookingRules, $now): void {
+                    $forms = $bookingRules->contains('trigger', 'missing_form')
+                        ? app(FormCompletionReadModel::class)->forStudents($bookings->pluck('student_id')->filter()->unique()->values()->all()) : collect();
                     foreach ($bookings as $booking) {
-                        $data = $this->booking($booking);
-                        $data['meeting_url'] = app(MeetingLinkService::class)->notificationUrl($booking, $rule->minutes) ?? 'Unavailable';
-                        $data['meeting_provider'] = $booking->meeting_provider_snapshot ?? 'Unassigned';
-                        $identity = 'booking:'.$booking->id.':'.$booking->start_at_utc->timestamp;
-                        if ($rule->trigger === 'session_reminder') {
-                            $this->automation->emit($rule->trigger, $identity, $data, null, $rule->id);
-                        } elseif ($booking->student) {
-                            foreach ($this->assignments->assignedTo($booking->student)->where('is_mandatory', true) as $form) {
-                                if (! FormSubmission::where('student_id', $booking->student_id)->where('form_version_id', $form->published_version_id)->where('status', 'submitted')->exists()) {
-                                    $this->automation->emit('missing_form', $identity.':form:'.$form->published_version_id, array_merge($data, ['form_title' => $form->title, '_form_version_id' => $form->published_version_id]), null, $rule->id);
+                        $facts = $this->booking($booking);
+                        foreach ($bookingRules as $rule) {
+                            if ($booking->start_at_utc->gt($now->addMinutes($rule->minutes))) {
+                                continue;
+                            }
+                            $data = $facts;
+                            $data['meeting_url'] = app(MeetingLinkService::class)->notificationUrl($booking, $rule->minutes) ?? 'Unavailable';
+                            $data['meeting_provider'] = $booking->meeting_provider_snapshot ?? 'Unassigned';
+                            $identity = 'booking:'.$booking->id.':'.$booking->start_at_utc->timestamp;
+                            if ($rule->trigger === 'session_reminder') {
+                                $this->automation->emit($rule->trigger, $identity, $data, null, $rule->id);
+                            } elseif ($booking->student) {
+                                foreach ($forms->get($booking->student_id, collect()) as $form) {
+                                    if ($form['mandatory'] && ! $form['has_submitted']) {
+                                        $versionId = $form['form_version_id'];
+                                        $this->automation->emit('missing_form', $identity.':form:'.$versionId, array_merge($data, ['form_title' => $form['title'], '_form_version_id' => $versionId]), null, $rule->id);
+                                    }
                                 }
                             }
                         }
                     }
                 });
+        }
+        foreach ($rules as $rule) {
+            if (in_array($rule->trigger, ['scheduler_stale', 'queue_stale', 'low_credits', 'package_expiring', 'session_reminder', 'missing_form'], true)) {
+                continue;
+            }
+            if (in_array($rule->trigger, TelegramFollowUpService::TRIGGERS, true)) {
+                app(TelegramFollowUpService::class)->scan($rule);
             } elseif ($rule->trigger === 'traffic_spike') {
                 $count = $this->analytics->getActiveVisitorsCount($rule->window_minutes);
                 if ($count >= $rule->threshold) {
@@ -168,7 +188,7 @@ class TelegramReadService
             $expiry = 0;
             $entitlements = app(EntitlementService::class);
             $expiryLimit = CarbonImmutable::now('UTC')->addDays(14);
-            foreach (StudentPackage::where('status', 'active')->cursor() as $package) {
+            foreach (StudentPackage::where('status', 'active')->with(['entitlements.type', 'ledgerEntries'])->lazyById(100) as $package) {
                 if (! $entitlements->eligible($package)) {
                     continue;
                 }
@@ -307,7 +327,7 @@ class TelegramReadService
         if ($tomorrow) {
             $date = $date->addDay();
         }
-        $bookings = Booking::where('status', 'confirmed')->where('start_at_utc', '>=', $date->setTimezone('UTC'))->where('start_at_utc', '<', $date->addDay()->setTimezone('UTC'))->orderBy('start_at_utc')->get();
+        $bookings = Booking::where('status', 'confirmed')->where('start_at_utc', '>=', $date->setTimezone('UTC'))->where('start_at_utc', '<', $date->addDay()->setTimezone('UTC'))->when($personal, fn ($query) => $query->with(['student', 'contact', 'sessionType', 'consumedEntry.package.payments', 'consumedEntry.package.refunds', 'consumedEntry.package.entitlements.type', 'consumedEntry.package.ledgerEntries']))->orderBy('start_at_utc')->get();
         $lines = [$date->toDateString().' — '.$bookings->count().' confirmed sessions'];
         foreach ($bookings->take(50) as $booking) {
             $lines[] = $booking->business_start->format('H:i').' '.($personal ? $this->booking($booking)['student_name'] : 'Lesson #'.$booking->id);

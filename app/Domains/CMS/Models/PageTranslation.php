@@ -33,11 +33,13 @@ class PageTranslation extends Model
         ];
     }
 
+    /** @return BelongsTo<Page, $this> */
     public function page(): BelongsTo
     {
         return $this->belongsTo(Page::class);
     }
 
+    /** @return BelongsTo<EntityTranslationRevision, $this> */
     public function sourceRevision(): BelongsTo
     {
         return $this->belongsTo(EntityTranslationRevision::class, 'source_revision_id');

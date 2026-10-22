@@ -2,6 +2,7 @@
 
 namespace App\Domains\Resources\Models;
 
+use App\Domains\Resources\Models\Resource as LearningResource;
 use Database\Factories\Domains\Resources\ResourceCollectionFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,11 +36,11 @@ class ResourceCollection extends Model
     }
 
     /**
-     * @return BelongsToMany<resource, $this>
+     * @return BelongsToMany<LearningResource, $this>
      */
     public function resources(): BelongsToMany
     {
-        return $this->belongsToMany(Resource::class, 'resource_collection_items', 'collection_id', 'resource_id')
+        return $this->belongsToMany(LearningResource::class, 'resource_collection_items', 'collection_id', 'resource_id')
             ->withPivot('sort_order')
             ->orderByPivot('sort_order')
             ->withTimestamps();

@@ -72,6 +72,7 @@ class StudentTeachingReadModel
         $notices = [];
         $events = [];
         $teachingLink = route('student.teaching.index', [], false);
+        $allCreditsLow = $this->entitlements->allCreditsLow($packages);
         foreach ($packages as $package) {
             foreach ($this->entitlements->projection($package) as $balance) {
                 if ($balance['id'] === null) {
@@ -81,7 +82,7 @@ class StudentTeachingReadModel
                 $canBook = $canBook || $requirements->contains(fn ($session): bool => (int) $session->required_entitlement_type_id === (int) $allocation?->entitlement_type_id && $balance['available'] >= (int) $session->required_entitlement_units);
                 $expiry = $package->expiryDeadline();
                 $soon = $package->status === 'active' && $expiry !== null && $expiry->lessThanOrEqualTo(now($this->timezones->getBusinessTimezone())->addDays(14)) && $balance['remaining'] > 0;
-                $low = $this->entitlements->eligible($package) && $this->entitlements->allCreditsLow($packages);
+                $low = $this->entitlements->eligible($package) && $allCreditsLow;
                 if (! $low && ! $soon) {
                     continue;
                 }

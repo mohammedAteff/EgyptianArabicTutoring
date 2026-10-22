@@ -24,7 +24,7 @@ class PaymentMethodController extends Controller
         DB::transaction(function () use ($request, $paymentMethod, $audit): void {
             $methods = PaymentMethod::query()->orderBy('id')->lockForUpdate()->get();
             $method = $methods->firstWhere('id', $paymentMethod->id);
-            abort_unless($method, 404);
+            abort_unless($method !== null, 404);
             $replacement = $methods->where('id', '!=', $method->id)->where('active', true)->sortBy('sort_order')->first();
             if ($method->active && ! $replacement) {
                 throw ValidationException::withMessages(['method' => 'Add or enable another payment method before removing the last enabled method.']);

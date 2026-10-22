@@ -21,11 +21,13 @@ class FormQuestion extends Model
         ];
     }
 
+    /** @return BelongsTo<FormVersion, $this> */
     public function version(): BelongsTo
     {
         return $this->belongsTo(FormVersion::class, 'form_version_id');
     }
 
+    /** @return HasMany<FormQuestionOption, $this> */
     public function options(): HasMany
     {
         return $this->hasMany(FormQuestionOption::class)->orderBy('sort_order')->orderBy('id');

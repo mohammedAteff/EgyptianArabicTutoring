@@ -66,7 +66,7 @@ class VaultOperationsExtensionsTest extends TestCase
     {
         $actor = Administrator::factory()->create(['name' => 'Summary staff']);
         PaymentRecord::factory()->create(['amount_paid' => '12.37', 'paid_at' => '2026-09-15 10:00:00', 'created_at' => '2026-09-16 10:00:00']);
-        PaymentRecord::factory()->create(['amount_paid' => '15.01', 'currency' => 'EUR', 'paid_at' => '2026-09-15 11:00:00']);
+        PaymentRecord::factory()->create(['student_package_id' => StudentPackage::factory()->create(['currency' => 'EUR'])->id, 'amount_paid' => '15.01', 'currency' => 'EUR', 'paid_at' => '2026-09-15 11:00:00']);
         $this->travelTo(CarbonImmutable::parse('2026-09-15 12:00:00', 'UTC'));
         app(AuditLogService::class)->log('student_updated', Student::class, null, null, null, $actor->id);
         app(AuditLogService::class)->log('staff_task_updated', StaffTask::class, null, ['status' => 'open'], ['status' => 'completed'], $actor->id);

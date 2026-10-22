@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * @property-read Visitor|null $visitor
+ */
 class VisitorSession extends Model
 {
     use HasFactory;
@@ -41,8 +44,9 @@ class VisitorSession extends Model
                 }
             }
 
-            if (isset($session->visitor_id) && is_string($session->visitor_id) && ! is_numeric($session->visitor_id)) {
-                $visitorUuid = $session->visitor_id;
+            $visitorId = $session->getAttribute('visitor_id');
+            if ($visitorId !== null && is_string($visitorId) && ! is_numeric($visitorId)) {
+                $visitorUuid = $visitorId;
                 $visitor = Visitor::where('visitor_token', $visitorUuid)
                     ->orWhere('visitor_id', $visitorUuid)
                     ->first();

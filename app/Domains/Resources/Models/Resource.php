@@ -15,8 +15,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Resource extends Model
 {
+    /** @use HasTranslations<ResourceTranslation> */
     use HasFactory, HasTranslations, SoftDeletes;
 
+    /** @return class-string<ResourceTranslation> */
     public function getTranslationModelClass(): string
     {
         return ResourceTranslation::class;
@@ -62,21 +64,25 @@ class Resource extends Model
         ];
     }
 
+    /** @return BelongsTo<ResourceCategory, $this> */
     public function category(): BelongsTo
     {
         return $this->belongsTo(ResourceCategory::class, 'category_id');
     }
 
+    /** @return HasMany<ResourceRequest, $this> */
     public function requests(): HasMany
     {
         return $this->hasMany(ResourceRequest::class, 'resource_id');
     }
 
+    /** @return HasMany<ResourceDownload, $this> */
     public function downloads(): HasMany
     {
         return $this->hasMany(ResourceDownload::class, 'resource_id');
     }
 
+    /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany
     {
         return $this->morphMany(ContentRevision::class, 'revisable');

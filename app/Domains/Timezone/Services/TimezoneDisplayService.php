@@ -115,12 +115,9 @@ class TimezoneDisplayService
         $timezone = 'UTC';
         $instant = null;
 
-        if (is_string($arg1) && ! ($arg2 instanceof DateTimeInterface)) {
+        if (is_string($arg1)) {
             $timezone = $arg1;
-            $instant = $arg2 ? Carbon::parse($arg2, 'UTC') : Carbon::now('UTC');
-        } elseif (is_string($arg1) && $arg2 instanceof DateTimeInterface) {
-            $timezone = $arg1;
-            $instant = $arg2;
+            $instant = $arg2 instanceof DateTimeInterface ? $arg2 : ($arg2 ? Carbon::parse($arg2, 'UTC') : Carbon::now('UTC'));
         } elseif ($arg1 instanceof DateTimeInterface && is_string($arg2)) {
             $instant = $arg1;
             $timezone = $arg2;

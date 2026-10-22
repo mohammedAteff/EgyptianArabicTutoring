@@ -64,8 +64,8 @@ class AdminDrawerAndSocialAccessibilityTest extends TestCase
 
         // Desktop layout reserves the fixed sidebar width for the entire content column,
         // including the topbar, so the navigation cannot cover the search/header area.
-        $response->assertSee('class="flex-1 flex flex-col min-w-0 overflow-hidden md:ml-64"', false);
-        $response->assertSee('class="ml-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"', false);
+        $response->assertSee('id="admin-content" class="flex-1 flex flex-col min-w-0 md:ml-64"', false);
+        $response->assertSee('class="ml-0 min-w-0 flex-1 p-4 sm:p-6 lg:p-8"', false);
 
         // The security audit table is restricted to Super Admins and remains scrollable.
         $this->admin->update(['role' => 'super_admin']);

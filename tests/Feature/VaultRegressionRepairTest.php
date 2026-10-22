@@ -35,6 +35,7 @@ class VaultRegressionRepairTest extends TestCase
         $package = StudentPackage::factory()->create($attributes + [
             'student_id' => $student->id, 'identity_state' => 'mapped', 'status' => 'active',
             'total_sessions_allocated' => $credits, 'expires_at' => now('UTC')->addDays(60), 'validity_days' => 60,
+            'funding_activated_at' => now('UTC'),
         ]);
         $allocation = StudentPackageEntitlement::create([
             'student_id' => $student->id, 'student_package_id' => $package->id,

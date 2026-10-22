@@ -15,8 +15,10 @@ use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Students\Services\BillingReconciliationService;
 use App\Domains\Students\Services\CashierReportService;
 use App\Domains\Students\Services\ReconciliationReport;
+use App\Domains\Students\Services\StudentBillingWriteService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentLedgerService;
+use App\Domains\System\Services\OperationFailureReporter;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Http\Controllers\Controller;
 use Carbon\CarbonImmutable;
@@ -78,16 +80,8 @@ class StudentBillingController extends Controller
         $students = $studentsQuery->orderBy('first_name')->orderBy('last_name')->paginate(15)->withQueryString();
 
         // Calculate exact remaining balance via bcmath for every package
-        $students->getCollection()->transform(function (Student $student) use ($ledger) {
-            foreach ($student->packages as $pkg) {
-                $summary = $ledger->summary($pkg, true);
-                $pkg->remaining_balance = $summary['balance_due'];
-                $pkg->setAttribute('overpaid', $summary['overpaid']);
-                $pkg->setAttribute('net_paid', $summary['net_paid']);
-                $pkg->available_credits = $summary['remaining_credits'];
-                $pkg->setAttribute('credit_summary', $summary);
-                $pkg->is_paid_in_full = bccomp($pkg->remaining_balance, '0.00', 2) <= 0;
-            }
+        $students->getCollection()->transform(function (Student $student) use ($ledger, $report) {
+            $report->preparePackages($student, $ledger);
 
             return $student;
         });
@@ -99,18 +93,7 @@ class StudentBillingController extends Controller
         $diagnosticEligibility = null;
         if ($selectedStudent) {
             $diagnosticEligibility = $ledger->checkDiagnosticCreditEligibility($selectedStudent->id);
-            foreach ($selectedStudent->packages as $pkg) {
-                $summary = $ledger->summary($pkg, true);
-                $pkg->remaining_balance = $summary['balance_due'];
-                $pkg->setAttribute('overpaid', $summary['overpaid']);
-                $pkg->setAttribute('net_paid', $summary['net_paid']);
-                $pkg->available_credits = $summary['remaining_credits'];
-                $pkg->setAttribute('credit_summary', $summary);
-                $pkg->is_paid_in_full = bccomp($pkg->remaining_balance, '0.00', 2) <= 0;
-                foreach ($pkg->payments as $payment) {
-                    $payment->setAttribute('refundable_amount', $ledger->refundableAmount($payment, $pkg));
-                }
-            }
+            $report->preparePackages($selectedStudent, $ledger, withRefundablePayments: true);
         }
 
         return view('admin.billing.cashier', [
@@ -149,13 +132,8 @@ class StudentBillingController extends Controller
         ]);
     }
 
-    public function storePackage(Request $request, int $student, StudentLedgerService $ledger, AuditLogService $auditLogs): RedirectResponse
+    public function storePackage(Request $request, int $student, StudentBillingWriteService $writes): RedirectResponse
     {
-        $presetKey = $request->input('preset_key');
-        $preset = $presetKey && isset(StudentLedgerService::PRESETS[$presetKey])
-            ? StudentLedgerService::PRESETS[$presetKey]
-            : null;
-
         $validated = $request->validate([
             'entitlement_code' => ['required_without:preset_key', 'nullable', 'exists:entitlement_types,code'],
             'preset_key' => ['nullable', Rule::in(array_keys(StudentLedgerService::PRESETS))],
@@ -172,52 +150,22 @@ class StudentBillingController extends Controller
 
         $studentRecord = Student::query()->findOrFail($student);
 
-        // Auto-calculate expiration date using Cairo midnight if not provided but preset is known
-        $expirationDate = $validated['expiration_date'] ?? null;
-        if (! $expirationDate && $preset && $preset['validity_days'] !== null) {
-            $expirationDate = $ledger->calculateExpirationDate(CarbonImmutable::now('UTC'), $preset['validity_days']);
-        }
-
         try {
-            $package = $ledger->createPackage(
-                $studentRecord,
-                $validated['package_name'],
-                (int) $validated['total_sessions_allocated'],
-                $validated['original_price'],
-                $validated['discount_amount'],
-                strtoupper($validated['currency']),
-                $expirationDate,
-                $validated['package_idempotency_key'],
-                $request->user('web')?->id,
-                $validated['preset_key'] ?? null,
-                $validated['override_notes'] ?? null,
-                $validated['entitlement_code'] ?? null,
-                isset($validated['diagnostic_booking_id']) ? (int) $validated['diagnostic_booking_id'] : null,
-            );
+            $package = $writes->createPackage($studentRecord, $validated, $request->user('web')?->id);
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['package' => $exception->getMessage()]);
+        } catch (\Throwable $exception) {
+            app(OperationFailureReporter::class)->report($exception, 'create_student_package');
+
+            return back()->withInput()->with('error', 'Unable to save the package. Please try again.');
         }
 
         abort_unless($package->wasRecentlyCreated, 409, 'This package request was already processed.');
 
-        if ($package->wasRecentlyCreated) {
-            $auditLogs->log('student_package_created', StudentPackage::class, $package->id, null, [
-                'student_id' => $studentRecord->id,
-                'student_package_id' => $package->id,
-                'total_sessions_allocated' => $package->total_sessions_allocated,
-                'original_price' => $package->original_price,
-                'discount_amount' => $package->discount_amount,
-                'final_price' => $package->final_price,
-                'currency' => $package->currency,
-                'expiration_date' => $package->expiration_date?->toDateString(),
-                'override_notes' => $validated['override_notes'] ?? null,
-            ], $request->user('web')?->id);
-        }
-
         return back()->with('success', 'Session package saved.');
     }
 
-    public function storePayment(Request $request, int $student, int $package, StudentLedgerService $ledger, AuditLogService $auditLogs): RedirectResponse
+    public function storePayment(Request $request, int $student, int $package, StudentBillingWriteService $writes): RedirectResponse
     {
         $idempotencyField = 'payment_idempotency_key_'.$package;
         if (! $request->has($idempotencyField) && $request->has('payment_idempotency_key')) {
@@ -262,35 +210,16 @@ class StudentBillingController extends Controller
             }
         }
         try {
-            $payment = $ledger->recordPayment(
-                $packageRecord,
-                $validated['amount_paid'],
-                $validated[$idempotencyField],
-                $request->user('web')?->id,
-                $validated['payment_method'],
-                $validated['transaction_reference'] ?? null,
-                $validated['notes'] ?? null,
-                $method->id,
-                $receipt?->utc(),
-            );
+            $payment = $writes->recordPayment($packageRecord, $validated, $validated[$idempotencyField], $method->id, $receipt?->utc(), $request->user('web')?->id);
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['payment' => $exception->getMessage()]);
+        } catch (\Throwable $exception) {
+            app(OperationFailureReporter::class)->report($exception, 'record_student_payment');
+
+            return back()->withInput()->with('error', 'Unable to save the payment. Please try again.');
         }
 
         abort_unless($payment->wasRecentlyCreated, 409, 'This payment request was already processed.');
-
-        if ($payment->wasRecentlyCreated) {
-            $auditLogs->log('student_payment_recorded', PaymentRecord::class, $payment->id, null, [
-                'student_id' => $student,
-                'student_package_id' => $packageRecord->id,
-                'payment_record_id' => $payment->id,
-                'amount_paid' => $payment->amount_paid,
-                'paid_at' => $payment->paid_at->utc()->toDateTimeString(),
-                'validity_started_at' => $packageRecord->fresh()->validity_started_at?->toDateTimeString(),
-                'expires_at' => $packageRecord->fresh()->expires_at?->toDateTimeString(),
-                'currency' => $payment->currency,
-            ], $request->user('web')?->id);
-        }
 
         return back()->with('success', 'Payment record saved.');
     }
@@ -330,18 +259,16 @@ class StudentBillingController extends Controller
 
             abort_unless($refund->wasRecentlyCreated, 409, 'This refund request was already processed.');
 
-            if ($refund->wasRecentlyCreated) {
-                $auditLogs->log('student_payment_refunded', PaymentRecord::class, $paymentRecord->id, null, [
-                    'student_id' => $student,
-                    'student_package_id' => $refund->student_package_id,
-                    'payment_record_id' => $paymentRecord->id,
-                    'payment_refund_id' => $refund->id,
-                    'reason_code' => $validated['reason_code'] ?? null, 'reason' => $validated['reason'] ?? null,
-                    'amount_refunded' => $refund->amount_refunded,
-                    'currency' => $refund->currency,
-                    'forfeited_credits' => (int) ($validated['forfeit_credits'] ?? 0),
-                ], $request->user('web')?->id);
-            }
+            $auditLogs->log('student_payment_refunded', PaymentRecord::class, $paymentRecord->id, null, [
+                'student_id' => $student,
+                'student_package_id' => $refund->student_package_id,
+                'payment_record_id' => $paymentRecord->id,
+                'payment_refund_id' => $refund->id,
+                'reason_code' => $validated['reason_code'] ?? null, 'reason' => $validated['reason'] ?? null,
+                'amount_refunded' => $refund->amount_refunded,
+                'currency' => $refund->currency,
+                'forfeited_credits' => (int) ($validated['forfeit_credits'] ?? 0),
+            ], $request->user('web')?->id);
 
             $forfeitMsg = ((int) ($validated['forfeit_credits'] ?? 0)) > 0
                 ? ' Refund saved and '.(int) $validated['forfeit_credits'].' credits forfeited.'
@@ -416,14 +343,12 @@ class StudentBillingController extends Controller
 
             abort_unless($entry->wasRecentlyCreated, 409, 'This credit adjustment was already processed.');
 
-            if ($entry->wasRecentlyCreated) {
-                $auditLogs->log('student_credit_adjusted', StudentPackage::class, $packageRecord->id, null, [
-                    'student_id' => $student,
-                    'student_package_id' => $packageRecord->id,
-                    'ledger_entry_id' => $entry->id, 'reason_code' => $validated['reason_code'] ?? null, 'description' => $validated['description'],
-                    'credit_change' => $entry->credit_change,
-                ], $request->user('web')?->id);
-            }
+            $auditLogs->log('student_credit_adjusted', StudentPackage::class, $packageRecord->id, null, [
+                'student_id' => $student,
+                'student_package_id' => $packageRecord->id,
+                'ledger_entry_id' => $entry->id, 'reason_code' => $validated['reason_code'] ?? null, 'description' => $validated['description'],
+                'credit_change' => $entry->credit_change,
+            ], $request->user('web')?->id);
 
             return back()->with('success', 'Credit adjustment recorded in the append-only ledger.');
         }, 5);

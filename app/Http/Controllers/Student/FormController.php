@@ -33,9 +33,9 @@ class FormController extends Controller
         $publishedSubmission = $studentSubmissions->first(fn (FormSubmission $candidate): bool => (int) $candidate->form_version_id === (int) $form->published_version_id);
         $submission = $publishedSubmission ?? ($request->boolean('new_version') ? null : $latestSubmission);
 
-        $version = $submission?->version ?? $form->publishedVersion()->with('questions.options')->firstOrFail();
+        $version = $submission->version ?? $form->publishedVersion()->with('questions.options')->firstOrFail();
         $answers = [];
-        foreach ($submission?->answers ?? [] as $answer) {
+        foreach ($submission->answers ?? [] as $answer) {
             $value = $answer->value_text;
             if (in_array($answer->question->question_type, ['multiple_choice'], true)) {
                 $value = json_decode((string) $value, true) ?? [];

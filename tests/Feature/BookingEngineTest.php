@@ -327,7 +327,7 @@ class BookingEngineTest extends TestCase
         $this->assertStringContainsString('BEGIN:VCALENDAR', $icsContent);
         $this->assertStringContainsString('VERSION:2.0', $icsContent);
         $this->assertStringContainsString('BEGIN:VEVENT', $icsContent);
-        $this->assertStringContainsString('UID:booking-'.$booking->confirmation_token, $icsContent);
+        $this->assertStringContainsString('UID:booking-'.$booking->id, $icsContent);
         $this->assertStringContainsString('DTSTART:'.$slotStartUtc->format('Ymd\THis\Z'), $icsContent);
         $this->assertStringContainsString('DTEND:'.$slotEndUtc->format('Ymd\THis\Z'), $icsContent);
         $this->assertStringContainsString('SUMMARY:1-on-1 Tutoring', $icsContent);

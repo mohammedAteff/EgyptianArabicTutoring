@@ -22,17 +22,54 @@ class FormCompletionReadModel
             }
         }
         $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block')])]);
-        $submissions = FormSubmission::query()->where('student_id', $student->id)->whereIn('form_version_id', $forms->pluck('published_version_id'))
+
+        return $this->metadata($forms, $this->submissions([$student->id], $forms->pluck('published_version_id')->all()));
+    }
+
+    /** @param list<int> $studentIds
+     * @return Collection<int, Collection<int, array<string, mixed>>>
+     */
+    public function forStudents(array $studentIds, bool $includeIntake = false): Collection
+    {
+        $forms = $this->assignments->assignedToStudents($studentIds, $includeIntake);
+        $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block')])]);
+        $submissions = $this->submissions($studentIds, $forms->pluck('published_version_id')->unique()->all())->groupBy('student_id');
+
+        return collect($studentIds)->mapWithKeys(fn (int $id): array => [$id => $this->metadata($forms->where('assigned_student_id', $id)->values(), $submissions->get($id, collect()))]);
+    }
+
+    /** @param list<int> $studentIds
+     * @param  list<int>  $versionIds
+     * @return Collection<int, FormSubmission>
+     */
+    private function submissions(array $studentIds, array $versionIds): Collection
+    {
+        return FormSubmission::query()->whereIn('student_id', $studentIds)->whereIn('form_version_id', $versionIds)
             ->withCount(['answers' => fn ($query) => $query->whereNotNull('value_text')->whereRaw("TRIM(value_text) <> ''")->where('value_text', '!=', '[]')])->orderByDesc('id')->get();
+    }
 
-        return $forms->map(function ($form) use ($submissions): array {
-            $submission = $submissions->firstWhere('form_version_id', $form->published_version_id);
-            $total = (int) $form->publishedVersion->questions_count;
-            $answered = min($total, (int) ($submission?->answers_count ?? 0));
+    /** @param \Illuminate\Database\Eloquent\Collection<int, Form> $forms
+     * @param  Collection<int, FormSubmission>  $submissions
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function metadata(\Illuminate\Database\Eloquent\Collection $forms, Collection $submissions): Collection
+    {
 
-            return ['form_id' => $form->id, 'slug' => $form->slug, 'title' => $form->title, 'mandatory' => $form->is_mandatory,
-                'status' => $submission?->status ?? 'missing', 'answered' => $answered, 'total' => $total,
-                'saved_at' => $submission?->updated_at, 'submitted_at' => $submission?->submitted_at];
-        });
+        return $forms->map(fn (Form $form): array => $this->formMetadata($form, $submissions));
+    }
+
+    /** @param Collection<int, FormSubmission> $submissions
+     * @return array<string, mixed>
+     */
+    private function formMetadata(Form $form, Collection $submissions): array
+    {
+
+        $submission = $submissions->firstWhere('form_version_id', $form->published_version_id);
+        $total = (int) $form->publishedVersion->getAttribute('questions_count');
+        $answered = min($total, (int) ($submission?->getAttribute('answers_count') ?? 0));
+
+        return ['form_id' => $form->id, 'form_version_id' => $form->published_version_id, 'slug' => $form->slug, 'title' => $form->title, 'mandatory' => $form->is_mandatory,
+            'status' => $submission->status ?? 'missing', 'has_submitted' => $submissions->contains(fn (FormSubmission $entry): bool => (int) $entry->form_version_id === (int) $form->published_version_id && $entry->status === 'submitted'), 'answered' => $answered, 'total' => $total,
+            'saved_at' => $submission?->updated_at, 'submitted_at' => $submission?->submitted_at];
     }
 }

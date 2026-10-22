@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Page extends Model
 {
+    /** @use HasTranslations<PageTranslation> */
     use HasFactory, HasTranslations;
 
+    /** @return class-string<PageTranslation> */
     public function getTranslationModelClass(): string
     {
         return PageTranslation::class;
@@ -55,6 +57,7 @@ class Page extends Model
         return $this->status === 'published' && $this->published_at !== null && $this->published_at->isPast();
     }
 
+    /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany
     {
         return $this->morphMany(ContentRevision::class, 'revisable');

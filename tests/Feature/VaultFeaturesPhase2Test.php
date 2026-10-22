@@ -334,6 +334,7 @@ class VaultFeaturesPhase2Test extends TestCase
             'total_sessions_allocated' => $credits,
             'expires_at' => now('UTC')->addDays(60),
             'validity_days' => 60,
+            'funding_activated_at' => now('UTC'),
         ]);
 
         $entitlementType = EntitlementType::query()->where('code', 'one_hour')->firstOrFail();

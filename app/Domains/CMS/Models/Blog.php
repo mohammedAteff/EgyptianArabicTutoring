@@ -5,7 +5,7 @@ namespace App\Domains\CMS\Models;
 use App\Domains\Administration\Models\Administrator;
 use App\Domains\CMS\Services\LocalizedUrlService;
 use App\Domains\Games\Models\Game;
-use App\Domains\Resources\Models\Resource;
+use App\Domains\Resources\Models\Resource as LearningResource;
 use Database\Factories\BlogFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -54,10 +54,10 @@ class Blog extends Model
         return $this->belongsToMany(self::class, 'blog_related_articles', 'blog_id', 'related_blog_id');
     }
 
-    /** @return BelongsToMany<resource, $this> */
+    /** @return BelongsToMany<LearningResource, $this> */
     public function relatedResources(): BelongsToMany
     {
-        return $this->belongsToMany(Resource::class, 'blog_related_resources', 'blog_id', 'resource_id');
+        return $this->belongsToMany(LearningResource::class, 'blog_related_resources', 'blog_id', 'resource_id');
     }
 
     /** @return BelongsToMany<Game, $this> */
@@ -79,16 +79,19 @@ class Blog extends Model
         return app(LocalizedUrlService::class)->getLocalizedUrl('blog.detail', $this->locale, $this->slug);
     }
 
+    /** @return BelongsTo<Administrator, $this> */
     public function author(): BelongsTo
     {
         return $this->belongsTo(Administrator::class, 'author_id');
     }
 
+    /** @return HasMany<BlogRevision, $this> */
     public function revisions(): HasMany
     {
         return $this->hasMany(BlogRevision::class, 'blog_id');
     }
 
+    /** @return HasMany<BlogSlugRedirect, $this> */
     public function redirects(): HasMany
     {
         return $this->hasMany(BlogSlugRedirect::class, 'blog_id');

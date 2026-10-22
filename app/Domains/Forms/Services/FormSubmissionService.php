@@ -97,7 +97,7 @@ class FormSubmissionService
             }
             $submission->status = $submit ? 'submitted' : 'draft';
             if ($submit) {
-                $submission->submitted_at = now('UTC');
+                $submission->setAttribute('submitted_at', now('UTC'));
             }
             $submission->save();
 

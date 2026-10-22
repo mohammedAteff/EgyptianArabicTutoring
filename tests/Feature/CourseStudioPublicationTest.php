@@ -255,6 +255,16 @@ class CourseStudioPublicationTest extends TestCase
         $plan['rows']['content_revisions'] = [(array) DB::table('content_revisions')->where('revisable_type', Course::class)->firstOrFail()];
         $archive = app(DevelopmentDataArchiveService::class);
         $file = $archive->create($actor, $plan);
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open(Storage::disk('local')->path($file['path'])));
+        $manifest = json_decode($zip->getFromName('manifest.json'), true, flags: JSON_THROW_ON_ERROR);
+        $payload = json_encode($plan['rows']['content_revisions'], JSON_THROW_ON_ERROR);
+        $manifest['row_counts']['content_revisions'] = 1;
+        $manifest['entries']['data/content_revisions.json'] = ['sha256' => hash('sha256', $payload), 'size' => strlen($payload)];
+        $zip->addFromString('data/content_revisions.json', $payload);
+        $zip->addFromString('manifest.json', json_encode($manifest, JSON_THROW_ON_ERROR));
+        $zip->close();
+
         try {
             $archive->read($actor, $file['path']);
             $this->fail('Resource imports must refuse LMS revisions.');
@@ -275,6 +285,6 @@ class CourseStudioPublicationTest extends TestCase
         $structure->setStatus($actor, $lesson, 'published', $lesson->fresh()->lock_version);
         $structure->addBlock($actor, $lesson, ['kind' => 'bunny_video']);
         $this->actingAs($actor, 'web')->postJson(route('admin.lms.courses.lifecycle', $course), ['status' => 'published', 'version' => $course->fresh()->lock_version])->assertUnprocessable()->assertJsonValidationErrors('publication');
-        $this->assertDatabaseCount('lms_course_releases',0);
+        $this->assertDatabaseCount('lms_course_releases', 0);
     }
 }

@@ -213,7 +213,7 @@ class StudentLedgerService
             throw new InvalidArgumentException('Invalid package terms.');
         }
 
-        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes, $type, $fingerprint, $diagnosticBookingId): StudentPackage {
+        return $this->database->transaction(function () use ($student, $name, $sessions, $originalCents, $discountCents, $currency, $expirationDate, $idempotencyKey, $administratorId, $presetKey, $overrideNotes, $type, $fingerprint, $fingerprintData, $diagnosticBookingId): StudentPackage {
             $lockedStudent = Student::withTrashed()->whereKey($student->id)->lockForUpdate()->firstOrFail();
             if ($lockedStudent->trashed() || $lockedStudent->identity_status === 'merged') {
                 throw new InvalidArgumentException('Packages cannot be assigned to an inactive student record.');
@@ -226,7 +226,15 @@ class StudentLedgerService
 
                 $replay = StudentPackage::findOrFail($existing->student_package_id);
                 if ($replay->purchase_fingerprint !== $fingerprint) {
-                    throw new InvalidArgumentException('Idempotency payload changed.');
+                    $legacyFingerprint = null;
+                    if ($expirationDate === null && $presetKey !== null && trim((string) $overrideNotes) === '' && self::PRESETS[$presetKey]['validity_days'] !== null) {
+                        $legacyData = $fingerprintData;
+                        $legacyData[5] = $this->calculateExpirationDate($replay->created_at, self::PRESETS[$presetKey]['validity_days']);
+                        $legacyFingerprint = hash('sha256', json_encode($legacyData, JSON_THROW_ON_ERROR));
+                    }
+                    if ($replay->purchase_fingerprint !== $legacyFingerprint) {
+                        throw new InvalidArgumentException('Idempotency payload changed.');
+                    }
                 }
 
                 return $replay;

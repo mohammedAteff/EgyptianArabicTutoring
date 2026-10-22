@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 
 class MeetingRoomUsageReadModel
 {
-    /** @return Collection<int, array<string, mixed>> */
+    /** @return Collection<int, array{room: MeetingRoom, used: int, next: Booking|null, busy: bool}> */
     public function overview(string $dateFrom, string $dateTo): Collection
     {
         $timezone = app(TimezoneService::class)->getBusinessTimezone();
