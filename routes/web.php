@@ -726,6 +726,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
                 Route::post('/run/{rule}', [TelegramController::class, 'run'])->middleware('throttle:5,1')->name('run');
                 Route::post('/preview', [TelegramController::class, 'preview'])->middleware('throttle:30,1')->name('preview');
                 Route::post('/test/{destination}', [TelegramController::class, 'test'])->middleware('throttle:5,1')->name('test');
+                Route::post('/commands/{bot}', [TelegramController::class, 'commands'])->middleware('throttle:5,1')->name('commands');
             });
             Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
             Route::post('/settings/email-safeguards', [EmailSafeguardController::class, 'update'])->name('settings.email-safeguards');

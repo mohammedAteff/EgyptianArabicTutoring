@@ -8,6 +8,7 @@ use App\Domains\Analytics\Models\DailyMetric;
 use App\Domains\Analytics\Models\Visitor;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\Analytics\Services\ContentAnalyticsService;
 use App\Domains\Analytics\Services\FunnelProgressionService;
 use App\Domains\Analytics\Services\SocialAnalyticsRollup;
 use App\Domains\CMS\Models\Setting;
@@ -203,7 +204,8 @@ class AggregateDailyAnalyticsCommand extends Command
             $dwellBySection,
             $viewsBySection
         ) {
-            DailyMetric::where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())->where('metric_date', $targetDate)->delete();
+            DailyMetric::where('reporting_timezone', app(TimezoneService::class)->getBusinessTimezone())->where('metric_date', $targetDate)
+                ->whereNotIn('dimension_key', ['game', 'resource'])->delete();
 
             foreach ($eventCounts as $eventName => $count) {
                 DailyMetric::create([
@@ -350,6 +352,7 @@ class AggregateDailyAnalyticsCommand extends Command
         }
 
         app(SocialAnalyticsRollup::class)->aggregateDay(CarbonImmutable::parse($targetDate, app(TimezoneService::class)->getBusinessTimezone()));
+        app(ContentAnalyticsService::class)->aggregateDay(CarbonImmutable::parse($targetDate, app(TimezoneService::class)->getBusinessTimezone()));
 
         // Optional Rebuilding of visitor_funnel_progressions (Section 14)
         if ($this->option('rebuild-funnel')) {
@@ -425,6 +428,7 @@ class AggregateDailyAnalyticsCommand extends Command
                     }
 
                     app(SocialAnalyticsRollup::class)->aggregateDay($currDay);
+                    app(ContentAnalyticsService::class)->aggregateDay($currDay);
                     $deletedEvents = AnalyticsEvent::where('created_at', '>=', $dayStartUtc)
                         ->where('created_at', '<', $dayEndUtc)
                         ->delete();
@@ -484,6 +488,7 @@ class AggregateDailyAnalyticsCommand extends Command
 
                     if ($hasRollup && $hasCountryRollup) {
                         app(SocialAnalyticsRollup::class)->aggregateDay($pruneDay);
+                        app(ContentAnalyticsService::class)->aggregateDay($pruneDay);
                         do {
                             $deletedChunk = DB::table('analytics_events')
                                 ->where('created_at', '>=', $dayStartUtc)

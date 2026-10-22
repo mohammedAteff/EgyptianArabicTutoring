@@ -4,6 +4,8 @@ namespace App\Domains\Notifications\Services;
 
 class TelegramRuleCatalog
 {
+    public const DIGESTS = ['business_digest', 'analytics_digest', 'morning_briefing', 'daily_wrapup', 'weekly_summary'];
+
     /** @return array<string, array{label:string,group:string,modes:list<string>,fields:list<string>,template:string,defaults:array{minutes:int,threshold:int}}> */
     public function all(): array
     {
@@ -19,6 +21,8 @@ class TelegramRuleCatalog
             'backup_success' => ['Backup completed', 'System', ['file_name', 'file_size', 'local_status', 'offsite_status']], 'backup_failure' => ['Backup failed', 'System', ['failure_code', 'local_status', 'offsite_status']],
             'maintenance_enabled' => ['Maintenance enabled', 'System', ['enabled_at', 'duration_minutes']], 'maintenance_duration' => ['Maintenance lasting too long', 'System', ['enabled_at', 'duration_minutes']],
             'business_digest' => ['Daily business digest', 'Digests', ['date', 'digest']], 'analytics_digest' => ['Daily analytics digest', 'Digests', ['date', 'digest']],
+            'morning_briefing' => ['Morning briefing', 'Digests', ['date', 'digest']], 'daily_wrapup' => ['Daily wrap-up', 'Digests', ['date', 'digest']],
+            'weekly_summary' => ['Weekly business summary (Mondays)', 'Digests', ['date', 'digest']],
         ];
         foreach (TelegramActivityEvents::AUDIT_ALERTS as $key => [$label, $group]) {
             $definitions[$key] = [$label, $group, ['event', 'student_name', 'record_type', 'record_id', 'status', 'occurred_at', 'admin_url']];
@@ -37,13 +41,24 @@ class TelegramRuleCatalog
         $definitions['meeting_missing'] = ['Lesson approaching without meeting details', 'Bookings', $booking];
         $result = [];
         foreach ($definitions as $key => [$label,$group,$fields]) {
-            $scheduled = in_array($key, ['business_digest', 'analytics_digest'], true);
+            $scheduled = in_array($key, self::DIGESTS, true);
             $templateFields = match ($key) {
                 'waitlist_opening' => ['student_name', 'details', 'admin_url'],
                 'system_warning' => ['notification_id', 'details', 'admin_url'],
                 default => $fields,
             };
             $template = $label."\n".implode("\n", array_map(fn (string $field): string => ucwords(str_replace('_', ' ', $field)).': {'.$field.'}', $templateFields));
+            $template = match ($key) {
+                'booking_created', 'booking_rescheduled', 'booking_cancelled', 'session_reminder' => '📅 '.$label."\n{student_name} · {session_title}\n🕒 {tutor_time}\nStudent time: {student_time}\n{booking_context}\nCredits: {remaining_credits}\nContact: {email} · {phone}\nMeeting: {meeting_url}\n{admin_url}",
+                'missing_form' => "📝 Required form outstanding\n{student_name} · {form_title}\nLesson: {tutor_time}\n{admin_url}",
+                'low_credits' => "🔔 Low lesson credits\n{student_name}\n{package_name}\n{remaining_credits}\n{admin_url}",
+                'package_expiring' => "⏳ Unused credits approaching expiry\n{student_name}\n{package_name}\n{remaining_credits}\nExpires: {expiry_date}\n{admin_url}",
+                'payment_recorded', 'payment_refunded', 'package_created' => '💳 '.$label."\n{student_name}\n{amount} {currency}\n{admin_url}",
+                'installment_overdue' => "⚠️ Installment overdue\n{student_name}\n{amount} {currency} · due {due_date}\n{admin_url}",
+                'resource_lead', 'resource_downloaded' => '📚 '.$label."\n{resource_title}\nCountry: {country} · Source: {source}\n{admin_url}",
+                'business_digest', 'analytics_digest', 'morning_briefing', 'daily_wrapup', 'weekly_summary' => $label." · {date}\n\n{digest}",
+                default => $template,
+            };
             $result[$key] = ['label' => $label, 'group' => $group, 'fields' => $fields, 'modes' => $scheduled ? ['scheduled', 'on_demand'] : ($key === 'meeting_missing' ? ['instant'] : ['instant', 'delayed']), 'template' => $template, 'defaults' => ['minutes' => match ($key) {
                 'missing_form' => 720, 'scheduler_stale', 'queue_stale' => 15, 'maintenance_duration' => 120, default => 60
             }, 'threshold' => match ($key) {
@@ -60,5 +75,18 @@ class TelegramRuleCatalog
     public function get(string $trigger): array
     {
         return $this->all()[$trigger] ?? throw new \InvalidArgumentException('Unknown alert type.');
+    }
+
+    public function isDefault(string $trigger, string $template): bool
+    {
+        $definition = $this->get($trigger);
+        $fields = match ($trigger) {
+            'waitlist_opening' => ['student_name', 'details', 'admin_url'],
+            'system_warning' => ['notification_id', 'details', 'admin_url'],
+            default => $definition['fields'],
+        };
+        $legacy = $definition['label']."\n".implode("\n", array_map(fn (string $field): string => ucwords(str_replace('_', ' ', $field)).': {'.$field.'}', $fields));
+
+        return $template === $definition['template'] || $template === $legacy;
     }
 }

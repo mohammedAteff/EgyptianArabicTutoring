@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\Games\Models\Game;
+use App\Domains\Games\Services\GameTelemetryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -110,7 +111,7 @@ class GameController extends Controller
         ]);
     }
 
-    public function track(Request $request, string $slug): JsonResponse
+    public function track(Request $request, string $slug, GameTelemetryService $telemetry): JsonResponse
     {
         $game = Game::query()
             ->where('slug', $slug)
@@ -137,8 +138,8 @@ class GameController extends Controller
             ?? $request->cookie('_va_session');
 
         $allowedKeys = $action === 'game_started'
-            ? ['level']
-            : ['score', 'total', 'duration_seconds', 'level'];
+            ? ['level', 'attempt_id']
+            : ['score', 'total', 'duration_seconds', 'level', 'attempt_id'];
 
         $clientValues = [];
 
@@ -184,13 +185,16 @@ class GameController extends Controller
             'game_title' => $game->title,
         ]);
 
+        $telemetry->validate($clientValues);
+
         $this->analyticsService->track(
             eventName: $action,
             metadata: $metadata,
             request: $request,
             visitorToken: $visitorToken,
             sessionToken: $sessionToken,
-            page: '/'.ltrim($request->path(), '/')
+            page: '/'.ltrim($request->path(), '/'),
+            eventUuid: $telemetry->eventIdentity($request, $game, $action, $clientValues['attempt_id'] ?? null)
         );
 
         return response()->json(['status' => 'tracked', 'action' => $action]);

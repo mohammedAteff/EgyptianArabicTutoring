@@ -33,7 +33,7 @@ class TelegramReadService
         $entry = $booking->consumedEntry;
         $package = $entry?->package;
         $package?->loadMissing(['payments', 'refunds', 'ledgerEntries', 'entitlements.type']);
-        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('Y-m-d H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('Y-m-d g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package, true)['balance_text'] : 'Direct booking', 'session_number' => $package ? (int) $package->ledgerEntries->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
+        $data = ['_booking_start' => $booking->start_at_utc->timestamp, '_student_id' => $booking->student_id, '_session_type_id' => $booking->session_type_id, 'country' => $booking->detected_country_code, 'source' => $booking->source, 'booking_id' => $booking->id, 'student_name' => $booking->student->name ?? $booking->contact->name ?? 'Student', 'email' => $booking->student->email ?? $booking->contact->email ?? null, 'phone' => $booking->student->phone ?? $booking->contact->phone ?? null, 'session_title' => $booking->sessionType->title ?? 'Lesson', 'tutor_time' => $booking->business_start->format('D j M Y, H:i T'), 'student_time' => $booking->start_at_utc->copy()->setTimezone($booking->student?->preferred_timezone ?: $booking->customer_timezone)->format('D j M Y, g:i A T'), 'admin_url' => route('admin.bookings.index'), 'meeting_url' => app(MeetingLinkService::class)->notificationUrl($booking, 0) ?? 'Unavailable', 'booking_context' => $package ? 'Returning package student' : 'Diagnostic booking', 'remaining_credits' => $package ? $this->ledger->summary($package, true)['balance_text'] : 'Direct booking', 'session_number' => $package ? (int) $package->ledgerEntries->where('credit_change', '<', 0)->where('id', '<=', $entry->id)->count() : 1, 'total_sessions' => $package->total_sessions_allocated ?? 1];
 
         return $data;
     }
@@ -43,7 +43,7 @@ class TelegramReadService
     {
         $package->loadMissing(['student', 'payments', 'refunds', 'ledgerEntries', 'entitlements.type']);
 
-        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package, true)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => $package->expiryLabel(), 'admin_url' => route('admin.students.show', $package->student_id)];
+        return ['_student_id' => $package->student_id, 'student_name' => $package->student->name, 'email' => $package->student->email, 'phone' => $package->student->phone, 'package_name' => $package->package_name, 'remaining_credits' => $this->ledger->summary($package, true)['balance_text'], 'offering_key' => $package->offering_key ?? 'legacy_unclassified', 'purchase_id' => $package->id, 'expiry_date' => app(TelegramReportFormatter::class)->expiry($package), 'admin_url' => route('admin.students.show', $package->student_id)];
     }
 
     public function scanPackage(StudentPackage $package): void
@@ -145,10 +145,13 @@ class TelegramReadService
                 if ($enabled && is_string($since) && $now->gte(CarbonImmutable::parse($since)->addMinutes($rule->minutes))) {
                     $this->automation->emit('maintenance_duration', 'maintenance:'.$now->timestamp, ['enabled_at' => $since, 'duration_minutes' => (int) CarbonImmutable::parse($since)->diffInMinutes($now)], 'maintenance:'.$since, $rule->id);
                 }
-            } elseif (in_array($rule->trigger, ['business_digest', 'analytics_digest'], true)) {
+            } elseif (in_array($rule->trigger, TelegramRuleCatalog::DIGESTS, true)) {
                 $local = $now->setTimezone((string) Setting::get('business_timezone', app(TimezoneService::class)->getBusinessTimezone()));
+                if ($rule->trigger === 'weekly_summary' && $local->dayOfWeekIso !== 1) {
+                    continue;
+                }
                 if ($rule->mode === 'scheduled' && $local->format('H:i') >= $rule->send_time) {
-                    $this->automation->emit($rule->trigger, 'digest:'.$local->toDateString(), ['date' => $local->toDateString(), 'digest' => $rule->trigger === 'business_digest' ? $this->businessDigest($rule->sections ?? []) : $this->stats(1)], null, $rule->id);
+                    $this->automation->emit($rule->trigger, 'digest:'.$local->toDateString(), ['date' => $local->toDateString(), 'digest' => in_array($rule->trigger, ['business_digest', 'analytics_digest'], true) ? $this->digest($rule->trigger, $rule->sections ?? [], false) : ''], null, $rule->id);
                 }
             }
         }
@@ -225,10 +228,26 @@ class TelegramReadService
         return implode("\n", $lines) ?: 'No digest sections selected.';
     }
 
-    public function stats(int $days): string
+    /** @param list<string> $sections */
+    public function digest(string $trigger, array $sections, bool $personal): string
     {
-        $end = CarbonImmutable::now(app(TimezoneService::class)->getBusinessTimezone())->endOfDay();
-        $start = $end->startOfDay()->subDays($days - 1);
+        $business = app(TelegramBusinessReadService::class);
+
+        return match ($trigger) {
+            'business_digest' => $this->businessDigest($sections),
+            'analytics_digest' => $this->stats(1),
+            'morning_briefing' => $business->briefing('morning', $personal),
+            'daily_wrapup' => $business->briefing('wrap', $personal),
+            'weekly_summary' => $business->weekly($personal),
+            default => throw new \InvalidArgumentException('Unknown digest.'),
+        };
+    }
+
+    public function stats(int $days, ?CarbonImmutable $from = null, ?CarbonImmutable $through = null): string
+    {
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+        $end = ($through ?? CarbonImmutable::now($timezone)->endOfDay())->setTimezone($timezone);
+        $start = $from?->setTimezone($timezone) ?? $end->startOfDay()->subDays($days - 1);
         $metrics = $this->analytics->reportingMetrics($start, $end)->where('dimension_key', '');
         $traffic = $this->reports->getTrafficReport($start, $end)['summary'];
         $lines = ['<b>Analytics</b>', $start->format('j M Y').($days > 1 ? ' – '.$end->format('j M Y') : '').' · '.e(app(TimezoneService::class)->getBusinessTimezone()), '', '<b>Traffic</b>'];
@@ -276,11 +295,31 @@ class TelegramReadService
         })->sortByDesc('unique_visitors')->take(5);
         foreach ($countries as $country) {
             $code = strtoupper($country->country_code);
-            $flag = mb_chr(127397 + ord($code[0])).mb_chr(127397 + ord($code[1]));
-            $lines[] = $flag.' '.e($display->resolveCountryName($code)).' — '.$country->unique_visitors;
+            $lines[] = e(app(TelegramReportFormatter::class)->country($code)).' — '.$country->unique_visitors;
         }
         if ($countries->isEmpty()) {
             $lines[] = 'No country data.';
+        }
+        $lines[] = '';
+        $lines[] = '<b>🎮 Games · recorded activity</b>';
+        $lines[] = 'Opens: '.$metrics->where('metric_name', 'game_opened')->sum('count').' · Starts: '.$metrics->where('metric_name', 'game_started')->sum('count').' · Completions: '.$metrics->where('metric_name', 'game_completed')->sum('count');
+        $lines[] = 'Open Games or Resources for item reports, linked completion rates and trends.';
+        if ($days > 1) {
+            $previousStart = $start->subDays($days);
+            $previousEnd = $end->min(CarbonImmutable::now($timezone))->subDays($days);
+            $previous = $this->reports->getTrafficReport($previousStart, $previousEnd)['summary'];
+            $previousMetrics = $this->analytics->reportingMetrics($previousStart, $previousEnd)->where('dimension_key', '');
+            $lines[] = '';
+            $lines[] = '<b>Change vs previous comparable period</b>';
+            if ($traffic['visitors_is_daily_sum'] === $previous['visitors_is_daily_sum']) {
+                $lines[] = app(TelegramReportFormatter::class)->comparison('Visitors', $traffic['visitors'], $previous['visitors']);
+            }
+            $lines[] = app(TelegramReportFormatter::class)->comparison('Sessions', $traffic['sessions'], $previous['sessions']);
+            $lines[] = app(TelegramReportFormatter::class)->comparison('Page views', $traffic['page_views'], $previous['page_views']);
+            foreach (['booking_completed' => 'Booking events', 'resource_requested' => 'Resource requests', 'game_started' => 'Game starts'] as $metric => $label) {
+                $lines[] = app(TelegramReportFormatter::class)->comparison($label, $metrics->where('metric_name', $metric)->sum('count'), $previousMetrics->where('metric_name', $metric)->sum('count'));
+            }
+            $lines[] = 'Current-day comparisons stop at the same local time. Visitor comparisons require the same counting basis.';
         }
 
         return implode("\n", $lines);

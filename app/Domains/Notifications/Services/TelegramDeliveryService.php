@@ -22,9 +22,9 @@ class TelegramDeliveryService
      * @param  list<string>  $parts
      * @param  list<list<array{type: string, offset: int, length: int, url?: string}>>  $entities
      */
-    public function direct(TelegramDestination $destination, array $parts, string $identity, string $trigger = 'test', array $entities = []): TelegramDelivery
+    public function direct(TelegramDestination $destination, array $parts, string $identity, string $trigger = 'test', array $entities = [], array $options = []): TelegramDelivery
     {
-        $delivery = TelegramDelivery::firstOrCreate(['dedupe_key' => hash('sha256', $trigger.':'.$destination->id.':'.$identity)], ['telegram_bot_id' => $destination->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'trigger' => $trigger, 'payload' => ['parts' => $parts, 'entities' => $entities], 'due_at' => now('UTC')]);
+        $delivery = TelegramDelivery::firstOrCreate(['dedupe_key' => hash('sha256', $trigger.':'.$destination->id.':'.$identity)], ['telegram_bot_id' => $destination->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'trigger' => $trigger, 'payload' => ['parts' => $parts, 'entities' => $entities, 'options' => $options], 'due_at' => now('UTC')]);
         $this->deliver($delivery->id, true);
 
         return $delivery->refresh();
@@ -42,6 +42,37 @@ class TelegramDeliveryService
 
             return;
         }
+        $access = $delivery->payload['options'] ?? [];
+        if ((isset($access['expires_at']) && $access['expires_at'] < now('UTC')->timestamp)
+            || (isset($access['navigation_key']) && Cache::get($access['navigation_key']) !== $access['navigation_version'])) {
+            $delivery->update(['status' => 'cancelled', 'failure_code' => 'report_expired_or_superseded']);
+
+            return;
+        }
+        if (isset($access['command']) && (! $delivery->bot->commands_enabled
+            || ! filter_var(Setting::get('telegram.commands_enabled', false), FILTER_VALIDATE_BOOLEAN)
+            || ! app(TelegramCommandCatalog::class)->allows($delivery->bot, $access['command'])
+            || ! in_array((string) ($access['user'] ?? ''), array_map('strval', $delivery->destination->allowed_user_ids ?? []), true)
+            || (string) ($access['chat_id'] ?? '') !== (string) $delivery->destination->chat_id
+            || (! empty($access['personal']) && $delivery->destination->detail_level !== 'personal'))) {
+            $delivery->update(['status' => 'cancelled', 'failure_code' => 'command_access_revoked']);
+
+            return;
+        }
+        if ($delivery->rule && isset($delivery->payload['source']) && ($delivery->payload['source']['_detail_level'] ?? null) !== $delivery->destination->detail_level) {
+            $source = $delivery->payload['source'];
+            $source['_detail_level'] = $delivery->destination->detail_level;
+            if (in_array($delivery->trigger, ['morning_briefing', 'daily_wrapup', 'weekly_summary'], true)) {
+                $source['digest'] = app(TelegramReadService::class)->digest($delivery->trigger, $delivery->rule->sections ?? [], $delivery->destination->detail_level === 'personal');
+            }
+            $parts = app(TelegramTemplateService::class)->deliveryParts($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal');
+            if ($delivery->next_part > 0) {
+                $delivery->update(['status' => 'cancelled', 'failure_code' => 'destination_privacy_changed']);
+
+                return;
+            }
+            $delivery->update(['payload' => array_merge($parts, ['source' => $source])]);
+        }
         if ($delivery->rule && in_array($delivery->trigger, TelegramFollowUpService::TRIGGERS, true)) {
             $source = app(TelegramFollowUpService::class)->currentFacts($delivery->rule, $delivery->payload['source'] ?? []);
             if ($source === null) {
@@ -49,8 +80,9 @@ class TelegramDeliveryService
 
                 return;
             }
+            $source['_detail_level'] = $delivery->destination->detail_level;
             $templates = app(TelegramTemplateService::class);
-            $delivery->update(['payload' => ['source' => $source, 'parts' => $templates->split($templates->render($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal'))]]);
+            $delivery->update(['payload' => array_merge($templates->deliveryParts($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal'), ['source' => $source])]);
         }
         if (in_array($delivery->trigger, ['session_reminder', 'missing_form'], true)) {
             $source = $delivery->payload['source'] ?? [];
@@ -71,8 +103,8 @@ class TelegramDeliveryService
             $source['meeting_url'] = $booking ? (app(MeetingLinkService::class)->notificationUrl($booking, (int) $delivery->rule->minutes) ?? 'Unavailable') : 'Unavailable';
             $source['meeting_provider'] = $booking->meeting_provider_snapshot ?? 'Unassigned';
             $templates = app(TelegramTemplateService::class);
-            $parts = $templates->split($templates->render($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal'));
-            $delivery->update(['payload' => ['source' => $source, 'parts' => $parts]]);
+            $parts = $templates->deliveryParts($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal');
+            $delivery->update(['payload' => array_merge($parts, ['source' => $source])]);
         }
         $lock = Cache::lock('telegram-send-bot:'.$delivery->telegram_bot_id, 30);
         if (! $lock->get()) {
@@ -106,7 +138,22 @@ class TelegramDeliveryService
                     if (! empty($delivery->payload['entities'][$index])) {
                         $message['entities'] = $delivery->payload['entities'][$index];
                     }
-                    $response = Http::connectTimeout(2)->timeout(5)->post('https://api.telegram.org/bot'.$delivery->bot->token.'/sendMessage', $message);
+                    $options = $delivery->payload['options'] ?? [];
+                    if ($delivery->rule?->priority === 'low') {
+                        $options['silent'] = true;
+                    }
+                    $method = 'sendMessage';
+                    if (count($parts) === 1 && isset($options['edit_message_id'])) {
+                        $method = 'editMessageText';
+                        $message['message_id'] = $options['edit_message_id'];
+                    }
+                    if ($index === count($parts) - 1 && ! empty($options['reply_markup'])) {
+                        $message['reply_markup'] = $options['reply_markup'];
+                    }
+                    if ($method === 'sendMessage' && ! empty($options['silent'])) {
+                        $message['disable_notification'] = true;
+                    }
+                    $response = Http::connectTimeout(2)->timeout(5)->post('https://api.telegram.org/bot'.$delivery->bot->token.'/'.$method, $message);
                 } catch (\Throwable) {
                     $delivery->update(['status' => 'uncertain', 'failure_code' => 'network_outcome_unknown']);
                     $delivery->bot->update(['last_failure_at' => now('UTC'), 'failure_code' => 'network_outcome_unknown']);
@@ -114,6 +161,11 @@ class TelegramDeliveryService
                     return;
                 }
                 if ($response->json('ok') !== true) {
+                    if ($method === 'editMessageText' && $response->json('error_code') === 400 && str_contains((string) $response->json('description', ''), 'message is not modified')) {
+                        $delivery->update(['status' => 'sent', 'failure_code' => null]);
+
+                        return;
+                    }
                     $code = (int) ($response->json('error_code') ?? $response->status());
                     $retry = ($code === 429 || $code >= 500) && $delivery->attempts < 4;
                     $safe = 'telegram_'.$code;

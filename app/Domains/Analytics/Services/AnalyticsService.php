@@ -504,6 +504,9 @@ class AnalyticsService
 
             if ($sToken && in_array($eventName, self::SESSION_DEDUPLICATED_EVENTS, true)) {
                 $dedupKey = 'va_dedup_session_'.app(AnalyticsLifecycle::class)->generation().'_'.$eventName.'_'.$sToken;
+                if ($eventName === 'resource_gate_viewed') {
+                    $dedupKey .= '_'.hash('sha256', (string) ($metadata['resource_slug'] ?? $metadata['resource_id'] ?? $page));
+                }
 
                 if (! Cache::add($dedupKey, true, now()->addMinutes(30))) {
                     return null;

@@ -174,7 +174,7 @@ class ReportController extends Controller
     protected function exportResources(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, array $filters): Response
     {
         $report = $this->reportService->getResourcesReport($start, $end, $filters);
-        $headers = ['Resource Title', 'Slug', 'File Type', 'Status', 'Lead Requests', 'Downloads', 'Conversion Rate'];
+        $headers = ['Resource Title', 'Slug', 'File Type', 'Status', 'Lead Requests', 'Access Actions', 'Requests Followed by Access (%)'];
         $rows = $report['rows']->map(fn ($r) => [
             $r['title'],
             $r['slug'],

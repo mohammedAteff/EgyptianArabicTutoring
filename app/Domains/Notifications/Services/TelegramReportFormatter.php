@@ -2,6 +2,10 @@
 
 namespace App\Domains\Notifications\Services;
 
+use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Timezone\Services\TimezoneDisplayService;
+use App\Domains\Timezone\Services\TimezoneService;
+
 class TelegramReportFormatter
 {
     /** @return array{text: string, entities: list<array{type: string, offset: int, length: int, url?: string}>} */
@@ -70,5 +74,35 @@ class TelegramReportFormatter
     public function units(string $text): int
     {
         return intdiv(strlen(mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')), 2);
+    }
+
+    public function comparison(string $label, int|float $current, int|float $previous): string
+    {
+        $change = $current - $previous;
+        $percentage = $previous > 0 ? ' · '.($change >= 0 ? '+' : '').round(100 * $change / $previous, 1).'%' : ' · no earlier activity';
+
+        return $label.': '.$current.' vs '.$previous.' · '.($change >= 0 ? '+' : '').$change.$percentage;
+    }
+
+    public function country(?string $code): string
+    {
+        $code = strtoupper($code ?? 'ZZ');
+        $display = app(TimezoneDisplayService::class);
+        if (! preg_match('/^[A-Z]{2}$/', $code) || in_array($code, ['ZZ', 'XX'], true) || $display->resolveCountryName($code) === $code) {
+            return '🌐 Unknown country';
+        }
+
+        return mb_chr(127397 + ord($code[0])).mb_chr(127397 + ord($code[1])).' '.$display->resolveCountryName($code);
+    }
+
+    public function expiry(StudentPackage $package): string
+    {
+        if ($package->validity_days !== null && $package->funding_activated_at === null) {
+            return 'Not started · awaiting first payment';
+        }
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+        $deadline = $package->expiryDeadline();
+
+        return $deadline ? $deadline->setTimezone($timezone)->format('j M Y, H:i').' · '.$timezone : 'No expiry';
     }
 }

@@ -25,7 +25,7 @@ class TelegramTemplateService
         foreach ($this->catalog->get($trigger)['fields'] as $field) {
             $private = in_array($field, ['student_name', 'email', 'phone', 'meeting_url', 'student_time', 'details', 'birthday', 'amount'], true);
             $value = (string) ($values[$field] ?? 'Unknown');
-            if ($field === 'digest' && in_array($trigger, ['analytics_digest', 'business_digest'], true)) {
+            if ($field === 'digest' && in_array($trigger, TelegramRuleCatalog::DIGESTS, true)) {
                 $value = app(TelegramReportFormatter::class)->format($value)['text'];
             }
             $replacements['{'.$field.'}'] = $private && ! $personal ? '[private]' : $value;
@@ -42,10 +42,30 @@ class TelegramTemplateService
     {
         $this->validate($trigger, $template);
         $formatter = app(TelegramReportFormatter::class);
+        if (in_array($trigger, TelegramRuleCatalog::DIGESTS, true) && $this->catalog->isDefault($trigger, $template)) {
+            $template = $this->catalog->get($trigger)['template'];
+        }
+        if (! in_array($trigger, TelegramRuleCatalog::DIGESTS, true) && $this->catalog->isDefault($trigger, $template)) {
+            if (array_key_exists('country', $values)) {
+                $values['country'] = $formatter->country((string) $values['country']);
+            }
+            $safe = array_map(fn ($value) => $value === null ? null : e((string) $value), $values);
+            foreach (['admin_url' => 'Open details', 'meeting_url' => 'Open meeting'] as $field => $label) {
+                if (isset($values[$field]) && preg_match('~^https?://~i', (string) $values[$field])) {
+                    $safe[$field] = '<a href="'.e((string) $values[$field]).'">'.$label.'</a>';
+                }
+            }
+            $rendered = $this->render($trigger, $this->catalog->get($trigger)['template'], $safe, $personal);
+            $newline = strpos($rendered, "\n");
+            $html = $newline === false ? '<b>'.$rendered.'</b>' : '<b>'.substr($rendered, 0, $newline).'</b>'.substr($rendered, $newline);
+            $formatted = $formatter->format($html);
+
+            return $formatter->split($formatted['text'], $formatted['entities']);
+        }
         $text = '';
         $entities = [];
         foreach (preg_split('/(\{[^{}]+\})/u', $template, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [] as $segment) {
-            if ($segment === '{digest}' && in_array($trigger, ['analytics_digest', 'business_digest'], true)) {
+            if ($segment === '{digest}' && in_array($trigger, TelegramRuleCatalog::DIGESTS, true)) {
                 $formatted = $formatter->format((string) ($values['digest'] ?? 'Unknown'));
                 $offset = $formatter->units($text);
                 foreach ($formatted['entities'] as $entity) {

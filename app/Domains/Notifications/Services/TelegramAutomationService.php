@@ -77,6 +77,10 @@ class TelegramAutomationService
                     $payload['_legacy_key'] = $legacyKey;
                 }
                 $dedupe = hash('sha256', $rule->id.':'.$destination->id.':'.$identity);
+                $payload['_detail_level'] = $destination->detail_level;
+                if (in_array($rule->trigger, ['morning_briefing', 'daily_wrapup', 'weekly_summary'], true)) {
+                    $payload['digest'] = app(TelegramReadService::class)->digest($rule->trigger, $rule->sections ?? [], $destination->detail_level === 'personal');
+                }
                 $parts = $this->templates->deliveryParts($rule->trigger, $rule->template, $payload, $destination->detail_level === 'personal');
                 try {
                     $delivery = TelegramDelivery::create(['telegram_bot_id' => $rule->telegram_bot_id, 'telegram_destination_id' => $destination->id, 'telegram_rule_id' => $rule->id, 'dedupe_key' => $dedupe, 'trigger' => $rule->trigger, 'payload' => array_merge($parts, ['source' => $payload]), 'due_at' => $due]);

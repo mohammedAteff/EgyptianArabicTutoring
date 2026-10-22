@@ -554,6 +554,8 @@ class PhaseCVerificationTest extends TestCase
         $this->assertNull($service->track('session_started', sessionToken: $session->session_token));
 
         $this->assertNotNull($service->track('resource_gate_viewed', ['resource_id' => 1], sessionToken: $session->session_token));
+        $this->assertNull($service->track('resource_gate_viewed', ['resource_id' => 1], sessionToken: $session->session_token));
+        $this->assertNotNull($service->track('resource_gate_viewed', ['resource_id' => 2], sessionToken: $session->session_token));
         $this->assertNull($service->track('resource_gate_viewed', ['resource_id' => 2], sessionToken: $session->session_token));
 
         $this->assertNotNull($service->track('social_link_clicked', ['platform' => 'whatsapp'], sessionToken: $session->session_token));

@@ -278,6 +278,10 @@ class ReportService
             ->withCount([
                 'requests' => fn ($q) => $q->whereBetween('created_at', [$start, $end]),
                 'downloads' => fn ($q) => $q->whereBetween('created_at', [$start, $end]),
+                'requests as followed_by_access_count' => fn ($q) => $q->whereBetween('created_at', [$start, $end])
+                    ->whereHas('downloads', fn ($downloads) => $downloads->where('created_at', '<=', $end)
+                        ->whereColumn('resource_downloads.resource_id', 'resource_requests.resource_id')
+                        ->whereColumn('resource_downloads.created_at', '>=', 'resource_requests.created_at')),
             ])
             ->orderByDesc('requests_count')
             ->get();
@@ -285,15 +289,19 @@ class ReportService
         $rows = $resources->map(function (Resource $r) {
             $reqCount = $r->requests_count;
             $dlCount = $r->downloads_count;
-            $conversion = $reqCount > 0 ? round(($dlCount / $reqCount) * 100, 1) : 0;
+            $followedByAccess = (int) $r->getAttribute('followed_by_access_count');
+            $conversion = $reqCount > 0 ? round(($followedByAccess / $reqCount) * 100, 1) : 0;
 
             return [
+                'id' => $r->id,
                 'title' => $r->title,
                 'slug' => $r->slug,
-                'file_type' => strtoupper($r->file_type),
+                'file_type' => strtoupper($r->file_type ?? ''),
                 'status' => ucfirst($r->status),
                 'requests' => $reqCount,
                 'downloads' => $dlCount,
+                'requests_followed_by_access' => $followedByAccess,
+                'conversion_rate' => $conversion,
                 'conversion_pct' => $conversion.'%',
             ];
         });

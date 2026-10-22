@@ -210,8 +210,8 @@
                                 <th class="py-3 px-4">Format</th>
                                 <th class="py-3 px-4">Status</th>
                                 <th class="py-3 px-4 text-right">Email Requests</th>
-                                <th class="py-3 px-4 text-right">Downloads</th>
-                                <th class="py-3 px-4 text-right">Conversion Rate</th>
+                                <th class="py-3 px-4 text-right">Access Actions</th>
+                                <th class="py-3 px-4 text-right">Requests Followed by Access</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">

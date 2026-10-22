@@ -1,4 +1,5 @@
 import './analytics-telemetry.js';
+import './game-telemetry.js';
 
 import './form-builder.js';
 import './clipboard.js';

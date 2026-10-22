@@ -81,20 +81,20 @@ class LmsOperationsService
 
     /** @param array<string,mixed> $filters
      * @return array<string,mixed> */
-    public function reviews(array $filters = []): array
+    public function reviews(array $filters = [], ?int $page = null, int $perPage = 20): array
     {
         $blockIds = LessonBlock::query()->when(! empty($filters['course_id']), fn ($q) => $q->whereHas('lesson', fn ($lessons) => $lessons->where('course_id', (int) $filters['course_id'])))->select('id');
         $quizzes = QuizAttempt::query()->whereIn('block_id', $blockIds)->where('status', 'pending_review')
             ->when(! empty($filters['student_id']), fn ($q) => $q->where('student_id', (int) $filters['student_id']))
             ->whereHas('student', fn ($q) => $q->verified()->whereNull('merged_into_student_id'))
-            ->with(['student:id,first_name,last_name', 'block.lesson.course'])->orderBy('id')->paginate(20, ['id', 'student_id', 'block_id', 'number', 'status', 'created_at'], 'quizzes');
+            ->with(['student:id,first_name,last_name', 'block.lesson.course'])->orderBy('id')->paginate($perPage, ['id', 'student_id', 'block_id', 'number', 'status', 'created_at'], 'quizzes', $page);
         $assignments = AssignmentSubmission::query()->whereIn('block_id', $blockIds)->whereIn('status', ['submitted', 'under_review'])
             ->when(! empty($filters['student_id']), fn ($q) => $q->where('student_id', (int) $filters['student_id']))
             ->whereHas('student', fn ($q) => $q->verified()->whereNull('merged_into_student_id'))
-            ->with(['student:id,first_name,last_name', 'block.lesson.course'])->orderBy('id')->paginate(20, ['id', 'student_id', 'block_id', 'number', 'status', 'created_at'], 'assignments');
+            ->with(['student:id,first_name,last_name', 'block.lesson.course'])->orderBy('id')->paginate($perPage, ['id', 'student_id', 'block_id', 'number', 'status', 'created_at'], 'assignments', $page);
         $videos = VideoAsset::query()->where('provider', 'bunny')->whereIn('status', ['uploading', 'processing', 'failed', 'delete_failed', 'create_unconfirmed'])
             ->when(! empty($filters['course_id']), fn ($q) => $q->where('course_id', (int) $filters['course_id']))->with('course')->orderBy('id')
-            ->paginate(20, ['id', 'course_id', 'label', 'status', 'created_at', 'updated_at'], 'videos');
+            ->paginate($perPage, ['id', 'course_id', 'label', 'status', 'created_at', 'updated_at'], 'videos', $page);
 
         return ['quizzes' => $quizzes, 'assignments' => $assignments, 'videos' => $videos];
     }

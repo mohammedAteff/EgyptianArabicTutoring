@@ -10,6 +10,8 @@ use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Notifications\Models\TelegramDestination;
 use App\Domains\Notifications\Models\TelegramRule;
 use App\Domains\Notifications\Services\TelegramAutomationService;
+use App\Domains\Notifications\Services\TelegramCommandCatalog;
+use App\Domains\Notifications\Services\TelegramCommandService;
 use App\Domains\Notifications\Services\TelegramDeliveryService;
 use App\Domains\Notifications\Services\TelegramLegacyImporter;
 use App\Domains\Notifications\Services\TelegramReadService;
@@ -65,7 +67,7 @@ class TelegramController extends Controller
 
     public function bot(Request $request, ?TelegramBot $bot = null): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:120'], 'token' => [$bot ? 'nullable' : 'required', 'string', 'regex:/^[0-9]{5,20}:[A-Za-z0-9_-]{20,100}$/'], 'commands' => ['nullable', 'array'], 'commands.*' => [Rule::in(['today', 'tomorrow', 'student', 'stats'])]]);
+        $data = $request->validate(['name' => ['required', 'string', 'max:120'], 'token' => [$bot ? 'nullable' : 'required', 'string', 'regex:/^[0-9]{5,20}:[A-Za-z0-9_-]{20,100}$/'], 'commands' => ['nullable', 'array'], 'commands.*' => [Rule::in(array_keys(app(TelegramCommandCatalog::class)->all()))]]);
         $data['enabled'] = $request->boolean('enabled');
         $data['commands_enabled'] = $request->boolean('commands_enabled');
         $data['commands'] = $data['commands'] ?? [];
@@ -132,8 +134,8 @@ class TelegramController extends Controller
 
     public function run(TelegramRule $rule, TelegramReadService $read, TelegramAutomationService $automation): RedirectResponse
     {
-        abort_unless($rule->mode === 'on_demand' && in_array($rule->trigger, ['business_digest', 'analytics_digest'], true), 422);
-        $automation->emit($rule->trigger, 'manual:'.Str::uuid(), ['date' => now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(), 'digest' => $rule->trigger === 'business_digest' ? $read->businessDigest($rule->sections ?? []) : $read->stats(1)], null, $rule->id);
+        abort_unless($rule->mode === 'on_demand' && in_array($rule->trigger, TelegramRuleCatalog::DIGESTS, true), 422);
+        $automation->emit($rule->trigger, 'manual:'.Str::uuid(), ['date' => now(app(TimezoneService::class)->getBusinessTimezone())->toDateString(), 'digest' => in_array($rule->trigger, ['business_digest', 'analytics_digest'], true) ? $read->digest($rule->trigger, $rule->sections ?? [], false) : ''], null, $rule->id);
         $this->audit('run', $rule->id, ['trigger' => $rule->trigger]);
 
         return back()->with('success', 'On-demand report requested. Check delivery history for its outcome.');
@@ -146,6 +148,14 @@ class TelegramController extends Controller
         $this->audit('test', $destination->id, ['status' => $result->status]);
 
         return back()->with($result->status === 'sent' ? 'success' : 'error', 'TEST delivery status: '.$result->status.($result->failure_code ? ' ('.$result->failure_code.')' : ''));
+    }
+
+    public function commands(TelegramBot $bot, TelegramCommandService $commands): RedirectResponse
+    {
+        $published = $commands->publishMenu($bot);
+        $this->audit('command_menu', $bot->id, ['published' => $published]);
+
+        return back()->with($published ? 'success' : 'error', $published ? 'Telegram command menu updated for allowed destinations. No report was sent.' : 'Menu update failed. Check that commands are enabled and the bot is configured correctly.');
     }
 
     /** @param array<string,mixed> $data */

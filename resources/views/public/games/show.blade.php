@@ -26,6 +26,9 @@
              gameSlug: @js($game->slug),
              trackingUrl: @js(route('games.track', ['slug' => $game->slug])),
              csrfToken: @js(csrf_token()),
+             telemetry: null,
+             init() { this.telemetry = window.awaGames.create({url: this.trackingUrl, csrf: this.csrfToken}); },
+             destroy() { this.telemetry?.destroy(); },
              state: 'intro', // 'intro', 'playing', 'finished'
              currentIndex: 0,
              score: 0,
@@ -105,15 +108,7 @@
                  this.selectedOption = null;
                  this.showFeedback = false;
 
-                 // Track game_started event
-                 fetch(this.trackingUrl, {
-                     method: 'POST',
-                     headers: {
-                         'Content-Type': 'application/json',
-                         'X-CSRF-TOKEN': this.csrfToken
-                     },
-                     body: JSON.stringify({ action: 'game_started' })
-                 });
+                 this.telemetry.start();
              },
              chooseOption(index) {
                  if (this.showFeedback) return;
@@ -135,21 +130,7 @@
              finishGame() {
                  this.state = 'finished';
 
-                 // Track game_completed event
-                 fetch(this.trackingUrl, {
-                     method: 'POST',
-                     headers: {
-                         'Content-Type': 'application/json',
-                         'X-CSRF-TOKEN': this.csrfToken
-                     },
-                     body: JSON.stringify({
-                         action: 'game_completed',
-                         metadata: {
-                             score: this.score,
-                             total: this.questions.length
-                         }
-                     })
-                 });
+                 this.telemetry.complete({score: this.score, total: this.questions.length});
              }
          }">
 
