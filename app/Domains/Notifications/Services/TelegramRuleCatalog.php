@@ -49,13 +49,17 @@ class TelegramRuleCatalog
             };
             $template = $label."\n".implode("\n", array_map(fn (string $field): string => ucwords(str_replace('_', ' ', $field)).': {'.$field.'}', $templateFields));
             $template = match ($key) {
-                'booking_created', 'booking_rescheduled', 'booking_cancelled', 'session_reminder' => '📅 '.$label."\n{student_name} · {session_title}\n🕒 {tutor_time}\nStudent time: {student_time}\n{booking_context}\nCredits: {remaining_credits}\nContact: {email} · {phone}\nMeeting: {meeting_url}\n{admin_url}",
-                'missing_form' => "📝 Required form outstanding\n{student_name} · {form_title}\nLesson: {tutor_time}\n{admin_url}",
-                'low_credits' => "🔔 Low lesson credits\n{student_name}\n{package_name}\n{remaining_credits}\n{admin_url}",
-                'package_expiring' => "⏳ Unused credits approaching expiry\n{student_name}\n{package_name}\n{remaining_credits}\nExpires: {expiry_date}\n{admin_url}",
-                'payment_recorded', 'payment_refunded', 'package_created' => '💳 '.$label."\n{student_name}\n{amount} {currency}\n{admin_url}",
-                'installment_overdue' => "⚠️ Installment overdue\n{student_name}\n{amount} {currency} · due {due_date}\n{admin_url}",
-                'resource_lead', 'resource_downloaded' => '📚 '.$label."\n{resource_title}\nCountry: {country} · Source: {source}\n{admin_url}",
+                'booking_created', 'booking_rescheduled', 'booking_cancelled', 'session_reminder' => '📅 '.$label."\n\n{student_name}\n{session_title}\n\n🕒 {tutor_time}\nStudent: {student_time}\n\n{booking_context}\nCredits: {remaining_credits}\n\n{email}\n{phone}\n\n{meeting_url}\n{admin_url}",
+                'missing_form' => "📝 Required form outstanding\n\n{student_name}\n{form_title}\n\nLesson: {tutor_time}\n\n{admin_url}",
+                'low_credits' => "🔔 Low lesson credits\n\n{student_name}\n\nAvailable credits\n{remaining_credits}\n\n{admin_url}",
+                'package_expiring' => "⏳ Credits approaching expiry\n\n{student_name}\n{package_name}\n\n{remaining_credits}\nExpires: {expiry_date}\n\n{admin_url}",
+                'payment_recorded', 'payment_refunded', 'package_created' => '💳 '.$label."\n\n{student_name}\n{amount} {currency}\n\n{admin_url}",
+                'installment_overdue' => "⚠️ Installment overdue\n\n{student_name}\n{amount} {currency}\nDue: {due_date}\n\n{admin_url}",
+                'resource_lead', 'resource_downloaded' => '📚 '.$label."\n\n{resource_title}\n\nCountry: {country}\nSource: {source}\n\n{admin_url}",
+                'homework_submitted' => $label."\n\n{student_name}\nHomework #{record_id}\n\n{admin_url}",
+                'student_verified' => $label."\n\n{student_name}\n\n{admin_url}",
+                'lesson_feedback' => $label."\n\n{student_name}\nLesson #{booking_id}\n\n{admin_url}",
+                'staff_task_overdue' => $label."\n\nTask #{record_id}\nDue: {due_date}\n\n{admin_url}",
                 'business_digest', 'analytics_digest', 'morning_briefing', 'daily_wrapup', 'weekly_summary' => $label." · {date}\n\n{digest}",
                 default => $template,
             };
@@ -87,6 +91,17 @@ class TelegramRuleCatalog
         };
         $legacy = $definition['label']."\n".implode("\n", array_map(fn (string $field): string => ucwords(str_replace('_', ' ', $field)).': {'.$field.'}', $fields));
 
-        return $template === $definition['template'] || $template === $legacy;
+        $previous = match ($trigger) {
+            'booking_created', 'booking_rescheduled', 'booking_cancelled', 'session_reminder' => '📅 '.$definition['label']."\n{student_name} · {session_title}\n🕒 {tutor_time}\nStudent time: {student_time}\n{booking_context}\nCredits: {remaining_credits}\nContact: {email} · {phone}\nMeeting: {meeting_url}\n{admin_url}",
+            'missing_form' => "📝 Required form outstanding\n{student_name} · {form_title}\nLesson: {tutor_time}\n{admin_url}",
+            'low_credits' => "🔔 Low lesson credits\n{student_name}\n{package_name}\n{remaining_credits}\n{admin_url}",
+            'package_expiring' => "⏳ Unused credits approaching expiry\n{student_name}\n{package_name}\n{remaining_credits}\nExpires: {expiry_date}\n{admin_url}",
+            'payment_recorded', 'payment_refunded', 'package_created' => '💳 '.$definition['label']."\n{student_name}\n{amount} {currency}\n{admin_url}",
+            'installment_overdue' => "⚠️ Installment overdue\n{student_name}\n{amount} {currency} · due {due_date}\n{admin_url}",
+            'resource_lead', 'resource_downloaded' => '📚 '.$definition['label']."\n{resource_title}\nCountry: {country} · Source: {source}\n{admin_url}",
+            default => $legacy,
+        };
+
+        return in_array($template, [$definition['template'], $legacy, $previous], true);
     }
 }

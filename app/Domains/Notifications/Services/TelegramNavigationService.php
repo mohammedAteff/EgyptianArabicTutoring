@@ -50,7 +50,7 @@ class TelegramNavigationService
         if (! $personal && in_array($command, ['student', 'money', 'brief', 'wrap'], true)) {
             $page = ['text' => $command === 'student' ? 'Student lookups require a trusted personal-detail destination.' : 'This report requires a trusted personal-detail destination.', 'buttons' => []];
         } elseif (in_array($command, ['start', 'help'], true)) {
-            $page = ['text' => '<b>🏠 Business dashboard</b>'."\n".'Choose a report below. All lesson times use '.e(app(TimezoneService::class)->getBusinessTimezone()).'.'."\n\n".'Use /student followed by a name to search.'."\n".'Reports accept today, yesterday, 7d, 30d, or two dates: /stats 2026-10-01 2026-10-14.'."\n".'Only enabled commands are shown. Use the website Telegram settings to enable more options.', 'buttons' => []];
+            $page = ['text' => '<b>🏠 Business dashboard</b>'."\n".e(app(TimezoneService::class)->getBusinessTimezone())."\n\nChoose what you need.".($command === 'help' ? "\n\nFind a student: /student name\nReports: today, yesterday, 7d, 30d, or two dates.\nExample: /stats 2026-10-01 2026-10-14\nUp to 90 days, ending today or earlier.\n\nEnable more options in the website Telegram settings." : ''), 'buttons' => []];
             foreach ($this->catalog->all() as $name => $label) {
                 if ($this->catalog->allows($bot, $name) && ($personal || ! in_array($name, ['student', 'money', 'brief', 'wrap'], true))) {
                     $page['buttons'][] = ['label' => $label, 'command' => $name, 'state' => in_array($name, ['games', 'resources'], true) ? ['section' => $name] : []];
@@ -58,12 +58,19 @@ class TelegramNavigationService
             }
         } elseif (in_array($command, ['stats', 'games', 'resources', 'money'], true)) {
             [$start, $end] = $this->bounds($state);
-            $page = $command === 'money' ? $this->business->money($start, $end) : $this->analytics->page($start, $end, $state);
-            if ($command === 'money') {
-                $page['text'] .= "\n".$start->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('j M Y').' – '.$end->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('j M Y');
-            }
-            foreach (['today' => 'Today', 'yesterday' => 'Yesterday', '7d' => '7 days', '30d' => '30 days'] as $range => $label) {
-                $page['buttons'][] = ['label' => $label, 'state' => ['range' => $range, 'start_date' => null, 'end_date' => null, 'page' => 0]];
+            if (! empty($state['period_picker'])) {
+                $page = ['text' => '<b>📅 Date range</b>'."\n".app(TelegramReportFormatter::class)->period($start, $end)."\n\nChoose a period below.\n\nFor custom dates, send:\n/".$command.' YYYY-MM-DD YYYY-MM-DD'."\nUp to 90 days, ending today or earlier.", 'buttons' => []];
+                foreach (['today' => 'Today', 'yesterday' => 'Yesterday', '7d' => '7 days', '30d' => '30 days'] as $range => $label) {
+                    $page['buttons'][] = ['label' => $label, 'state' => ['range' => $range, 'start_date' => null, 'end_date' => null, 'page' => 0, 'period_picker' => false], 'row' => 'periods'];
+                }
+                $page['buttons'][] = ['label' => '← Back to report', 'state' => ['period_picker' => false], 'row' => 'back'];
+            } else {
+                $page = $command === 'money' ? $this->business->money($start, $end) : $this->analytics->page($start, $end, $state);
+                if ($command === 'money') {
+                    [$heading, $body] = explode("\n", $page['text'], 2);
+                    $page['text'] = $heading."\n".app(TelegramReportFormatter::class)->period($start, $end)."\n\n".$body;
+                }
+                $page['buttons'][] = ['label' => '📅 Date range', 'state' => ['period_picker' => true], 'row' => 'period'];
             }
         } elseif (in_array($command, ['today', 'tomorrow', 'week'], true)) {
             $page = $this->business->schedule($command === 'week' ? 7 : 1, $command === 'tomorrow' ? 1 : 0, $personal, (int) ($state['page'] ?? 0));
@@ -73,16 +80,16 @@ class TelegramNavigationService
         } elseif ($command === 'student') {
             $page = $this->business->student($state);
         } elseif ($command === 'attention') {
-            $page = $this->business->attention($personal, (string) ($state['category'] ?? ''), (int) ($state['page'] ?? 0));
+            $page = $this->business->attention($personal, (string) ($state['category'] ?? ''), (int) ($state['page'] ?? 0), (bool) ($state['include_clear'] ?? false));
         } elseif ($command === 'status') {
             $page = $this->business->status();
         } else {
             $page = ['text' => $this->business->briefing($command, $personal),
                 'buttons' => [['label' => 'Needs attention', 'command' => 'attention'], ['label' => 'Today', 'command' => 'today'], ['label' => 'Money', 'command' => 'money']]];
         }
-        $page['buttons'][] = ['label' => '↻ Refresh', 'state' => []];
+        $page['buttons'][] = ['label' => '↻ Refresh', 'state' => [], 'row' => 'footer'];
         if (! in_array($command, ['start', 'help'], true)) {
-            $page['buttons'][] = ['label' => '🏠 Home', 'command' => 'start'];
+            $page['buttons'][] = ['label' => '🏠 Home', 'command' => 'start', 'row' => 'footer'];
         }
         $keyboard = [];
         $urls = [];
@@ -92,7 +99,7 @@ class TelegramNavigationService
                     continue;
                 }
                 $urls[] = $button['url'];
-                $keyboard[] = ['text' => $button['label'], 'url' => $button['url']];
+                $keyboard[$button['row'] ?? 'content'][] = ['text' => $button['label'], 'url' => $button['url']];
 
                 continue;
             }
@@ -105,10 +112,29 @@ class TelegramNavigationService
             $token = Str::random(32);
             $context = ['bot' => $bot->id, 'destination' => $destination->id, 'user' => $user, 'state' => $next];
             Cache::put('telegram-navigation:'.$token, Crypt::encryptString(json_encode($context, JSON_THROW_ON_ERROR)), now('UTC')->addMinutes(30));
-            $keyboard[] = ['text' => $button['label'], 'callback_data' => 'nav:'.$token];
+            $keyboard[$button['row'] ?? 'content'][] = ['text' => $button['label'], 'callback_data' => 'nav:'.$token];
+        }
+        $rows = [];
+        foreach ($keyboard as $group) {
+            $row = [];
+            foreach ($group as $button) {
+                $wide = mb_strlen($button['text']) > 18;
+                if ($row !== [] && ($wide || count($row) === 2)) {
+                    $rows[] = $row;
+                    $row = [];
+                }
+                $row[] = $button;
+                if ($wide) {
+                    $rows[] = $row;
+                    $row = [];
+                }
+            }
+            if ($row !== []) {
+                $rows[] = $row;
+            }
         }
 
-        return ['text' => $page['text'], 'reply_markup' => ['inline_keyboard' => array_chunk($keyboard, 2)]];
+        return ['text' => $page['text'], 'reply_markup' => ['inline_keyboard' => $rows]];
     }
 
     /** @return array<string, mixed>|null */

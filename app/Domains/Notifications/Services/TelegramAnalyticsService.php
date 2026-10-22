@@ -22,9 +22,16 @@ class TelegramAnalyticsService
         $days = (int) $start->setTimezone($timezone)->startOfDay()->diffInDays($end->setTimezone($timezone)->startOfDay()) + 1;
         $buttons = [];
         $page = max(0, (int) ($state['page'] ?? 0));
-        $title = $start->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('j M Y').' – '.$end->setTimezone(app(TimezoneService::class)->getBusinessTimezone())->format('j M Y').' · '.e(app(TimezoneService::class)->getBusinessTimezone());
-        if ($section === 'overview') {
-            $text = $this->read->stats($days, $start, $end);
+        $title = $this->formatter->period($start, $end);
+        if (in_array($section, ['overview', 'pages', 'changes'], true)) {
+            $text = $this->read->stats($days, $start, $end, $section);
+        } elseif ($section === 'details') {
+            $text = '<b>📊 Website details</b>'."\n".$title."\n\nChoose a breakdown.";
+            foreach (['pages' => 'Pages', 'countries' => 'Countries', 'sources' => 'Sources', 'funnel' => 'Booking funnel', 'changes' => 'Changes', 'notes' => 'How counted'] as $key => $label) {
+                $buttons[] = ['label' => $label, 'state' => ['section' => $key, 'page' => 0], 'row' => 'sections'];
+            }
+        } elseif ($section === 'notes') {
+            $text = '<b>ℹ️ How analytics are counted</b>'."\n".$title."\n\nVisitors are tracked browsers. Where raw history is unavailable, the report labels a sum of daily uniques; that is not a period-unique count.\n\nToday ends at the current time. Comparisons use the same local time and matching visitor-count basis.\n\nDetailed breakdowns use retained activity. Missing historical details are not reconstructed.\n\nGame results are submitted engagement data. External game opens do not confirm play. Resource access actions do not prove that a file was received or read.";
         } elseif (in_array($section, ['games', 'resources'], true)) {
             $id = isset($state['id']) ? (int) $state['id'] : null;
             $report = $section === 'games' ? $this->content->games($start, $end, $id) : $this->content->resources($start, $end, $id);
@@ -48,15 +55,18 @@ class TelegramAnalyticsService
                     }
                     $this->pagination($buttons, $page, count($item['days']), 10);
                 } elseif ($section === 'games') {
-                    $lines = array_merge($lines, $this->gameLines($item));
+                    $lines = array_merge($lines, $this->gameLines($item, $view));
                 } else {
-                    $lines = array_merge($lines, $this->resourceLines($item));
+                    $lines = array_merge($lines, $this->resourceLines($item, $view));
                 }
-                foreach (['overview' => 'Overview', 'trend' => 'Daily trend', 'countries' => 'Countries', 'sources' => 'Sources'] as $key => $label) {
-                    $buttons[] = ['label' => $label, 'state' => ['view' => $key, 'page' => 0]];
+                $views = ['overview' => 'Overview'] + ($section === 'games' ? ['play' => 'Play attempts', 'results' => 'Scores & time'] : ['journey' => 'Request journey']) + ['trend' => 'Daily trend', 'countries' => 'Countries', 'sources' => 'Sources', 'notes' => 'How counted'];
+                foreach ($views as $key => $label) {
+                    if ($key !== $view) {
+                        $buttons[] = ['label' => $label, 'state' => ['view' => $key, 'page' => 0], 'row' => 'views'];
+                    }
                 }
-                $buttons[] = ['label' => $section === 'games' ? 'Open game' : 'Open resource', 'url' => route($section === 'games' ? 'games.show' : 'resources.show', $item['slug'])];
-                $buttons[] = ['label' => 'All '.$section, 'state' => ['id' => null, 'view' => null, 'page' => 0]];
+                $buttons[] = ['label' => $section === 'games' ? 'Open game ↗' : 'Open resource ↗', 'url' => route($section === 'games' ? 'games.show' : 'resources.show', $item['slug']), 'row' => 'actions'];
+                $buttons[] = ['label' => '← All '.$section, 'state' => ['id' => null, 'view' => null, 'page' => 0], 'row' => 'back'];
             } elseif ($id !== null) {
                 $lines[] = 'This item is no longer available.';
                 $buttons[] = ['label' => 'All '.$section, 'state' => ['id' => null, 'view' => null]];
@@ -72,7 +82,7 @@ class TelegramAnalyticsService
                 $current = $rows->sum($metric);
                 $before = $previous['rows']->sum($metric);
                 $lines[] = 'Previous comparable period '.$metric.': '.$before.' · Change: '.($current - $before >= 0 ? '+' : '').($current - $before);
-                $lines[] = 'Includes today only through the current time, when applicable.';
+                $lines[] = 'Today is counted through now.';
                 $lines[] = '';
                 $page = max(0, (int) ($state['page'] ?? 0));
                 foreach ($rows->slice($page * 6, 6) as $row) {
@@ -92,8 +102,6 @@ class TelegramAnalyticsService
                     $buttons[] = ['label' => 'Next →', 'state' => ['page' => $page + 1]];
                 }
             }
-            $lines[] = '';
-            $lines[] = 'Detailed views use retained activity. Missing historical detail is not reconstructed.';
             $text = implode("\n", $lines);
         } elseif ($section === 'funnel') {
             $data = $this->analytics->getPrimaryBookingFunnel($start, $end);
@@ -117,9 +125,11 @@ class TelegramAnalyticsService
             $this->pagination($buttons, $page, $sources->count(), 8);
             $text = implode("\n", $lines);
         }
-        foreach (['overview' => '📊 Overview', 'games' => '🎮 Games', 'resources' => '📚 Resources', 'funnel' => '📈 Booking funnel', 'countries' => '🌍 Countries', 'sources' => '📣 Sources'] as $key => $label) {
+        $destinations = $section === 'overview' ? ['games' => '🎮 Games', 'resources' => '📚 Resources', 'details' => 'Website details']
+            : (in_array($section, ['games', 'resources'], true) ? ['overview' => '← Analytics'] : ['details' => '← Details', 'overview' => '← Analytics']);
+        foreach ($destinations as $key => $label) {
             if ($key !== $section) {
-                $buttons[] = ['label' => $label, 'command' => 'stats', 'state' => ['section' => $key, 'id' => null, 'view' => null, 'page' => 0]];
+                $buttons[] = ['label' => $label, 'command' => 'stats', 'state' => ['section' => $key, 'id' => null, 'view' => null, 'page' => 0], 'row' => 'sections'];
             }
         }
 
@@ -129,21 +139,23 @@ class TelegramAnalyticsService
     /** @param array<string, mixed> $row
      * @return list<string>
      */
-    private function gameLines(array $row): array
+    private function gameLines(array $row, string $view): array
     {
-        $lines = ['Opens: '.$row['opened'].' · Tracked visitors (retained detail): '.$row['tracked_visitors'], 'Recorded starts: '.$row['started'].' · Recorded completions: '.$row['completed'], '', '<b>Linked play attempts · retained detail</b>',
-            'Started: '.$row['attempts'].' · Completed: '.$row['linked_completed'], 'Completion: '.($row['completion_rate'] !== null ? $row['completion_rate'].'% ('.$row['linked_completed'].'/'.$row['attempts'].')' : 'Not available'),
-            'Recent unfinished (<24h): '.$row['pending'].' · No completion recorded after 24h: '.$row['without_completion'], 'Repeat tracked players: '.$row['repeat_players'], 'Legacy starts without a play ID: '.$row['legacy_starts'], '', '<b>Submitted results · engagement data</b>',
+        if ($view === 'overview') {
+            return ['Opens: '.$row['opened'], 'Tracked browsers: '.$row['tracked_visitors'], '', 'Recorded starts: '.$row['started'], 'Recorded completions: '.$row['completed'], '', 'Linked completion: '.($row['completion_rate'] !== null ? $row['completion_rate'].'% ('.$row['linked_completed'].'/'.$row['attempts'].')' : 'Not available'), 'Linked figures use retained play attempts.'];
+        }
+        if ($view === 'play') {
+            return ['<b>Play attempts · retained activity</b>', 'Started: '.$row['attempts'], 'Completed: '.$row['linked_completed'], '', 'Unfinished under 24h: '.$row['pending'], 'No finish after 24h: '.$row['without_completion'], 'Repeat players: '.$row['repeat_players'], 'Legacy starts without a play ID: '.$row['legacy_starts']];
+        }
+        if ($view === 'notes') {
+            return ['<b>How counted</b>', 'Starts belong to this period. Completions are linked through report end to the same game, browser and play ID.', '', 'Detailed views use retained activity; missing history is not reconstructed.', 'Results are submitted engagement data, not verified assessments.', '', 'Later bookings: '.$row['later_bookings'].' · confirmed/completed/no-show, same browser within this period. Association, not causation.', $row['external'] ? 'External game opens do not confirm play; start/result tracking requires integration.' : 'Active time excludes time while the game is hidden or unfocused.'];
+        }
+        $lines = ['<b>Scores &amp; active time</b>',
             'Average score: '.($row['average_score'] !== null ? $row['average_score'].'%' : 'Not available').' · '.$row['score_samples'].' valid samples'];
         foreach ($row['score_distribution'] as $range => $count) {
             $lines[] = $range.': '.$count;
         }
         $lines[] = 'Average active play: '.($row['average_seconds'] !== null ? $row['average_seconds'].' sec' : 'Not available').' · '.$row['duration_samples'].' samples';
-        $lines[] = 'Later confirmed/completed/no-show bookings: '.$row['later_bookings'].' · same tracked browser, within this period; association, not causation.';
-        $lines[] = 'Starts belong to this period; completions are counted through its report end. Visitors represent tracked browsers.';
-        if ($row['external']) {
-            $lines[] = 'External game: an outbound open does not confirm play. Start/result tracking requires integration.';
-        }
 
         return $lines;
     }
@@ -151,14 +163,20 @@ class TelegramAnalyticsService
     /** @param array<string, mixed> $row
      * @return list<string>
      */
-    private function resourceLines(array $row): array
+    private function resourceLines(array $row, string $view): array
     {
-        return ['Detail-page views: '.$row['views'].' · Access-panel views: '.$row['gate_views'], 'Requests: '.$row['requests'].' · Distinct requesting contacts: '.$row['contacts'],
-            'First-time requesters: '.$row['new_requesters'].' · Returning requesters: '.$row['returning_requesters'], 'First-time means no earlier resource request under this contact record.', '',
-            'Recorded access actions: '.$row['download_actions'], 'Requests followed by access: '.$row['linked_downloads'].'/'.$row['requests'].' · '.($row['download_rate'] !== null ? $row['download_rate'].'%' : 'Not available'),
-            'Requests without recorded access: '.$row['without_download'], '', $row['external'] ? 'External access actions are redirects; file receipt is not confirmed.' : 'Local access actions are file delivery requests; reading or successful receipt is not confirmed.',
-            'Later confirmed/completed/no-show bookings after a tracked request: '.$row['later_bookings'].' · same browser, within this period; association, not causation.',
-            'Request-to-access figures follow requests created within the selected period, through report end.'];
+        if ($view === 'overview') {
+            return ['Detail-page views: '.$row['views'], 'Access-panel views: '.$row['gate_views'], '', 'Requests: '.$row['requests'], 'Access actions: '.$row['download_actions'], 'Requests followed by access: '.$row['linked_downloads'].'/'.$row['requests'].' · '.($row['download_rate'] !== null ? $row['download_rate'].'%' : 'Not available')];
+        }
+        if ($view === 'journey') {
+            return ['<b>Request journey</b>', 'Requesting contacts: '.$row['contacts'], 'First-time: '.$row['new_requesters'], 'Returning: '.$row['returning_requesters'], '', 'Requests without access: '.$row['without_download'], 'Later bookings: '.$row['later_bookings'], 'Later bookings share a tracked browser and follow a request within this period; association, not causation.'];
+        }
+
+        return ['<b>How counted</b>', 'First-time requesters have no earlier resource request under the same contact record.', '',
+            'Request-to-access figures follow requests created in this period, through report end. Repeated access actions do not increase the number of converted requests.', '',
+            $row['external'] ? 'External actions are redirects. File receipt is not confirmed.' : 'Local actions are file delivery requests. Reading or successful receipt is not confirmed.', '',
+            'Later bookings include confirmed, completed and no-show bookings after a request by the same browser, within this period. Association, not causation.', '',
+            'Detailed views use retained activity; missing history is not reconstructed.'];
     }
 
     /** @param array<string, array{events: int, visitors: array<string, bool>}> $values

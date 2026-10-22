@@ -39,6 +39,9 @@ class TelegramController extends Controller
             $tab = 'overview';
         }
         $rule = $request->filled('edit') ? TelegramRule::findOrFail($request->integer('edit')) : null;
+        if ($rule && $catalog->isDefault($rule->trigger, $rule->template)) {
+            $rule->template = $catalog->get($rule->trigger)['template'];
+        }
         $history = TelegramDelivery::with(['bot', 'destination', 'rule'])->orderByDesc('id');
         $filters = $request->validate(['bot' => ['nullable', 'integer'], 'destination' => ['nullable', 'integer'], 'rule' => ['nullable', 'integer'], 'status' => ['nullable', Rule::in(['pending', 'sending', 'sent', 'failed', 'uncertain', 'cancelled'])], 'date' => ['nullable', 'date_format:Y-m-d']]);
         foreach (['bot' => 'telegram_bot_id', 'destination' => 'telegram_destination_id', 'rule' => 'telegram_rule_id', 'status' => 'status'] as $input => $column) {
@@ -128,8 +131,10 @@ class TelegramController extends Controller
         $samples['student_name'] = 'Example student';
         $samples['email'] = 'example@example.org';
         $samples['phone'] = 'Example phone';
+        $samples = array_replace($samples, ['session_title' => '1-hour Arabic lesson', 'tutor_time' => 'Thu 22 Oct, 15:00 Cairo', 'student_time' => 'Thu 22 Oct, 13:00 London', 'booking_context' => 'Package lesson', 'remaining_credits' => '1-hour: 0 · 2-hour: 10 available', 'package_name' => 'Example learning package', 'amount' => '50.00', 'currency' => 'USD', 'country' => 'EG', 'source' => 'Direct traffic', 'expiry_date' => '22 Nov 2026', 'due_date' => '22 Oct 2026', 'admin_url' => route('admin.telegram.index'), 'meeting_url' => 'https://example.org/lesson', 'digest' => "<b>Today</b>\n2 confirmed lessons\n\n<b>Needs attention</b>\n1 required form outstanding"]);
 
-        return back()->with('preview', $templates->render($data['trigger'], $data['template'], $samples, true))->withInput($request->except(['token']));
+        return back()->with('preview', $templates->render($data['trigger'], $data['template'], $samples, true))
+            ->with('preview_messages', $templates->deliveryParts($data['trigger'], $data['template'], $samples, true))->withInput($request->except(['token']));
     }
 
     public function run(TelegramRule $rule, TelegramReadService $read, TelegramAutomationService $automation): RedirectResponse

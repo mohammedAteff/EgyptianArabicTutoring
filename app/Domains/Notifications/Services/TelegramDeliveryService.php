@@ -8,6 +8,8 @@ use App\Domains\CMS\Models\Setting;
 use App\Domains\Forms\Models\FormSubmission;
 use App\Domains\Notifications\Models\TelegramDelivery;
 use App\Domains\Notifications\Models\TelegramDestination;
+use App\Domains\Students\Models\StudentPackage;
+use App\Domains\Students\Services\EntitlementService;
 use App\Domains\Timezone\Services\TimezoneService;
 use App\Jobs\DeliverTelegramMessage;
 use Illuminate\Support\Facades\Cache;
@@ -71,6 +73,21 @@ class TelegramDeliveryService
 
                 return;
             }
+            $delivery->update(['payload' => array_merge($parts, ['source' => $source])]);
+        }
+        if ($delivery->rule && $delivery->trigger === 'low_credits') {
+            $source = $delivery->payload['source'] ?? [];
+            $package = StudentPackage::query()->with(['student.packages.entitlements.type', 'student.packages.ledgerEntries'])->find($source['purchase_id'] ?? null);
+            $entitlements = app(EntitlementService::class);
+            if (! $package || ! $entitlements->eligible($package) || ! $package->student
+                || ! $entitlements->allCreditsLow($package->student->packages, $delivery->rule->threshold)) {
+                $delivery->update(['status' => 'cancelled', 'failure_code' => 'source_no_longer_eligible']);
+
+                return;
+            }
+            $source['remaining_credits'] = app(TelegramReportFormatter::class)->credits($entitlements->forPackages($package->student->packages));
+            $source['_detail_level'] = $delivery->destination->detail_level;
+            $parts = app(TelegramTemplateService::class)->deliveryParts($delivery->trigger, $delivery->rule->template, $source, $delivery->destination->detail_level === 'personal');
             $delivery->update(['payload' => array_merge($parts, ['source' => $source])]);
         }
         if ($delivery->rule && in_array($delivery->trigger, TelegramFollowUpService::TRIGGERS, true)) {

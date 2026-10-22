@@ -187,7 +187,7 @@ class TelegramReadService
             }
         }
         if (in_array('students', $sections, true)) {
-            $low = 0;
+            $low = app(TelegramBusinessReadService::class)->lowCreditStudents()->count();
             $expiry = 0;
             $entitlements = app(EntitlementService::class);
             $expiryLimit = CarbonImmutable::now('UTC')->addDays(14);
@@ -201,15 +201,12 @@ class TelegramReadService
                         continue;
                     }
                     $remaining = $allocation['available'];
-                    if ($remaining <= 1) {
-                        $low++;
-                    }
                     if ($remaining > 0 && $deadline && $deadline->lessThanOrEqualTo($expiryLimit)) {
                         $expiry++;
                     }
                 }
             }
-            $lines[] = 'Low entitlement allocations (≤1): '.$low;
+            $lines[] = 'Students with low credits (all types ≤1): '.$low;
             $lines[] = 'Unused entitlement allocations expiring within 14 days: '.$expiry;
         }
         if (in_array('resources', $sections, true)) {
@@ -235,7 +232,7 @@ class TelegramReadService
 
         return match ($trigger) {
             'business_digest' => $this->businessDigest($sections),
-            'analytics_digest' => $this->stats(1),
+            'analytics_digest' => $this->stats(1, view: 'overview')."\n\nMore details: /stats today",
             'morning_briefing' => $business->briefing('morning', $personal),
             'daily_wrapup' => $business->briefing('wrap', $personal),
             'weekly_summary' => $business->weekly($personal),
@@ -243,20 +240,22 @@ class TelegramReadService
         };
     }
 
-    public function stats(int $days, ?CarbonImmutable $from = null, ?CarbonImmutable $through = null): string
+    public function stats(int $days, ?CarbonImmutable $from = null, ?CarbonImmutable $through = null, string $view = 'full'): string
     {
         $timezone = app(TimezoneService::class)->getBusinessTimezone();
         $end = ($through ?? CarbonImmutable::now($timezone)->endOfDay())->setTimezone($timezone);
         $start = $from?->setTimezone($timezone) ?? $end->startOfDay()->subDays($days - 1);
         $metrics = $this->analytics->reportingMetrics($start, $end)->where('dimension_key', '');
         $traffic = $this->reports->getTrafficReport($start, $end)['summary'];
-        $lines = ['<b>Analytics</b>', $start->format('j M Y').($days > 1 ? ' – '.$end->format('j M Y') : '').' · '.e(app(TimezoneService::class)->getBusinessTimezone()), '', '<b>Traffic</b>'];
+        $heading = ['<b>Analytics</b>', app(TelegramReportFormatter::class)->period($start, $end)];
+        $sections = [];
+        $lines = ['', '<b>Traffic</b>'];
         $lines[] = ($traffic['visitors_is_daily_sum'] ? 'Sum of daily unique visitors' : 'Unique visitors').': '.$traffic['visitors'];
         $lines[] = 'Sessions: '.$traffic['sessions'];
         $lines[] = 'Page views: '.$traffic['page_views'];
         $lines[] = 'Bounced sessions: '.$metrics->where('metric_name', 'bounced_sessions')->sum('count');
-        $lines[] = '';
-        $lines[] = '<b>Actions</b>';
+        $sections['traffic'] = $lines;
+        $lines = ['', '<b>Actions</b>'];
         foreach (['booking_completed' => 'Bookings completed', 'resource_requested' => 'Resources requested', 'resource_downloaded' => 'Resources downloaded'] as $metric => $label) {
             $lines[] = $label.': '.$metrics->where('metric_name', $metric)->sum('count');
         }
@@ -269,8 +268,8 @@ class TelegramReadService
         if ($platforms !== []) {
             $lines[] = implode(' · ', $platforms);
         }
-        $lines[] = '';
-        $lines[] = '<b>Top pages · views</b>';
+        $sections['actions'] = $lines;
+        $lines = ['', '<b>Top pages · views</b>'];
         $events = $this->reports->getEventsReport($start->setTimezone('UTC'), $end->setTimezone('UTC'), 'page_view')['rows'];
         foreach ($events->groupBy('page')->map(fn ($rows): int => (int) $rows->sum('event_count'))->sortDesc()->take(5) as $page => $views) {
             $lines[] = $this->pageLink((string) $page).' — '.$views;
@@ -278,15 +277,15 @@ class TelegramReadService
         if ($events->isEmpty()) {
             $lines[] = 'No page views.';
         }
-        $lines[] = '';
-        $lines[] = '<b>Sources · visitors</b>';
+        $sections['pages'] = $lines;
+        $lines = ['', '<b>Sources · visitors</b>'];
         foreach ($this->analytics->getAcquisitionPerformance($start->setTimezone('UTC'), $end->setTimezone('UTC'))->take(5) as $source) {
             $name = strtolower((string) $source->source) === 'direct' ? 'Direct traffic' : (string) $source->source;
             $details = collect([$source->medium, $source->campaign])->filter(fn ($value): bool => $value !== null && ! in_array(strtolower(trim((string) $value)), ['', 'none', '(none)', 'null', '(not set)'], true));
             $lines[] = e(Str::limit($name.($details->isNotEmpty() ? ' · '.$details->implode(' · ') : ''), 160)).' — '.$source->visitors;
         }
-        $lines[] = '';
-        $lines[] = '<b>Top countries · visitors</b>';
+        $sections['sources'] = $lines;
+        $lines = ['', '<b>Top countries · visitors</b>'];
         $display = app(TimezoneDisplayService::class);
         $countries = $this->analytics->reportingCountries($start, $end)->filter(function ($country) use ($display): bool {
             $code = strtoupper((string) $country->country_code);
@@ -300,17 +299,20 @@ class TelegramReadService
         if ($countries->isEmpty()) {
             $lines[] = 'No country data.';
         }
-        $lines[] = '';
-        $lines[] = '<b>🎮 Games · recorded activity</b>';
-        $lines[] = 'Opens: '.$metrics->where('metric_name', 'game_opened')->sum('count').' · Starts: '.$metrics->where('metric_name', 'game_started')->sum('count').' · Completions: '.$metrics->where('metric_name', 'game_completed')->sum('count');
-        $lines[] = 'Open Games or Resources for item reports, linked completion rates and trends.';
-        if ($days > 1) {
+        $sections['countries'] = $lines;
+        $lines = ['', '<b>🎮 Games · recorded activity</b>'];
+        $lines[] = 'Opens: '.$metrics->where('metric_name', 'game_opened')->sum('count');
+        $lines[] = 'Starts: '.$metrics->where('metric_name', 'game_started')->sum('count');
+        $lines[] = 'Completions: '.$metrics->where('metric_name', 'game_completed')->sum('count');
+        $sections['games'] = $lines;
+        $lines = [];
+        if ($days > 1 && in_array($view, ['full', 'changes'], true)) {
             $previousStart = $start->subDays($days);
             $previousEnd = $end->min(CarbonImmutable::now($timezone))->subDays($days);
             $previous = $this->reports->getTrafficReport($previousStart, $previousEnd)['summary'];
             $previousMetrics = $this->analytics->reportingMetrics($previousStart, $previousEnd)->where('dimension_key', '');
             $lines[] = '';
-            $lines[] = '<b>Change vs previous comparable period</b>';
+            $lines[] = '<b>Change vs previous period</b>';
             if ($traffic['visitors_is_daily_sum'] === $previous['visitors_is_daily_sum']) {
                 $lines[] = app(TelegramReportFormatter::class)->comparison('Visitors', $traffic['visitors'], $previous['visitors']);
             }
@@ -319,10 +321,17 @@ class TelegramReadService
             foreach (['booking_completed' => 'Booking events', 'resource_requested' => 'Resource requests', 'game_started' => 'Game starts'] as $metric => $label) {
                 $lines[] = app(TelegramReportFormatter::class)->comparison($label, $metrics->where('metric_name', $metric)->sum('count'), $previousMetrics->where('metric_name', $metric)->sum('count'));
             }
-            $lines[] = 'Current-day comparisons stop at the same local time. Visitor comparisons require the same counting basis.';
+            $lines[] = 'Today is compared through the same local time. Visitor counts use a matching basis.';
         }
+        $sections['changes'] = $lines ?: ['', 'Choose a period longer than one day to compare.'];
+        $selected = match ($view) {
+            'overview' => ['traffic', 'actions', 'countries', 'games'],
+            'pages' => ['pages'],
+            'changes' => ['changes'],
+            default => array_keys($sections),
+        };
 
-        return implode("\n", $lines);
+        return implode("\n", array_merge($heading, ...array_map(fn (string $section): array => $sections[$section], $selected)));
     }
 
     private function pageLink(string $page): string

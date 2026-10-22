@@ -21,10 +21,13 @@ use App\Domains\Students\Services\StudentLedgerService;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 
 class TelegramBusinessReadService
 {
+    private const PAGE_SIZE = 5;
+
     public function __construct(private TimezoneService $timezones, private StudentLedgerService $ledger, private EntitlementService $entitlements,
         private FormCompletionReadModel $forms, private InstallmentScheduleService $installments) {}
 
@@ -35,9 +38,9 @@ class TelegramBusinessReadService
         $query = Booking::query()->where('status', 'confirmed')->where('start_at_utc', '>=', $start->utc())->where('start_at_utc', '<', $start->addDays($days)->utc());
         $count = (clone $query)->count();
         $hours = round((float) (clone $query)->selectRaw('COALESCE(SUM(TIMESTAMPDIFF(MINUTE, start_at_utc, end_at_utc)), 0) AS minutes')->value('minutes') / 60, 1);
-        $bookings = $query->with(['student', 'contact', 'sessionType'])->orderBy('start_at_utc')->orderBy('id')->offset($page * 8)->limit(8)->get();
+        $bookings = $query->with(['student', 'contact', 'sessionType'])->orderBy('start_at_utc')->orderBy('id')->offset($page * self::PAGE_SIZE)->limit(self::PAGE_SIZE)->get();
         $forms = $this->forms->forStudents($bookings->pluck('student_id')->filter()->unique()->all());
-        $lines = ['<b>📅 '.($days > 1 ? 'Next 7 days' : ($offset ? 'Tomorrow' : 'Today')).'</b>', $start->format('D, j M Y').' · '.e($this->timezones->getBusinessTimezone()), $count.' confirmed sessions · '.$hours.' teaching hours', ''];
+        $lines = ['<b>📅 '.($days > 1 ? 'Next 7 days' : ($offset ? 'Tomorrow' : 'Today')).'</b>', $start->format('D, j M Y'), e($this->timezones->getBusinessTimezone()), $count.' confirmed sessions · '.$hours.' teaching hours', ''];
         $buttons = [];
         foreach ($bookings as $booking) {
             $name = $personal ? ($booking->student->name ?? $booking->contact->name ?? 'Student') : 'Lesson #'.$booking->id;
@@ -62,8 +65,11 @@ class TelegramBusinessReadService
         if ($page > 0) {
             $buttons[] = ['label' => '← Previous', 'state' => ['page' => $page - 1]];
         }
-        if (($page + 1) * 8 < $count) {
+        if (($page + 1) * self::PAGE_SIZE < $count) {
             $buttons[] = ['label' => 'Next →', 'state' => ['page' => $page + 1]];
+        }
+        if ($count > self::PAGE_SIZE) {
+            $lines[] = 'Showing '.($page * self::PAGE_SIZE + 1).'–'.min(($page + 1) * self::PAGE_SIZE, $count).' of '.$count;
         }
 
         return ['text' => implode("\n", $lines), 'buttons' => $buttons];
@@ -192,7 +198,7 @@ class TelegramBusinessReadService
     }
 
     /** @return array{text: string, buttons: list<array<string, mixed>>} */
-    public function attention(bool $personal, string $category = '', int $page = 0): array
+    public function attention(bool $personal, string $category = '', int $page = 0, bool $includeClear = false): array
     {
         $items = ['lessons' => [], 'forms' => [], 'payments' => [], 'credits' => [], 'expiry' => [], 'learning' => [], 'assignments' => [], 'quizzes' => [], 'waitlist' => [], 'tasks' => [], 'system' => []];
         $bookings = Booking::query()->where('status', 'confirmed')->whereBetween('start_at_utc', [now('UTC'), now('UTC')->addDays(7)])->with(['student', 'contact'])->orderBy('start_at_utc')->get();
@@ -226,19 +232,21 @@ class TelegramBusinessReadService
                 if ($allocation['id'] === null) {
                     continue;
                 }
-                if ($allocation['available'] <= 1) {
-                    $items['credits'][] = ['label' => $name.' — '.$allocation['label'].': '.$allocation['available'].' available', 'url' => $url];
-                }
                 if ($allocation['available'] > 0 && $package->expiryDeadline()?->lte(now('UTC')->addDays(14))) {
                     $items['expiry'][] = ['label' => $name.' — '.$allocation['label'].' · '.app(TelegramReportFormatter::class)->expiry($package), 'url' => $url];
                 }
             }
         }
+        foreach ($this->lowCreditStudents() as $student) {
+            $name = $personal ? $student->name : 'Student #'.$student->id;
+            $balances = $this->entitlements->forPackages($student->packages);
+            $items['credits'][] = ['label' => $name."\n".app(TelegramReportFormatter::class)->credits($balances), 'url' => $personal ? route('admin.students.show', $student->id) : null, 'button' => Str::limit($name, 32).' ↗'];
+        }
         $homework = Homework::query()->where('status', 'submitted')->orderBy('id')->get(['id', 'title', 'student_id']);
         foreach ($homework as $record) {
             $items['learning'][] = ['label' => 'Homework awaiting feedback'.($personal ? ' — '.$record->title : ''), 'url' => $personal ? route('admin.students.teaching', $record->student_id) : null];
         }
-        $reviews = app(LmsOperationsService::class)->reviews([], $page + 1, 8);
+        $reviews = app(LmsOperationsService::class)->reviews([], $page + 1, self::PAGE_SIZE);
         foreach (['assignments', 'quizzes'] as $kind) {
             foreach ($reviews[$kind]->items() as $submission) {
                 $items[$kind][] = ['label' => ($personal ? ($submission->student->name ?? 'Student') : 'Submission #'.$submission->id).' · '.($kind === 'quizzes' ? 'Quiz attempt' : 'Assignment').' #'.$submission->number,
@@ -254,7 +262,9 @@ class TelegramBusinessReadService
         foreach (AdminNotification::query()->unread()->where('type', 'system_warning')->orderBy('id')->pluck('id') as $id) {
             $items['system'][] = ['label' => 'Unresolved system warning #'.$id.' — review details in admin', 'url' => route('admin.dashboard')];
         }
-        $labels = ['lessons' => 'Lessons missing meeting details · next 7 days', 'forms' => 'Missing forms · lesson/form pairs · next 7 days', 'payments' => 'Overdue installments', 'credits' => 'Low credit allocations · ≤1', 'expiry' => 'Unused allocations expiring · next 14 days', 'learning' => 'Homework awaiting feedback', 'assignments' => 'Assignment submissions awaiting review', 'quizzes' => 'Quiz attempts awaiting review', 'waitlist' => 'Active waitlist preferences previously offered availability', 'tasks' => 'Overdue open tasks', 'system' => 'Unread system warnings'];
+        $labels = ['lessons' => 'Missing meeting links', 'forms' => 'Missing forms', 'payments' => 'Overdue installments', 'credits' => 'Students with low credits', 'expiry' => 'Expiring credits', 'learning' => 'Homework awaiting feedback', 'assignments' => 'Assignments to review', 'quizzes' => 'Quizzes to review', 'waitlist' => 'Waitlist follow-ups', 'tasks' => 'Overdue tasks', 'system' => 'System warnings'];
+        $buttonLabels = ['lessons' => 'Meeting links', 'forms' => 'Forms', 'payments' => 'Payments', 'credits' => 'Low credits', 'expiry' => 'Expiring', 'learning' => 'Homework', 'assignments' => 'Assignments', 'quizzes' => 'Quizzes', 'waitlist' => 'Waitlist', 'tasks' => 'Tasks', 'system' => 'Warnings'];
+        $notes = ['lessons' => 'Confirmed lessons in the next 7 days.', 'forms' => 'Required forms for lessons in the next 7 days; counted per lesson and form.', 'credits' => 'Available credits across all lesson types must be 1 or less per type. One entry per student.', 'expiry' => 'Unused credits expiring within 14 days.', 'waitlist' => 'Active preferences where availability was previously offered. Check current slots.'];
         $counts = array_map('count', $items);
         $counts['assignments'] = $reviews['assignments']->total();
         $counts['quizzes'] = $reviews['quizzes']->total();
@@ -262,29 +272,61 @@ class TelegramBusinessReadService
         $buttons = [];
         if (isset($items[$category])) {
             $lines[] = '<b>'.e($labels[$category]).' — '.$counts[$category].'</b>';
-            $visible = in_array($category, ['assignments', 'quizzes'], true) ? $items[$category] : array_slice($items[$category], $page * 8, 8);
-            foreach ($visible as $item) {
+            $lines[] = '';
+            $visible = in_array($category, ['assignments', 'quizzes'], true) ? $items[$category] : array_slice($items[$category], $page * self::PAGE_SIZE, self::PAGE_SIZE);
+            if ($page > 0 && $visible === [] && $counts[$category] > 0) {
+                return $this->attention($personal, $category, 0, $includeClear);
+            }
+            foreach ($visible as $index => $item) {
                 $label = $item['label'];
-                $lines[] = '• '.e($label);
+                $number = $page * self::PAGE_SIZE + $index + 1;
+                $lines[] = $number.'. '.e($label);
+                $lines[] = '';
                 if ($item['url']) {
-                    $buttons[] = ['label' => Str::limit($label, 30), 'url' => $item['url']];
+                    $buttons[] = ['label' => $item['button'] ?? 'Open item '.$number.' ↗', 'url' => $item['url'], 'row' => 'items'];
                 }
+            }
+            if ($counts[$category] === 0) {
+                $lines[] = '✅ Nothing to follow up here.';
+            } else {
+                $lines[] = 'Showing '.($page * self::PAGE_SIZE + 1).'–'.min(($page + 1) * self::PAGE_SIZE, $counts[$category]).' of '.$counts[$category];
+            }
+            if (isset($notes[$category])) {
+                $lines[] = $notes[$category];
             }
             if ($page > 0) {
                 $buttons[] = ['label' => '← Previous', 'state' => ['page' => $page - 1]];
             }
-            if (($page + 1) * 8 < $counts[$category]) {
+            if (($page + 1) * self::PAGE_SIZE < $counts[$category]) {
                 $buttons[] = ['label' => 'Next →', 'state' => ['page' => $page + 1]];
             }
-            $buttons[] = ['label' => 'All categories', 'state' => ['category' => '', 'page' => 0]];
+            $buttons[] = ['label' => '← Attention', 'state' => ['category' => '', 'page' => 0], 'row' => 'back'];
         } else {
             foreach ($items as $key => $rows) {
+                if ($counts[$key] === 0 && ! $includeClear) {
+                    continue;
+                }
                 $lines[] = $counts[$key].' · '.e($labels[$key]);
-                $buttons[] = ['label' => Str::limit($labels[$key], 28).' ('.$counts[$key].')', 'state' => ['category' => $key, 'page' => 0]];
+                $buttons[] = ['label' => $buttonLabels[$key].' ('.$counts[$key].')', 'state' => ['category' => $key, 'page' => 0], 'row' => 'categories'];
             }
+            $clear = count(array_filter($counts, fn (int $count): bool => $count === 0));
+            $lines[] = '';
+            if ($clear > 0) {
+                $lines[] = $clear === count($counts) ? '✅ All clear. Nothing needs attention.' : '✅ '.$clear.' other checks clear.';
+            }
+            $buttons[] = ['label' => $includeClear ? 'Active only' : 'All checks', 'state' => ['include_clear' => ! $includeClear], 'row' => 'back'];
         }
 
         return ['text' => implode("\n", $lines), 'buttons' => $buttons];
+    }
+
+    /** @return LazyCollection<int, Student> */
+    public function lowCreditStudents(int $threshold = 1): LazyCollection
+    {
+        return Student::query()->verified()->whereNull('merged_into_student_id')->whereHas('packages')
+            ->with(['packages.entitlements.type', 'packages.ledgerEntries'])->lazyById(100)
+            ->filter(fn (Student $student): bool => $student->packages->contains(fn (StudentPackage $package): bool => $this->entitlements->eligible($package))
+                && $this->entitlements->allCreditsLow($student->packages, $threshold));
     }
 
     /** @return array{text: string, buttons: list<array<string, mixed>>} */

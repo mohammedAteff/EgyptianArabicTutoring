@@ -146,7 +146,8 @@ class TelegramBusinessDashboardTest extends TestCase
         $before = Student::count();
         $page = app(TelegramNavigationService::class)->render($bot, $destination, '777', ['command' => 'attention']);
         $this->assertStringContainsString('Needs attention', $page['text']);
-        $this->assertStringContainsString('Overdue installments', $page['text']);
+        $this->assertStringContainsString('All clear', $page['text']);
+        $this->assertStringNotContainsString('Overdue installments', $page['text']);
         $this->assertSame($before, Student::count());
         Http::assertNothingSent();
 

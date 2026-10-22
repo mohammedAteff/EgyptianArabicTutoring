@@ -50,6 +50,9 @@ class TelegramTemplateService
                 $values['country'] = $formatter->country((string) $values['country']);
             }
             $safe = array_map(fn ($value) => $value === null ? null : e((string) $value), $values);
+            if (isset($safe['remaining_credits'])) {
+                $safe['remaining_credits'] = str_replace('; ', "\n", $safe['remaining_credits']);
+            }
             foreach (['admin_url' => 'Open details', 'meeting_url' => 'Open meeting'] as $field => $label) {
                 if (isset($values[$field]) && preg_match('~^https?://~i', (string) $values[$field])) {
                     $safe[$field] = '<a href="'.e((string) $values[$field]).'">'.$label.'</a>';

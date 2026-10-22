@@ -5,6 +5,8 @@ namespace App\Domains\Notifications\Services;
 use App\Domains\Students\Models\StudentPackage;
 use App\Domains\Timezone\Services\TimezoneDisplayService;
 use App\Domains\Timezone\Services\TimezoneService;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\HtmlString;
 
 class TelegramReportFormatter
 {
@@ -79,9 +81,59 @@ class TelegramReportFormatter
     public function comparison(string $label, int|float $current, int|float $previous): string
     {
         $change = $current - $previous;
-        $percentage = $previous > 0 ? ' · '.($change >= 0 ? '+' : '').round(100 * $change / $previous, 1).'%' : ' · no earlier activity';
+        if ($change == 0) {
+            return $label.': '.$current.' · unchanged';
+        }
+        $percentage = $previous > 0 ? ' ('.($change >= 0 ? '+' : '').round(100 * $change / $previous, 1).'%)' : ' · new activity';
 
-        return $label.': '.$current.' vs '.$previous.' · '.($change >= 0 ? '+' : '').$change.$percentage;
+        return $label.': '.$current.' · '.($change >= 0 ? '+' : '').$change.$percentage;
+    }
+
+    public function period(CarbonImmutable $start, CarbonImmutable $end): string
+    {
+        $timezone = app(TimezoneService::class)->getBusinessTimezone();
+        $from = $start->setTimezone($timezone)->format('j M Y');
+        $through = $end->setTimezone($timezone)->format('j M Y');
+
+        return $from.($from === $through ? '' : ' – '.$through)."\n".e($timezone);
+    }
+
+    /** @param array<string, array{label: string, remaining: int, available: int}> $balances */
+    public function credits(array $balances): string
+    {
+        $lines = [];
+        foreach ($balances as $code => $balance) {
+            if ($code === 'legacy_unclassified') {
+                continue;
+            }
+            $label = match ($code) {
+                'one_hour' => '1-hour', 'two_hour' => '2-hour', default => $balance['label']
+            };
+            $lines[] = $label.': '.$balance['available'];
+        }
+
+        return implode(' · ', $lines).' available';
+    }
+
+    /** @param list<array{type: string, offset: int, length: int, url?: string}> $entities */
+    public function previewHtml(string $text, array $entities): HtmlString
+    {
+        $utf16 = mb_convert_encoding($text, 'UTF-16LE', 'UTF-8');
+        $html = '';
+        $position = 0;
+        foreach ($entities as $entity) {
+            if ($entity['offset'] < $position || ! in_array($entity['type'], ['bold', 'text_link'], true)) {
+                continue;
+            }
+            $html .= e(mb_convert_encoding(substr($utf16, $position * 2, ($entity['offset'] - $position) * 2), 'UTF-8', 'UTF-16LE'));
+            $label = e(mb_convert_encoding(substr($utf16, $entity['offset'] * 2, $entity['length'] * 2), 'UTF-8', 'UTF-16LE'));
+            $url = $entity['url'] ?? '';
+            $html .= $entity['type'] === 'bold' ? '<strong>'.$label.'</strong>' : (preg_match('~^https?://~i', $url) ? '<a class="text-sky-700 underline" href="'.e($url).'" target="_blank" rel="noopener noreferrer">'.$label.'</a>' : $label);
+            $position = $entity['offset'] + $entity['length'];
+        }
+        $html .= e(mb_convert_encoding(substr($utf16, $position * 2), 'UTF-8', 'UTF-16LE'));
+
+        return new HtmlString($html);
     }
 
     public function country(?string $code): string

@@ -323,7 +323,7 @@ class TelegramAutomationTest extends TestCase
 
         $text = app(TelegramReadService::class)->businessDigest(['students']);
 
-        $this->assertSame("Low entitlement allocations (≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
+        $this->assertSame("Students with low credits (all types ≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
         Http::assertNothingSent();
     }
 
@@ -336,7 +336,7 @@ class TelegramAutomationTest extends TestCase
 
         $text = app(TelegramReadService::class)->businessDigest(['students']);
 
-        $this->assertSame("Low entitlement allocations (≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
+        $this->assertSame("Students with low credits (all types ≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
         Http::assertNothingSent();
     }
 
@@ -352,7 +352,7 @@ class TelegramAutomationTest extends TestCase
 
         $text = app(TelegramReadService::class)->businessDigest(['students']);
 
-        $this->assertSame("Low entitlement allocations (≤1): 1\nUnused entitlement allocations expiring within 14 days: ".$expiring, $text);
+        $this->assertSame("Students with low credits (all types ≤1): 1\nUnused entitlement allocations expiring within 14 days: ".$expiring, $text);
         Http::assertNothingSent();
     }
 
