@@ -7,7 +7,7 @@
 @forelse($submissions as $submission)
     <article class="rounded-xl border border-stone-200 bg-white p-5">
         <div class="flex flex-wrap justify-between gap-2"><h2 class="font-semibold">Submission #{{ $submission->id }} · {{ $submission->student?->first_name }} {{ $submission->student?->last_name }}</h2><span class="text-sm text-stone-500">{{ ucfirst($submission->status) }} · v{{ $submission->version->version_number }} · {{ $submission->submitted_at?->timezone($businessTimezone)->format('Y-m-d H:i') ?? 'Not submitted' }}</span></div>
-        <dl class="mt-4 grid gap-3 sm:grid-cols-2">@foreach($submission->answers as $answer)<div class="rounded-lg bg-stone-50 p-3"><dt class="text-xs font-semibold text-stone-600">{{ $answer->question?->label }}</dt><dd class="mt-1 whitespace-pre-wrap text-sm text-stone-900">{{ $answer->value_text }}</dd></div>@endforeach</dl>
+        <dl class="mt-4 grid gap-3 sm:grid-cols-2">@foreach($submission->answers as $answer)<div class="rounded-lg bg-stone-50 p-3"><dt class="text-xs font-semibold text-stone-600">{{ $answer->question?->label }}</dt><dd class="mt-1 whitespace-pre-wrap text-sm text-stone-900">{{ $answer->displayValue() }}</dd></div>@endforeach</dl>
     </article>
 @empty
     <p class="rounded-xl border border-stone-200 bg-white p-6 text-stone-600">No responses yet.</p>

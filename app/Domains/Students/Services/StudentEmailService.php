@@ -28,7 +28,7 @@ class StudentEmailService
         app(EmailQualityService::class)->validate($email);
         $key = 'student-secondary-email:'.$student->id;
         if (RateLimiter::tooManyAttempts($key, 6)) {
-            throw ValidationException::withMessages(['email' => 'Please wait before adding another email address.']);
+            throw ValidationException::withMessages(['email' => __('Please wait before adding another email address.')]);
         }
         RateLimiter::hit($key, 3600);
 
@@ -39,14 +39,14 @@ class StudentEmailService
                 $this->assertAvailable($lockedStudent, $email);
 
                 if ($lockedStudent->email_normalized === $email || StudentEmail::query()->where('student_id', $lockedStudent->id)->where('email_normalized', $email)->exists()) {
-                    throw ValidationException::withMessages(['email' => 'This email address is already connected to your student profile.']);
+                    throw ValidationException::withMessages(['email' => __('This email address is already connected to your student profile.')]);
                 }
 
                 StudentEmail::create(['student_id' => $lockedStudent->id, 'email_normalized' => $email, 'verified_at' => null]);
                 app(AuditLogService::class)->log('student_contact_email_added', Student::class, $lockedStudent->id, null, ['email' => $email, 'student_id' => $lockedStudent->id], null);
             }, 5);
         } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages(['email' => 'This email cannot be added to this profile.']);
+            throw ValidationException::withMessages(['email' => __('This email cannot be added to this profile.')]);
         }
     }
 
@@ -56,12 +56,12 @@ class StudentEmailService
         app(EmailQualityService::class)->validate($email);
         $key = 'student-secondary-email:'.$student->id;
         if (RateLimiter::tooManyAttempts($key, 6)) {
-            throw ValidationException::withMessages(['email' => 'Please wait before requesting another verification email.']);
+            throw ValidationException::withMessages(['email' => __('Please wait before requesting another verification email.')]);
         }
         RateLimiter::hit($key, 3600);
         $this->assertAvailable($student, $email);
         if ($this->trusted($student, $email)) {
-            throw ValidationException::withMessages(['email' => 'This email is already verified for your profile.']);
+            throw ValidationException::withMessages(['email' => __('This email is already verified for your profile.')]);
         }
         $token = Str::random(64);
         $challenge = DB::transaction(function () use ($student, $email, $token): StudentEmailVerification {
@@ -71,17 +71,17 @@ class StudentEmailService
             return StudentEmailVerification::create(['student_id' => $student->id, 'email_normalized' => $email, 'token_hash' => hash('sha256', $token), 'expires_at' => now('UTC')->addMinutes(15)]);
         }, 5);
         try {
-            Mail::to($email)->send(new StudentSecondaryEmailVerification(route('student.profile.email.verify', ['token' => $token])));
+            Mail::to($email)->send((new StudentSecondaryEmailVerification(route('student.profile.email.verify', ['token' => $token])))->locale(app()->getLocale()));
         } catch (\Throwable $exception) {
             $challenge->update(['consumed_at' => now('UTC')]);
-            throw ValidationException::withMessages(['email' => 'Verification email could not be sent. Please try again later.']);
+            throw ValidationException::withMessages(['email' => __('Verification email could not be sent. Please try again later.')]);
         }
     }
 
     public function verify(Student $student, string $token): void
     {
         if (! preg_match('/^[A-Za-z0-9]{64}$/', $token)) {
-            throw ValidationException::withMessages(['email' => 'This verification link is invalid or expired.']);
+            throw ValidationException::withMessages(['email' => __('This verification link is invalid or expired.')]);
         }
         try {
             DB::transaction(function () use ($student, $token): void {
@@ -90,7 +90,7 @@ class StudentEmailService
                 Student::verified()->whereNull('suspended_at')->whereKey($student->id)->lockForUpdate()->firstOrFail();
                 $challenge = StudentEmailVerification::query()->where('student_id', $student->id)->where('token_hash', hash('sha256', $token))->lockForUpdate()->first();
                 if (! $challenge || $challenge->consumed_at || $challenge->expires_at->lte(now('UTC'))) {
-                    throw ValidationException::withMessages(['email' => 'This verification link is invalid or expired.']);
+                    throw ValidationException::withMessages(['email' => __('This verification link is invalid or expired.')]);
                 }
                 $this->assertAvailable($student, $challenge->email_normalized);
                 $address = StudentEmail::firstOrCreate(['email_normalized' => $challenge->email_normalized], ['student_id' => $student->id, 'verified_at' => now('UTC')]);
@@ -101,14 +101,14 @@ class StudentEmailService
                 app(AuditLogService::class)->log('student_secondary_email_verified', Student::class, $student->id, null, ['email' => $challenge->email_normalized, 'student_id' => $student->id], null);
             }, 5);
         } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages(['email' => 'This email is already associated with another profile.']);
+            throw ValidationException::withMessages(['email' => __('This email is already associated with another profile.')]);
         }
     }
 
     private function assertAvailable(Student $student, string $email): void
     {
         if (Student::withTrashed()->where('email_normalized', $email)->where('id', '!=', $student->id)->exists() || StudentEmail::query()->where('email_normalized', $email)->where('student_id', '!=', $student->id)->exists()) {
-            throw ValidationException::withMessages(['email' => 'This email cannot be added to this profile.']);
+            throw ValidationException::withMessages(['email' => __('This email cannot be added to this profile.')]);
         }
     }
 }

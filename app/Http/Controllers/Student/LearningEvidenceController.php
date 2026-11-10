@@ -41,7 +41,7 @@ class LearningEvidenceController extends Controller
     {
         $this->progress->manual($this->student($request), $course, $lesson);
 
-        return to_route('student.learning.lessons.show', [$course, $lesson])->with('status', 'Your completion requirement was saved.');
+        return to_route('student.learning.lessons.show', [$course, $lesson])->with('status', __('Your completion requirement was saved.'));
     }
 
     public function show(Request $request, Course $course, Lesson $lesson, LessonBlock $block, StudentPortalService $portal): Response

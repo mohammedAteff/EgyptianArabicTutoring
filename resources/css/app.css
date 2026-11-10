@@ -1,5 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
+@import './public-studio.css';
+@import './pricing.css';
+@import './booking.css';
+@import './about.css';
+@import './faq.css';
+@import './legal.css';
+@import './resources.css';
+@import './games.css';
+@import './blogs.css';
+@import './student-portal.css';
+@import './learning-insights.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -27,7 +38,7 @@
 bdi[lang="ar"],
 .arabic-learning-text,
 [dir="rtl"][lang="ar"] {
-    font-family: var(--font-cairo);
+    font-family: var(--studio-font-arabic, var(--font-cairo));
     unicode-bidi: isolate;
     line-height: 1.6;
 }

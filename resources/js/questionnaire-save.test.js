@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createQuestionnaireSaveController } from './questionnaire-save.js';
+import { createQuestionnaireSaveController, initializeQuestionnaireSaves } from './questionnaire-save.js';
 
 function fixture(persist = async () => {}) {
     const statuses = [];
@@ -135,4 +135,141 @@ test('a second save call shares the in-flight request', async () => {
     assert.equal(count, 1);
     resolve();
     await first;
+});
+
+test('edits during submission preparation do not schedule a late autosave', async () => {
+    const { controller, edit, timers } = fixture();
+    edit('Initial answer');
+    await controller.prepareSubmission();
+    edit('Latest answer for native POST');
+    assert.equal(timers.size, 0);
+    assert.equal(controller.shouldWarn(), true);
+    controller.allowSubmissionNavigation();
+    edit('A genuine subsequent edit');
+    assert.equal(timers.size, 1);
+});
+
+// This models the integration lifecycle; actual native browser input is verified separately.
+function submissionFixture() {
+    const browser = new EventTarget();
+    const status = { dataset: {}, textContent: '' };
+    const requests = [];
+    const attempts = [];
+    const form = new EventTarget();
+    Object.assign(form, {
+        dataset: {},
+        questionnaireValues: () => ({}),
+        querySelector: () => status,
+        firing: false,
+        valid: true,
+        requestSubmit(submitter) {
+            attempts.push(submitter);
+            if (this.firing) return;
+            if (submitter && submitter.form !== this) throw new Error('Submitter removed');
+            if (!submitter?.formNoValidate && !this.valid) return;
+            const event = new Event('submit', { cancelable: true });
+            event.submitter = submitter;
+            if (this.dispatchEvent(event)) requests.push(submitter?.value ?? null);
+        },
+    });
+    const originalWindow = globalThis.window;
+    globalThis.window = browser;
+    try {
+        initializeQuestionnaireSaves({ querySelectorAll: () => [form] });
+    } finally {
+        globalThis.window = originalWindow;
+    }
+    const draft = { form, value: 'draft', formNoValidate: true };
+    const submit = { form, value: 'submit', formNoValidate: false };
+    const activate = async (submitter = submit) => {
+        form.firing = true;
+        const event = new Event('submit', { cancelable: true });
+        event.submitter = submitter;
+        form.dispatchEvent(event);
+        await Promise.resolve();
+        form.firing = false;
+    };
+    const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
+    return { form, browser, status, draft, submit, activate, nextTask, requests, attempts };
+}
+
+test('settled submission escapes the firing-events guard and preserves the chosen submitter', async () => {
+    const { activate, nextTask, submit, requests, attempts } = submissionFixture();
+    await activate(submit);
+    await nextTask();
+    assert.deepEqual(requests, ['submit']);
+    assert.deepEqual(attempts, [submit]);
+});
+
+test('incomplete draft keeps its validation exemption and rapid activation makes one native request', async () => {
+    const { form, activate, nextTask, draft, requests } = submissionFixture();
+    form.valid = false;
+    await activate(draft);
+    await activate(draft);
+    await nextTask();
+    await activate(draft);
+    await nextTask();
+    assert.deepEqual(requests, ['draft']);
+});
+
+test('cancelled native validation permits a corrected retry', async () => {
+    const { form, activate, nextTask, requests } = submissionFixture();
+    form.valid = false;
+    await activate();
+    await nextTask();
+    assert.deepEqual(requests, []);
+    form.valid = true;
+    await activate();
+    await nextTask();
+    assert.deepEqual(requests, ['submit']);
+});
+
+test('a removed submitter reports a usable retry without silently changing intent', async () => {
+    const { form, activate, nextTask, draft, submit, status, requests } = submissionFixture();
+    form.dispatchEvent(new Event('input'));
+    await activate(draft);
+    draft.form = null;
+    await nextTask();
+    assert.deepEqual(requests, []);
+    assert.equal(status.dataset.saveState, 'error');
+    await activate(submit);
+    await nextTask();
+    assert.deepEqual(requests, ['submit']);
+});
+
+test('another listener cancelling the reissued event permits a later retry', async () => {
+    const { form, activate, nextTask, requests, status } = submissionFixture();
+    const cancel = event => event.preventDefault();
+    form.addEventListener('submit', cancel);
+    await activate();
+    await nextTask();
+    assert.deepEqual(requests, []);
+    assert.equal(status.dataset.saveState, 'idle');
+    form.removeEventListener('submit', cancel);
+    await activate();
+    await nextTask();
+    assert.deepEqual(requests, ['submit']);
+});
+
+test('cancelling a clean acknowledged submission restores the saved status', async () => {
+    const { controller, edit, statuses } = fixture();
+    edit('Acknowledged answer');
+    await controller.save();
+    await controller.prepareSubmission();
+    controller.allowSubmissionNavigation();
+    controller.cancelSubmission();
+    assert.equal(statuses.at(-1)[0], 'saved');
+    assert.equal(controller.shouldWarn(), false);
+});
+
+test('a persisted history return clears the submission lock', async () => {
+    const { activate, nextTask, browser, requests } = submissionFixture();
+    await activate();
+    await nextTask();
+    const returned = new Event('pageshow');
+    returned.persisted = true;
+    browser.dispatchEvent(returned);
+    await activate();
+    await nextTask();
+    assert.deepEqual(requests, ['submit', 'submit']);
 });

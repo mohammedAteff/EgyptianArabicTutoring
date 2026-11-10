@@ -1,3 +1,4 @@
+import { uiText } from './ui-translations.js';
 import {protectedPost} from './protected-video.js';
 
 export function validWatchPosition(position, duration) {
@@ -20,9 +21,9 @@ export function initializeLearningProgress() {
                 if (turn !== generation) return;
                 const result = await protectedPost(root.dataset.watchUrl + '/' + active.id,
                     {...proof, watch_token: active.watch_token, sequence: ++sequence, position, mode});
-                status.textContent = result.completed ? 'Lesson requirements completed.' : Math.floor(result.percent) + '% watched · progress saved';
+                status.textContent = result.completed ? uiText('Lesson requirements completed.') : Math.floor(result.percent) + uiText('% watched · progress saved');
             }).catch(() => {
-                if (turn === generation) { clearInterval(timer); watch = null; status.textContent = 'Progress could not be saved. Reopen the video to check access.'; }
+                if (turn === generation) { clearInterval(timer); watch = null; status.textContent = uiText('Progress could not be saved. Reopen the video to check access.'); }
             });
             return queue;
         };
@@ -33,9 +34,9 @@ export function initializeLearningProgress() {
             const begin = protectedPost(root.dataset.watchUrl, security).then(data => {
                 if (turn !== generation) return;
                 watch = data; resume = data.resume_seconds;
-                status.textContent = Math.floor(data.percent) + '% watched · resume saved';
+                status.textContent = Math.floor(data.percent) + uiText('% watched · resume saved');
                 timer = setInterval(() => { if (!document.hidden && !video.paused && !video.seeking && video.readyState >= 3) flush('playing'); }, 10000);
-            }).catch(() => { if (turn === generation) status.textContent = 'Video progress is unavailable; playback can still continue.'; });
+            }).catch(() => { if (turn === generation) status.textContent = uiText('Video progress is unavailable; playback can still continue.'); });
             event.detail.pending.push(begin);
         });
         video.addEventListener('loadedmetadata', () => {
@@ -58,7 +59,7 @@ export function initializeLearningProgress() {
         if (!button || !status) return;
         const mime = typeof MediaRecorder !== 'undefined' ? recordingMime(MediaRecorder) : null;
         if (!mime || !navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
-            button.disabled = true; status.textContent = 'Recording is unavailable here. Upload an audio file.'; return;
+            button.disabled = true; status.textContent = uiText('Recording is unavailable here. Upload an audio file.'); return;
         }
         let recorder, stream, chunks = [], bytes = 0, limit;
         const stopTracks = () => { clearTimeout(limit); stream?.getTracks().forEach(track => track.stop()); stream = null; };
@@ -72,22 +73,22 @@ export function initializeLearningProgress() {
                 recorder.addEventListener('dataavailable', event => {
                     bytes += event.data.size;
                     if (bytes <= 25 * 1024 * 1024) chunks.push(event.data);
-                    else { status.textContent = 'Recording exceeded 25 MB. Record a shorter response.'; if (recorder.state === 'recording') recorder.stop(); }
+                    else { status.textContent = uiText('Recording exceeded 25 MB. Record a shorter response.'); if (recorder.state === 'recording') recorder.stop(); }
                 });
                 recorder.addEventListener('stop', () => {
-                    stopTracks(); button.textContent = 'Record again';
+                    stopTracks(); button.textContent = uiText('Record again');
                     if (bytes > 25 * 1024 * 1024 || !bytes) return;
                     const transfer = new DataTransfer();
                     transfer.items.add(new File(chunks, 'response.' + (mime === 'audio/ogg' ? 'ogg' : 'webm'), {type: mime}));
                     form.querySelector('[data-submission-file]').files = transfer.files;
                     form.querySelector('[data-submission-kind]').value = 'audio';
                     form.querySelector('[data-submission-kind]').dispatchEvent(new Event('change', {bubbles: true}));
-                    status.textContent = 'Recording ready. Select Submit to save it privately.';
+                    status.textContent = uiText('Recording ready. Select Submit to save it privately.');
                 });
-                recorder.addEventListener('error', () => { stopTracks(); status.textContent = 'Recording failed. Upload an audio file.'; });
-                recorder.start(1000); button.textContent = 'Stop recording'; status.textContent = 'Recording…';
+                recorder.addEventListener('error', () => { stopTracks(); status.textContent = uiText('Recording failed. Upload an audio file.'); });
+                recorder.start(1000); button.textContent = uiText('Stop recording'); status.textContent = uiText('Recording…');
                 limit = setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 10 * 60 * 1000);
-            } catch { stopTracks(); status.textContent = 'Microphone permission is unavailable. Upload an audio file.'; }
+            } catch { stopTracks(); status.textContent = uiText('Microphone permission is unavailable. Upload an audio file.'); }
         });
         window.addEventListener('pagehide', () => { if (recorder?.state === 'recording') recorder.stop(); stopTracks(); });
     });

@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-8">
+<div class="aq-form max-w-4xl mx-auto space-y-8">
 
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -250,13 +250,13 @@
         <section class="{{ $cardClass }}" aria-labelledby="internal-traffic-heading">
             <h2 id="internal-traffic-heading" class="{{ $headingClass }}">7. Analytics Exclusions &amp; Internal Traffic</h2>
             <p class="text-sm text-slate-500">Administrators, previews, bots and synthetic checks are excluded automatically. Saved connection exclusions apply to public analytics reports.</p>
-            <div class="space-y-3">
-                <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="exclude_connection" value="1" @checked(old('exclude_connection', $getSetting('exclude_connection', false))) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"> Exclude my current connection</label>
-                <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="clear_exclusions" value="1" @checked(old('clear_exclusions', $getSetting('clear_exclusions', false))) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"> Clear saved connection exclusions</label>
+            <div class="aq-analytics-exclusions grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                <label class="aq-check-row flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="exclude_connection" value="1" @checked(old('exclude_connection', $getSetting('exclude_connection', false))) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"><span>Exclude my current connection</span></label>
+                <label class="aq-check-row flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="clear_exclusions" value="1" @checked(old('clear_exclusions', $getSetting('clear_exclusions', false))) class="rounded border-slate-300 text-amber-600 focus:ring-amber-500"><span>Clear saved connection exclusions</span></label>
             </div>
         </section>
 
-<section id="email-safeguards" class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8"><h2 class="font-serif text-lg font-bold">Email safeguards</h2><p class="text-sm text-slate-600">Public booking and resource requests check email format, reject known disposable domains, and check whether the domain can receive mail. These checks cannot prove ownership of an individual mailbox.</p><p class="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">Email quality checks: active · Six-digit PIN verification: OFF</p><label class="block text-sm font-semibold">Future PIN verification preference<select name="email_pin_preference" class="mt-1 block w-full rounded-xl border border-slate-300 p-3"><option value="off" @selected(old('email_pin_preference', $emailPinPreference) === 'off')>Keep PIN verification off</option><option value="request_activation" @selected(old('email_pin_preference', $emailPinPreference) === 'request_activation')>Mark PIN verification for future activation</option></select></label><p class="text-xs text-slate-500">This saves your preference only. No PIN challenge or email is sent. The PIN flow and reliable email delivery must be completed before it can be activated.</p></section>
+<section id="email-safeguards" class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8"><h2 class="font-serif text-lg font-bold">8. Email safeguards</h2><p class="text-sm text-slate-600">Public booking and resource requests check email format, reject known disposable domains, and check whether the domain can receive mail. These checks cannot prove ownership of an individual mailbox.</p><p class="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">Email quality checks: active · Six-digit PIN verification: OFF</p><label class="block text-sm font-semibold">Future PIN verification preference<select name="email_pin_preference" class="mt-1 block w-full rounded-xl border border-slate-300 p-3"><option value="off" @selected(old('email_pin_preference', $emailPinPreference) === 'off')>Keep PIN verification off</option><option value="request_activation" @selected(old('email_pin_preference', $emailPinPreference) === 'request_activation')>Mark PIN verification for future activation</option></select></label><p class="text-xs text-slate-500">This saves your preference only. No PIN challenge or email is sent. The PIN flow and reliable email delivery must be completed before it can be activated.</p></section>
 
         @include('admin.settings.announcement')
 

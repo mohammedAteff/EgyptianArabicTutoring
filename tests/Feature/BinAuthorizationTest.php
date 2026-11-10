@@ -55,7 +55,7 @@ class BinAuthorizationTest extends TestCase
         $this->assertSame('student', $own->created_by_type);
         $this->assertTrue($own->student_visible);
         $this->get(route('student.bins.edit', $own))->assertOk();
-        $this->put(route('student.bins.update', $own), ['title' => 'My writing revised', 'body' => 'New text', 'student_id' => $other->id])->assertRedirect();
+        $this->put(route('student.bins.update', $own), ['title' => 'My writing revised', 'body' => 'New text', 'revision' => $own->revision, 'student_id' => $other->id])->assertRedirect();
         $this->assertSame($student->id, $own->fresh()->student_id);
         $this->delete('/student/notes/'.$own->id, ['confirmation' => 'DELETE'])->assertStatus(405);
         $this->get(route('admin.staff-bins.index'))->assertRedirect(route('admin.login'));
@@ -68,7 +68,7 @@ class BinAuthorizationTest extends TestCase
         $admin = AdministratorFactory::new()->create(['role' => 'admin']);
         $bin = StudentBin::factory()->create(['student_id' => $student->id, 'created_by_type' => 'staff', 'created_by_id' => $admin->id]);
         $this->actingAs($admin, 'web')->get(route('admin.student-bins.edit', [$student, $bin]))->assertOk();
-        $this->put(route('admin.student-bins.update', [$student, $bin]), ['title' => 'Staff revised', 'body' => 'Safe body', 'student_visible' => true])->assertRedirect();
+        $this->put(route('admin.student-bins.update', [$student, $bin]), ['title' => 'Staff revised', 'body' => 'Safe body', 'revision' => $bin->revision, 'student_visible' => true])->assertRedirect();
         $this->get(route('admin.student-bins.edit', [$other, $bin]))->assertNotFound();
         $assistant = AdministratorFactory::new()->create(['role' => 'assistant']);
         $this->actingAs($assistant, 'web')->get(route('admin.student-bins.index', $student))->assertOk();
@@ -108,7 +108,7 @@ class BinAuthorizationTest extends TestCase
         $this->assertSame($primary->id, $note->fresh()->student_id);
         $this->assertSame($secondary->id, $note->fresh()->created_by_id);
         $this->portal($primary)->get(route('student.bins.edit', $note))->assertOk();
-        $this->put(route('student.bins.update', $note), ['title' => 'Merged writing revised', 'body' => 'Canonical student revision'])->assertRedirect();
+        $this->put(route('student.bins.update', $note), ['title' => 'Merged writing revised', 'body' => 'Canonical student revision', 'revision' => $note->revision])->assertRedirect();
         $this->assertSame('Canonical student revision', $note->fresh()->body);
         $this->portal($secondary)->get(route('student.bins.index'))->assertRedirect(route('student.login'));
     }

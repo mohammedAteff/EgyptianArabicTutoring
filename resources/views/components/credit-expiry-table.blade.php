@@ -6,7 +6,7 @@
 
     <p class="mt-1 text-sm text-slate-500">Effective validity and credit balances from the session ledger. Courtesy credits share their package's expiry.</p>
 
-    <div class="mt-4 overflow-x-auto"><table class="w-full min-w-[50rem] text-left text-sm">
+    <div class="mt-4 overflow-x-auto" tabindex="0" role="region" aria-label="Credits and package expiration"><table class="w-full min-w-[50rem] text-left text-sm">
 
         <thead class="border-b border-slate-200 text-xs uppercase text-slate-500"><tr>@foreach(['Source / package', 'Acquired', 'Entitlements', 'Effective expiry', 'Status'] as $heading)<th class="p-3">{{ $heading }}</th>@endforeach</tr></thead>
 

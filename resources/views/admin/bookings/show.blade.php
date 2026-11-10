@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<x-estimated-activity-bootstrap :contexts="$activityContexts ?? []" />
 <p class="mb-4 rounded-xl bg-white p-4 text-sm">Funding: {{ ucfirst($booking->funding_mode) }}@if($booking->consumed_ledger_entry_id) · {{ $booking->entitlement_units }} × {{ $booking->entitlement_code === 'two_hour' ? '2-hour session' : '1-hour session' }} · Purchase #{{ $booking->student_package_id }} · Allocation #{{ $booking->student_package_entitlement_id }} · Credit use · Ledger entry #{{ $booking->consumed_ledger_entry_id }}<span class="mt-1 block text-xs text-slate-500">Ledger entries include credits granted and used. Their numbers are independent of booking and purchase numbers.</span>@endif</p>
 <div class="max-w-6xl mx-auto space-y-8" x-data="{ rescheduleModalOpen: false, cancelModalOpen: false }">
 
@@ -33,7 +34,7 @@
         @endcan @endif
         <!-- Quick Status Actions -->
         @if($booking->status === 'confirmed')
-            <div class="flex items-center gap-2">
+            <div class="aq-booking-status-actions flex items-center gap-2">
                 <form action="{{ route('admin.bookings.complete', $booking->id) }}" method="POST">
                     @csrf
                     <button type="submit" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs">
@@ -65,7 +66,7 @@
         $studentEnd = $booking->end_at_utc->copy()->setTimezone($studentStart->timezoneName);
     @endphp
 
-    <div class="bg-gradient-to-r from-slate-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800">
+    <div class="aq-timezone-comparison bg-gradient-to-r from-slate-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800">
         <div class="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-4">Dual Timezone Authoritative Comparison</div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -213,24 +214,24 @@
             <h3 class="text-lg font-bold font-serif text-slate-900 mb-1">Reschedule Tutoring Session</h3>
             <p class="text-xs text-slate-500 mb-6">Enter the new appointment date and time in Tutor Time ({{ $businessTz }}).</p>
 
-            <form action="{{ route('admin.bookings.reschedule', $booking->id) }}" method="POST" class="space-y-4">
+            <form id="activity-booking-schedule" action="{{ route('admin.bookings.reschedule', $booking->id) }}" method="POST" class="space-y-4">
                 @csrf
 <label class="block text-sm">Lesson type (entitlement must match original debit)<select name="session_type_id" class="mt-1 block w-full rounded-lg border border-slate-300 p-3">@foreach($sessionTypes as $type)<option value="{{ $type->id }}" @selected($type->id === $booking->session_type_id)>{{ $type->title }} · {{ $type->requiredEntitlementType?->label ?? $type->funding_mode }}</option>@endforeach</select></label>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">New Date (YYYY-MM-DD)</label>
-                    <input type="date" name="new_date" required min="{{ date('Y-m-d') }}"
+                    <label for="reschedule-date" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">New Date (YYYY-MM-DD)</label>
+                    <input id="reschedule-date" type="date" name="new_date" required min="{{ date('Y-m-d') }}"
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">New Start Time (HH:MM)</label>
-                    <input type="time" name="new_time" required
+                    <label for="reschedule-time" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">New Start Time (HH:MM)</label>
+                    <input id="reschedule-time" type="time" name="new_time" required
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Reason for Reschedule</label>
-                    <x-operational-reason-select category="reschedule" /><input type="text" name="reason" placeholder="e.g. Student requested evening slot"
+                    <label for="reschedule-reason" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Reason for Reschedule</label>
+                    <x-operational-reason-select category="reschedule" /><input id="reschedule-reason" type="text" name="reason" placeholder="e.g. Student requested evening slot"
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
 

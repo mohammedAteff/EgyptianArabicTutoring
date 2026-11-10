@@ -28,6 +28,7 @@ class BookingLanguageSwitchSyncTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-07-06 08:00:00', 'UTC'));
         $this->installShortFormFixture();
 
         RateLimiter::clear(TransientRateLimitKey::make('throttle:hold:ip', '127.0.0.1'));

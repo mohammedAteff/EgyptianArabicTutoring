@@ -5,22 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Preview Promotion: {{ $promotion->title }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/admin-quiet-operations.css', 'resources/js/admin-appearance.js'])
 </head>
-<body class="bg-slate-100 font-sans min-h-screen text-slate-800 antialiased">
+<body class="studio-promotion-preview min-h-screen antialiased">
 
     <!-- Admin Preview Header Banner -->
-    <div class="bg-slate-900 text-white px-4 py-2.5 text-xs flex items-center justify-between border-b border-slate-800 sticky top-0 z-50 shadow-md">
-        <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold uppercase tracking-wider text-[10px]">Preview Mode</span>
+    <div data-admin-appearance-scope data-admin-appearance="light" class="aq-preview-controls px-4 py-2.5 text-xs flex flex-wrap gap-3 items-center justify-between border-b sticky top-0 z-50">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="aq-preview-badge px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[10px]">Preview Mode</span>
             <span class="font-semibold">{{ $promotion->title }}</span>
             <span class="text-slate-400">({{ $promotion->display_type }})</span>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="aq-appearance">
+                <label for="preview-appearance">Appearance</label>
+                <select id="preview-appearance" data-admin-appearance-select>
+                    <option value="light">Light</option>
+                    <option value="dark-teal">Dark Teal</option>
+                    <option value="pure-black">Pure Black</option>
+                </select>
+            </div>
             <a href="{{ route('admin.promotions.edit', $promotion) }}" class="text-amber-400 hover:text-amber-300 font-semibold underline">Edit Promotion</a>
             <a href="{{ route('admin.promotions.index') }}" class="text-slate-400 hover:text-white">Exit Preview</a>
         </div>
     </div>
+
+    <script>
+        try {
+            const appearance = localStorage.getItem('awa.admin.appearance.v1');
+            document.querySelector('[data-admin-appearance-scope]').dataset.adminAppearance = ['light', 'dark-teal', 'pure-black'].includes(appearance) ? appearance : 'light';
+        } catch {}
+    </script>
 
     <!-- Promotional Component Render -->
     @include('components.promotional-banner', ['promotion' => $promotion, 'preview' => true])

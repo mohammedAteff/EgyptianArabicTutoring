@@ -32,4 +32,22 @@ class FormQuestion extends Model
     {
         return $this->hasMany(FormQuestionOption::class)->orderBy('sort_order')->orderBy('id');
     }
+
+    public function displayAnswer(?string $value): string
+    {
+        if ($value === null || ! in_array($this->question_type, ['single_choice', 'dropdown', 'multiple_choice'], true)) {
+            return $value ?? '';
+        }
+        $labels = $this->options->pluck('label', 'value');
+        if ($this->question_type === 'multiple_choice') {
+            $choices = json_decode($value, true);
+            if (is_array($choices) && array_is_list($choices) && collect($choices)->every(fn ($choice): bool => is_string($choice))) {
+                return implode(', ', array_map(fn (string $choice): string => $labels->get($choice, $choice), $choices));
+            }
+
+            return $value;
+        }
+
+        return $labels->get($value, $value);
+    }
 }

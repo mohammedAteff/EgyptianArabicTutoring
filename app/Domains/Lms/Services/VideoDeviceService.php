@@ -26,14 +26,14 @@ class VideoDeviceService
         $device = is_string($token) && preg_match('/^[a-f0-9]{64}$/D', $token)
             ? AuthorizedDevice::query()->where('token_hash', hash('sha256', $token))->where('student_id', $student->id)->lockForUpdate()->first() : null;
         if ($device) {
-            abort_unless($device->status === 'authorized', 403, 'This browser was revoked. Manage your authorized browsers to register it again.');
-            abort_if($limit !== null && AuthorizedDevice::query()->where('student_id', $student->id)->where('status', 'authorized')->count() > $limit, 409, 'Remove an authorized browser before playing this video.');
+            abort_unless($device->status === 'authorized', 403, __('This browser was revoked. Manage your authorized browsers to register it again.'));
+            abort_if($limit !== null && AuthorizedDevice::query()->where('student_id', $student->id)->where('status', 'authorized')->count() > $limit, 409, __('Remove an authorized browser before playing this video.'));
             $device->forceFill(['last_seen_at' => now('UTC')])->save();
 
             return $device;
         }
         abort_unless($create, 404);
-        abort_if($limit !== null && AuthorizedDevice::query()->where('student_id', $student->id)->where('status', 'authorized')->count() >= $limit, 409, 'Your authorized browser limit has been reached.');
+        abort_if($limit !== null && AuthorizedDevice::query()->where('student_id', $student->id)->where('status', 'authorized')->count() >= $limit, 409, __('Your authorized browser limit has been reached.'));
         $token = bin2hex(random_bytes(32));
         $device = new AuthorizedDevice;
         $device->forceFill(['student_id' => $student->id, 'token_hash' => hash('sha256', $token), 'label' => 'My browser', 'status' => 'authorized', 'last_seen_at' => now('UTC')])->save();

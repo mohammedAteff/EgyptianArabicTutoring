@@ -6,12 +6,15 @@ use App\Domains\Notifications\Models\TelegramBot;
 
 class TelegramCommandCatalog
 {
+    public const PERSONAL_COMMANDS = ['student', 'money', 'brief', 'wrap', 'feedback', 'insights'];
+
     /** @return array<string, string> */
     public function all(): array
     {
         return ['today' => '📅 Today', 'tomorrow' => '🗓 Tomorrow', 'week' => '📆 Next 7 days', 'student' => '👤 Find student',
             'stats' => '📊 Analytics', 'games' => '🎮 Games', 'resources' => '📚 Resources', 'attention' => '🔔 Needs attention',
-            'money' => '💳 Money', 'status' => '🛠 System status', 'brief' => '☀️ Morning briefing', 'wrap' => '🌙 Daily wrap-up'];
+            'money' => '💳 Money', 'status' => '🛠 System status', 'brief' => '☀️ Morning briefing', 'wrap' => '🌙 Daily wrap-up',
+            'feedback' => '💬 Student Feedback', 'insights' => '📖 Student Insights'];
     }
 
     public function allows(TelegramBot $bot, string $command): bool

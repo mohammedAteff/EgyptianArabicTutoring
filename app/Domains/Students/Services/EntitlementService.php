@@ -150,9 +150,9 @@ class EntitlementService
     }
 
     /** @param Collection<int, StudentPackage> $packages */
-    public function allCreditsLow(Collection $packages, int $threshold = 2): bool
+    public function allCreditsLow(Collection $packages, int $threshold = 2, ?string $timezone = null): bool
     {
-        $totals = $this->forPackages($packages);
+        $totals = $this->forPackages($packages, $timezone);
         unset($totals['legacy_unclassified']);
 
         return $totals !== [] && collect($totals)->every(fn (array $balance): bool => $balance['available'] <= $threshold);
@@ -172,11 +172,11 @@ class EntitlementService
     /** @param Collection<int, StudentPackage> $packages
      * @return array<string, array{label: string, remaining: int, available: int}>
      */
-    public function forPackages(Collection $packages): array
+    public function forPackages(Collection $packages, ?string $timezone = null): array
     {
         $totals = [];
         foreach ($packages as $package) {
-            foreach ($this->projection($package) as $row) {
+            foreach ($this->projection($package, $timezone) as $row) {
                 $code = $row['code'];
                 $totals[$code] ??= ['label' => $row['label'], 'remaining' => 0, 'available' => 0];
                 $totals[$code]['remaining'] += $row['remaining'];

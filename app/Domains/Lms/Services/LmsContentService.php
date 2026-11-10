@@ -21,7 +21,7 @@ class LmsContentService
 
     public function sanitizeText(string $html): string
     {
-        return preg_replace('/<img\b[^>]*>/i', '', $this->sanitizer->sanitize($html)) ?? '';
+        return $this->sanitizer->sanitizeLesson($html);
     }
 
     /** @param array<string,mixed> $data

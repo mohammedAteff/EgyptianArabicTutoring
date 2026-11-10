@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="mx-auto max-w-7xl space-y-6">
+<div class="aq-page aq-students mx-auto max-w-7xl space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Student records</p>
@@ -89,7 +89,7 @@
             </form>
         </div>
 
-        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="aq-roster overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" tabindex="0" role="region" aria-label="Student records">
             <div class="hidden grid-cols-[3rem_minmax(12rem,1.3fr)_minmax(12rem,1fr)_minmax(9rem,.8fr)_auto] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 md:grid items-center">
                 <input type="checkbox" @change="allSelected = !allSelected; selected = allSelected ? [{{ $students->pluck('id')->implode(',') }}] : []" :checked="allSelected" class="rounded text-amber-600" title="Select all on this page">
                 <span>Student</span><span>Contact</span><span>Timezone</span><span>Record</span>

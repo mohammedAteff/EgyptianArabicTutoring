@@ -110,7 +110,7 @@ class BlogAuthoringWorkflowTest extends TestCase
         $this->get($en->publicUrl())->assertOk()->assertSee('/fr/blog/explication-francaise')->assertDontSee('hreflang="de"', false)->assertDontSee('german-private-draft');
         $this->get('/fr/blog/'.$en->slug)->assertStatus(301)->assertRedirect($fr->publicUrl());
         $this->get($fr->publicUrl())->assertOk()->assertSee('<html lang="fr"', false)->assertSee('hreflang="en"', false);
-        $this->get('/de/blog/'.$en->slug)->assertNotFound()->assertSee('This article hasn', false)->assertSee($en->slug);
+        $this->get('/de/blog/'.$en->slug)->assertNotFound()->assertSeeText('Dieser Artikel wurde noch nicht in der ausgewählten Sprache veröffentlicht.')->assertSee($en->slug);
         $this->get('/sitemap.xml')->assertOk()->assertSee($en->slug)->assertSee($fr->slug)->assertDontSee('german-private-draft');
     }
 

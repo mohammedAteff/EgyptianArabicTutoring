@@ -21,7 +21,7 @@ class FormCompletionReadModel
                 $forms->push($intake);
             }
         }
-        $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block')])]);
+        $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block'), 'questions as conditional_questions_count' => fn ($questions) => $questions->whereNotNull('conditional_logic')])]);
 
         return $this->metadata($forms, $this->submissions([$student->id], $forms->pluck('published_version_id')->all()));
     }
@@ -32,7 +32,7 @@ class FormCompletionReadModel
     public function forStudents(array $studentIds, bool $includeIntake = false): Collection
     {
         $forms = $this->assignments->assignedToStudents($studentIds, $includeIntake);
-        $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block')])]);
+        $forms->load(['publishedVersion' => fn ($query) => $query->withCount(['questions' => fn ($questions) => $questions->where('question_type', '!=', 'info_block'), 'questions as conditional_questions_count' => fn ($questions) => $questions->whereNotNull('conditional_logic')])]);
         $submissions = $this->submissions($studentIds, $forms->pluck('published_version_id')->unique()->all())->groupBy('student_id');
 
         return collect($studentIds)->mapWithKeys(fn (int $id): array => [$id => $this->metadata($forms->where('assigned_student_id', $id)->values(), $submissions->get($id, collect()))]);
@@ -69,7 +69,7 @@ class FormCompletionReadModel
         $answered = min($total, (int) ($submission?->getAttribute('answers_count') ?? 0));
 
         return ['form_id' => $form->id, 'form_version_id' => $form->published_version_id, 'slug' => $form->slug, 'title' => $form->title, 'mandatory' => $form->is_mandatory,
-            'status' => $submission->status ?? 'missing', 'has_submitted' => $submissions->contains(fn (FormSubmission $entry): bool => (int) $entry->form_version_id === (int) $form->published_version_id && $entry->status === 'submitted'), 'answered' => $answered, 'total' => $total,
+            'status' => $submission->status ?? 'missing', 'has_submitted' => $submissions->contains(fn (FormSubmission $entry): bool => (int) $entry->form_version_id === (int) $form->published_version_id && $entry->status === 'submitted'), 'answered' => $answered, 'total' => $total, 'has_conditional_questions' => (int) $form->publishedVersion->getAttribute('conditional_questions_count') > 0,
             'saved_at' => $submission?->updated_at, 'submitted_at' => $submission?->submitted_at];
     }
 }

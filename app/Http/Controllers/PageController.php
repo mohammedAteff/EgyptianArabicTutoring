@@ -9,6 +9,8 @@ use App\Domains\CMS\Services\RichTextSanitizer;
 use App\Domains\CMS\Services\WebsiteCopyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class PageController extends Controller
@@ -24,10 +26,11 @@ class PageController extends Controller
         $resolved = $page?->resolveTranslation();
         $isFallback = $resolved ? $resolved['is_fallback'] : (app()->getLocale() !== 'en');
         $copy = app(WebsiteCopyService::class);
-        $hasCopy = request()->attributes->get('website_copy_preview') || $copy->document('about', app()->getLocale())?->published_content !== null || $copy->document('about', 'en')?->published_content !== null;
+        $hasCopy = request()->attributes->get('website_copy_preview') || $copy->hasTranslation('about', app()->getLocale()) || $copy->document('about', 'en')?->published_content !== null;
 
         return view('public.about', [
             'title' => ($resolved['translation'] ?? null)?->getAttribute('title') ?? 'About Abdallah',
+            'metaDescription' => Str::limit(trim(strip_tags(app(RichTextSanitizer::class)->sanitize((string) config('public_content.about.0.blocks.0.text')))), 160),
             'page' => $page,
             'translation' => $resolved['translation'] ?? null,
             'isFallback' => $isFallback,
@@ -107,25 +110,42 @@ class PageController extends Controller
 
     public function faq(Request $request): View
     {
-        $filters = $request->validate(['q' => ['nullable', 'string', 'max:200'], 'topic' => ['nullable', 'string', 'max:100']]);
-        $search = trim((string) ($filters['q'] ?? ''));
-        $topic = (string) ($filters['topic'] ?? '');
-        $topics = Faq::active()->whereNotNull('topic')->select('topic')->distinct()->reorder()->orderBy('topic')->pluck('topic');
-        $query = Faq::active()->with('translations');
-        if ($topic !== '') {
-            $query->where('topic', $topic);
-        }
-        if ($search !== '') {
-            $query->where(function ($query) use ($search): void {
-                $query->where('question', 'like', '%'.$search.'%')->orWhere('answer', 'like', '%'.$search.'%');
-            });
-        }
-        $faqs = $query->get();
+        $validator = Validator::make($request->only(['q', 'topic']), ['q' => ['nullable', 'string', 'max:200'], 'topic' => ['nullable', 'string', 'max:100']]);
+        $filterErrors = $validator->errors();
+        $search = $filterErrors->has('q') ? '' : trim((string) $request->input('q', ''));
+        $topic = $filterErrors->has('topic') ? '' : (string) $request->input('topic', '');
+        $allFaqs = Faq::active()->with(['translations' => fn ($query) => $query->whereIn('status', ['published', 'stale'])])->get();
+        $availableTopics = $allFaqs->pluck('topic')->filter(fn (?string $value): bool => filled($value))->unique();
+        $canonicalTopics = collect(config('public_content.faq_topics', []));
+        $topics = $canonicalTopics->intersect($availableTopics)
+            ->merge($availableTopics->diff($canonicalTopics)->sort(SORT_NATURAL | SORT_FLAG_CASE))->values();
+        $allFaqs = $allFaqs->sortBy(fn (Faq $faq): int => $topics->search($faq->topic, true) === false ? $topics->count() : $topics->search($faq->topic, true));
+        $normalizedSearch = Str::lower(Str::ascii($search));
+        $answerOnlyMatches = [];
+        $faqs = $allFaqs->filter(function (Faq $faq) use ($topic, $normalizedSearch, &$answerOnlyMatches): bool {
+            if ($topic !== '' && $faq->topic !== $topic) {
+                return false;
+            }
+            if ($normalizedSearch === '') {
+                return true;
+            }
+            $translation = $faq->localizedContent();
+            $question = Str::lower(Str::ascii($translation['question']));
+            $answer = Str::lower(Str::ascii($translation['answer']));
+            if (! str_contains($question, $normalizedSearch) && str_contains($answer, $normalizedSearch)) {
+                $answerOnlyMatches[$faq->id] = true;
+            }
+
+            return str_contains(
+                $question."\n".$answer,
+                $normalizedSearch,
+            );
+        });
 
         $locale = app()->getLocale();
         $isFallback = false;
         if ($locale !== 'en') {
-            $allTranslated = $faqs->isNotEmpty() && $faqs->every(fn ($f) => $f->liveTranslation($locale) !== null);
+            $allTranslated = $allFaqs->every(fn (Faq $faq): bool => $faq->localizedContent($locale)['locale'] === $locale);
             if (! $allTranslated) {
                 $isFallback = true;
             }
@@ -133,7 +153,7 @@ class PageController extends Controller
 
         $availableLocales = ['en'];
         foreach (['fr', 'de'] as $loc) {
-            $allTranslated = $faqs->isNotEmpty() && $faqs->every(fn ($f) => $f->liveTranslation($loc) !== null);
+            $allTranslated = $allFaqs->every(fn (Faq $faq): bool => $faq->localizedContent($loc)['locale'] === $loc);
             if ($allTranslated) {
                 $availableLocales[] = $loc;
             }
@@ -147,6 +167,11 @@ class PageController extends Controller
             'search' => $search,
             'topic' => $topic,
             'topics' => $topics,
+            'publishedCount' => $allFaqs->count(),
+            'topicHasQuestions' => $topic === '' || $allFaqs->contains(fn (Faq $faq): bool => $faq->topic === $topic),
+            'filterErrors' => $filterErrors,
+            'answerOnlyMatches' => $answerOnlyMatches,
+            'noIndex' => $request->hasAny(['q', 'topic']),
         ]);
     }
 

@@ -1,13 +1,20 @@
-@props(['blog', 'featured' => false])
-@php($image = app(\App\Domains\CMS\Services\BlogImageService::class)->url($blog->featured_image_path))
-<article lang="{{ $blog->locale }}" class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm {{ $featured ? 'md:grid md:grid-cols-2' : '' }}">
-    @if($image)<a href="{{ $blog->publicUrl() }}" tabindex="-1" aria-hidden="true"><img src="{{ $image }}" alt="{{ $blog->featured_image_alt ?? '' }}" loading="lazy" class="aspect-video h-full w-full object-cover"></a>@endif
-    <div class="p-6">
-        @if($featured)<p lang="en" class="mb-3 text-xs font-semibold uppercase tracking-widest text-terracotta-600">Featured Article</p>@endif
-        @if($blog->category)<p class="text-sm text-terracotta-600">{{ $blog->category->name }}</p>@endif
-        <h2 class="mt-2 text-2xl font-semibold text-nile-900"><a class="hover:underline" href="{{ $blog->publicUrl() }}">{{ $blog->title }}</a></h2>
-        <p class="mt-3 text-sm leading-7 text-stone-600">{{ $blog->excerpt }}</p>
-        <p lang="en" class="mt-4 text-xs text-stone-500">{{ $blog->published_at?->format('M j, Y') }} · {{ $blog->readingMinutes() }} min read</p>
-        <a lang="en" href="{{ $blog->publicUrl() }}" class="mt-5 inline-block font-semibold text-terracotta-600 underline underline-offset-4">Read Article <span class="sr-only">: {{ $blog->title }}</span></a>
+@props(['blog', 'featured' => false, 'wide' => false, 'copyLocale' => 'en'])
+@php
+    $images = app(\App\Domains\CMS\Services\BlogImageService::class);
+    $image = $images->url($blog->featured_image_path);
+    $dimensions = $images->dimensions($blog->featured_image_path);
+@endphp
+<article lang="{{ $blog->locale }}" class="blog-card {{ $wide ? 'blog-card-lead' : '' }} {{ $image ? 'blog-card-with-image' : '' }}">
+    @if($image)<div class="blog-card-media"><img src="{{ $image }}" alt="{{ $blog->featured_image_alt ?? '' }}" width="{{ $dimensions['width'] }}" height="{{ $dimensions['height'] }}" loading="lazy" decoding="async"></div>@endif
+    <div class="blog-card-content">
+        <div class="blog-card-meta">
+            @if($featured)<span lang="{{ $copyLocale }}" class="blogs-eyebrow">{{ website_text('blogs', 'Featured Article') }}</span>@endif
+            @if($blog->category)<span class="blog-card-category">{{ $blog->category->name }}</span>@endif
+            @if($blog->published_at)<time lang="{{ $copyLocale }}" datetime="{{ $blog->published_at->toIso8601String() }}">{{ $blog->published_at->copy()->locale($copyLocale)->translatedFormat(localized_date_format('M j, Y')) }}</time>@endif
+            <span lang="{{ $copyLocale }}">{{ $blog->readingMinutes() }} {{ website_text('blogs', 'min read') }}</span>
+        </div>
+        <h3><a href="{{ $blog->publicUrl() }}">{{ $blog->title }}</a></h3>
+        @if($blog->excerpt)<p class="blog-card-excerpt">{{ $blog->excerpt }}</p>@endif
+        <a lang="{{ $copyLocale }}" href="{{ $blog->publicUrl() }}" class="blogs-link">{{ website_text('blogs', 'Read Article') }}<span class="sr-only">: {{ $blog->title }}</span> <x-public-studio-icon name="arrow" class="studio-link-arrow" /></a>
     </div>
 </article>

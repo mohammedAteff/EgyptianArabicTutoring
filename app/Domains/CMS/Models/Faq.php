@@ -49,6 +49,35 @@ class Faq extends Model
         return $query->where('active', true)->orderBy('sort_order');
     }
 
+    public function readableTranslation(?string $locale = null): ?FaqTranslation
+    {
+        foreach (array_unique([$locale ?? app()->getLocale(), 'en']) as $language) {
+            $translation = $this->liveTranslation($language);
+            if ($translation instanceof FaqTranslation && filled($translation->question) && filled($translation->answer)) {
+                return $translation;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array{question: string, answer: string, locale: string} */
+    public function localizedContent(?string $locale = null): array
+    {
+        $locale ??= app()->getLocale();
+        $published = $this->readableTranslation($locale);
+        if ($published?->locale === $locale) {
+            return ['question' => $published->question, 'answer' => $published->answer, 'locale' => $locale];
+        }
+        $question = $published->question ?? $this->question;
+        $answer = $published->answer ?? $this->answer;
+        if ($locale !== 'en' && app('translator')->hasForLocale($question, $locale) && app('translator')->hasForLocale($answer, $locale)) {
+            return ['question' => __($question, locale: $locale), 'answer' => __($answer, locale: $locale), 'locale' => $locale];
+        }
+
+        return ['question' => $question, 'answer' => $answer, 'locale' => 'en'];
+    }
+
     /** @return MorphMany<ContentRevision, $this> */
     public function revisions(): MorphMany
     {

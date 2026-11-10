@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('content')
+<x-estimated-activity-bootstrap :contexts="$activityContexts ?? []" />
 <div class="space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div><a href="{{ route('admin.lms.courses.index') }}" class="text-xs font-semibold text-slate-500 hover:text-amber-700">← Back to courses</a><h1 class="mt-3 font-serif text-2xl font-bold text-slate-900" dir="auto">{{ $graph['title'] }}</h1><p class="mt-2 text-sm text-slate-500">Course Studio · <span class="font-semibold capitalize">{{ $course->status }}</span>@if($hasDraft)<span class="ml-2 rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">Draft changes pending</span>@endif</p></div>
@@ -24,10 +25,10 @@
         <p class="w-full text-xs text-slate-500">Specific Student previews show current access, progress and lesson locks. Preview creates no Student learning activity.</p>
     </form>
     @endif
-    <fieldset @disabled($course->status==='archived') class="min-w-0 space-y-6">
+    <fieldset id="activity-course-editor" @disabled($course->status==='archived') class="min-w-0 space-y-6">
         <a href="{{ route('admin.lms.reviews.index', $course) }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">Review quizzes & assignments →</a>
-        @include('admin.lms.courses._videos')
-        @if(auth()->user()?->role==='super_admin')@include('admin.lms.courses._protection')@endif
+        <div data-activity-excluded>@include('admin.lms.courses._videos')</div>
+        @if(auth()->user()?->role==='super_admin')<div data-activity-excluded>@include('admin.lms.courses._protection')</div>@endif
         <div class="grid gap-6 xl:grid-cols-2">
             <section class="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
                 <h2 class="text-lg font-bold text-slate-900">Course details</h2>
@@ -38,10 +39,10 @@
                     <x-lms.button tone="neutral">Save details draft</x-lms.button>
                 </form>
             </section>
-            <section class="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+            <section data-activity-excluded class="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
                 <h2 class="text-lg font-bold text-slate-900">Course access</h2>
                 @php($accessForm = old('operation')==='access' ? array_replace($graph['access'],array_intersect_key(session()->getOldInput(),$graph['access'])) : $graph['access'])
-                <form method="POST" action="{{ route('admin.lms.courses.update',$course) }}" class="space-y-4" x-data="{mode:@js($accessForm['access_mode'])}">
+                <form data-activity-excluded method="POST" action="{{ route('admin.lms.courses.update',$course) }}" class="space-y-4" x-data="{mode:@js($accessForm['access_mode'])}">
                     @csrf<input type="hidden" name="version" value="{{ $course->lock_version }}"><input type="hidden" name="operation" value="access">
                     <div><label for="studio-audience" class="mb-1.5 block text-sm font-semibold text-slate-700">Who can access this course?</label><select id="studio-audience" name="audience" class="min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-sm">@foreach(['public'=>'Public','member'=>'Member','all_students'=>'All Students','selected_students'=>'Selected Students'] as $value=>$label)<option value="{{ $value }}" @selected($accessForm['audience']===$value) @disabled($course->kind==='private'&&$value!=='selected_students')>{{ $label }}</option>@endforeach</select></div>
                     <div><label for="studio-mode" class="mb-1.5 block text-sm font-semibold text-slate-700">Access duration</label><select id="studio-mode" name="access_mode" x-model="mode" class="min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-sm">@foreach(['permanent'=>'Permanent','fixed'=>'Fixed expiration','relative'=>'Relative days'] as $value=>$label)<option value="{{ $value }}" @selected($accessForm['access_mode']===$value)>{{ $label }}</option>@endforeach</select></div>
@@ -85,7 +86,7 @@
                         <summary class="cursor-pointer rounded-t-2xl bg-slate-50 p-4 text-sm font-bold text-slate-800"><span dir="auto">Lesson {{ $lessonIndex+1 }} · {{ $lesson['title'] }}</span><span class="ml-2 rounded-lg bg-white px-2 py-1 text-xs font-semibold capitalize text-slate-500">{{ $lesson['status'] }}</span></summary>
                         <div class="space-y-5 p-4 sm:p-5">
                             <div class="flex justify-end">@include('admin.lms.courses._order',['course'=>$course,'operation'=>'reorder_lesson','key'=>$lesson['key'],'index'=>$lessonIndex,'count'=>count($section['lessons']),'label'=>$lesson['title']])</div>
-                            @if(auth()->user()?->role==='super_admin')@include('admin.lms.courses._protection', ['protectionLesson' => $lesson])@endif
+                            @if(auth()->user()?->role==='super_admin')<div data-activity-excluded>@include('admin.lms.courses._protection', ['protectionLesson' => $lesson])</div>@endif
                             @include('admin.lms.courses._learning')
                             <form method="POST" action="{{ route('admin.lms.courses.update',$course) }}" class="grid gap-4 md:grid-cols-3">
                                 @csrf<input type="hidden" name="version" value="{{ $course->lock_version }}"><input type="hidden" name="operation" value="edit_lesson"><input type="hidden" name="key" value="{{ $lesson['key'] }}">

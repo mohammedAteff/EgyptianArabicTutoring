@@ -24,12 +24,12 @@ class AdminNavigationOrganizationTest extends TestCase
         ];
         if ($role !== 'assistant') {
             $expected = array_merge($expected, [
-                'admin.dashboard', 'admin.notifications.index', 'admin.reports.activity', 'admin.data-quality.index',
+                'admin.dashboard', 'admin.notifications.index', 'admin.reports.activity', 'admin.data-quality.index', 'admin.feedback.index', 'admin.student-insights.index', 'admin.tutor-insights.index',
                 'admin.availability.index', 'admin.recurring.index', 'admin.waitlist.index', 'admin.booking-policy.index', 'admin.meeting-links.index',
                 'admin.billing.cashier', 'admin.billing.reconcile', 'admin.receivables.index', 'admin.payment-methods.index',
                 'admin.lms.courses.index', 'admin.lms.operations', 'admin.resources.index', 'admin.resource-collections.index', 'admin.games.index',
                 'admin.content.index', 'admin.website-copy.index', 'admin.blog.index', 'admin.media.index', 'admin.promotions.index',
-                'admin.reports.lifecycle', 'admin.reports.index', 'admin.analytics', 'admin.analytics.countries', 'admin.analytics.sections',
+                'admin.reports.lifecycle', 'admin.reports.index', 'admin.analytics', 'admin.analytics.games', 'admin.analytics.countries', 'admin.analytics.sections',
                 'admin.settings.index', 'admin.telegram.index',
             ]);
         }
@@ -71,9 +71,10 @@ class AdminNavigationOrganizationTest extends TestCase
     #[TestWith(['admin.forms.completion', 'learning', 'admin.forms.completion'])]
     #[TestWith(['admin.lms.courses.create', 'learning', 'admin.lms.courses.index'])]
     #[TestWith(['admin.reports.activity', 'daily', 'admin.reports.activity'])]
+    #[TestWith(['admin.tutor-work.index', 'reports', 'admin.tutor-insights.index'])]
     public function test_current_page_opens_its_group_and_highlights_one_destination(string $page, string $group, string $destination): void
     {
-        $staff = Administrator::factory()->create(['role' => 'admin']);
+        $staff = Administrator::factory()->create(['role' => $page === 'admin.tutor-work.index' ? 'super_admin' : 'admin']);
 
         $response = $this->actingAs($staff, 'web')->get(route($page))->assertOk();
         $xpath = $this->xpath($response->getContent());

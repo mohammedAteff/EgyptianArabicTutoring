@@ -282,6 +282,8 @@ class AnalyticsService
         'game_opened',
         'game_started',
         'game_completed',
+        'game_activity',
+        'game_interrupted',
         'social_link_clicked',
         'whatsapp_clicked',
         'telegram_clicked',
@@ -298,6 +300,7 @@ class AnalyticsService
     ];
 
     public const SERVER_ONLY_EVENTS = [
+        'game_activity', 'game_interrupted',
         'lms_course_started', 'lms_lesson_completed', 'lms_course_completed', 'lms_quiz_submitted', 'lms_assignment_submitted',
         'booking_completed',
         'booking_cancelled',
@@ -593,6 +596,16 @@ class AnalyticsService
             // Enforce privacy: raw IP, client country overrides, and internal timestamps must never be stored in event metadata
             unset($metadata['ip'], $metadata['country_code'], $metadata['_occurred_at'], $metadata['occurred_at']);
 
+            $isGameEvent = in_array($eventName, ['game_opened', 'game_started', 'game_completed', 'game_activity', 'game_interrupted'], true);
+            if ($isGameEvent) {
+                $vToken = $vToken ? hash_hmac('sha256', 'public-games:'.$vToken, (string) config('app.key')) : null;
+                $sToken = $sToken ? hash_hmac('sha256', 'public-games-session:'.$sToken, (string) config('app.key')) : null;
+                $ipHash = null;
+                $metadata['privacy_scope'] = 'browser';
+                $agent = strtolower((string) $req->userAgent());
+                $metadata['device_type'] = preg_match('/ipad|tablet/', $agent) ? 'tablet' : (preg_match('/mobile|iphone|android/', $agent) ? 'mobile' : 'desktop');
+            }
+
             try {
                 $event = AnalyticsEvent::create([
                     'event_uuid' => $eventUuid,
@@ -618,7 +631,7 @@ class AnalyticsService
                 return $eventUuid ? AnalyticsEvent::where('event_uuid', $eventUuid)->first() : null;
             }
 
-            if (! $isBot && $vToken) {
+            if (! $isBot && $vToken && ! $isGameEvent) {
                 try {
                     $visitor = Visitor::firstOrCreate(
                         ['visitor_token' => $vToken],

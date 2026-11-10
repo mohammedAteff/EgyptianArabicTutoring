@@ -23,9 +23,9 @@ class StudentLearningService
     public function __construct(private LmsAccessService $access, private LmsContentService $content, private LmsProgressService $progress, private LmsLearningGate $gate) {}
 
     /** @return array<string,mixed> */
-    public function hub(Student $student): array
+    public function hub(Student $student, ?array $overview = null): array
     {
-        $overview = $this->overview($student);
+        $overview ??= $this->overview($student);
         $courses = collect($overview['outlines'])->pluck('course');
         $visits = LearningVisit::query()->where('student_id', $student->id)->whereIn('course_id', $courses->pluck('id'))->orderByDesc('accessed_at')->orderByDesc('id')->get()->keyBy('course_id');
         $cards = $courses->map(function (Course $course) use ($overview, $visits): array {

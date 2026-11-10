@@ -63,7 +63,7 @@ class OperationalRemediationTest extends TestCase
         foreach (['+201012345678', '201012345678', '01012345678', '00201012345678', '+20 (10) 1234-5678'] as $phone) {
             $this->assertTrue(app(StudentIdentityService::class)->phoneMatches($phone, $student->phone_normalized), $phone);
         }
-        $this->post(route('student.login.submit'), ['date_of_birth' => '1990-01-01', 'email' => $student->email, 'phone' => '010 1234 5678'])->assertRedirect(route('student.dashboard'));
+        $this->post(route('student.login.submit'), ['date_of_birth' => '1990-01-01', 'email' => $student->email, 'phone' => '010 1234 5678'])->assertRedirect(route('student.home'));
         $this->assertAuthenticatedAs($student, 'student');
         $this->assertFalse(app(StudentIdentityService::class)->phoneMatches('01012345679', $student->phone_normalized));
     }
@@ -105,8 +105,8 @@ class OperationalRemediationTest extends TestCase
         $this->artisan('forms:install-onboarding')->assertSuccessful();
         $this->assertDatabaseCount('forms', 2);
         $short = app(BookingService::class)->publishedIntakeForm();
-        $this->assertCount(3, $short->publishedVersion->questions);
-        $this->assertSame(['after_booking', 'next_session_check'], Form::where('slug', 'long-form')->first()->triggers->pluck('trigger_name')->sort()->values()->all());
+        $this->assertSame(['awa_int_01', 'awa_int_02', 'awa_int_03', 'awa_int_04'], $short->publishedVersion->questions->pluck('question_key')->all());
+        $this->assertSame(['after_booking'], Form::where('slug', 'long-form')->first()->triggers->pluck('trigger_name')->sort()->values()->all());
         $this->expectException(ValidationException::class);
         app(BookingService::class)->validatePublicIntake($short->published_version_id, []);
     }

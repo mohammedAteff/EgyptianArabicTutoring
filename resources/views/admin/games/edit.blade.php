@@ -79,7 +79,7 @@
                 <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">External Target URL (Optional)</label>
                 <input type="url" name="target_url" value="{{ $valTargetUrl }}" placeholder="https://mohamedateff.com/6word"
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                <p class="text-xs text-slate-400 mt-1">If provided, clicking the game card launches this external destination in a new tab.</p>
+                <p class="text-xs text-slate-400 mt-1">{{ $game->localView() ? 'This game runs locally. The saved external URL is retained for rollback.' : 'If provided, clicking the game card launches this external destination in a new tab.' }}</p>
                 @error('target_url') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
             </div>
 
@@ -109,6 +109,12 @@
                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
             </div>
+
+            <label class="flex items-center gap-3 text-sm text-slate-700">
+                <input type="hidden" name="featured" value="0">
+                <input type="checkbox" name="featured" value="1" @checked(old('featured', $draftRevision?->content['featured'] ?? $game->featured)) class="h-5 w-5 rounded border-slate-300">
+                Featured game
+            </label>
 
             <!-- Submit -->
             <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">

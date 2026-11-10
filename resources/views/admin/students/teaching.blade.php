@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('content')
+<x-estimated-activity-bootstrap :contexts="$activityContexts ?? []" />
 <div class="mx-auto max-w-5xl space-y-6">
     <a href="{{ route('admin.students.index') }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">&larr; Student records</a>
     <header><h1 class="font-serif text-3xl font-bold text-slate-900">Teaching workspace</h1><p class="mt-2 text-slate-600">{{ $student->name }}@if($bookingId) · Lesson #{{ $bookingId }}@endif</p>

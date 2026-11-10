@@ -28,7 +28,7 @@ class VideoDeviceController extends Controller
     {
         $this->devices->register($request, $this->student($request));
 
-        return redirect()->route('student.video.devices')->with('status', 'This browser is authorized for protected learning videos. Some videos may have a lower browser limit.');
+        return redirect()->route('student.video.devices')->with('status', __('This browser is authorized for protected learning videos. Some videos may have a lower browser limit.'));
     }
 
     public function update(Request $request, int $device): RedirectResponse
@@ -36,14 +36,14 @@ class VideoDeviceController extends Controller
         $values = $request->validate(['label' => ['required', 'string', 'max:80']]);
         $this->devices->rename($this->student($request), $device, $values['label']);
 
-        return redirect()->route('student.video.devices')->with('status', 'Browser label updated.');
+        return redirect()->route('student.video.devices')->with('status', __('Browser label updated.'));
     }
 
     public function revoke(Request $request, int $device): RedirectResponse
     {
         $this->devices->revoke($this->student($request), $device);
 
-        return redirect()->route('student.video.devices')->with('status', 'Browser video access removed. Videos already open may keep playing briefly. Your Student Portal sign-in stays active.');
+        return redirect()->route('student.video.devices')->with('status', __('Browser video access removed. Videos already open may keep playing briefly. Your Student Portal sign-in stays active.'));
     }
 
     private function student(Request $request): Student

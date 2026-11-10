@@ -26,7 +26,7 @@ class TwoFactorController extends Controller
         $request->session()->regenerate(true);
         $this->factors->beginEnrollment($request->attributes->get('student')->id, $request->session()->getId());
 
-        return to_route('student.security.show')->with('success', 'Check your primary email to continue setup in this browser.');
+        return to_route('student.security.show')->with('success', __('Check your primary email to continue setup in this browser.'));
     }
 
     public function approve(Request $request): View
@@ -87,7 +87,7 @@ class TwoFactorController extends Controller
         $data = $this->factorInput($request) + $request->validate(['password' => ['required', 'string', 'max:1024'], 'reason' => ['required', 'string', 'min:10', 'max:500']]);
         $this->factors->resetByStaff($request->user('web'), $student->id, $data['password'], $data['code'] ?? null, $data['recovery_code'] ?? null, $data['reason']);
 
-        return back()->with('success', 'Student MFA reset. Existing student sessions and recovery codes are invalid.');
+        return back()->with('success', __('Student MFA reset. Existing student sessions and recovery codes are invalid.'));
     }
 
     /** @return array<string, mixed> */

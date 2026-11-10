@@ -7,6 +7,7 @@ use App\Domains\Availability\Services\AvailabilityService;
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Lms\Services\LmsStudentLifecycle;
+use App\Domains\Reporting\Services\EstimatedActivityLifecycle;
 use App\Domains\Students\Models\Student;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -157,7 +158,9 @@ class StudentMergeService
                 DB::table('student_birthday_reminders')->insertOrIgnore(['student_id' => $primaryId, 'birthday_date' => $reminder->birthday_date, 'days_before' => $reminder->days_before, 'created_at' => $reminder->created_at]);
             }
             DB::table('student_birthday_reminders')->where('student_id', $secondaryId)->delete();
+            app(EstimatedActivityLifecycle::class)->merge($primary, $students->get($secondaryId));
             $this->learning->merge($primaryId, $secondaryId);
+            app(FeedbackLifecycle::class)->merge($primaryId, $secondaryId);
 
             DB::table('session_reschedules')
                 ->where('actor_type', 'student')

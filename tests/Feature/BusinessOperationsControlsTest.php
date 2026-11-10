@@ -95,6 +95,7 @@ class BusinessOperationsControlsTest extends TestCase
 
     public function test_room_overlap_rejected_adjacent_times_allowed_and_archival_retains_snapshots(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-11-02 08:00:00', 'UTC'));
         $provider = MeetingProvider::where('is_default', true)->firstOrFail();
         $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'QA room', 'url' => 'https://example.org/qa-room', 'url_hash' => hash('sha256', 'https://example.org/qa-room')]);
         $first = $this->booking('2026-11-02 10:00:00');
@@ -120,6 +121,7 @@ class BusinessOperationsControlsTest extends TestCase
 
     public function test_student_link_reveal_uses_utc_lead_time_and_cancelled_links_are_hidden(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-11-02 08:00:00', 'UTC'));
         $provider = MeetingProvider::where('is_default', true)->firstOrFail();
         $room = MeetingRoom::create(['meeting_provider_id' => $provider->id, 'name' => 'Reveal room', 'url' => 'https://example.org/reveal', 'url_hash' => hash('sha256', 'https://example.org/reveal')]);
         $booking = $this->booking('2026-11-02 10:00:00');

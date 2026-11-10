@@ -13,3 +13,15 @@ test('visual edits retain stable keys, options, validation and conditional metad
     assert.equal(saved[1].validation_rules.max_length, 250); assert.equal(saved[2].sort_order, 2);
     assert.equal(new Set(saved.map(question => question.question_key)).size, 3);
 });
+
+test('new conditions use the server discriminator and section presentation survives serialization', () => {
+    let factory;
+    vm.runInNewContext(source, {document: {addEventListener: (event, callback) => callback()}, Alpine: {data: (name, callback) => factory = callback}});
+    const presentation = {section: {key: 'section_5', title: 'Making learning materials your own', description: 'Section text'}, introduction_heading: 'Introduction'};
+    const builder = factory([{question_key: 'awa_pro_x04', presentation_config: presentation, options: []}]);
+    builder.condition(builder.questions[0]);
+    const saved = JSON.parse(builder.serialize())[0];
+    assert.equal(saved.conditional_logic.logic_version, 1);
+    assert.equal(Object.hasOwn(saved.conditional_logic, 'version'), false);
+    assert.deepEqual(saved.presentation_config, presentation);
+});

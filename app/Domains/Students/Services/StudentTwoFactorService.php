@@ -33,12 +33,12 @@ class StudentTwoFactorService
     public function beginEnrollment(int $id, string $sessionId): void
     {
         if (! app()->environment('testing') && ! SecurityMailTransport::canDeliver()) {
-            throw ValidationException::withMessages(['security' => 'Email delivery must be configured before authenticator enrollment. Contact your tutor.']);
+            throw ValidationException::withMessages(['security' => __('Email delivery must be configured before authenticator enrollment. Contact your tutor.')]);
         }
         [$student, $state] = DB::transaction(function () use ($id, $sessionId): array {
             $student = $this->locked($id);
             if ($student->requiresTwoFactor() || ! filter_var($student->email_normalized, FILTER_VALIDATE_EMAIL)) {
-                throw ValidationException::withMessages(['security' => 'An available primary email and disabled authenticator are required to start setup.']);
+                throw ValidationException::withMessages(['security' => __('An available primary email and disabled authenticator are required to start setup.')]);
             }
             $student->forceFill(['two_factor_pending_secret' => $this->totp->generateSecretKey(), 'two_factor_pending_at' => now('UTC'),
                 'two_factor_pending_session' => $this->binding($student, $sessionId)])->save();
@@ -47,11 +47,11 @@ class StudentTwoFactorService
         });
         $url = URL::temporarySignedRoute('student.security.approve', now('UTC')->addMinutes(10), ['state' => $state]);
         try {
-            Mail::to($student->email_normalized)->send(new StudentSecurityVerification($url));
+            Mail::to($student->email_normalized)->send((new StudentSecurityVerification($url))->locale(app()->getLocale()));
         } catch (\Throwable) {
             Student::query()->whereKey($id)->where('two_factor_pending_session', $student->two_factor_pending_session)
                 ->update(['two_factor_pending_secret' => null, 'two_factor_pending_at' => null, 'two_factor_pending_session' => null]);
-            throw ValidationException::withMessages(['security' => 'The security email could not be delivered. Please try again later.']);
+            throw ValidationException::withMessages(['security' => __('The security email could not be delivered. Please try again later.')]);
         }
         $this->audit->logStudent($id, 'student_two_factor_enrollment_requested', Student::class, $id);
     }
@@ -73,7 +73,7 @@ class StudentTwoFactorService
             $student = $this->pending($this->locked($id), $sessionId, $state);
             $step = $this->totp->verifyKeyNewer($student->two_factor_pending_secret, $code, 0, 1, intdiv(now('UTC')->timestamp, 30));
             if ($step === false) {
-                throw ValidationException::withMessages(['code' => 'The authenticator code is invalid.']);
+                throw ValidationException::withMessages(['code' => __('The authenticator code is invalid.')]);
             }
             [$codes, $hashes] = $this->recoveryCodes();
             $student->forceFill(['two_factor_secret' => $student->two_factor_pending_secret, 'two_factor_confirmed_at' => now('UTC'),
@@ -91,7 +91,7 @@ class StudentTwoFactorService
         return DB::transaction(function () use ($id, $code, $recoveryCode, $fingerprint): Student {
             $student = $this->locked($id);
             if (! hash_equals($this->fingerprint($student), $fingerprint) || ! $student->requiresTwoFactor()) {
-                throw ValidationException::withMessages(['code' => 'Your sign-in state changed. Sign in again.']);
+                throw ValidationException::withMessages(['code' => __('Your sign-in state changed. Sign in again.')]);
             }
             if ($recoveryCode && ! $code) {
                 $hashes = $student->two_factor_recovery_codes ?? [];
@@ -112,7 +112,7 @@ class StudentTwoFactorService
                     return $student;
                 }
             }
-            throw ValidationException::withMessages(['code' => 'The code is invalid or has already been used.']);
+            throw ValidationException::withMessages(['code' => __('The code is invalid or has already been used.')]);
         });
     }
 
@@ -176,7 +176,7 @@ class StudentTwoFactorService
             || $student->two_factor_pending_at->lte(now('UTC')->subMinutes(10))
             || ! hash_equals((string) $student->two_factor_pending_session, $this->binding($student, $sessionId))
             || ! hash_equals($this->state($student), $state)) {
-            throw ValidationException::withMessages(['security' => 'Setup is invalid, expired, or belongs to another session. Restart setup.']);
+            throw ValidationException::withMessages(['security' => __('Setup is invalid, expired, or belongs to another session. Restart setup.')]);
         }
 
         return $student;

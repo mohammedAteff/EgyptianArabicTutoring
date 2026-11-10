@@ -1,8 +1,8 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
+<div class="aq-promotions max-w-4xl mx-auto space-y-6">
+    <div class="flex flex-wrap gap-3 items-center justify-between">
         <div>
             <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
                 <a href="{{ route('admin.promotions.index') }}" class="hover:underline">&larr; Back to Promotions</a>
@@ -119,7 +119,7 @@
             </label>
         </div>
 
-        <div class="pt-6 border-t border-slate-100 flex items-center justify-end gap-3">
+        <div class="pt-6 border-t border-slate-100 flex flex-wrap items-center justify-end gap-3">
             <a href="{{ route('admin.promotions.index') }}" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-semibold transition-colors">
                 Cancel
             </a>

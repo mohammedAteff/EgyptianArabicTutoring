@@ -37,7 +37,7 @@ class SchedulingController extends Controller
             $service->holiday($student, $data);
         } else {
             if (! SessionType::query()->studentDiscoverable()->whereKey((int) ($data['session_type_id'] ?? 0))->exists()) {
-                throw ValidationException::withMessages(['session_type_id' => 'This lesson type is not available for preferred lesson periods.']);
+                throw ValidationException::withMessages(['session_type_id' => __('This lesson type is not available for preferred lesson periods.')]);
             }
             $service->waitlist($student, $data);
         }

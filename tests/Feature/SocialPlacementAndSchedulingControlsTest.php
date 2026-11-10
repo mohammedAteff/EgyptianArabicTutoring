@@ -77,41 +77,48 @@ class SocialPlacementAndSchedulingControlsTest extends TestCase
         $this->assertSame(10, $rule->fresh()->buffer_minutes);
     }
 
-    public function test_banner_and_footer_payloads_are_counted_once_and_show_click_times(): void
+    public function test_banner_floating_and_footer_payloads_are_counted_once_and_show_click_times(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-19 15:20:30', 'Africa/Cairo'));
-        foreach (['top_banner', 'footer_social'] as $placement) {
-            $this->postJson(route('analytics.track'), ['event_uuid' => (string) Str::uuid(), 'event_name' => 'social_link_clicked', 'page' => '/social-qa', 'metadata' => ['platform' => 'youtube', 'placement' => $placement, 'target_url' => 'https://youtube.com/example', 'context' => 'public', 'language' => 'en']])->assertOk();
+        foreach (['top_banner', 'floating_social', 'footer_social'] as $placement) {
+            $payload = ['event_uuid' => (string) Str::uuid(), 'event_name' => 'social_link_clicked', 'page' => '/social-qa', 'metadata' => ['platform' => 'youtube', 'placement' => $placement, 'target_url' => 'https://youtube.com/example', 'context' => 'public', 'language' => 'en']];
+            $this->postJson(route('analytics.track'), $payload)->assertOk();
+            $this->postJson(route('analytics.track'), $payload)->assertOk();
         }
         AnalyticsEvent::query()->create(['event_uuid' => (string) Str::uuid(), 'event_name' => 'social_link_clicked', 'visitor_token' => 'bot', 'page' => '/', 'metadata' => ['platform' => 'youtube', 'placement' => 'top_banner'], 'is_bot' => true, 'created_at' => now('UTC')]);
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']));
 
-        $this->get(route('admin.reports.index', ['type' => 'social', 'range' => 'today']))->assertSee('Individual click times')->assertSee('Oct 19, 2026')->assertViewHas('reportData', fn ($data) => $data['total_clicks'] === 2 && $data['placement_totals']['top_banner'] === 1 && $data['placement_totals']['footer_social'] === 1 && $data['recent_clicks']->count() === 2);
+        $this->get(route('admin.reports.index', ['type' => 'social', 'range' => 'today']))->assertSee('Individual click times')->assertSee('Oct 19, 2026')->assertSee('Floating sidebar / mobile menu')->assertViewHas('reportData', fn ($data) => $data['total_clicks'] === 3 && $data['placement_totals']['top_banner'] === 1 && $data['placement_totals']['floating_social'] === 1 && $data['placement_totals']['footer_social'] === 1 && $data['recent_clicks']->count() === 3);
         $this->get(route('admin.reports.index', ['type' => 'social', 'range' => 'today', 'placement' => 'top_banner', 'platform' => 'YouTube']))->assertViewHas('reportData', fn ($data) => $data['total_clicks'] === 1 && $data['recent_clicks']->count() === 1 && $data['recent_clicks']->first()->placement === 'top_banner');
+        $this->get(route('admin.reports.index', ['type' => 'social', 'range' => 'today', 'placement' => 'floating_social']))->assertViewHas('reportData', fn ($data) => $data['total_clicks'] === 1 && $data['recent_clicks']->sole()->placement === 'floating_social');
     }
 
-    #[TestWith(['csv'])]
-    #[TestWith(['xlsx'])]
-    public function test_individual_click_exports_include_business_time_and_respect_placement_filters(string $format): void
+    #[TestWith(['csv', 'top_banner'])]
+    #[TestWith(['xlsx', 'top_banner'])]
+    #[TestWith(['csv', 'floating_social'])]
+    #[TestWith(['xlsx', 'floating_social'])]
+    public function test_individual_click_exports_include_business_time_and_respect_placement_filters(string $format, string $placement): void
     {
         $time = CarbonImmutable::parse('2026-10-19 15:20:30', 'Africa/Cairo');
         $this->travelTo($time);
         $this->click($time, 'top_banner');
+        $this->click($time, 'floating_social');
         $this->click($time->subMinute(), 'footer_social');
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']));
 
-        $response = $this->get(route('admin.reports.export', ['type' => 'social', 'range' => 'today', 'placement' => 'top_banner', 'detail' => 'clicks', 'format' => $format]))->assertOk();
+        $response = $this->get(route('admin.reports.export', ['type' => 'social', 'range' => 'today', 'placement' => $placement, 'detail' => 'clicks', 'format' => $format]))->assertOk();
 
         if ($format === 'csv') {
             $csv = $response->streamedContent();
             $this->assertStringContainsString('2026-10-19 15:20:30+03:00', $csv);
-            $this->assertStringContainsString('top_banner', $csv);
+            $this->assertStringContainsString($placement, $csv);
             $this->assertStringNotContainsString('footer_social', $csv);
+            $this->assertCount(2, preg_split('/\r\n|\r|\n/', trim($csv)));
         } else {
             $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
             $sheet = $workbook->getActiveSheet();
             $this->assertSame('2026-10-19 15:20:30+03:00', $sheet->getCell('A2')->getValue());
-            $this->assertSame('top_banner', $sheet->getCell('C2')->getValue());
+            $this->assertSame($placement, $sheet->getCell('C2')->getValue());
             $this->assertSame(2, $sheet->getHighestRow());
             $workbook->disconnectWorksheets();
         }
@@ -131,6 +138,21 @@ class SocialPlacementAndSchedulingControlsTest extends TestCase
         AnalyticsEvent::query()->delete();
 
         $this->get(route('admin.reports.index', ['type' => 'social', 'range' => 'today', 'placement' => 'top_banner']))->assertViewHas('reportData', fn ($data) => $data['total_clicks'] === 26 && $data['recent_clicks']->isEmpty())->assertSee('No individual clicks are available');
+    }
+
+    public function test_floating_social_placement_remains_filterable_after_raw_clicks_are_pruned(): void
+    {
+        $time = CarbonImmutable::parse('2026-10-19 15:20:30', 'Africa/Cairo');
+        $this->travelTo($time);
+        foreach (['top_banner', 'floating_social', 'floating_social', 'footer_social'] as $placement) {
+            $this->click($time, $placement);
+        }
+        app(SocialAnalyticsRollup::class)->aggregateDay($time);
+        AnalyticsEvent::query()->delete();
+        $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']));
+
+        $this->get(route('admin.reports.index', ['type' => 'social', 'range' => 'today', 'placement' => 'floating_social']))
+            ->assertViewHas('reportData', fn ($data) => $data['total_clicks'] === 2 && $data['placement_totals']->all() === ['floating_social' => 2] && $data['uses_durable_history'] && $data['recent_clicks']->isEmpty());
     }
 
     #[TestWith([0])]

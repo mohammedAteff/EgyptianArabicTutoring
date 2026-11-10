@@ -103,8 +103,11 @@ class PublicExperienceTest extends TestCase
         $slotStartUtc = CarbonImmutable::parse("{$slotDate} 09:00:00", 'Africa/Cairo')->setTimezone('UTC')->toDateTimeString();
         $component = Livewire::test(BookingWizard::class)
             ->call('setDetectedTimezone', 'America/New_York')
-            ->assertSet('customerTimezone', 'America/New_York')
-            ->call('selectDate', $slotDate)
+            ->assertSet('customerTimezone', 'America/New_York');
+        if ($component->get('calendarMonth') !== $nextSunday->format('Y-m')) {
+            $component->call('nextMonth');
+        }
+        $component->call('selectDate', $slotDate)
             ->assertSet('selectedDate', $slotDate);
         $component->call('selectSlot', $this->slotIdFor($this->sessionType, $slotStartUtc, 'America/New_York', $component->get('visitorToken')))
             ->assertSet('currentStep', 3)
@@ -161,7 +164,7 @@ class PublicExperienceTest extends TestCase
         $icsResponse->assertStatus(200);
         $icsResponse->assertHeader('Content-Type', 'text/calendar; charset=utf-8');
         $this->assertStringContainsString('BEGIN:VCALENDAR', $icsResponse->getContent());
-        $this->assertStringContainsString($booking->confirmation_token, $icsResponse->getContent());
+        $this->assertStringContainsString($booking->confirmation_token, str_replace("\r\n ", '', $icsResponse->getContent()));
         $this->assertStringNotContainsString('meet.google.com', $icsResponse->getContent());
 
         $room = MeetingRoom::factory()->create(['meeting_provider_id' => MeetingProvider::where('is_default', true)->firstOrFail()->id, 'url' => 'https://meet.example.test/arabic-room', 'url_hash' => hash('sha256', 'https://meet.example.test/arabic-room')]);
@@ -472,46 +475,20 @@ class PublicExperienceTest extends TestCase
         $this->assertSame(1, DB::table('analytics_events')->where('event_name', 'game_opened')->where('metadata->game_slug', $game->slug)->count());
     }
 
-    public function test_external_game_card_renders_with_preview_image_badge_and_clickable_link(): void
+    public function test_story_card_opens_the_local_game_with_its_cover_and_preserves_identity(): void
     {
-        $externalGame = Game::create([
-            'title' => '6-Word Story',
-            'slug' => '6-word-story',
-            'description' => 'Think fast, speak continuously, and practice Egyptian Arabic through quick speaking challenges.',
-            'badge' => 'Speaking Practice',
-            'thumbnail_path' => 'images/games/6-word-story.webp',
-            'target_url' => 'https://mohamedateff.com/6word',
-            'status' => 'available',
-            'featured' => true,
-            'sort_order' => 1,
-        ]);
-
-        $response = $this->get(route('games.index'));
-        $response->assertStatus(200);
-        $response->assertSeeText('Pick a Challenge. See Where It Takes You.');
-        $response->assertSeeText('6-Word Story');
-        $response->assertSeeText('Speaking Practice');
-        $response->assertSeeText('Think fast, speak continuously');
-        $response->assertDontSee('Games are currently being updated. Check back shortly!');
-
-        // Assert link target, rel, and URL
-        $response->assertSee('href="https://mohamedateff.com/6word"', false);
-        $response->assertSee('target="_blank"', false);
-        $response->assertSee('rel="noopener noreferrer"', false);
-        $response->assertSee('images/games/6-word-story.webp', false);
-
+        $game = Game::create(['title' => '6-Word Story', 'slug' => '6-word-story', 'description' => 'Think fast, speak continuously.', 'badge' => 'Speaking Practice', 'thumbnail_path' => 'images/games/6-word-story.webp', 'target_url' => 'https://mohamedateff.com/6word', 'status' => 'available', 'featured' => true, 'sort_order' => 1]);
+        $response = $this->get(route('games.index'))->assertOk()->assertSeeText('6-Word Story')->assertSeeText('Speaking Practice');
         $document = new \DOMDocument;
         $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
-        $link = (new \DOMXPath($document))->query('//a[@href="'.$externalGame->target_url.'"]')->item(0);
-        $this->assertStringContainsString('game_opened', $link->getAttribute('onclick'));
-        $this->assertStringContainsString('outbound_link_clicked', $link->getAttribute('onclick'));
-
-        // Assert show route redirects directly to external game and logs event
-        $showResponse = $this->get(route('games.show', $externalGame->slug));
-        $showResponse->assertRedirect('https://mohamedateff.com/6word');
-        $this->assertDatabaseHas('analytics_events', [
-            'event_name' => 'game_opened',
-        ]);
+        $link = (new \DOMXPath($document))->query('//article[@data-game-id="'.$game->id.'"]//a')->item(0);
+        $this->assertSame(localized_url('game.detail', $game->slug), $link->getAttribute('href'));
+        $this->assertSame('', $link->getAttribute('target'));
+        $this->assertSame('', $link->getAttribute('onclick'));
+        $response->assertSee('six-word-story-cover.webp', false);
+        $this->get(route('games.show', $game->slug))->assertOk()->assertViewIs('public.games.six-word-story');
+        $this->assertDatabaseHas('analytics_events', ['event_name' => 'game_opened']);
+        $this->assertSame('https://mohamedateff.com/6word', $game->fresh()->target_url);
     }
 
     public function test_static_pages_load_successfully(): void

@@ -151,7 +151,7 @@ class BookingController extends Controller
 
         app(AnalyticsService::class)->track('package_session_scheduled', ['booking_id' => $booking->id], $request, eventUuid: 'package-booking-'.$booking->id);
 
-        return redirect()->route('student.bookings.show', $booking->id)->with('success', 'Lesson Confirmed. Your lesson has been booked using the required lesson credit.');
+        return redirect()->route('student.bookings.show', $booking->id)->with('success', __('Lesson Confirmed. Your lesson has been booked using the required lesson credit.'));
     }
 
     private function displayTimezone(?string $requested, Student $student, TimezoneService $timezones): string

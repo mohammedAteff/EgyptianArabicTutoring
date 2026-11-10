@@ -12,7 +12,7 @@ class StudentSecurityVerification extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Confirm your student authenticator setup');
+        return new Envelope(subject: __('Confirm your student authenticator setup'));
     }
 
     public function content(): Content

@@ -109,7 +109,7 @@ class LearningController extends Controller
         $values = $request->validate(['body' => ['required', 'string', 'max:10000']]);
         $this->state->saveNote($this->student($request), $course, $lesson, $values['body']);
 
-        return redirect()->route('student.learning.lessons.show', [$course, $lesson])->with('status', 'Private note saved.');
+        return redirect()->route('student.learning.lessons.show', [$course, $lesson])->with('status', __('Private note saved.'));
     }
 
     public function updateNote(Request $request, Course $course, Lesson $lesson, int $note): RedirectResponse
@@ -117,7 +117,7 @@ class LearningController extends Controller
         $values = $request->validate(['body' => ['required', 'string', 'max:10000'], 'version' => ['required', 'integer', 'min:1']]);
         $this->state->saveNote($this->student($request), $course, $lesson, $values['body'], $note, (int) $values['version']);
 
-        return redirect()->route('student.learning.lessons.show', [$course, $lesson])->with('status', 'Private note updated.');
+        return redirect()->route('student.learning.lessons.show', [$course, $lesson])->with('status', __('Private note updated.'));
     }
 
     public function deleteNote(Request $request, int $note): RedirectResponse
@@ -125,7 +125,7 @@ class LearningController extends Controller
         $values = $request->validate(['version' => ['required', 'integer', 'min:1']]);
         $this->state->deleteNote($this->student($request), $note, (int) $values['version']);
 
-        return redirect()->route('student.learning.notes.index')->with('status', 'Private note deleted.');
+        return redirect()->route('student.learning.notes.index')->with('status', __('Private note deleted.'));
     }
 
     public function storeBookmark(Request $request, Course $course, Lesson $lesson): RedirectResponse
@@ -133,7 +133,7 @@ class LearningController extends Controller
         $values = $request->validate(['block_id' => ['required', 'integer', 'min:1'], 'seconds' => ['required', 'numeric', 'between:0,86400'], 'label' => ['nullable', 'string', 'max:500']]);
         $this->state->bookmark($this->student($request), $course, $lesson, (int) $values['block_id'], (float) $values['seconds'], $values['label'] ?? null);
 
-        return redirect()->route('student.learning.lessons.show', [$course, $lesson])->with('status', 'Video bookmark saved.');
+        return redirect()->route('student.learning.lessons.show', [$course, $lesson])->with('status', __('Video bookmark saved.'));
     }
 
     public function deleteBookmark(Request $request, Course $course, Lesson $lesson, int $bookmark): RedirectResponse
@@ -143,7 +143,7 @@ class LearningController extends Controller
         $owned = LessonBookmark::query()->where('student_id', $student->id)->where('lesson_id', $lesson->id)->findOrFail($bookmark);
         $this->state->deleteBookmark($student, $owned->id);
 
-        return redirect()->route('student.learning.index')->with('status', 'Video bookmark deleted.');
+        return redirect()->route('student.learning.index')->with('status', __('Video bookmark deleted.'));
     }
 
     private function student(Request $request): Student

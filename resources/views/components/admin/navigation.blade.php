@@ -19,7 +19,7 @@
             <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 [&::-webkit-details-marker]:hidden">
                 <span class="min-w-0 flex-1">{{ $group['label'] }}</span>
                 @if($key === 'daily' && $unreadCount > 0)
-                    <span aria-label="{{ $unreadCount }} unread notifications" class="rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-slate-950">{{ $unreadCount }}</span>
+                    <span aria-label="{{ $unreadCount }} unread notifications" class="aq-notification-count rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-slate-950">{{ $unreadCount }}</span>
                 @endif
                 <svg aria-hidden="true" class="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7"/></svg>
             </summary>

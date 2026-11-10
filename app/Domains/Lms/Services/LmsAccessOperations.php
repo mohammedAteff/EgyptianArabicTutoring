@@ -12,6 +12,7 @@ use App\Domains\Lms\Models\LearningAssignment;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
+use App\Domains\Reporting\Services\EstimatedActivityLifecycle;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\TeachingRecordService;
 use Carbon\CarbonImmutable;
@@ -198,6 +199,7 @@ class LmsAccessOperations
                     throw ValidationException::withMessages(['expires_at' => 'Expiration must follow the start.']);
                 }
                 $current->forceFill(['lock_version' => $current->lock_version + 1])->save();
+                app(EstimatedActivityLifecycle::class)->revoke($student, 'access_changed');
                 $this->record($actor, $student, $current, $operationKey, $fingerprint, $action);
                 $this->audits->log('lms_access_'.$action, AccessGrant::class, $current->id, ['status' => $before['status']],
                     ['student_id' => $student->id, 'course_id' => $current->course_id, 'status' => $current->status, 'lock_version' => $current->lock_version], $actor->id);

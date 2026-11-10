@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 @section('content')
-<div class="mx-auto max-w-6xl space-y-6">
+<div class="aq-page aq-copy-editor mx-auto max-w-6xl space-y-6">
     <div><h1 class="font-serif text-3xl font-bold text-slate-900">Website Copy & Pages</h1><p class="mt-2 text-sm text-slate-600">One workspace for public wording, FAQs, legal documents and translations. Drafts stay private until you publish.</p></div>
     @include('admin.website-copy.navigation')
     @if(session('success'))<p role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('success') }}</p>@endif

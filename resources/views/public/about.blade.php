@@ -1,33 +1,51 @@
 
 @extends('layouts.public')
+@section('body-class', 'studio-about-profile-page')
 @section('content')
 <x-public-english-fallback :is-fallback="$isFallback ?? false" />
 @php
     $imageUrl = app(\App\Domains\CMS\Services\AboutImageService::class)->url($imagePath ?? null);
+    $visibleSections = array_filter(config('public_content.about'), fn (array $section): bool => $section['_visible'] ?? true);
+    $primarySection = isset($visibleSections[0]) ? 0 : array_key_first($visibleSections);
+    $compositions = [0 => 'introduction', 1 => 'curiosity', 2 => 'approach', 3 => 'experience', 4 => 'learners', 5 => 'invitation'];
 @endphp
-<div lang="{{ $copyLocale ?? 'en' }}" class="mx-auto max-w-4xl space-y-16 px-4 py-12 sm:px-6 lg:px-8">
-    @foreach(config('public_content.about') as $index => $section)
-        @if(! ($section['_visible'] ?? true)) @continue @endif
-        <section>
-            @if($index === 0 && !empty($biography))
-                @php if ($biographyHeading ?? null) { $section['title'] = $biographyHeading; } @endphp
-                <x-public-copy-section :section="$section" :level="1" :show-blocks="false" :locale="$biographyLocale ?? 'en'" />
-                <div lang="{{ $index === 0 ? ($biographyLocale ?? 'en') : 'en' }}" class="article-copy mt-6 whitespace-pre-line">{!! preg_match('/<\\/?[a-z][^>]*>/i', $biography) ? app(\App\Domains\CMS\Services\RichTextSanitizer::class)->sanitize($biography) : nl2br(e($biography)) !!}</div>
-            @elseif($index === 2 && !empty($philosophy))
-                <x-public-copy-section :section="$section" :show-blocks="false" />
-                <div class="article-copy mt-6 whitespace-pre-line">{!! preg_match('/<\\/?[a-z][^>]*>/i', $philosophy) ? app(\App\Domains\CMS\Services\RichTextSanitizer::class)->sanitize($philosophy) : nl2br(e($philosophy)) !!}</div>
-            @else
-                <x-public-copy-section :section="$section" :level="$index === 0 ? 1 : 2" />
-            @endif
-            @if($index === 0 && $imageUrl)
-                <img src="{{ $imageUrl }}" alt="Abdallah" class="mt-8 max-h-96 rounded-2xl object-cover" loading="lazy">
-            @endif
-            @if($index === 5)
-                <div class="mt-7 flex flex-wrap gap-4">
-                    <a href="{{ website_link('about', 'booking', localized_url('booking')) }}" data-cta="booking" class="rounded-xl bg-terracotta-500 px-6 py-3 font-bold text-white hover:bg-terracotta-600">{{ website_text('about', 'Book Your Diagnostic') }}</a>
-                    <a href="{{ website_link('about', 'pricing', localized_url('pricing')) }}" class="rounded-xl border border-stone-300 bg-white px-6 py-3 font-semibold">{{ website_text('about', 'Explore Lessons & Pricing') }}</a>
+<div lang="{{ $copyLocale ?? 'en' }}" class="about-profile">
+    @foreach($visibleSections as $identity => $section)
+        @php
+            $isBiography = $identity === 0 && filled($biography ?? null);
+            $isPhilosophy = $identity === 2 && filled($philosophy ?? null);
+            $sectionLocale = $isBiography ? ($biographyLocale ?? 'en') : ($copyLocale ?? 'en');
+            $heading = $isBiography && filled($biographyHeading ?? null) ? $biographyHeading : $section['title'];
+        @endphp
+        <section id="about-section-{{ $identity + 1 }}" class="about-profile-section about-profile-{{ $compositions[$identity] ?? 'narrative' }}" aria-labelledby="about-heading-{{ $identity + 1 }}" lang="{{ $sectionLocale }}">
+            <div @class(['about-profile-inner', 'about-profile-with-portrait' => $identity === 0 && $imageUrl])>
+                <header class="about-profile-heading">
+                    <p class="about-profile-eyebrow">{{ __($section['badge']) }}</p>
+                    @if($identity === $primarySection)
+                        <h1 id="about-heading-{{ $identity + 1 }}">{{ $heading }}</h1>
+                    @else
+                        <h2 id="about-heading-{{ $identity + 1 }}">{{ $heading }}</h2>
+                    @endif
+                </header>
+                <div class="about-profile-content" lang="{{ $isPhilosophy ? 'en' : $sectionLocale }}">
+                    <x-about-editorial-blocks :blocks="$section['blocks']" :body="$isBiography ? $biography : ($isPhilosophy ? $philosophy : null)" :variant="match ($identity) { 0 => 'introduction', 2 => 'principles', 3 => 'experience', 4 => 'contexts', 5 => 'offer', default => 'narrative' }">
+                        @if($identity === 5)
+                            <div class="about-profile-actions">
+                                <a href="{{ website_link('about', 'booking', localized_url('booking')) }}" data-cta="booking" class="studio-button">{{ website_text('about', 'Book Your Diagnostic') }} <x-public-studio-icon name="arrow" class="studio-link-arrow" /></a>
+                                <a href="{{ website_link('about', 'pricing', localized_url('pricing')) }}" class="studio-link">{{ website_text('about', 'Explore Lessons & Pricing') }} <x-public-studio-icon name="arrow" class="studio-link-arrow" /></a>
+                            </div>
+                        @endif
+                    </x-about-editorial-blocks>
                 </div>
-            @endif
+                @if($identity === 0 && $imageUrl)
+                    <figure class="about-profile-portrait">
+                        <img src="{{ $imageUrl }}" alt="{{ __('Abdallah') }}" width="640" height="800" fetchpriority="high" decoding="async">
+                    </figure>
+                @endif
+                @if(!empty($section['extra_content']))
+                    <div class="about-profile-prose about-profile-extra" lang="{{ $copyLocale ?? 'en' }}">{!! app(\App\Domains\CMS\Services\RichTextSanitizer::class)->sanitize($section['extra_content']) !!}</div>
+                @endif
+            </div>
         </section>
     @endforeach
 </div>

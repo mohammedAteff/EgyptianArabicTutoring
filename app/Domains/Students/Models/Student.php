@@ -4,6 +4,7 @@ namespace App\Domains\Students\Models;
 
 use App\Domains\Booking\Models\Booking;
 use App\Domains\Forms\Models\FormSubmission;
+use App\Domains\Reporting\Services\EstimatedActivityLifecycle;
 use Database\Factories\StudentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property Carbon|null $suspended_at
@@ -56,6 +58,35 @@ class Student extends Authenticatable
     public function requiresTwoFactor(): bool
     {
         return $this->two_factor_secret !== null || $this->two_factor_confirmed_at !== null;
+    }
+
+    /** Serialize authority changes with synthetic collection, using the existing student mutex. */
+    public function save(array $options = []): bool
+    {
+        if (! $this->exists || ! $this->isDirty(['suspended_at', 'identity_status', 'merged_into_student_id', 'two_factor_version', 'email_normalized', 'phone_normalized', 'name_normalized', 'date_of_birth'])) {
+            return parent::save($options);
+        }
+
+        return DB::transaction(function () use ($options): bool {
+            static::withTrashed()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            app(EstimatedActivityLifecycle::class)->revoke($this);
+
+            return parent::save($options);
+        }, 5);
+    }
+
+    public function delete(): ?bool
+    {
+        if (! $this->exists) {
+            return parent::delete();
+        }
+
+        return DB::transaction(function (): ?bool {
+            static::withTrashed()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            app(EstimatedActivityLifecycle::class)->revoke($this, 'account_deleted');
+
+            return parent::delete();
+        }, 5);
     }
 
     protected static function newFactory(): StudentFactory

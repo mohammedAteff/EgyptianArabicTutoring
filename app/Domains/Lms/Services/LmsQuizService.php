@@ -220,14 +220,14 @@ class LmsQuizService
 
     private function invalid(string $message): never
     {
-        throw ValidationException::withMessages(['answers' => $message]);
+        throw ValidationException::withMessages(['answers' => __($message)]);
     }
 
     /** @param array<string,mixed> $question */
     private function answerLabel(array $question, mixed $answer): string
     {
         if ($answer === null) {
-            return $question['type'] === 'written' ? 'Manually reviewed' : '';
+            return $question['type'] === 'written' ? __('Manually reviewed') : '';
         }
         if ($question['type'] === 'choice') {
             return $question['options'][$answer] ?? '';
@@ -239,6 +239,6 @@ class LmsQuizService
             return implode('; ', array_map(fn (int $i): string => $question['options'][$i].' → '.$answer[$i], array_keys($answer)));
         }
 
-        return is_bool($answer) ? ($answer ? 'True' : 'False') : (is_array($answer) ? implode(', ', $answer) : (string) $answer);
+        return is_bool($answer) ? __($answer ? 'True' : 'False') : (is_array($answer) ? implode(', ', $answer) : (string) $answer);
     }
 }

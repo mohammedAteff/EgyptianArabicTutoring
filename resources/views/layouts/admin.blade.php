@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-50 text-slate-900 antialiased">
+<html lang="en" data-admin-appearance="light" class="h-full bg-slate-50 text-slate-900 antialiased">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,12 +7,8 @@
 
     <title>{{ $title ?? 'Admin Console' }} | {{ config('business.site_name') }} Admin</title>
 
-    <!-- Google Fonts: Cairo -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('components.admin.appearance-init')
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/css/admin-quiet-operations.css', 'resources/js/admin-appearance.js'])
     @livewireStyles
     <script>
         try { document.documentElement.dataset.sidebarCollapsed = localStorage.getItem('admin_sidebar_collapsed') === '1' ? 'true' : 'false'; } catch {}
@@ -84,11 +80,12 @@
                class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:fixed md:shrink-0 border-r border-slate-800">
             
             <!-- Brand / Logo -->
-            <div class="h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
-                <a href="{{ route(auth('web')->user()?->isAssistant() ? 'admin.operations.index' : 'admin.dashboard') }}" class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-bold font-serif shadow-md">
-                        <span aria-hidden="true">A</span>
-                    </div>
+            <div class="aq-brand h-16 flex items-center justify-between px-6 bg-slate-950 border-b border-slate-800">
+                <a href="{{ route(auth('web')->user()?->isAssistant() ? 'admin.operations.index' : 'admin.dashboard') }}" class="aq-brand-link flex items-center gap-3">
+                    <span class="aq-brandmark">
+                        <img class="aq-logo-light" src="{{ asset('assets/brand/wordmark-teal-520.webp') }}" alt="{{ config('business.site_name') }}" width="190" height="28">
+                        <img class="aq-logo-dark" src="{{ asset('assets/brand/wordmark-cream-520.webp') }}" alt="{{ config('business.site_name') }}" width="190" height="28">
+                    </span>
                     <div>
                         <div class="font-bold text-white text-sm leading-tight tracking-tight">Operations Console</div>
                         <div class="text-xs text-amber-400 font-medium">{{ auth('web')->user()?->name }}</div>
@@ -133,10 +130,10 @@
         <div id="admin-content" class="flex-1 flex flex-col min-w-0 md:ml-64">
             
             <!-- Topbar Header -->
-            <header class="h-16 shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between shadow-xs z-10">
+            <header class="aq-topbar h-16 shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between shadow-xs z-10">
                 
                 <!-- Left: Hamburger toggle + Global Search Form -->
-                <div class="flex min-w-0 items-center gap-2 sm:gap-4 flex-1 max-w-xl">
+                <div class="aq-topbar-search flex min-w-0 items-center gap-2 sm:gap-4 flex-1 max-w-xl">
                     <button type="button"
                             id="admin-menu-toggle"
                             @click="openSidebar()"
@@ -166,7 +163,7 @@
                 </div>
 
                 <!-- Right: Cairo Live Clock, Notification Bell & Public Website Link -->
-                <div class="flex items-center gap-2 sm:gap-4 text-sm font-medium">
+                <div class="aq-topbar-utilities flex items-center gap-2 sm:gap-4 text-sm font-medium">
                     <x-staff-quick-actions />
                     <div class="hidden xl:flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-full text-xs font-semibold">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -182,12 +179,21 @@
         <button class="rounded bg-slate-800 px-2 py-1 text-xs text-white">Save</button>
     </form>
 
+                    <div class="aq-appearance">
+                        <label for="admin-appearance-select">Appearance</label>
+                        <select id="admin-appearance-select" data-admin-appearance-select>
+                            <option value="light">Light</option>
+                            <option value="dark-teal">Dark Teal</option>
+                            <option value="pure-black">Pure Black</option>
+                        </select>
+                    </div>
+
                     <!-- Notification Bell -->
                     @if(auth('web')->user()?->isAdmin())
                     <a href="{{ route('admin.notifications.index') }}" class="relative p-2 text-slate-500 hover:text-amber-600 transition-colors" title="Notifications">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                         @if(($sidebarUnreadCount ?? 0) > 0)
-                            <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-600 ring-2 ring-white"></span>
+                            <span class="aq-notification-dot absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-600 ring-2 ring-white"></span>
                         @endif
                     </a>
 
@@ -198,6 +204,12 @@
                     </a>
                 </div>
             </header>
+            @if($tutorWorkShell)
+            <div data-work-shell data-actor-id="{{ $tutorWorkShell['actor'] }}" data-workspace-id="{{ $tutorWorkShell['workspace'] }}" data-context-version="{{ \App\Domains\Reporting\Services\TutorWorkWorkspace::PROTOCOL }}" data-state-url="{{ route('admin.tutor-work.state') }}" data-command-base="{{ route('admin.tutor-work.store') }}" class="aq-topbar shrink-0 border-b px-4 py-2 text-xs sm:px-6 lg:px-8" hidden>
+                <a href="{{ route('admin.tutor-work.index', ['view' => 'controls']) }}" class="inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg px-2 font-semibold underline underline-offset-4 focus-visible:outline-2" data-work-indicator></a>
+                <span data-work-shell-error hidden>Saved timer state unavailable. Check controls before assuming it stopped.</span>
+            </div>
+            @endif
 
             <!-- Flash & Alert Banners -->
             @php

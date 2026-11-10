@@ -14,7 +14,7 @@ use Illuminate\View\View;
 
 class BlogController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:200'], 'category' => ['nullable', 'string', 'max:120'], 'sort' => ['nullable', 'in:newest,oldest']]);
         $locale = app()->getLocale();
@@ -36,15 +36,32 @@ class BlogController extends Controller
         $sort = $filters['sort'] ?? 'newest';
         $query->orderBy('published_at', $sort === 'oldest' ? 'asc' : 'desc')->orderBy('id', $sort === 'oldest' ? 'asc' : 'desc');
         $featured = null;
-        if ($search === '' && $category === '' && ! $request->filled('page')) {
+        $lead = null;
+        if ($search === '' && $category === '' && $sort === 'newest') {
             $featured = (clone $base)->with('category')->whereKey(Setting::get('blog.featured.'.$contentLocale))->first();
+            $lead = $featured ?? (clone $base)->with('category')->orderByDesc('published_at')->orderByDesc('id')->first();
+            if ($lead) {
+                $query->whereKeyNot($lead->id);
+            }
         }
+        $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
+        $parameters = array_filter(['q' => $search, 'category' => $category, 'sort' => $sort === 'oldest' ? $sort : ''], fn (string $value): bool => $value !== '');
+        $total = (clone $query)->count();
+        $lastPage = max(1, (int) ceil($total / 12));
+        if ($page > $lastPage) {
+            if ($lastPage > 1) {
+                $parameters['page'] = $lastPage;
+            }
+
+            return redirect(localized_url('blogs').($parameters === [] ? '' : '?'.http_build_query($parameters)).'#article-library');
+        }
+        $blogs = $query->paginate(12, page: $page, total: $total)->appends($parameters)->fragment('article-library');
 
         return view('blog.index', [
             'title' => 'Blogs', 'metaDescription' => 'Practical explanations, learning advice, and thoughtful articles about Egyptian Arabic, Modern Standard Arabic, language and life in Egypt.',
-            'blogs' => $query->paginate(12)->withQueryString(), 'categories' => BlogCategory::query()->whereHas('blogs', fn ($query) => $query->published()->where('locale', $contentLocale))->orderBy('name')->get(),
+            'blogs' => $blogs, 'categories' => BlogCategory::query()->whereHas('blogs', fn ($query) => $query->published()->where('locale', $contentLocale))->orderBy('name')->get(),
             'search' => $search, 'selectedCategory' => $category, 'sort' => $sort, 'totalPublished' => $totalPublished,
-            'featured' => $featured, 'isFallback' => $fallback, 'contentLocale' => $contentLocale,
+            'lead' => $page === 1 ? $lead : null, 'featured' => $page === 1 ? $featured : null, 'isFallback' => $fallback, 'contentLocale' => $contentLocale,
             'entityLocales' => Blog::published()->distinct()->pluck('locale')->all() ?: ['en'],
         ]);
     }

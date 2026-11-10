@@ -242,7 +242,7 @@
     <!-- REPORT 4: SOCIAL & MESSAGING -->
     @elseif($reportType === 'social')
         <div class="space-y-6">
-            <p class="text-sm text-slate-600">Compare social clicks from the top banner, footer and floating WhatsApp button. Filter by platform or placement to see its totals and individual click times.</p>
+            <p class="text-sm text-slate-600">Compare social clicks from the top banner, floating sidebar or mobile social menu, footer and separate floating WhatsApp button. Filter by platform or placement to see its totals and individual click times.</p>
             <div class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-xs">
                 <span>Social &amp; Messaging Clicks: <strong>{{ number_format($reportData['total_clicks']) }}</strong></span>
                 <span>Unique visitors: <strong>{{ $reportData['unique_visitors'] === null ? 'Unavailable after pruning' : number_format($reportData['unique_visitors']) }}</strong></span>

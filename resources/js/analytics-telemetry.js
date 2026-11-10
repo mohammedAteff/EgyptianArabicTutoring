@@ -64,7 +64,7 @@
             flush(true);
         }));
         document.querySelectorAll('[data-whatsapp-cta]').forEach(link => link.addEventListener('click', () => {
-            enqueue('whatsapp_clicked', {target_url: link.href, platform: 'whatsapp', placement: 'floating_cta', context: link.dataset.context, language: link.dataset.language});
+            enqueue('whatsapp_clicked', {target_url: link.href, platform: 'whatsapp', placement: link.dataset.whatsappPlacement || 'floating_cta', context: link.dataset.context, language: link.dataset.language});
             flush(true);
         }));
         document.querySelectorAll('[data-analytics-event]').forEach(element => {

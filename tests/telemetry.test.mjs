@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../resources/js/analytics-telemetry.js', import.meta.url), 'utf8');
-function harness(contact = null, socials = [], failures = {}) {
+function harness(contact = null, socials = [], failures = {}, language = 'en') {
     const batches = [], handlers = {}, timers = [];
     let now = 0;
     const tall = {id: 'resource-preview', dataset: {}, getBoundingClientRect: () => ({top: 0, bottom: 3000, height: 3000, left: 0, right: 800, width: 800})};
     const gate = {dataset: {analyticsEvent: 'resource_gate_viewed', analyticsMetadata: '{"resource_slug":"guide"}'}};
-    const document = {readyState: 'complete', visibilityState: 'visible', querySelector: (selector) => selector.includes('analytics-event-url') ? {content: '/analytics/track'} : null,
+    const document = {readyState: 'complete', visibilityState: 'visible', documentElement: {lang: language}, querySelector: (selector) => selector.includes('analytics-event-url') ? {content: '/analytics/track'} : null,
         querySelectorAll: (selector) => selector === '[data-social-platform]' ? socials : selector === '[data-whatsapp-cta]' ? (contact ? [contact] : []) : selector === '[data-analytics-event]' ? [gate] : selector.includes('#hero') ? [tall] : [],
         addEventListener: (name, callback) => handlers[name] = callback};
     const context = vm.createContext({document, window: {location: {pathname: '/resources/guide', href: 'http://app.test/resources/guide'}, addEventListener: (name, callback) => handlers[name] = callback},
@@ -79,5 +79,65 @@ for (const [label, failures] of Object.entries({endpoint: {endpoint: true}, beac
         const uniqueEvents = [...new Map(h.events().filter(event => event.event_name === 'whatsapp_clicked').map(event => [event.event_uuid, event])).values()];
         assert.equal(uniqueEvents.length, 2);
         assert.deepEqual(uniqueEvents.map(event => event.metadata.placement).sort(), ['floating_cta', 'footer_social']);
+    });
+}
+
+test('floating social destinations keep separate records and emit one event each', async () => {
+    const handlers = [];
+    const socials = ['custom', 'custom', 'whatsapp'].map((platform, index) => ({
+        dataset: { socialPlatform: platform, socialPlacement: 'floating_social' },
+        href: `https://example.test/configured-${index}`,
+        addEventListener: (_name, handler) => handlers.push(handler),
+    }));
+    const h = harness(null, socials);
+    vm.runInContext(source, h.context);
+    await Promise.resolve();
+    assert.equal(handlers.length, 3);
+    let prevented = false;
+    for (const handler of handlers) {
+        handler({ preventDefault() { prevented = true; } });
+        await Promise.resolve();
+    }
+    const events = h.events().filter(event => event.metadata.placement === 'floating_social');
+    assert.equal(events.length, 3);
+    assert.equal(prevented, false);
+    assert.deepEqual(events.map(event => event.metadata.target_url).sort(), socials.map(link => link.href).sort());
+});
+
+for (const language of ['en', 'fr', 'de']) {
+    test(`${language}: banner, floating menu and footer clicks keep their placement without duplicates`, async () => {
+        const handlers = [];
+        const platforms = ['youtube', 'tiktok', 'instagram', 'telegram', 'whatsapp', 'linkedin', 'facebook', 'x', 'reddit', 'custom'];
+        const placements = ['top_banner', 'floating_social', 'footer_social'];
+        const socials = placements.flatMap(placement => platforms.map(platform => ({
+            dataset: {socialPlatform: platform, socialPlacement: placement},
+            href: `https://example.test/${platform}`,
+            addEventListener: (_name, handler) => handlers.push(handler),
+        })));
+        const h = harness(null, socials, {}, language);
+        vm.runInContext(source, h.context);
+        await Promise.resolve();
+
+        let prevented = false;
+        for (const handler of handlers) {
+            handler({preventDefault() { prevented = true; }});
+            await Promise.resolve();
+        }
+
+        const events = h.events().filter(event => ['social_link_clicked', 'telegram_clicked', 'whatsapp_clicked'].includes(event.event_name));
+        assert.equal(handlers.length, 30);
+        assert.equal(events.length, 30);
+        assert.equal(new Set(events.map(event => event.event_uuid)).size, 30);
+        assert.equal(prevented, false);
+        for (const placement of placements) {
+            const attributed = events.filter(event => event.metadata.placement === placement);
+            assert.equal(attributed.length, 10);
+            assert.deepEqual(attributed.map(event => event.metadata.platform).sort(), [...platforms].sort());
+            for (const event of attributed) {
+                assert.equal(event.metadata.language, language);
+                assert.equal(event.metadata.context, 'public');
+                assert.equal(event.metadata.target_url, `https://example.test/${event.metadata.platform}`);
+            }
+        }
     });
 }

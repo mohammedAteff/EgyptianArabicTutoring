@@ -148,7 +148,7 @@ class FormValidationService
         }
         foreach (array_keys($input) as $key) {
             if (! isset($byKey[$key])) {
-                throw ValidationException::withMessages(["answers.{$key}" => 'This answer does not belong to the form.']);
+                throw ValidationException::withMessages(["answers.{$key}" => __('This answer does not belong to the form.')]);
             }
         }
 
@@ -163,14 +163,14 @@ class FormValidationService
             if ($question->question_type === 'yes_no' && $value !== null && $value !== '') {
                 $value = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                 if ($value === null) {
-                    throw ValidationException::withMessages(["answers.{$key}" => 'The answer is invalid.']);
+                    throw ValidationException::withMessages(["answers.{$key}" => __('The answer is invalid.')]);
                 }
             }
             if ($value === '' || $value === []) {
                 $value = null;
             }
             if ($enforceRequired && $question->is_required && ($value === null || $value === false && $question->question_type !== 'yes_no')) {
-                throw ValidationException::withMessages(["answers.{$key}" => 'This answer is required.']);
+                throw ValidationException::withMessages(["answers.{$key}" => __('This answer is required.')]);
             }
             if ($value === null) {
                 continue;
@@ -218,12 +218,12 @@ class FormValidationService
             $baseRules[] = 'distinct';
             foreach ((array) $value as $index => $choice) {
                 if (! is_string($choice) || ! in_array($choice, $options, true)) {
-                    throw ValidationException::withMessages(["answers.{$key}.{$index}" => 'Choose only available options.']);
+                    throw ValidationException::withMessages(["answers.{$key}.{$index}" => __('Choose only available options.')]);
                 }
             }
         }
         if (in_array($type, ['single_choice', 'dropdown'], true) && ! in_array($value, $options, true)) {
-            throw ValidationException::withMessages(["answers.{$key}" => 'Choose an available option.']);
+            throw ValidationException::withMessages(["answers.{$key}" => __('Choose an available option.')]);
         }
         if ($type === 'date') {
             if (! empty($rules['min_date'])) {
@@ -247,12 +247,12 @@ class FormValidationService
 
         $validator = Validator::make(['answer' => $value], ['answer' => $baseRules]);
         if ($validator->fails()) {
-            throw ValidationException::withMessages(["answers.{$key}" => 'The answer is invalid.']);
+            throw ValidationException::withMessages(["answers.{$key}" => __('The answer is invalid.')]);
         }
         if (isset($rules['regex']) && is_string($rules['regex']) && is_string($value)) {
             $pattern = $rules['regex'];
             if (strlen($pattern) > 200 || @preg_match('~(*LIMIT_MATCH=10000)(*LIMIT_DEPTH=1000)(?:'.str_replace('~', '\\~', $pattern).')~u', $value) !== 1) {
-                throw ValidationException::withMessages(["answers.{$key}" => 'The answer does not match the required format.']);
+                throw ValidationException::withMessages(["answers.{$key}" => __('The answer does not match the required format.')]);
             }
         }
     }

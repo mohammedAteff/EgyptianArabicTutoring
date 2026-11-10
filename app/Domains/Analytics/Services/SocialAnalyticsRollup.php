@@ -15,7 +15,7 @@ class SocialAnalyticsRollup
 {
     public const EVENTS = ['whatsapp_clicked', 'telegram_clicked', 'social_link_clicked', 'outbound_link_clicked'];
 
-    public const PLACEMENTS = ['top_banner' => 'Top banner', 'footer_social' => 'Footer', 'floating_cta' => 'Floating WhatsApp', 'unknown' => 'Unknown'];
+    public const PLACEMENTS = ['top_banner' => 'Top banner', 'footer_social' => 'Footer', 'floating_cta' => 'Floating WhatsApp', 'floating_social' => 'Floating sidebar / mobile menu', 'unknown' => 'Unknown'];
 
     /** Individual timestamps are available only while raw events are retained.
      * @param array<string, mixed> $filters

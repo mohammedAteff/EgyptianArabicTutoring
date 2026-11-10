@@ -47,6 +47,6 @@ class EmailQualityService
 
     private function reject(string $message): never
     {
-        throw ValidationException::withMessages(['email' => $message]);
+        throw ValidationException::withMessages(['email' => __($message)]);
     }
 }

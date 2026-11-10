@@ -118,6 +118,74 @@ class BookingHoldService
     }
 
     /**
+     * Authenticate a flow's reservation and repeat the confirmation availability checks.
+     *
+     * @param  array{name: string, email: string, phone: string}|null  $leadDetails
+     */
+    public function validateOwnedHold(
+        ?int $holdId,
+        ?string $holdToken,
+        string $visitorToken,
+        string $sessionToken,
+        ?int $sessionTypeId,
+        ?string $selectedStartUtc,
+        ?string $selectedEndUtc,
+        ?array $leadDetails = null,
+    ): BookingHold {
+        $matchesFlow = static fn (?BookingHold $hold): bool => $hold
+            && $holdToken && $selectedStartUtc && $selectedEndUtc
+            && hash_equals((string) $hold->hold_token, $holdToken)
+            && hash_equals((string) $hold->visitor_token, $visitorToken)
+            && hash_equals((string) $hold->session_token, $sessionToken)
+            && $hold->session_type_id === $sessionTypeId
+            && $hold->status === 'active'
+            && $hold->expires_at->greaterThan(now('UTC'))
+            && $hold->slot_start_utc->toDateTimeString() === $selectedStartUtc
+            && $hold->slot_end_utc->toDateTimeString() === $selectedEndUtc;
+
+        $snapshot = $holdId ? BookingHold::query()->find($holdId) : null;
+        if (! $matchesFlow($snapshot)) {
+            throw new SlotUnavailableException('Your reservation is no longer valid. Please choose a time again.');
+        }
+
+        $sessionType = SessionType::query()->publicBookable()->find($snapshot->session_type_id);
+        if (! $sessionType) {
+            throw new SlotUnavailableException('This lesson type is no longer available. Please choose a time again.');
+        }
+
+        return $this->databaseCapability->transaction(function () use ($snapshot, $matchesFlow, $sessionType, $visitorToken, $holdToken, $leadDetails): BookingHold {
+            $start = CarbonImmutable::instance($snapshot->slot_start_utc)->utc();
+            $end = CarbonImmutable::instance($snapshot->slot_end_utc)->utc();
+            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $start, $end);
+
+            // Match confirmation's lock order: calendar dates before reservation rows.
+            $this->availabilityService->acquireCalendarDateLocks($start, $config['end_utc'], $config['buffer_minutes']);
+            $hold = BookingHold::query()->whereKey($snapshot->id)->lockForUpdate()->first();
+            if (! $matchesFlow($hold)) {
+                throw new SlotUnavailableException('Your reservation is no longer valid. Please choose a time again.');
+            }
+
+            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $start, $end);
+            $this->availabilityService->validateSlotForBooking(
+                sessionType: $sessionType,
+                startUtc: $start,
+                endUtc: $config['end_utc'],
+                currentVisitorToken: $visitorToken,
+                currentHoldToken: $holdToken,
+                excludeHoldId: $hold->id,
+                resolvedConfig: $config,
+            );
+
+            if ($leadDetails !== null) {
+                $hold->lead_details = $leadDetails;
+                $hold->save();
+            }
+
+            return $hold;
+        }, 5);
+    }
+
+    /**
      * Release any active holds for a visitor.
      */
     public function releaseVisitorHolds(string $visitorToken): int

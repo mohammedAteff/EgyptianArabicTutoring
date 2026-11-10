@@ -53,6 +53,7 @@ use App\Http\Controllers\Admin\StaffTaskController;
 use App\Http\Controllers\Admin\StudentBillingController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\StudentGuardianController;
+use App\Http\Controllers\Admin\StudentInsightsController;
 use App\Http\Controllers\Admin\StudentOperationalAlertController;
 use App\Http\Controllers\Admin\StudentOperationalStatusController;
 use App\Http\Controllers\Admin\StudentPinController;
@@ -63,6 +64,8 @@ use App\Http\Controllers\Admin\StudentTeachingController;
 use App\Http\Controllers\Admin\SystemHealthController;
 use App\Http\Controllers\Admin\TelegramController;
 use App\Http\Controllers\Admin\TranslationController;
+use App\Http\Controllers\Admin\TutorInsightsController;
+use App\Http\Controllers\Admin\TutorWorkController;
 use App\Http\Controllers\Admin\TwoFactorChallengeController;
 use App\Http\Controllers\Admin\TwoFactorSecurityController;
 use App\Http\Controllers\Admin\VideoSettingsController;
@@ -71,6 +74,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\BunnyStreamWebhookController;
+use App\Http\Controllers\EstimatedActivityController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LmsFoundationController;
@@ -81,15 +85,18 @@ use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\Student\AuthController as StudentAuthController;
 use App\Http\Controllers\Student\BookingController as StudentBookingController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
+use App\Http\Controllers\Student\FeedbackController;
 use App\Http\Controllers\Student\FinancialStatementController;
 use App\Http\Controllers\Student\FormController as StudentFormController;
 use App\Http\Controllers\Student\HomeworkController;
+use App\Http\Controllers\Student\InsightsController;
 use App\Http\Controllers\Student\LearningController;
 use App\Http\Controllers\Student\LearningEvidenceController;
 use App\Http\Controllers\Student\LessonFeedbackController;
 use App\Http\Controllers\Student\LessonWorkspaceController;
 use App\Http\Controllers\Student\ProfileController;
 use App\Http\Controllers\Student\ProtectedPlaybackController;
+use App\Http\Controllers\Student\QuickNoteController;
 use App\Http\Controllers\Student\RescheduleController as StudentRescheduleController;
 use App\Http\Controllers\Student\ResourceAssignmentController;
 use App\Http\Controllers\Student\SchedulingController;
@@ -100,10 +107,22 @@ use App\Http\Controllers\Student\VideoDeviceController;
 use App\Http\Controllers\StudentBinController;
 use App\Http\Middleware\ApplyAdminNoindexHeaders;
 use App\Http\Middleware\EnsureAdminPreviewAccess;
+use App\Http\Middleware\EnsureFeedbackSession;
+use App\Http\Middleware\EnsureQuickNotesSession;
 use App\Http\Middleware\TrackVisitorSession;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+// The collector gate precedes every collector-specific limiter. Web CSRF/session protection remains in force.
+foreach (['student', 'admin'] as $activityDomain) {
+    Route::post('/'.$activityDomain.'/estimated-activity/anchor', [EstimatedActivityController::class, 'anchor'])
+        ->withoutMiddleware([TrackVisitorSession::class])
+        ->defaults('domain', $activityDomain)->name($activityDomain.'.estimated-activity.anchor');
+    Route::post('/'.$activityDomain.'/estimated-activity/checkpoint', [EstimatedActivityController::class, 'checkpoint'])
+        ->withoutMiddleware([TrackVisitorSession::class])
+        ->defaults('domain', $activityDomain)->name($activityDomain.'.estimated-activity.checkpoint');
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -130,7 +149,19 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
     Route::post('/login', [StudentAuthController::class, 'login'])->middleware('throttle:student-verification')->name('login.submit');
     Route::get('/two-factor-challenge', [TwoFactorController::class, 'challenge'])->name('two-factor.challenge');
     Route::post('/two-factor-challenge', [TwoFactorController::class, 'verify'])->middleware('throttle:student-two-factor')->name('two-factor.verify');
-    Route::middleware(['lms.preview.readonly', 'student.auth'])->group(function () {
+    Route::middleware(['lms.preview.readonly', EnsureQuickNotesSession::class, EnsureFeedbackSession::class, 'student.auth'])->group(function () {
+        Route::get('/learning-insights', [InsightsController::class, 'index'])->name('insights.index');
+        Route::prefix('feedback')->name('feedback.')->group(function (): void {
+            Route::get('/', [FeedbackController::class, 'index'])->name('index');
+            Route::get('/new', [FeedbackController::class, 'create'])->name('create');
+            Route::get('/contexts', [FeedbackController::class, 'contexts'])->name('contexts');
+            Route::get('/session', [FeedbackController::class, 'session'])->name('session');
+            Route::post('/', [FeedbackController::class, 'store'])->name('store');
+            Route::get('/{conversation}', [FeedbackController::class, 'show'])->whereNumber('conversation')->name('show');
+            Route::post('/{conversation}', [FeedbackController::class, 'update'])->whereNumber('conversation')->name('update');
+            Route::post('/{conversation}/read', [FeedbackController::class, 'acknowledge'])->whereNumber('conversation')->name('read');
+        });
+        Route::get('/home', [App\Http\Controllers\Student\HomeController::class, 'index'])->name('home');
         Route::get('/my-learning', [LearningController::class, 'index'])->name('learning.index');
         Route::post('/learn/courses/{course}/lessons/{lesson}/complete', [LearningEvidenceController::class, 'manual'])->whereNumber(['course', 'lesson'])->middleware('throttle:30,1')->name('evidence.manual');
         Route::get('/learn/courses/{course}/lessons/{lesson}/assessments/{block}', [LearningEvidenceController::class, 'show'])->whereNumber(['course', 'lesson', 'block'])->name('evidence.show');
@@ -182,6 +213,13 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
         Route::post('/lessons/{booking}/feedback', [LessonFeedbackController::class, 'store'])->whereNumber('booking')->middleware('throttle:30,1')->name('lessons.feedback');
         Route::get('/notifications', [App\Http\Controllers\Student\NotificationController::class, 'index'])->name('notifications.index');
         Route::patch('/notifications/{notification}', [App\Http\Controllers\Student\NotificationController::class, 'update'])->whereNumber('notification')->name('notifications.update');
+        Route::middleware('throttle:120,1')->prefix('quick-notes')->name('quick-notes.')->group(function (): void {
+            Route::get('/session', [QuickNoteController::class, 'session'])->name('session');
+            Route::post('/', [QuickNoteController::class, 'store'])->name('store');
+            Route::get('/{bin}', [QuickNoteController::class, 'show'])->whereNumber('bin')->name('show');
+            Route::put('/{bin}', [QuickNoteController::class, 'update'])->whereNumber('bin')->name('update');
+            Route::put('/{bin}/bookmark', [QuickNoteController::class, 'bookmark'])->whereNumber('bin')->name('bookmark');
+        });
         Route::get('/notes', [StudentBinController::class, 'index'])->name('bins.index');
         Route::post('/notes', [StudentBinController::class, 'store'])->name('bins.store');
         Route::get('/notes/{bin}/edit', [StudentBinController::class, 'edit'])->name('bins.edit');
@@ -214,6 +252,8 @@ Route::prefix('student')->name('student.')->middleware(ApplyAdminNoindexHeaders:
 });
 
 Route::view('/booking-policy', 'public.policy', ['title' => 'Booking, Cancellation & Refund Policy', 'entityLocales' => ['en']])->name('policy');
+Route::view('/fr/politique-reservation', 'public.policy', ['title' => 'Booking, Cancellation & Refund Policy'])->name('policy.fr');
+Route::view('/de/buchungsbedingungen', 'public.policy', ['title' => 'Booking, Cancellation & Refund Policy'])->name('policy.de');
 
 Route::get('/booking', [BookingController::class, 'index'])->name('booking.index');
 Route::get('/book', function (Request $request) {
@@ -356,6 +396,30 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
     |--------------------------------------------------------------------------
     */
     Route::middleware(['auth:web', 'account.active'])->group(function () {
+        Route::prefix('reports/tutor-insights/work')->name('tutor-work.')->middleware('role:super_admin')->group(function (): void {
+            Route::get('/', [TutorWorkController::class, 'index'])->name('index');
+            Route::get('/state', [TutorWorkController::class, 'state'])->name('state');
+            Route::get('/export', [TutorWorkController::class, 'export'])->name('export');
+            Route::get('/{entry}', [TutorWorkController::class, 'show'])->whereNumber('entry')->name('show');
+            Route::post('/', [TutorWorkController::class, 'mutate'])->middleware('throttle:60,1')->name('store');
+            Route::post('/{entry}', [TutorWorkController::class, 'mutate'])->whereNumber('entry')->middleware('throttle:60,1')->name('mutate');
+        });
+        Route::prefix('reports/tutor-insights')->name('tutor-insights.')->middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/', [TutorInsightsController::class, 'index'])->name('index');
+            Route::get('/students', [TutorInsightsController::class, 'students'])->name('students');
+            Route::get('/export', [TutorInsightsController::class, 'export'])->name('export');
+        });
+        Route::prefix('reports/student-insights')->name('student-insights.')->middleware('role:super_admin,admin')->group(function (): void {
+            Route::get('/', [StudentInsightsController::class, 'index'])->name('index');
+            Route::get('/export', [StudentInsightsController::class, 'export'])->name('export');
+        });
+        Route::prefix('feedback')->name('feedback.')->middleware(['role:super_admin,admin', EnsureFeedbackSession::class])->group(function (): void {
+            Route::get('/', [App\Http\Controllers\Admin\FeedbackController::class, 'index'])->name('index');
+            Route::get('/session', [App\Http\Controllers\Admin\FeedbackController::class, 'session'])->name('session');
+            Route::get('/{conversation}', [App\Http\Controllers\Admin\FeedbackController::class, 'show'])->whereNumber('conversation')->name('show');
+            Route::post('/{conversation}', [App\Http\Controllers\Admin\FeedbackController::class, 'update'])->whereNumber('conversation')->middleware('throttle:60,1')->name('update');
+            Route::post('/{conversation}/read', [App\Http\Controllers\Admin\FeedbackController::class, 'acknowledge'])->whereNumber('conversation')->middleware('throttle:120,1')->name('read');
+        });
         Route::prefix('lms')->name('lms.')->middleware('role:super_admin,admin')->group(function (): void {
             Route::get('/operations', [LearningOperationsController::class, 'index'])->name('operations');
             Route::get('/attention', [LearningOperationsController::class, 'attention'])->name('attention');
@@ -700,6 +764,7 @@ Route::prefix('admin')->name('admin.')->middleware(ApplyAdminNoindexHeaders::cla
 
         // Analytics & Business Funnels
         Route::get('/analytics', [AnalyticsDashboardController::class, 'index'])->middleware('admin.role:super_admin,admin')->name('analytics');
+        Route::get('/analytics/games', [AnalyticsDashboardController::class, 'games'])->middleware('admin.role:super_admin,admin')->name('analytics.games');
         Route::get('/analytics/overview/export', [AnalyticsDashboardController::class, 'exportOverview'])->middleware('admin.role:super_admin,admin')->name('analytics.overview.export');
         Route::get('/analytics/countries', [AnalyticsDashboardController::class, 'countries'])->middleware('admin.role:super_admin,admin')->name('analytics.countries');
         Route::get('/analytics/countries/export', [AnalyticsDashboardController::class, 'exportCountries'])->middleware('admin.role:super_admin,admin')->name('analytics.countries.export');

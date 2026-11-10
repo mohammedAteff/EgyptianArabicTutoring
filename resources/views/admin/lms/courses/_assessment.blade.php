@@ -18,7 +18,7 @@
         <label class="block text-sm">Instructions<textarea dir="auto" name="definition[instructions]" maxlength="10000" rows="4" :disabled="kind!=='assignment'" class="mt-2 w-full rounded-lg border border-slate-300 p-3">{{ $payload['instructions'] ?? '' }}</textarea></label>
         <fieldset><legend class="mb-2 text-sm font-semibold">Accepted response types</legend>@foreach(['text'=>'Text','file'=>'Private file','audio'=>'Audio upload / recording','video'=>'Small video upload','external_link'=>'External HTTPS link'] as $type=>$label)<label class="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" name="definition[types][]" value="{{ $type }}" :disabled="kind!=='assignment'" @checked(in_array($type,$payload['types'] ?? ['text'],true))>{{ $label }}</label>@endforeach</fieldset>
     </div>
-    <div x-show="kind==='quiz'" x-data="{questions:@js($questionRows)}" class="space-y-4">
+    <div x-show="kind==='quiz'" x-data="{questions:@js($questionRows)}" x-init="$nextTick(() => $dispatch('admin-form-ready'))" class="space-y-4">
         <div class="grid gap-3 sm:grid-cols-2">
             <label class="block text-sm">Passing score (%)<input type="number" name="definition[passing_score]" min="0" max="100" value="{{ $payload['passing_score'] ?? 80 }}" :disabled="kind!=='quiz'" class="mt-2 min-h-11 w-full rounded-lg border border-slate-300 px-3"></label>
             <label class="block text-sm">Attempt limit<input type="number" name="definition[attempt_limit]" min="1" max="100" value="{{ $payload['attempt_limit'] ?? 3 }}" :disabled="kind!=='quiz'" class="mt-2 min-h-11 w-full rounded-lg border border-slate-300 px-3"></label>

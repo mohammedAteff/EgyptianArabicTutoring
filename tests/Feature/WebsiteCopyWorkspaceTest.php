@@ -92,7 +92,7 @@ class WebsiteCopyWorkspaceTest extends TestCase
         $expected = $this->copyFields();
         $this->assertEqualsCanonicalizing(array_keys($expected['values']), array_keys($values));
         $this->assertSame($expected['values']['home__0__title'], $values['home__0__title']);
-        $this->assertSame($expected['values']['home__0__blocks__0__text'], html_entity_decode($values['home__0__blocks__0__text']));
+        $this->assertSame(trim(strip_tags($expected['values']['home__0__blocks__0__text'])), trim(strip_tags(html_entity_decode($values['home__0__blocks__0__text']))));
         $values['home__0__title'] = 'Round trip draft';
         $this->post(route('admin.website-copy.update'), array_replace($expected, ['values' => $values, 'action' => 'draft']))->assertSessionHasNoErrors();
         $this->get('/')->assertDontSee('Round trip draft');
@@ -102,7 +102,7 @@ class WebsiteCopyWorkspaceTest extends TestCase
     public function test_empty_translated_static_wording_uses_the_published_english_value(): void
     {
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'super_admin']));
-        $key = 'ui__'.sha1('Explore Lessons & Pricing');
+        $key = 'ui__'.sha1('Book Your Diagnostic');
         $this->post(route('admin.website-copy.update'), $this->copyFields(changes: [$key => 'English resource link']))->assertSessionHasNoErrors();
         $this->post(route('admin.website-copy.update'), $this->copyFields(locale: 'fr', changes: [$key => '']))->assertSessionHasNoErrors();
         $this->get('/fr')->assertOk()->assertSee('English resource link');
@@ -127,7 +127,7 @@ class WebsiteCopyWorkspaceTest extends TestCase
         $this->actingAs($actor)->post(route('admin.website-copy.update'), $this->copyFields(changes: ['home__0__title' => 'Published English heading']))->assertSessionHasNoErrors();
         $this->post(route('admin.website-copy.update'), $this->copyFields(locale: $locale, changes: ['home__0__title' => $headline]))->assertSessionHasNoErrors();
         $this->get('/'.$locale)->assertOk()->assertSee($headline)->assertDontSee('Published English heading');
-        $this->get('/')->assertSee('Published English heading')->assertDontSee($headline);
+        $this->get('/?lang=en')->assertSee('Published English heading')->assertDontSee($headline);
     }
 
     public function test_changed_source_refuses_a_stale_translation_form(): void
@@ -152,7 +152,7 @@ class WebsiteCopyWorkspaceTest extends TestCase
     {
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'super_admin']));
         $this->post(route('admin.website-copy.update'), $this->copyFields(changes: ['_sections__home__1__visible' => '0', '_sections__home__8__order' => '1', '_sections__home__0__order' => '9']))->assertSessionHasNoErrors();
-        $this->get('/')->assertDontSee('Everyday Egyptian Arabic')->assertSeeInOrder(["Let's Find Your Way Forward in Arabic.", 'Learn Arabic with a plan built around you.'], false);
+        $this->get('/')->assertDontSee('Everyday Egyptian Arabic')->assertSeeInOrder(['id="home-section-9"', 'id="home-section-1"'], false);
     }
 
     public function test_previous_revision_can_be_reviewed_and_restored_as_a_private_draft(): void

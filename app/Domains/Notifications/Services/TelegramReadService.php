@@ -245,66 +245,85 @@ class TelegramReadService
         $timezone = app(TimezoneService::class)->getBusinessTimezone();
         $end = ($through ?? CarbonImmutable::now($timezone)->endOfDay())->setTimezone($timezone);
         $start = $from?->setTimezone($timezone) ?? $end->startOfDay()->subDays($days - 1);
-        $metrics = $this->analytics->reportingMetrics($start, $end)->where('dimension_key', '');
-        $traffic = $this->reports->getTrafficReport($start, $end)['summary'];
+        $selected = match ($view) {
+            'overview' => ['traffic', 'actions', 'countries', 'games'],
+            'pages' => ['pages'],
+            'changes' => ['changes'],
+            default => ['traffic', 'actions', 'pages', 'sources', 'countries', 'games', 'changes'],
+        };
+        $needs = fn (string ...$sections): bool => array_intersect($selected, $sections) !== [];
+        $metrics = $needs('traffic', 'actions', 'games', 'changes') ? $this->analytics->reportingMetrics($start, $end)->where('dimension_key', '') : collect();
+        $traffic = $needs('traffic', 'changes') ? $this->reports->getTrafficReport($start, $end)['summary'] : [];
         $heading = ['<b>Analytics</b>', app(TelegramReportFormatter::class)->period($start, $end)];
         $sections = [];
-        $lines = ['', '<b>Traffic</b>'];
-        $lines[] = ($traffic['visitors_is_daily_sum'] ? 'Sum of daily unique visitors' : 'Unique visitors').': '.$traffic['visitors'];
-        $lines[] = 'Sessions: '.$traffic['sessions'];
-        $lines[] = 'Page views: '.$traffic['page_views'];
-        $lines[] = 'Bounced sessions: '.$metrics->where('metric_name', 'bounced_sessions')->sum('count');
-        $sections['traffic'] = $lines;
-        $lines = ['', '<b>Actions</b>'];
-        foreach (['booking_completed' => 'Bookings completed', 'resource_requested' => 'Resources requested', 'resource_downloaded' => 'Resources downloaded'] as $metric => $label) {
-            $lines[] = $label.': '.$metrics->where('metric_name', $metric)->sum('count');
+        if ($needs('traffic')) {
+            $lines = ['', '<b>Traffic</b>'];
+            $lines[] = ($traffic['visitors_is_daily_sum'] ? 'Sum of daily unique visitors' : 'Unique visitors').': '.$traffic['visitors'];
+            $lines[] = 'Sessions: '.$traffic['sessions'];
+            $lines[] = 'Page views: '.$traffic['page_views'];
+            $lines[] = 'Bounced sessions: '.$metrics->where('metric_name', 'bounced_sessions')->sum('count');
+            $sections['traffic'] = $lines;
         }
-        $social = $this->reports->getSocialReport($start->setTimezone('UTC'), $end->setTimezone('UTC'));
-        $lines[] = 'Social clicks: '.$social['total_clicks'];
-        $platforms = [];
-        foreach ($social['platform_totals'] as $platform => $clicks) {
-            $platforms[] = e(Str::limit($platform, 60)).': '.$clicks;
+        if ($needs('actions')) {
+            $lines = ['', '<b>Actions</b>'];
+            foreach (['booking_completed' => 'Bookings completed', 'resource_requested' => 'Resources requested', 'resource_downloaded' => 'Resources downloaded'] as $metric => $label) {
+                $lines[] = $label.': '.$metrics->where('metric_name', $metric)->sum('count');
+            }
+            $social = $this->reports->getSocialReport($start->setTimezone('UTC'), $end->setTimezone('UTC'));
+            $lines[] = 'Social clicks: '.$social['total_clicks'];
+            $platforms = [];
+            foreach ($social['platform_totals'] as $platform => $clicks) {
+                $platforms[] = e(Str::limit($platform, 60)).': '.$clicks;
+            }
+            if ($platforms !== []) {
+                $lines[] = implode(' · ', $platforms);
+            }
+            $sections['actions'] = $lines;
         }
-        if ($platforms !== []) {
-            $lines[] = implode(' · ', $platforms);
+        if ($needs('pages')) {
+            $lines = ['', '<b>Top pages · views</b>'];
+            $events = $this->reports->getEventsReport($start->setTimezone('UTC'), $end->setTimezone('UTC'), 'page_view')['rows'];
+            foreach ($events->groupBy('page')->map(fn ($rows): int => (int) $rows->sum('event_count'))->sortDesc()->take(5) as $page => $views) {
+                $lines[] = $this->pageLink((string) $page).' — '.$views;
+            }
+            if ($events->isEmpty()) {
+                $lines[] = 'No page views.';
+            }
+            $sections['pages'] = $lines;
         }
-        $sections['actions'] = $lines;
-        $lines = ['', '<b>Top pages · views</b>'];
-        $events = $this->reports->getEventsReport($start->setTimezone('UTC'), $end->setTimezone('UTC'), 'page_view')['rows'];
-        foreach ($events->groupBy('page')->map(fn ($rows): int => (int) $rows->sum('event_count'))->sortDesc()->take(5) as $page => $views) {
-            $lines[] = $this->pageLink((string) $page).' — '.$views;
+        if ($needs('sources')) {
+            $lines = ['', '<b>Sources · visitors</b>'];
+            foreach ($this->analytics->getAcquisitionPerformance($start->setTimezone('UTC'), $end->setTimezone('UTC'))->take(5) as $source) {
+                $name = strtolower((string) $source->source) === 'direct' ? 'Direct traffic' : (string) $source->source;
+                $details = collect([$source->medium, $source->campaign])->filter(fn ($value): bool => $value !== null && ! in_array(strtolower(trim((string) $value)), ['', 'none', '(none)', 'null', '(not set)'], true));
+                $lines[] = e(Str::limit($name.($details->isNotEmpty() ? ' · '.$details->implode(' · ') : ''), 160)).' — '.$source->visitors;
+            }
+            $sections['sources'] = $lines;
         }
-        if ($events->isEmpty()) {
-            $lines[] = 'No page views.';
-        }
-        $sections['pages'] = $lines;
-        $lines = ['', '<b>Sources · visitors</b>'];
-        foreach ($this->analytics->getAcquisitionPerformance($start->setTimezone('UTC'), $end->setTimezone('UTC'))->take(5) as $source) {
-            $name = strtolower((string) $source->source) === 'direct' ? 'Direct traffic' : (string) $source->source;
-            $details = collect([$source->medium, $source->campaign])->filter(fn ($value): bool => $value !== null && ! in_array(strtolower(trim((string) $value)), ['', 'none', '(none)', 'null', '(not set)'], true));
-            $lines[] = e(Str::limit($name.($details->isNotEmpty() ? ' · '.$details->implode(' · ') : ''), 160)).' — '.$source->visitors;
-        }
-        $sections['sources'] = $lines;
-        $lines = ['', '<b>Top countries · visitors</b>'];
-        $display = app(TimezoneDisplayService::class);
-        $countries = $this->analytics->reportingCountries($start, $end)->filter(function ($country) use ($display): bool {
-            $code = strtoupper((string) $country->country_code);
+        if ($needs('countries')) {
+            $lines = ['', '<b>Top countries · visitors</b>'];
+            $display = app(TimezoneDisplayService::class);
+            $countries = $this->analytics->reportingCountries($start, $end)->filter(function ($country) use ($display): bool {
+                $code = strtoupper((string) $country->country_code);
 
-            return preg_match('/^[A-Z]{2}$/', $code) && ! in_array($code, ['ZZ', 'XX'], true) && $display->resolveCountryName($code) !== $code;
-        })->sortByDesc('unique_visitors')->take(5);
-        foreach ($countries as $country) {
-            $code = strtoupper($country->country_code);
-            $lines[] = e(app(TelegramReportFormatter::class)->country($code)).' — '.$country->unique_visitors;
+                return preg_match('/^[A-Z]{2}$/', $code) && ! in_array($code, ['ZZ', 'XX'], true) && $display->resolveCountryName($code) !== $code;
+            })->sortByDesc('unique_visitors')->take(5);
+            foreach ($countries as $country) {
+                $code = strtoupper($country->country_code);
+                $lines[] = e(app(TelegramReportFormatter::class)->country($code)).' — '.$country->unique_visitors;
+            }
+            if ($countries->isEmpty()) {
+                $lines[] = 'No country data.';
+            }
+            $sections['countries'] = $lines;
         }
-        if ($countries->isEmpty()) {
-            $lines[] = 'No country data.';
+        if ($needs('games')) {
+            $lines = ['', '<b>🎮 Games · recorded activity</b>'];
+            $lines[] = 'Opens: '.$metrics->where('metric_name', 'game_opened')->sum('count');
+            $lines[] = 'Starts: '.$metrics->where('metric_name', 'game_started')->sum('count');
+            $lines[] = 'Completions: '.$metrics->where('metric_name', 'game_completed')->sum('count');
+            $sections['games'] = $lines;
         }
-        $sections['countries'] = $lines;
-        $lines = ['', '<b>🎮 Games · recorded activity</b>'];
-        $lines[] = 'Opens: '.$metrics->where('metric_name', 'game_opened')->sum('count');
-        $lines[] = 'Starts: '.$metrics->where('metric_name', 'game_started')->sum('count');
-        $lines[] = 'Completions: '.$metrics->where('metric_name', 'game_completed')->sum('count');
-        $sections['games'] = $lines;
         $lines = [];
         if ($days > 1 && in_array($view, ['full', 'changes'], true)) {
             $previousStart = $start->subDays($days);
@@ -324,12 +343,6 @@ class TelegramReadService
             $lines[] = 'Today is compared through the same local time. Visitor counts use a matching basis.';
         }
         $sections['changes'] = $lines ?: ['', 'Choose a period longer than one day to compare.'];
-        $selected = match ($view) {
-            'overview' => ['traffic', 'actions', 'countries', 'games'],
-            'pages' => ['pages'],
-            'changes' => ['changes'],
-            default => array_keys($sections),
-        };
 
         return implode("\n", array_merge($heading, ...array_map(fn (string $section): array => $sections[$section], $selected)));
     }

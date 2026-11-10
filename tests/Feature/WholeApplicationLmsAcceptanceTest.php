@@ -49,7 +49,7 @@ class WholeApplicationLmsAcceptanceTest extends TestCase
     private function login(Student $student): void
     {
         $this->post(route('student.login.submit'), ['name' => $student->first_name.' '.$student->last_name,
-            'email' => $student->email, 'date_of_birth' => '1990-01-01'])->assertRedirect(route('student.dashboard'));
+            'email' => $student->email, 'date_of_birth' => '1990-01-01'])->assertRedirect(route('student.home'));
         $this->assertAuthenticatedAs($student, 'student');
         $this->assertSame($student->id, session('student_id'));
     }

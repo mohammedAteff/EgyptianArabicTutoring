@@ -3,52 +3,53 @@
 namespace App\Console\Commands;
 
 use App\Domains\Administration\Models\Administrator;
-use App\Domains\Booking\Services\BookingService;
-use App\Domains\Forms\Models\Form;
-use App\Domains\Forms\Services\FormBuilderService;
+use App\Domains\Forms\Services\FinalStudentFormsInstaller;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
+use Throwable;
 
 class InstallStudentFormsCommand extends Command
 {
-    protected $signature = 'forms:install-onboarding {--administrator= : Author administrator ID}';
+    protected $signature = 'forms:install-onboarding {--administrator= : Existing authorized author ID} {--dry-run : Report without writing} {--replace-final : Replace canonical forms with the final questionnaires}';
 
-    protected $description = 'Install initial Short and Long Forms without replacing existing published forms';
+    protected $description = 'Install the final student questionnaires; preserve existing forms unless --replace-final is supplied';
 
-    public function handle(FormBuilderService $builder, BookingService $bookings): int
+    public function handle(FinalStudentFormsInstaller $installer): int
     {
-        $author = Administrator::query()->whereIn('role', ['super_admin', 'admin'])->when($this->option('administrator'), fn ($query) => $query->whereKey($this->option('administrator')))->orderBy('id')->first();
-        if (! $author) {
-            $this->error('An existing administrator is required to author onboarding forms.');
+        try {
+            $target = $installer->target();
+            $this->line(json_encode(['target' => $target], JSON_THROW_ON_ERROR));
+            $author = Administrator::query()->whereNull('suspended_at')->whereIn('role', ['super_admin', 'admin'])
+                ->when($this->option('administrator') !== null, fn ($query) => $query->whereKey($this->option('administrator')))->orderBy('id')->first();
+            if (! $author) {
+                $this->error('An existing active administrator is required to author onboarding forms.');
+
+                return self::FAILURE;
+            }
+            $replace = (bool) $this->option('replace-final');
+            $plans = $installer->plan($replace);
+            $this->line(json_encode(['author_id' => $author->id, 'plan' => $plans], JSON_THROW_ON_ERROR));
+            if ($this->option('dry-run')) {
+                $this->info('Dry run complete. No changes made.');
+
+                return self::SUCCESS;
+            }
+            if (collect($plans)->contains(fn (array $plan): bool => in_array($plan['action'], ['create', 'replace'], true))) {
+                $directory = storage_path('app/private/forms-intake-'.now()->format('Ymd'));
+                File::ensureDirectoryExists($directory, 0700);
+                $snapshotPath = $directory.'/definitions-before-'.now()->format('Ymd-His-u').'.json';
+                File::put($snapshotPath, json_encode($installer->snapshot(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+                $this->line('Recoverable definition snapshot: '.$snapshotPath);
+                $this->line(json_encode(['result' => $installer->apply($author, $replace, $plans)], JSON_THROW_ON_ERROR));
+            } else {
+                $this->info('No changes. Existing definitions preserved.');
+            }
+
+            return self::SUCCESS;
+        } catch (Throwable $exception) {
+            $this->error('No replacement committed: '.$exception->getMessage());
 
             return self::FAILURE;
         }
-        $definitions = [
-            'short-form' => ['title' => 'Short Form — Your Learning Goals', 'triggers' => ['pre_booking'], 'questions' => [
-                ['question_key' => 'goals', 'label' => 'What would you like to achieve with Egyptian Arabic?'],
-                ['question_key' => 'experience', 'label' => 'What Arabic learning experience do you have?'],
-                ['question_key' => 'context', 'label' => 'Where would you like to use Egyptian Arabic?'],
-            ]],
-            'long-form' => ['title' => 'Long Form — Learning Profile', 'triggers' => ['after_booking', 'next_session_check'], 'questions' => [
-                ['question_key' => 'motivation', 'label' => 'Tell us more about your motivation.'],
-                ['question_key' => 'strengths', 'label' => 'What feels comfortable already?'],
-                ['question_key' => 'challenges', 'label' => 'What feels most challenging?'],
-                ['question_key' => 'practice', 'label' => 'How much practice time can you set aside?'],
-                ['question_key' => 'interests', 'label' => 'Which topics interest you?'],
-                ['question_key' => 'preferences', 'label' => 'How do you prefer to learn?'],
-            ]],
-        ];
-        foreach ($definitions as $slug => $definition) {
-            if (Form::where('slug', $slug)->exists() || ($slug === 'short-form' && $bookings->publishedIntakeForm())) {
-                $this->line('Preserved existing '.$slug.'.');
-
-                continue;
-            }
-            $questions = array_map(fn (array $question): array => [...$question, 'question_type' => 'long_text', 'is_required' => $slug === 'short-form', 'assistant_visible' => true, 'validation_rules' => ['max_length' => 2000]], $definition['questions']);
-            $form = $builder->create(['title' => $definition['title'], 'slug' => $slug, 'description' => $slug === 'short-form' ? 'Complete this brief intake before your first lesson.' : 'Your progress saves automatically. Return whenever you are ready.', 'is_mandatory' => $slug === 'short-form', 'can_edit_after_submission' => false, 'triggers' => $definition['triggers']], $questions, $author);
-            $builder->publish($form->id, $form->active_version_id, $form->lock_version);
-            $this->info('Published '.$slug.'.');
-        }
-
-        return self::SUCCESS;
     }
 }

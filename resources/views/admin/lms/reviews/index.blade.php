@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 @section('content')
-<div class="mx-auto max-w-4xl space-y-6">
+<x-estimated-activity-bootstrap :contexts="$activityContexts ?? []" />
+<div id="activity-review-content" class="mx-auto max-w-4xl space-y-6">
     <a href="{{ route('admin.lms.courses.edit',$course) }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-800">← Course Studio</a>
     <h1 class="text-2xl font-bold" dir="auto">Learning reviews · {{ $course->title }}</h1>
     @if(session('success'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('success') }}</p>@endif

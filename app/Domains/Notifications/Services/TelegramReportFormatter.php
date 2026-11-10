@@ -147,13 +147,13 @@ class TelegramReportFormatter
         return mb_chr(127397 + ord($code[0])).mb_chr(127397 + ord($code[1])).' '.$display->resolveCountryName($code);
     }
 
-    public function expiry(StudentPackage $package): string
+    public function expiry(StudentPackage $package, ?string $timezone = null): string
     {
-        if ($package->validity_days !== null && $package->funding_activated_at === null) {
+        if ($package->validity_days !== null && $package->expiryDeadline($timezone) === null) {
             return 'Not started · awaiting first payment';
         }
-        $timezone = app(TimezoneService::class)->getBusinessTimezone();
-        $deadline = $package->expiryDeadline();
+        $timezone ??= app(TimezoneService::class)->getBusinessTimezone();
+        $deadline = $package->expiryDeadline($timezone);
 
         return $deadline ? $deadline->setTimezone($timezone)->format('j M Y, H:i').' · '.$timezone : 'No expiry';
     }

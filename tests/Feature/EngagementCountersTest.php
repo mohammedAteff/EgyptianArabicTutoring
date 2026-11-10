@@ -16,6 +16,7 @@ use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Database\Factories\AdministratorFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Cache;
 use Tests\Concerns\EditsWebsiteCopy;
 use Tests\TestCase;
@@ -325,8 +326,29 @@ class EngagementCountersTest extends TestCase
         $this->assertSame('3 hours', $payload['learning_hours']['formatted_time']);
         $this->assertSame(2, $payload['monthly_traffic']['count']);
         $this->assertSame(1, $payload['live_users']['count']);
-        $this->withHeaders(['X-Analytics-Synthetic' => '1'])->get('/')->assertOk()->assertSee('3 hours')->assertSee('QA 2 sessions last month')->assertSee('QA 1 online now');
+        $this->withHeaders(['X-Analytics-Synthetic' => '1'])->get('/')->assertOk()->assertSee('3 hours')->assertSeeText('QA 2 sessions last month')->assertSeeText('QA 1 online now');
         Setting::set('counters.monthly_traffic.source', 'unique_visitors');
         $this->assertSame(1, $this->counterService->getCachedPublicPayload()['monthly_traffic']['count']);
+    }
+
+    public function test_counter_value_emphasis_preserves_localized_text_and_escapes_copy(): void
+    {
+        $cases = [
+            ['We had 3 sessions in 30 days', '3'],
+            ['0 active visitors online right now', '0'],
+            ['Wir hatten 1.234 Sitzungen', '1.234'],
+            ["Nous avons accueilli 1\u{202F}234 visiteurs", "1\u{202F}234"],
+            ['٣ زوار متصلون الآن', '٣'],
+            ['3 visitors <script>alert(1)</script>', '3'],
+        ];
+
+        foreach ($cases as [$text, $value]) {
+            $html = Blade::render('<x-public-counter-text :text="$text" :value="$value" />', compact('text', 'value'));
+
+            $this->assertSame($text, trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+            $this->assertSame(1, preg_match_all('/<strong\b[^>]*>(.*?)<\/strong>/su', $html, $matches));
+            $this->assertSame($value, html_entity_decode($matches[1][0], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            $this->assertStringNotContainsString('<script>', $html);
+        }
     }
 }

@@ -50,7 +50,7 @@ class FinancialStatementController extends Controller
     {
         $this->assertOwner($request, $package);
         $values = $request->validate(['format' => ['nullable', 'in:csv,xlsx']]);
-        $response = $exports->export('package_statement_'.app(StudentFinancialReferences::class)->forStudent($package->student_id)['purchases'][$package->id], ['Record', 'Your reference', 'Date ('.$statements->studentTimezone($package).')', 'Amount', 'Currency', 'Description / method', 'Recorded external reference'], $statements->rows($package, true), $values['format'] ?? 'csv', 'Package Statement');
+        $response = $exports->export('package_statement_'.app(StudentFinancialReferences::class)->forStudent($package->student_id)['purchases'][$package->id], [__('Record'), __('Your reference'), __('Date (:timezone)', ['timezone' => $statements->studentTimezone($package)]), __('Amount'), __('Currency'), __('Description / method'), __('Recorded external reference')], $statements->rows($package, true), $values['format'] ?? 'csv', __('Package Statement'));
         $response->headers->set('Cache-Control', 'private, no-store');
 
         return $response;

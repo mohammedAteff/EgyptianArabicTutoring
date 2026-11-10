@@ -21,7 +21,7 @@ class LmsTutoringReadModel
         private LmsLearningDefinition $definitions, private StudentLearningService $learning, private StudentTeachingReadModel $teaching, private LmsTeachingTimeline $timeline) {}
 
     /** @return Collection<int,array<string,mixed>> */
-    public function assignments(Student $student, ?int $bookingId = null): Collection
+    public function assignments(Student $student, ?int $bookingId = null, ?array $overview = null): Collection
     {
         $rows = LearningAssignment::query()->whereHas('accessGrant', fn ($query) => $query->where('student_id', $student->id))
             ->when($bookingId, fn ($query) => $query->where('booking_id', $bookingId))
@@ -33,7 +33,7 @@ class LmsTutoringReadModel
             ->with(['section', 'blocks.videoAsset'])->orderBy('sort_order')->orderBy('id')->get();
         $retainedRows = LessonProgress::query()->where('student_id', $student->id)->whereIn('lesson_id', $lessons->pluck('id'))->get()->toBase();
         $summaries = $lessons->groupBy('course_id')->map(fn (Collection $group): array => $this->progress->cohortSummary($group, $retainedRows));
-        $overview = $this->learning->overview($student);
+        $overview ??= $this->learning->overview($student);
         $blockIds = $lessons->flatMap(fn (Lesson $lesson) => $lesson->blocks)->pluck('id');
         $quizzes = QuizAttempt::query()->where('student_id', $student->id)->whereIn('block_id', $blockIds)->where('status', '!=', 'erased')->orderByDesc('number')->get()->toBase()->groupBy('block_id');
         $submissions = AssignmentSubmission::query()->where('student_id', $student->id)->whereIn('block_id', $blockIds)->where('status', '!=', 'erased')->orderByDesc('number')->get()->toBase()->groupBy('block_id');

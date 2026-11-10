@@ -1,3 +1,4 @@
+import { uiText } from './ui-translations.js';
 export function studentDetailValue(form, name) {
     const field = form.elements.namedItem(name);
     let value = field?.value?.trim() || '';
@@ -13,12 +14,12 @@ export function studentDetailValue(form, name) {
 }
 
 export function studentDetails(form) {
-    const fields = { first_name: 'First name', last_name: 'Last name', email: 'Email', phone: 'Phone', date_of_birth: 'Date of birth', identity_status: 'Identity status', preferred_timezone: 'Timezone', internal_notes: 'Internal notes' };
+    const fields = { first_name: uiText('First name'), last_name: uiText('Last name'), email: uiText('Email'), phone: uiText('Phone'), date_of_birth: uiText('Date of birth'), identity_status: uiText('Identity status'), preferred_timezone: uiText('Timezone'), internal_notes: uiText('Internal notes') };
     return Object.entries(fields).map(([name, label]) => `${label}: ${studentDetailValue(form, name) || '—'}`).join('\n');
 }
 
 export async function copyText(value) {
-    if (navigator.clipboard?.writeText && window.isSecureContext) {
+    if (navigator.clipboard?.writeText) {
         try {
             await navigator.clipboard.writeText(value);
             return;
@@ -41,7 +42,26 @@ export async function copyText(value) {
         input.remove();
         focused?.focus({ preventScroll: true });
     }
-    if (!copied) throw new Error('Clipboard unavailable');
+    if (!copied) throw new Error(uiText('Clipboard unavailable'));
+}
+
+export function createCopyFeedback(changed, {write = copyText, duration = 2400} = {}) {
+    let timer, generation = 0;
+    return {
+        async copy(value, target = true) {
+            const attempt = ++generation;
+            clearTimeout(timer);
+            changed(null);
+            try { await write(value); }
+            catch (error) { if (attempt !== generation) return false; throw error; }
+            if (attempt !== generation) return false;
+            changed(target);
+            timer = setTimeout(() => { timer = undefined; changed(null); }, duration);
+            return true;
+        },
+        reset() { generation++; clearTimeout(timer); timer = undefined; changed(null); },
+        destroy() { generation++; clearTimeout(timer); timer = undefined; },
+    };
 }
 
 export function recoveryCodesText(panel) {
@@ -65,7 +85,7 @@ if (typeof document !== 'undefined') document.addEventListener('click', async ev
         button.append(status);
     }
     try {
-        if (!value) { if (status) status.textContent = 'Empty'; } else { await copyText(value); if (status) status.textContent = button.dataset.copySuccess || 'Copied ✓'; }
-    } catch { if (status) status.textContent = 'Copy unavailable'; }
+        if (!value) { if (status) status.textContent = uiText('Empty'); } else { await copyText(value); if (status) status.textContent = button.dataset.copySuccess || uiText('Copied ✓'); }
+    } catch { if (status) status.textContent = button.dataset.copyFailure || uiText('Copy unavailable'); }
     setTimeout(() => { if (status) status.textContent = ''; }, 1800);
 });

@@ -9,20 +9,20 @@
             </svg>
         </div>
 
-        <h1 class="text-3xl font-extrabold text-stone-900 tracking-tight">Rescheduling by direct contact</h1>
+        <h1 class="text-3xl font-extrabold text-stone-900 tracking-tight">{{ __('Rescheduling by direct contact') }}</h1>
         <p class="mt-4 text-stone-600 leading-relaxed">
-            To protect calendar availability and booking history, lesson changes are handled by Abdallah directly.
-            Please contact him by WhatsApp, Telegram, or email at least 24 hours before your lesson.
+            {{ __('To protect calendar availability and booking history, lesson changes are handled by Abdallah directly.
+            Please contact him by WhatsApp, Telegram, or email at least 24 hours before your lesson.') }}
         </p>
 
         <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
             <a href="{{ url()->previous() }}"
                class="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-stone-900 px-6 py-3 text-sm font-bold text-white hover:bg-stone-800 transition-colors">
-                Back to confirmation
+                {{ __('Back to confirmation') }}
             </a>
             <a href="{{ url('/') }}#contact"
                class="w-full sm:w-auto inline-flex items-center justify-center rounded-full border border-stone-300 px-6 py-3 text-sm font-bold text-stone-700 hover:bg-stone-50 transition-colors">
-                Contact Abdallah
+                {{ __('Contact Abdallah') }}
             </a>
         </div>
     </div>

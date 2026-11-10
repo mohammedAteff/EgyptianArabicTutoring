@@ -11,12 +11,18 @@ use App\Domains\Booking\Services\BookingHoldService;
 use App\Domains\Booking\Services\BookingService;
 use App\Domains\Booking\Services\RescheduleService;
 use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class BufferExpandedConcurrencyLockTest extends TestCase
 {
+    use DatabaseTruncation;
+
+    /** @var list<string> */
+    protected array $exceptTables = ['entitlement_types', 'meeting_providers', 'settings'];
+
     protected AvailabilityService $availabilityService;
 
     protected BookingService $bookingService;
@@ -88,20 +94,6 @@ class BufferExpandedConcurrencyLockTest extends TestCase
             } catch (\Throwable) {
                 // Connection not initialized
             }
-        }
-
-        // 3. Child-first database cleanup scoped to isolated concurrency fixtures
-        if (DB::connection()->getPdo()) {
-            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
-            DB::table('session_reschedules')->truncate();
-            DB::table('session_ledger_entries')->truncate();
-            DB::table('booking_events')->truncate();
-            DB::table('booking_holds')->truncate();
-            DB::table('bookings')->truncate();
-            DB::table('booking_calendar_locks')->truncate();
-            DB::table('availability_rules')->truncate();
-            DB::table('availability_exceptions')->truncate();
-            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
         }
 
         parent::tearDown();

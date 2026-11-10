@@ -6,7 +6,7 @@ document.addEventListener('alpine:init', () => {
         move(index, delta) { const target = index + delta; if (target < 0 || target >= this.questions.length) return; const [item] = this.questions.splice(index, 1); this.questions.splice(target, 0, item); },
         choice(question) { return ['single_choice','multiple_choice','dropdown'].includes(question.question_type); },
         addOption(question) { question.options.push({label: 'New option', value: 'option_' + Math.random().toString(36).slice(2,10)}); },
-        condition(question) { question.conditional_logic = {version: 1, mode: 'all', conditions: [{question_key: '', operator: 'equals', value: ''}]}; },
+        condition(question) { question.conditional_logic = {logic_version: 1, mode: 'all', conditions: [{question_key: '', operator: 'equals', value: ''}]}; },
         serialize() { return JSON.stringify(this.questions.map((question, index) => ({...question, sort_order: index, options: (question.options || []).map((option, order) => ({...option, sort_order: order}))}))); }
     }));
 });

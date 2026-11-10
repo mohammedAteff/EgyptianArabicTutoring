@@ -1,8 +1,8 @@
 <section class="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8" aria-labelledby="announcement-heading">
-    <h2 id="announcement-heading" class="text-lg font-bold text-slate-900">8. Site Announcement</h2>
+    <h2 id="announcement-heading" class="text-lg font-bold text-slate-900">9. Site Announcement</h2>
     <p class="text-sm text-slate-500">Configure the announcement here. Save as Draft and Publish All Settings apply to this section too.</p>
     <div class="grid gap-4 sm:grid-cols-2">
-        @foreach(['enabled' => ['Status', ['0' => 'Disabled', '1' => 'Enabled']], 'audience' => ['Audience', ['public' => 'Public only', 'public_student' => 'Public + Student Portal']], 'severity' => ['Presentation', ['information' => 'Information', 'warning' => 'Warning', 'urgent' => 'Urgent']], 'dismissible' => ['Dismissal', ['0' => 'Fixed', '1' => 'Dismissible']]] as $field => [$label, $options])
+        @foreach(['enabled' => ['Status', ['0' => 'Disabled', '1' => 'Enabled']], 'audience' => ['Audience', ['public' => 'Public only', 'public_student' => 'Public + Student Portal']], 'severity' => ['Presentation', ['information' => 'Information', 'warning' => 'Warning', 'urgent' => __('Urgent / emergency')]], 'dismissible' => ['Dismissal', ['0' => 'Fixed', '1' => 'Dismissible']]] as $field => [$label, $options])
             <label class="block text-sm font-semibold text-slate-700">{{ $label }}<select name="announcement[{{ $field }}]" class="mt-2 block min-h-11 w-full rounded-xl border border-slate-300 px-3 py-2">@foreach($options as $value => $option)<option value="{{ $value }}" @selected((string) old('announcement.'.$field, $announcement[$field] ?? array_key_first($options)) === (string) $value)>{{ $option }}</option>@endforeach</select></label>
         @endforeach
     </div>

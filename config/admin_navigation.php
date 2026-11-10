@@ -23,6 +23,7 @@ return [
             'label' => 'Students', 'roles' => $staff,
             'items' => [
                 'admin.students.index' => ['label' => 'Student Records', 'active' => ['admin.students.*'], 'shortcut' => 'Students'],
+                'admin.feedback.index' => ['label' => 'Feedback', 'roles' => $admins, 'active' => ['admin.feedback.*']],
                 'admin.contacts.index' => ['label' => 'Students & Contacts', 'active' => ['admin.contacts.*']],
                 'admin.leads' => ['label' => 'Student Leads'],
                 'admin.birthdays.index' => ['label' => 'Student Birthdays', 'active' => ['admin.birthdays.*']],
@@ -74,9 +75,12 @@ return [
         'reports' => [
             'label' => 'Reports & Analytics', 'roles' => $admins,
             'items' => [
+                'admin.student-insights.index' => ['label' => 'Student Insights', 'active' => ['admin.student-insights.*']],
+                'admin.tutor-insights.index' => ['label' => 'Tutor Insights', 'active' => ['admin.tutor-insights.*', 'admin.tutor-work.*']],
                 'admin.reports.lifecycle' => ['label' => 'Business Lifecycle'],
                 'admin.reports.index' => ['label' => 'Operational Reports & Exports', 'active' => ['admin.reports.*']],
                 'admin.analytics' => ['label' => 'Analytics & Funnels'],
+                'admin.analytics.games' => ['label' => 'Games Analytics', 'active' => ['admin.analytics.games*']],
                 'admin.analytics.countries' => ['label' => 'Country Analytics', 'active' => ['admin.analytics.countries*']],
                 'admin.analytics.sections' => ['label' => 'Section Attention', 'active' => ['admin.analytics.sections*']],
             ],

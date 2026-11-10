@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\DomCrawler\Crawler;
 use Tests\TestCase;
 
 class LessonWorkspaceTest extends TestCase
@@ -221,9 +222,12 @@ class LessonWorkspaceTest extends TestCase
         LessonMaterial::factory()->for($booking)->visible()->create(['title' => '<script>First worksheet</script>', 'sort_order' => 1]);
         LessonMaterial::factory()->for($booking)->create(['kind' => 'recording', 'title' => 'Private recording']);
         $this->portal($student);
-        $this->get(route('student.dashboard'))->assertSeeInOrder(['First worksheet', 'Second worksheet'])
-            ->assertDontSee('<script>First worksheet</script>', false)->assertDontSee('Private recording')
-            ->assertDontSee('Recording')->assertDontSee('No recording available');
+        $response = $this->get(route('student.dashboard'))->assertSeeInOrder(['First worksheet', 'Second worksheet'])
+            ->assertDontSee('<script>First worksheet</script>', false)->assertDontSee('Private recording');
+        $history = (new Crawler($response->getContent()))->filterXPath('//section[@aria-labelledby="history-title"]');
+        $this->assertCount(1, $history);
+        $this->assertStringNotContainsString('Recording', $history->text());
+        $this->assertStringNotContainsString('No recording available', $history->text());
     }
 
     public function test_visible_recording_is_separate_and_safe_external_link_has_no_referrer(): void

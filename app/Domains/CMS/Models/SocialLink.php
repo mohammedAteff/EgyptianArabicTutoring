@@ -16,7 +16,7 @@ class SocialLink extends Model
 
     protected $table = 'social_links';
 
-    protected $attributes = ['show_in_banner' => true, 'show_in_footer' => true];
+    protected $attributes = ['show_in_banner' => true, 'show_in_footer' => true, 'show_in_floating' => false];
 
     protected $fillable = [
         'platform',
@@ -26,6 +26,7 @@ class SocialLink extends Model
         'enabled',
         'show_in_banner',
         'show_in_footer',
+        'show_in_floating',
         'sort_order',
     ];
 
@@ -35,6 +36,7 @@ class SocialLink extends Model
             'enabled' => 'boolean',
             'show_in_banner' => 'boolean',
             'show_in_footer' => 'boolean',
+            'show_in_floating' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

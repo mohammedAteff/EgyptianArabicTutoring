@@ -28,7 +28,7 @@ class RescheduleController extends Controller
         $student = $request->attributes->get('student');
         $ownedBooking = Booking::query()->whereKey($booking)->where('student_id', $student->id)->with('sessionType')->firstOrFail();
         if ($ownedBooking->status !== 'confirmed' || $ownedBooking->start_at_utc->lessThan(now('UTC')->addHours(24))) {
-            return redirect()->route('student.dashboard')->with('info', 'Contact your tutor to change this session.');
+            return redirect()->route('student.dashboard')->with('info', __('Contact your tutor to change this session.'));
         }
 
         $timezone = $this->displayTimezone($student, $ownedBooking, $timezones, $request->input('timezone'));
@@ -87,7 +87,7 @@ class RescheduleController extends Controller
         ]);
 
         if (DB::table('session_reschedules')->where('booking_id', $ownedBooking->id)->where('idempotency_key', $input['idempotency_key'])->exists()) {
-            return redirect()->route('student.dashboard')->with('success', 'Your session change was recorded.');
+            return redirect()->route('student.dashboard')->with('success', __('Your session change was recorded.'));
         }
 
         $timezone = $this->displayTimezone($student, $ownedBooking, $timezones, $request->input('timezone'));
@@ -113,7 +113,7 @@ class RescheduleController extends Controller
             return back()->withErrors(['slot_id' => $exception->getMessage()]);
         }
 
-        return redirect()->route('student.dashboard')->with('success', 'Your session change was recorded.');
+        return redirect()->route('student.dashboard')->with('success', __('Your session change was recorded.'));
     }
 
     private function displayTimezone(Student $student, Booking $booking, TimezoneService $timezones, mixed $requested = null): string

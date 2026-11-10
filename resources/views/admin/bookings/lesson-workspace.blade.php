@@ -1,5 +1,6 @@
 @extends('layouts.admin')
 @section('content')
+<x-estimated-activity-bootstrap :contexts="$activityContexts ?? []" />
 <div class="mx-auto max-w-6xl space-y-6">
     <a href="{{ route('admin.bookings.show', $booking) }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">&larr; Booking #{{ $booking->id }}</a>
     <div><h1 class="font-serif text-3xl font-bold text-slate-900">Lesson Workspace</h1><p class="mt-2 text-slate-500">Prepare and share learning materials for this lesson.</p></div>
@@ -31,7 +32,7 @@
         </div>
         @endif
     </section>
-    <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+    <section id="activity-lesson-materials" class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <h2 class="text-xl font-bold text-slate-900">Attach material</h2>
         <p class="mt-1 text-sm text-slate-500">Materials stay private until you choose to share them. Students receive shared materials after the lesson.</p>
         <form action="{{ route('admin.lessons.materials.store', $booking) }}" method="POST" enctype="multipart/form-data" class="mt-5 grid gap-5 sm:grid-cols-2" x-data="{ kind: {{ \Illuminate\Support\Js::from(old('kind', 'private_file')) }} }">

@@ -58,7 +58,7 @@ class StudentContactEmailTest extends TestCase
         Mail::assertNothingOutgoing();
 
         $this->post(route('student.logout'));
-        $this->post(route('student.login.submit'), ['date_of_birth' => $student->date_of_birth->toDateString(), 'name' => $student->name, 'email' => 'trusted@routable.example'])->assertRedirect(route('student.dashboard'));
+        $this->post(route('student.login.submit'), ['date_of_birth' => $student->date_of_birth->toDateString(), 'name' => $student->name, 'email' => 'trusted@routable.example'])->assertRedirect(route('student.home'));
         $this->assertAuthenticatedAs($student, 'student');
     }
 

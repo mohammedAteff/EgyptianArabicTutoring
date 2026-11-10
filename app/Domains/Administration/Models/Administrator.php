@@ -4,6 +4,8 @@ namespace App\Domains\Administration\Models;
 
 use App\Domains\Administration\Notifications\AdminResetPasswordNotification;
 use App\Domains\CMS\Models\Blog;
+use App\Domains\Reporting\Services\EstimatedActivityLifecycle;
+use App\Domains\Reporting\Services\TutorWorkService;
 use App\Domains\Students\Models\StaffPinnedStudent;
 use Database\Factories\AdministratorFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -70,6 +73,37 @@ class Administrator extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return $this->role === 'super_admin';
+    }
+
+    /** Serialize trusted authority changes with account-owned work commands. */
+    public function save(array $options = []): bool
+    {
+        if (! $this->exists || ! $this->isDirty(['password', 'role', 'suspended_at', 'two_factor_version'])) {
+            return parent::save($options);
+        }
+
+        return DB::transaction(function () use ($options): bool {
+            static::withTrashed()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            app(TutorWorkService::class)->revoke($this->id, 'account_authority_changed');
+            app(EstimatedActivityLifecycle::class)->revoke($this);
+
+            return parent::save($options);
+        }, 5);
+    }
+
+    public function delete(): ?bool
+    {
+        if (! $this->exists) {
+            return parent::delete();
+        }
+
+        return DB::transaction(function (): ?bool {
+            static::withTrashed()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            app(TutorWorkService::class)->revoke($this->id, 'account_deleted');
+            app(EstimatedActivityLifecycle::class)->revoke($this, 'account_deleted');
+
+            return parent::delete();
+        }, 5);
     }
 
     public function roleLabel(): string

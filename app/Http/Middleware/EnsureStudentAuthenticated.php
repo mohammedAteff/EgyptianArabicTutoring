@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domains\Students\Services\StudentIntendedDestination;
 use App\Domains\Students\Services\StudentSessionContext;
 use App\Domains\Timezone\Services\TimezoneService;
 use Closure;
@@ -11,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureStudentAuthenticated
 {
-    public function __construct(private StudentSessionContext $students) {}
+    public function __construct(private StudentSessionContext $students, private StudentIntendedDestination $destinations) {}
 
     /**
      * Handle an incoming request.
@@ -23,6 +24,7 @@ class EnsureStudentAuthenticated
         $guard = Auth::guard('student');
         $student = $this->students->current($request);
         if (! $student) {
+            $this->destinations->capture($request);
             $guard->logout();
             $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at']);
 
@@ -30,7 +32,7 @@ class EnsureStudentAuthenticated
         }
 
         $timezone = $request->input('timezone');
-        if (is_string($timezone) && app(TimezoneService::class)->isValid($timezone)) {
+        if (! $request->routeIs('student.insights.*') && is_string($timezone) && app(TimezoneService::class)->isValid($timezone)) {
             $request->session()->put('student_display_timezone', $timezone);
         }
         $request->attributes->set('student', $student);

@@ -41,11 +41,13 @@ use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\HasPublishedShortForm;
+use Tests\Support\IssuesBookingSlotIds;
 use Tests\TestCase;
 
 class V5RemediationModuleTest extends TestCase
 {
     use HasPublishedShortForm;
+    use IssuesBookingSlotIds;
     use RefreshDatabase;
 
     protected Administrator $admin;
@@ -169,8 +171,14 @@ class V5RemediationModuleTest extends TestCase
 
     private function intakeWizard(): Testable
     {
-        return Livewire::test(BookingWizard::class)->set('first_name', 'Review')->set('last_name', 'Learner')
-            ->set('email', 'review@example.test')->set('phone', '+201012345678')->set('date_of_birth', '1990-01-01');
+        $this->travelTo(CarbonImmutable::parse('2026-07-06 08:00:00', 'UTC'));
+        $wizard = Livewire::test(BookingWizard::class)->set('first_name', 'Review')->set('last_name', 'Learner')
+            ->set('email', 'review@example.test')->set('phone', '+201012345678')->set('date_of_birth', '1990-01-01')
+            ->call('selectSession', $this->sessionType->id);
+        $wizard->call('selectSlot', $this->slotIdFor($this->sessionType, '2026-07-07 12:00:00', $wizard->get('customerTimezone'), $wizard->get('visitorToken')))
+            ->assertSet('currentStep', 3);
+
+        return $wizard;
     }
 
     public function test_legacy_pin_setting_cannot_send_mail_and_access_unlocks_immediately(): void

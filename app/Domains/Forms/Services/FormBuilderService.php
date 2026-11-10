@@ -46,11 +46,11 @@ class FormBuilderService
     }
 
     /** @param array<string, mixed> $metadata @param array<int, array<string, mixed>> $questions */
-    public function update(int $formId, array $metadata, array $questions, int $baseVersionId, int $lockVersion): Form
+    public function update(int $formId, array $metadata, array $questions, int $baseVersionId, int $lockVersion, bool $preserveBaseVersion = false): Form
     {
         $this->validation->validateStructure($questions);
 
-        return $this->withPublicationLock(fn (): Form => DB::transaction(function () use ($formId, $metadata, $questions, $baseVersionId, $lockVersion): Form {
+        return $this->withPublicationLock(fn (): Form => DB::transaction(function () use ($formId, $metadata, $questions, $baseVersionId, $lockVersion, $preserveBaseVersion): Form {
             $form = Form::query()->whereKey($formId)->lockForUpdate()->firstOrFail();
             if ((int) $form->active_version_id !== $baseVersionId || (int) $form->lock_version !== $lockVersion) {
                 abort(409, 'The form changed while you were editing. Reload the current version.');
@@ -59,7 +59,7 @@ class FormBuilderService
             $originalCreatedBy = $form->created_by;
 
             $version = FormVersion::query()->whereKey($baseVersionId)->where('form_id', $form->id)->lockForUpdate()->firstOrFail();
-            if ($version->isFrozen() || (int) $form->published_version_id === (int) $version->id) {
+            if ($preserveBaseVersion || $version->isFrozen() || (int) $form->published_version_id === (int) $version->id) {
                 $version = $form->versions()->create([
                     'version_number' => ((int) $form->versions()->max('version_number')) + 1,
                     'changelog' => $metadata['changelog'] ?? null,
@@ -133,7 +133,12 @@ class FormBuilderService
         }));
     }
 
-    private function withPublicationLock(Closure $callback): Form
+    public function atomicPublication(Closure $callback): mixed
+    {
+        return $this->withPublicationLock(fn (): mixed => DB::transaction($callback));
+    }
+
+    private function withPublicationLock(Closure $callback): mixed
     {
         $connection = DB::connection();
         $lockKey = substr($connection->getDatabaseName(), 0, 20).':pub:pre_booking';

@@ -21,6 +21,6 @@ class LessonFeedbackController extends Controller
             LessonFeedback::query()->updateOrCreate(['booking_id' => $lesson->id], $data + ['student_id' => $student->id]);
         }, 3);
 
-        return to_route('student.dashboard')->with('success', 'Private lesson feedback saved. Thank you.');
+        return to_route('student.dashboard')->with('success', __('Private lesson feedback saved. Thank you.'));
     }
 }

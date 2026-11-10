@@ -24,6 +24,17 @@ class BlogImageService
         }
     }
 
+    /** @return array{width: int, height: int}|null */
+    public function dimensions(?string $path): ?array
+    {
+        if (! $path || ! $this->isImage($path)) {
+            return null;
+        }
+        $size = getimagesize(Storage::disk('public')->path($path));
+
+        return ['width' => $size[0], 'height' => $size[1]];
+    }
+
     private function isImage(string $path): bool
     {
         if (str_contains($path, '..') || str_contains($path, '\\') || str_starts_with($path, '/') || ! Storage::disk('public')->exists($path)) {

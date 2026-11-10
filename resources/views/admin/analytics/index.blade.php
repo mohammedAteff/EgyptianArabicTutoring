@@ -60,20 +60,20 @@
     </div>
 
     <!-- Active Now Spotlight -->
-    <div class="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 rounded-2xl p-6 text-white shadow-md border border-slate-800">
+    <div class="aq-live-pulse rounded-2xl p-6 shadow-md border">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-slate-800">
             <div>
-                <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <div class="aq-live-badge inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">
+                    <span class="aq-live-indicator w-2 h-2 rounded-full"></span>
                     Live Pulse (5-Minute Activity Window)
                 </div>
-                <div class="flex items-baseline gap-3">
-                    <span class="text-4xl font-black tracking-tight text-white">{{ $activeVisitorsCount }}</span>
+                <div class="flex flex-wrap items-baseline gap-3">
+                    <span class="aq-live-count text-4xl font-black tracking-tight">{{ $activeVisitorsCount }}</span>
                     <span class="text-sm text-slate-400 font-medium">Estimated active visitors</span>
                 </div>
             </div>
             <div class="text-right">
-                <a href="{{ route('admin.reports.index', ['type' => 'traffic']) }}" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-200 transition-colors">
+                <a href="{{ route('admin.reports.index', ['type' => 'traffic']) }}" class="aq-action-secondary inline-flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-semibold transition-colors">
                     <span>Inspect Raw Traffic Report</span>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </a>
@@ -88,7 +88,7 @@
             @else
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     @foreach($activeVisitors as $item)
-                        <div class="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 flex flex-col justify-between text-xs">
+                        <div class="aq-live-visitor p-3 rounded-xl border flex flex-col justify-between text-xs">
                             <div class="flex items-center justify-between text-slate-400 mb-1">
 
                                 <span class="text-[11px]">{{ $item['minutes_ago'] === 0 ? 'Just now' : $item['minutes_ago'] . ($item['minutes_ago'] === 1 ? ' minute ago' : ' minutes ago') }}</span>
@@ -108,10 +108,10 @@
 
     <!-- Primary Booking Conversion Funnel -->
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex flex-wrap gap-3 items-center justify-between mb-6">
             <div>
                 <h2 class="text-base font-bold text-slate-900">Primary Business Funnel: Website → Confirmed Lesson</h2>
-                <div class="flex items-center gap-3 mt-0.5">
+                <div class="flex flex-wrap items-center gap-3 mt-0.5">
                     <p class="text-xs text-slate-500">Authoritative drop-off analysis between booking intent and completion.</p>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ ($primaryFunnel['is_mature'] ?? false) ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800' }}">
                         {{ $primaryFunnel['maturity_label'] ?? 'Immature / In-Progress' }}
@@ -247,12 +247,12 @@
 
     <!-- Audience Activity by Detected Country -->
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-        <div class="flex items-start justify-between gap-4 mb-4">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
             <div>
                 <h3 class="text-sm font-bold text-slate-900">Audience Activity by Detected Country</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Country dimensions are separate: visitors use immutable acquisition country, sessions use session-start country, and events/bookings use their server snapshot. ZZ means unresolved.</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <span class="text-[11px] text-slate-400 whitespace-nowrap">Business calendar days</span>
                 <a href="{{ route('admin.analytics.countries', ['range' => $range]) }}" class="text-xs font-semibold text-amber-700 hover:text-amber-800">
                     Full Country Breakdown →
@@ -311,7 +311,7 @@
 
     <!-- UTM Acquisition & Traffic Attribution -->
     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-wrap gap-3 items-center justify-between mb-4">
             <div>
                 <h3 class="text-sm font-bold text-slate-900">UTM Attribution & Campaign Performance</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Retained activity by acquisition source. A visitor may appear in multiple source groups; rows are not additive.</p>

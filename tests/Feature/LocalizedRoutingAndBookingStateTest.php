@@ -39,6 +39,7 @@ class LocalizedRoutingAndBookingStateTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-07-06 08:00:00', 'UTC'));
         $this->installShortFormFixture();
 
         $this->urlService = app(LocalizedUrlService::class);

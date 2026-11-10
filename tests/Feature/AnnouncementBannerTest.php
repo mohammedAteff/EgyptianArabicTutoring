@@ -74,7 +74,7 @@ class AnnouncementBannerTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-05T12:00:00Z'));
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']), 'web')->post(route('admin.settings.announcement'), $this->fields(['end_at' => '2026-10-06T12:00', 'dismissible' => 0, 'severity' => 'urgent']))->assertSessionHasNoErrors();
         auth('web')->logout();
-        $this->get('/')->assertSee('Synthetic announcement')->assertSee('bg-red-50')->assertDontSee('Dismiss announcement');
+        $this->get('/')->assertSee('Synthetic announcement')->assertSee('Urgent')->assertDontSee('Dismiss announcement');
         $this->actingAs(AdministratorFactory::new()->create(['role' => 'admin']), 'web')->post(route('admin.settings.announcement'), $this->fields(['enabled' => 0, 'message_en' => '']))->assertSessionHasNoErrors();
         auth('web')->logout();
         $this->get('/')->assertDontSee('data-site-announcement', false);

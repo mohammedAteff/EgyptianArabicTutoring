@@ -115,7 +115,7 @@ class FormController extends Controller
         $questions = FormQuestion::query()->where('form_version_id', $filters['version_id'])
             ->where('question_type', '!=', 'info_block')
             ->when($isAssistant, fn (Builder $query) => $query->where('assistant_visible', true))
-            ->orderBy('sort_order')->orderBy('id')->get(['id', 'label']);
+            ->with('options')->orderBy('sort_order')->orderBy('id')->get(['id', 'label', 'question_type']);
         $headers = array_merge(['Submission ID', 'Student ID', 'Submitted At', 'Status', 'Created At (Business Time)'], $questions->pluck('label')->all());
         $timezone = app(TimezoneService::class)->getBusinessTimezone();
         $rows = function () use ($scope, $filters, $isAssistant, $questions, $timezone): \Generator {
@@ -123,7 +123,7 @@ class FormController extends Controller
                 $answerMap = $submission->answers->keyBy('form_question_id');
                 $row = [(string) $submission->id, (string) $submission->student_id, $submission->submitted_at?->toIso8601String(), $submission->status, $submission->created_at?->timezone($timezone)->toIso8601String()];
                 foreach ($questions as $question) {
-                    $row[] = (string) ($answerMap->get($question->id)->value_text ?? '');
+                    $row[] = $question->displayAnswer($answerMap->get($question->id)?->value_text);
                 }
                 yield $row;
             }

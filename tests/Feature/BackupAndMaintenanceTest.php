@@ -168,7 +168,7 @@ class BackupAndMaintenanceTest extends TestCase
 
         $resBlocked = $this->get('/');
         $resBlocked->assertStatus(503);
-        $resBlocked->assertSee("We'll Be Right Back", false);
+        $resBlocked->assertSee('A little work behind the scenes.', false);
 
         // 3. Admin routes are still accessible
         $resAdmin = $this->get(route('admin.login'));

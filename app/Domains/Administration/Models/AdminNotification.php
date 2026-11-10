@@ -20,6 +20,7 @@ class AdminNotification extends Model
         'link',
         'data',
         'read_at',
+        'feedback_key',
     ];
 
     protected function casts(): array

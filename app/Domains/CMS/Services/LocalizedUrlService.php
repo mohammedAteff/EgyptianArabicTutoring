@@ -14,8 +14,12 @@ class LocalizedUrlService
     {
         $req = $request ?? request();
         $path = trim($req->getPathInfo(), '/');
-        $query = $req->getQueryString();
-        $querySuffix = $query ? '?'.$query : '';
+        $query = $req->query();
+        if (array_key_exists('lang', $query)) {
+            $query['lang'] = $targetLocale;
+        }
+        $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        $querySuffix = $queryString !== '' ? '?'.$queryString : '';
 
         // Match known routes by path structure
         $routeInfo = $this->resolveRouteInfo($path, $req);
@@ -122,6 +126,7 @@ class LocalizedUrlService
                 : ['key' => 'games'],
             'blog' => $slug ? ['key' => 'blog.detail', 'slug' => $slug] : ['key' => 'blogs'],
             'booking-policy' => ['key' => 'policy'],
+            'politique-reservation', 'buchungsbedingungen' => ['key' => 'policy'],
             'about', 'a-propos', 'ueber-uns' => ['key' => 'about'],
             'faq' => ['key' => 'faq'],
             'pricing', 'tarifs', 'preise' => ['key' => 'pricing'],
@@ -159,7 +164,7 @@ class LocalizedUrlService
         };
 
         return match ($key) {
-            'policy' => route('policy'),
+            'policy' => route($locale === 'en' ? 'policy' : 'policy.'.$locale),
             'blogs' => $locale === 'en' ? route('blog.index') : url('/'.$locale.'/blog'),
             'blog.detail' => $this->articleUrl($locale, $slug),
             'home' => match ($locale) {

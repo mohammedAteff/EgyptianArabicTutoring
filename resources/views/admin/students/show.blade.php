@@ -4,6 +4,7 @@
 <div class="mx-auto max-w-7xl">
 <a href="{{ $studentListUrl }}" class="mb-4 inline-flex min-h-11 items-center text-sm font-semibold text-amber-800 underline">← Back to Student Records</a>
 <x-student-quick-actions :student="$student" />
+@if(auth('web')->user()?->isAdmin())<a href="{{ route('admin.student-insights.index', ['student_id' => $student->id]) }}" class="mb-4 inline-flex min-h-11 items-center font-semibold underline">View learning insights</a>@endif
 @if($copyBlocks)<div class="mb-5 flex flex-wrap gap-3">@foreach($copyBlocks as $label=>$text)<button type="button" data-copy-text="{{ $text }}" class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800">Copy {{ $label }}</button>@endforeach</div>@endif
 <x-student-operational-alerts :student="$student" :alerts="$operationalAlerts" />
 @if(auth('web')->user()?->isAdmin())
@@ -302,7 +303,7 @@
                     @if($submission->answers->isNotEmpty())
                         <dl class="mt-3 grid gap-3 sm:grid-cols-2">
                             @foreach($submission->answers as $answer)
-                                <div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $answer->question?->label }}</dt><dd class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-800">{{ $answer->value_text }}</dd></div>
+                                <div class="rounded-lg bg-slate-50 p-3"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $answer->question?->label }}</dt><dd class="mt-1 break-words whitespace-pre-wrap text-sm text-slate-800">{{ $answer->displayValue() }}</dd></div>
                             @endforeach
                         </dl>
                     @else

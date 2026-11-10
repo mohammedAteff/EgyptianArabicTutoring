@@ -1,7 +1,7 @@
 @extends('layouts.public')
 
 @section('content')
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+<div class="public-resource-detail max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-xs font-medium text-stone-500 mb-8">
         <a href="{{ localized_url('home') }}" class="hover:text-stone-800">{{ __('Home') }}</a>
@@ -13,7 +13,7 @@
 
     @if(session('success'))
         <div class="mb-8 bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded-r-2xl text-sm text-emerald-800 font-medium shadow-sm">
-            {{ session('success') }}
+            {{ __(session('success')) }}
         </div>
     @endif
 
@@ -30,11 +30,9 @@
         <!-- Main Description (7 cols) -->
         <div @if($isFallback ?? false) lang="en" dir="ltr" @endif data-section-id="resource-preview" class="lg:col-span-7 space-y-6">
             <div class="flex items-center gap-3">
-                <span class="text-xs font-bold uppercase tracking-wider text-terracotta-600 bg-terracotta-50 px-3 py-1 rounded-full">
-                    {{ $resource->category?->liveTranslation()?->name ?? $resource->category?->name ?? 'Free Resource' }}
+                <span class="text-xs font-bold uppercase tracking-wider text-terracotta-600 bg-terracotta-50 px-3 py-1 rounded-full">{{ __($resource->category?->liveTranslation()?->name ?? $resource->category?->name ?? 'Free Resource') }}
                 </span>
-                <span class="text-xs font-semibold text-stone-500 bg-stone-100 px-2.5 py-0.5 rounded-full">
-                    {{ strtoupper($resource->file_type ?? 'PDF') }}
+                <span class="text-xs font-semibold text-stone-500 bg-stone-100 px-2.5 py-0.5 rounded-full">{{ __(strtoupper($resource->file_type ?? 'PDF')) }}
                 </span>
             </div>
 
@@ -60,19 +58,19 @@
 
             <!-- What's inside box -->
             <div class="p-6 rounded-2xl bg-stone-50 border border-stone-200/80 space-y-3">
-                <h3 class="font-bold text-stone-900 text-sm">Included in this Guide:</h3>
+                <h3 class="font-bold text-stone-900 text-sm">{{ __('Included in this Guide:') }}</h3>
                 <ul class="space-y-2 text-xs sm:text-sm text-stone-600">
                     <li class="flex items-center gap-2">
                         <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                        <span>Authentic Egyptian colloquial Arabic (Amiya) phonetic spelling & Arabic script</span>
+                        <span>{{ __('Authentic Egyptian colloquial Arabic (Amiya) phonetic spelling & Arabic script') }}</span>
                     </li>
                     <li class="flex items-center gap-2">
                         <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                        <span>Real-world conversational contexts & cultural nuances</span>
+                        <span>{{ __('Real-world conversational contexts & cultural nuances') }}</span>
                     </li>
                     <li class="flex items-center gap-2">
                         <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                        <span>Printable and mobile-friendly reference sheet</span>
+                        <span>{{ __('Printable and mobile-friendly reference sheet') }}</span>
                     </li>
                 </ul>
             </div>
@@ -112,13 +110,13 @@
                     if (!res.ok) {
                         if (res.status === 429) {
                             this.state = 'rate_limited';
-                            this.errorMessage = 'Too many requests. Please try again later.';
+                            this.errorMessage = @js(__('Too many requests. Please try again later.'));
                             return;
                         }
                         this.state = 'idle';
                         this.errorMessage = res.status === 422
-                            ? (data.errors?.email?.[0] || data.errors?.name?.[0] || 'Please check your name and email address.')
-                            : (res.status === 403 ? 'We couldn’t process your request. Please refresh the page and try again.' : 'We couldn’t process your request. Please try again shortly.');
+                            ? (data.errors?.email?.[0] || data.errors?.name?.[0] || @js(__('Please check your name and email address.')))
+                            : (res.status === 403 ? @js(__('We couldn’t process your request. Please refresh the page and try again.')) : @js(__('We couldn’t process your request. Please try again shortly.')));
                         return;
                     }
                     if (data.requires_pin) {
@@ -132,7 +130,7 @@
                 })
                 .catch(() => {
                     this.state = 'idle';
-                    this.errorMessage = 'Network error. Please try again.';
+                    this.errorMessage = @js(__('Network error. Please try again.'));
                 });
             },
             submitPin() {
@@ -160,24 +158,24 @@
                     } else if (res.status === 422) {
                         this.attempts++;
                         this.state = 'pin_required';
-                        this.errorMessage = 'Invalid verification code. (Attempt ' + this.attempts + ' of 5)';
+                        this.errorMessage = @js(__('Invalid verification code. (Attempt :attempt of 5)')).replace(':attempt', this.attempts);
                     } else if (res.status === 429) {
                         this.state = 'rate_limited';
-                        this.errorMessage = 'Too many failed verification attempts. Please request a new code.';
+                        this.errorMessage = @js(__('Too many failed verification attempts. Please request a new code.'));
                     } else if (res.status === 403) {
                         this.state = 'pin_required';
-                        this.errorMessage = 'Please refresh the page and try again.';
+                        this.errorMessage = @js(__('Please refresh the page and try again.'));
                     } else if (res.status === 409) {
                         this.state = 'pin_required';
-                        this.errorMessage = 'This verification code has already been used. Please request a new code.';
+                        this.errorMessage = @js(__('This verification code has already been used. Please request a new code.'));
                     } else {
                         this.state = 'pin_required';
-                        this.errorMessage = 'We couldn’t process your request. Please refresh the page and try again.';
+                        this.errorMessage = @js(__('We couldn’t process your request. Please refresh the page and try again.'));
                     }
                 })
                 .catch(() => {
                     this.state = 'pin_required';
-                    this.errorMessage = 'Network error. Please check your connection and retry.';
+                    this.errorMessage = @js(__('Network error. Please check your connection and retry.'));
                 });
             }
         }"
@@ -194,9 +192,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-stone-900">Your File Is Ready!</h2>
+                    <h2 class="text-xl font-bold text-stone-900">{{ __('Your File Is Ready!') }}</h2>
                     <p class="text-xs text-stone-500 leading-relaxed">
-                        Click below to save the file directly to your device.
+                        {{ __('Click below to save the file directly to your device.') }}
                     </p>
                     <div class="pt-2">
                         <a :href="downloadUrl || '{{ route(app()->getLocale() === 'fr' ? 'resources.download.fr' : (app()->getLocale() === 'de' ? 'resources.download.de' : 'resources.download'), array_filter(['slug' => $resource->slug, 'token' => session('download_token')])) }}'"
@@ -213,11 +211,11 @@
                 <div x-show="state === 'idle' || state === 'submitting'" style="{{ (! $resource->requiresPublicAccessRequest() || session('access_granted')) ? 'display: none;' : '' }}">
                     <div class="flex items-center gap-2 text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span>Free Instant Access</span>
+                        <span>{{ __('Free Instant Access') }}</span>
                     </div>
-                    <h2 class="text-xl font-bold text-stone-900">Get Free Access</h2>
+                    <h2 class="text-xl font-bold text-stone-900">{{ __('Get Free Access') }}</h2>
                     <p class="text-stone-500 text-xs mt-1 mb-6 leading-relaxed">
-                        Enter your name and email address to access this free resource. If this email matches a registered student, complete the existing identity check when requested.
+                        {{ __('Enter your name and email address to access this free resource. If this email matches a registered student, complete the existing identity check when requested.') }}
                     </p>
 
                     <div x-show="errorMessage" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-600 font-medium" x-text="errorMessage"></div>
@@ -226,20 +224,20 @@
                         @csrf
                         <div>
                             <label for="name" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-                                Your Name <span class="text-rose-500">*</span>
+                                {{ __('Your Name') }} <span class="text-rose-500">*</span>
                             </label>
                             <input type="text"
                                    x-model="name"
                                    name="name"
                                    id="name"
                                    required
-                                   placeholder="e.g. David"
+                                   placeholder="{{ __('e.g. David') }}"
                                    class="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:border-terracotta-500 focus:ring-2 focus:ring-terracotta-100 outline-none">
                         </div>
 
                         <div>
                             <label for="email" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-                                Email Address <span class="text-rose-500">*</span>
+                                {{ __('Email Address') }} <span class="text-rose-500">*</span>
                             </label>
                             <input type="email"
                                    x-model="email"
@@ -255,15 +253,13 @@
                                     :disabled="state === 'submitting'"
                                     class="w-full inline-flex items-center justify-center gap-2 bg-terracotta-500 hover:bg-terracotta-600 disabled:opacity-50 text-white font-bold text-sm px-6 py-3.5 rounded-full shadow-md hover:shadow transition-all">
                                 <span x-show="state !== 'submitting'">{{ __('Request Free Access') }}</span>
-                                <span x-show="state === 'submitting'">Requesting Access...</span>
-                                <svg x-show="state !== 'submitting'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
-                                </svg>
+                                <span x-show="state === 'submitting'">{{ __('Requesting Access...') }}</span>
+                                <x-public-studio-icon name="arrow" class="studio-link-arrow" x-show="state !== 'submitting'" />
                             </button>
                         </div>
 
                         <p class="text-[11px] text-stone-400 text-center leading-tight">
-                            We respect your privacy. Resource access does not trigger unsolicited marketing emails.
+                            {{ __('We respect your privacy. Resource access does not trigger unsolicited marketing emails.') }}
                         </p>
                     </form>
                 </div>
@@ -272,11 +268,11 @@
                 <div x-show="state === 'pin_required' || state === 'verifying'" style="display: none;">
                     <div class="flex items-center gap-2 text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">
                         <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                        <span>Verification Required</span>
+                        <span>{{ __('Verification Required') }}</span>
                     </div>
-                    <h2 class="text-xl font-bold text-stone-900">Check Your Email</h2>
+                    <h2 class="text-xl font-bold text-stone-900">{{ __('Check Your Email') }}</h2>
                     <p class="text-stone-500 text-xs mt-1 mb-6 leading-relaxed">
-                        We sent a 6-digit verification code to <strong class="text-stone-800" x-text="email"></strong>. Please enter it below to unlock your download.
+                        {{ __('We sent a 6-digit verification code to') }} <strong class="text-stone-800" x-text="email"></strong>{{ __('. Please enter it below to unlock your download.') }}
                     </p>
 
                     <div x-show="errorMessage" class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-600 font-medium" x-text="errorMessage"></div>
@@ -284,7 +280,7 @@
                     <form @submit.prevent="submitPin" class="space-y-4">
                         <div>
                             <label for="pin" class="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-                                6-Digit Verification Code <span class="text-rose-500">*</span>
+                                {{ __('6-Digit Verification Code') }} <span class="text-rose-500">*</span>
                             </label>
                             <input type="text"
                                    x-model="pin"
@@ -301,14 +297,14 @@
                             <button type="submit"
                                     :disabled="state === 'verifying' || pin.length !== 6"
                                     class="w-full inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-sm px-6 py-3.5 rounded-full shadow-md hover:shadow transition-all">
-                                <span x-show="state !== 'verifying'">Verify & Download</span>
-                                <span x-show="state === 'verifying'">Verifying Code...</span>
+                                <span x-show="state !== 'verifying'">{{ __('Verify & Download') }}</span>
+                                <span x-show="state === 'verifying'">{{ __('Verifying Code...') }}</span>
                             </button>
                         </div>
 
                         <div class="text-center pt-2">
                             <button type="button" @click="state = 'idle'; pin = ''; errorMessage = '';" class="text-xs text-stone-500 hover:text-stone-800 underline">
-                                Entered wrong email? Try again
+                                {{ __('Entered wrong email? Try again') }}
                             </button>
                         </div>
                     </form>
@@ -321,21 +317,21 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-stone-900">Access Restricted</h2>
-                    <p class="text-xs text-stone-600 leading-relaxed" x-text="errorMessage || 'Too many attempts. Please try again later.'"></p>
+                    <h2 class="text-xl font-bold text-stone-900">{{ __('Access Restricted') }}</h2>
+                    <p class="text-xs text-stone-600 leading-relaxed" x-text="errorMessage || @js(__('Too many attempts. Please try again later.'))"></p>
                     <div class="pt-2">
                         <button type="button" @click="state = 'idle'; pin = ''; errorMessage = ''; attempts = 0;" class="text-xs font-semibold text-terracotta-600 hover:text-terracotta-700 underline">
-                            Return to Form
+                            {{ __('Return to Form') }}
                         </button>
                     </div>
                 </div>
 
                 <!-- Cross-promote Lesson -->
                 <div class="mt-8 pt-6 border-t border-stone-100 text-center">
-                    <div class="text-xs font-bold text-stone-900 mb-1">Want to practice speaking?</div>
-                    <p class="text-xs text-stone-500 mb-3">Practice these exact phrases in a private 1-on-1 session.</p>
-                    <a href="{{ localized_url('booking') }}" class="text-xs font-bold text-terracotta-600 hover:text-terracotta-700 underline">
-                        Book a Lesson with Abdallah →
+                    <div class="text-xs font-bold text-stone-900 mb-1">{{ __('Want to practice speaking?') }}</div>
+                    <p class="text-xs text-stone-500 mb-3">{{ __('Practice these exact phrases in a private 1-on-1 session.') }}</p>
+                    <a href="{{ localized_url('booking') }}" class="inline-flex items-center gap-2 text-xs font-bold text-terracotta-600 hover:text-terracotta-700 underline">
+                        {{ __('Book a Lesson with Abdallah') }} <x-public-studio-icon name="arrow" class="studio-link-arrow" />
                     </a>
                 </div>
             </div>

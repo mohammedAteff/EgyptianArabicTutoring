@@ -6,60 +6,100 @@ use App\Domains\Administration\Services\AdminNotificationService;
 use App\Domains\Analytics\Models\VisitorSession;
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Services\LocalizedUrlService;
+use App\Domains\CMS\Services\WebsiteCopyService;
 use App\Domains\Contacts\Models\Contact;
 use App\Domains\Contacts\Services\ContactService;
+use App\Domains\Games\Models\Game;
 use App\Domains\Resources\Models\Resource;
-use App\Domains\Resources\Models\ResourceCategory;
 use App\Domains\Resources\Models\ResourceDownload;
 use App\Domains\Resources\Models\ResourceRequest as ResourceRequestModel;
 use App\Domains\Resources\Services\EmailQualityService;
+use App\Domains\Resources\Services\ResourceLibraryQuery;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentSessionContext;
+use App\Rules\SafeLessonUrl;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ResourceController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, ResourceLibraryQuery $library): View|RedirectResponse
     {
-        $categorySlug = $request->query('category');
+        $validator = Validator::make($request->query(), ['q' => ['nullable', 'string', 'max:200'], 'category' => ['nullable', 'string', 'max:255']]);
+        $filterErrors = $validator->errors();
+        $search = $filterErrors->has('q') ? '' : trim((string) $request->query('q', ''));
+        $categorySlug = $filterErrors->has('category') ? '' : trim((string) $request->query('category', ''));
+        $categories = $library->categories()->get();
+        $selectedCategory = $categories->firstWhere('slug', $categorySlug);
+        $catalogueCount = Resource::query()->publicCatalogue()->count();
+        $query = $library->resources()->orderBy('resources.sort_order')->orderBy('resources.id');
 
-        $categories = ResourceCategory::where('active', true)
-            ->whereHas('resources', function (Builder $query): void {
-                /** @var Builder<\App\Domains\Resources\Models\Resource> $query */
-                $query->publicCatalogue();
-            })
-            ->with('translations')
-            ->orderBy('sort_order')
-            ->get();
-
-        $query = Resource::query()
-            ->publicCatalogue()
-            ->with(['category.translations', 'translations'])
-            ->orderBy('sort_order');
-
-        if ($categorySlug) {
-            $query->whereHas('category', fn ($q) => $q->where('slug', $categorySlug));
+        if ($categorySlug !== '') {
+            $query->where('resources.category_id', $selectedCategory->id ?? -1);
+        }
+        if ($search !== '') {
+            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
+            $query->where(function (Builder $query) use ($pattern): void {
+                foreach (['library_title', 'library_short_description', 'library_category'] as $column) {
+                    $query->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$pattern]);
+                }
+            });
         }
 
-        $resources = $query->paginate(12)->withQueryString();
+        $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
+        $filters = array_filter(['q' => $search, 'category' => $categorySlug], fn (string $value): bool => $value !== '');
+        $total = (clone $query)->count();
+        $lastPage = max(1, (int) ceil($total / 12));
+        if ($page > $lastPage) {
+            $destination = $filters;
+            if ($lastPage > 1) {
+                $destination['page'] = $lastPage;
+            }
+
+            return redirect(localized_url('resources').($destination === [] ? '' : '?'.http_build_query($destination)).'#resource-results');
+        }
+        $resources = $query->paginate(12, page: $page, total: $total)->appends($filters)->fragment('resource-results');
+        $featuredResource = $search === '' && $categorySlug === '' && ! $filterErrors->any() && $resources->currentPage() === 1
+            ? $resources->getCollection()->first(fn (Resource $resource): bool => $resource->featured && ($resource->external_url
+                ? SafeLessonUrl::isSafe($resource->external_url)
+                : ($resource->file_path && Storage::disk('local')->exists($resource->file_path))))
+            : null;
+
+        $entityLocales = ['en'];
+        foreach (['fr', 'de'] as $locale) {
+            if (app(WebsiteCopyService::class)->hasTranslation('resources', $locale) && $library->hasCompleteTranslation($locale)) {
+                $entityLocales[] = $locale;
+            }
+        }
 
         return view('public.resources.index', [
             'resources' => $resources,
             'categories' => $categories,
             'selectedCategory' => $categorySlug,
+            'categoryLabel' => $selectedCategory->library_name ?? $categorySlug,
+            'search' => $search,
+            'filterErrors' => $filterErrors,
+            'catalogueCount' => $catalogueCount,
+            'categoryHasResources' => $categorySlug === '' || $selectedCategory !== null,
+            'featuredResource' => $featuredResource,
+            'showGamePreview' => is_file(public_path('images/games/6-word-story.webp'))
+                && @getimagesize(public_path('images/games/6-word-story.webp')) !== false
+                && Game::query()->available()->where('slug', '6-word-story')->exists(),
+            'noIndex' => $request->hasAny(['q', 'category']),
             'title' => 'Arabic Learning Resources',
-            'isFallback' => app()->getLocale() !== 'en',
-            'entityLocales' => ['en'],
+            'isFallback' => ! in_array(app()->getLocale(), $entityLocales, true),
+            'entityLocales' => $entityLocales,
         ]);
     }
 
@@ -82,7 +122,7 @@ class ResourceController extends Controller
             'isStale' => $resolved['is_stale'],
             'entityLocales' => $resource->getAvailableLocales(),
             'resourceStudent' => $this->authenticatedStudent(request()),
-            'title' => ($resolved['translation']->title ?? $resource->title).' — Free Arabic Resource',
+            'title' => __(':title — Free Arabic Resource', ['title' => $resolved['translation']->title ?? $resource->title]),
         ]);
     }
 
@@ -167,7 +207,7 @@ class ResourceController extends Controller
             'content' => ['nullable', 'string', 'max:255'],
             'term' => ['nullable', 'string', 'max:255'],
             'landing_page' => ['nullable', 'string', 'max:255'],
-        ], ['email.email' => 'Please enter a valid email address.']);
+        ], ['email.email' => __('Please enter a valid email address.')]);
 
         app(EmailQualityService::class)->validate((string) $request->input('email'));
 

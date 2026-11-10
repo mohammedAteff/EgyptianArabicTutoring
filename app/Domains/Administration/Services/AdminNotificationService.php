@@ -10,6 +10,16 @@ use Carbon\CarbonImmutable;
 
 class AdminNotificationService
 {
+    public function sendFeedback(string $identity, int $conversationId, int $studentId): AdminNotification
+    {
+        return AdminNotification::query()->firstOrCreate(['feedback_key' => hash('sha256', $identity)], [
+            'type' => 'feedback', 'level' => 'info', 'title' => 'Student feedback activity',
+            'message' => 'A student has sent feedback. Open the conversation to review it.',
+            'link' => route('admin.feedback.show', $conversationId, false),
+            'data' => ['conversation_id' => $conversationId, 'student_id' => $studentId],
+        ]);
+    }
+
     /**
      * Dispatch an internal admin notification with deduplication.
      */

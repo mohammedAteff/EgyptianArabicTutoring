@@ -136,8 +136,10 @@ class FinancialTimingCorrectionTest extends TestCase
         $ledger = app(StudentLedgerService::class);
         $ledger->recordPayment($track, '140.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-02-14 10:00:00', 'UTC'));
         $this->assertNotNull($track->fresh()->validity_started_at);
+        $this->assertFalse(app(EntitlementService::class)->eligible($track->fresh()));
         $ledger->recordPayment($track, '140.00', (string) Str::uuid(), null, receivedAt: CarbonImmutable::parse('2026-02-15 10:00:00', 'UTC'));
         $track->refresh();
+        $this->assertTrue(app(EntitlementService::class)->eligible($track));
         $this->assertSame('2026-02-14 10:00:00', $track->validity_started_at->toDateTimeString());
         $this->assertSame('2026-04-30 09:00:00', $track->expires_at->toDateTimeString());
         $this->assertSame('12:00', $track->expires_at->setTimezone('Africa/Cairo')->format('H:i'));

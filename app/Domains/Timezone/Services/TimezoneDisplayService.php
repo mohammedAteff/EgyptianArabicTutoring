@@ -29,7 +29,7 @@ class TimezoneDisplayService
 
     public function studentTime(DateTimeInterface $instant): string
     {
-        return $instant->format('g:i A');
+        return localized_date($instant, 'g:i A');
     }
 
     public function administratorTime(DateTimeInterface $instant, ?string $timezone = null): string
@@ -142,7 +142,7 @@ class TimezoneDisplayService
             : '/assets/flags/4x3/globe.svg';
 
         $label = $canonicalTz === 'UTC'
-            ? 'UTC (Coordinated Universal Time)'
+            ? __('UTC (Coordinated Universal Time)')
             : "{$city} ({$canonicalTz}, {$offsetFormatted})";
 
         return [
@@ -216,15 +216,15 @@ class TimezoneDisplayService
     }
 
     /**
-     * Resolve an accessible English country name from an ISO country code.
+     * Resolve an accessible localized country name from an ISO country code.
      */
     public function resolveCountryName(?string $countryCode): string
     {
         if (! $countryCode) {
-            return 'Unknown / Unresolved';
+            return __('Unknown / Unresolved');
         }
 
-        $name = \Locale::getDisplayRegion('und-'.strtoupper($countryCode), 'en');
+        $name = \Locale::getDisplayRegion('und-'.strtoupper($countryCode), app()->getLocale());
 
         return $name !== '' ? $name : strtoupper($countryCode);
     }
@@ -235,7 +235,7 @@ class TimezoneDisplayService
     public function resolveCityName(string $timezone): string
     {
         if (isset(self::CITY_MAP[$timezone])) {
-            return self::CITY_MAP[$timezone];
+            return __(self::CITY_MAP[$timezone]);
         }
 
         if (in_array($timezone, ['UTC', 'GMT', 'Etc/UTC'], true)) {
@@ -245,7 +245,7 @@ class TimezoneDisplayService
         $parts = explode('/', $timezone);
         $last = end($parts);
 
-        return str_replace('_', ' ', $last);
+        return __(str_replace('_', ' ', $last));
     }
 
     /**

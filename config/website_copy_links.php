@@ -27,6 +27,11 @@ return [
     'faq' => [
         0 => 'faq',
         1 => 'pricing',
+        2 => 'booking',
+        3 => 'policy',
+        4 => 'student',
+        5 => 'resources',
+        6 => 'games',
     ],
     'policy' => [
     ],

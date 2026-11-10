@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="space-y-6">
+<div class="aq-notifications space-y-6">
 
     <!-- Header & Action Bar -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -10,7 +10,7 @@
             <p class="text-sm text-slate-500 mt-1">Internal operations alerts, new bookings, resource leads, and system events.</p>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0">
+        <div class="aq-notification-filters flex items-center gap-3 shrink-0">
             <!-- Filter Switcher -->
             <div class="flex items-center bg-slate-200/80 p-1 rounded-xl">
                 <a href="{{ route('admin.notifications.index', ['filter' => 'all']) }}" 
@@ -21,7 +21,7 @@
                    class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 {{ $filter === 'unread' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900' }}">
                     <span>Unread</span>
                     @if($unreadCount > 0)
-                        <span class="px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-bold">{{ $unreadCount }}</span>
+                        <span class="aq-notification-count px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-bold">{{ $unreadCount }}</span>
                     @endif
                 </a>
             </div>
@@ -48,7 +48,7 @@
                     ? route('admin.bookings.show', $bookingId)
                     : $notification->link;
             @endphp
-            <div class="p-4 sm:p-5 flex items-start gap-4 transition-colors {{ $isUnread ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'hover:bg-slate-50/70' }}">
+            <div class="aq-notification-row p-4 sm:p-5 flex items-start gap-4 transition-colors {{ $isUnread ? 'bg-amber-50/30 hover:bg-amber-50/50' : 'hover:bg-slate-50/70' }}">
                 
                 <!-- Status Icon -->
                 <div class="shrink-0 mt-0.5">
@@ -77,7 +77,7 @@
                         <span class="font-bold text-slate-900 text-sm">{{ $notification->title }}</span>
                         <span class="text-xs text-slate-500">Notification #{{ $notification->id }}</span>
                         @if($isUnread)
-                            <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">New</span>
+                            <span class="aq-notification-new px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">New</span>
                         @endif
                         <span class="text-xs text-slate-400 ml-auto">{{ $notification->created_at->diffForHumans() }}</span>
                     </div>
@@ -91,7 +91,7 @@
                     @endif
 
                     <!-- Action buttons -->
-                    <div class="flex items-center gap-3 mt-3">
+                    <div class="aq-notification-actions flex items-center gap-3 mt-3">
                         @if($detailsLink)
                             <a href="{{ $detailsLink }}" class="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors inline-flex items-center gap-1">
                                 <span>View Details</span>

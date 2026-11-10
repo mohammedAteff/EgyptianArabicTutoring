@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 @section('content')
 <x-lifecycle-feedback />
-<div class="mx-auto max-w-6xl space-y-6"><h1 class="font-serif text-3xl font-bold">Social Channels</h1><p class="text-sm text-slate-600">Manage official social links, visibility and ordering in the top banner and footer.</p>
+<div class="mx-auto max-w-6xl space-y-6"><h1 class="font-serif text-3xl font-bold">Social Channels</h1><p class="text-sm text-slate-600">Manage official social links, visibility and ordering in the top banner, footer and floating social menu.</p>
     <form action="{{ route('admin.content.social.display') }}" method="POST" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
         @csrf
         <input type="hidden" name="banner_enabled" value="0">
@@ -37,6 +37,7 @@
                             <div class="flex flex-wrap gap-4 text-sm text-slate-700">
                                 <input type="hidden" name="socials[{{ $soc->id }}][show_in_banner]" value="0"><label><input type="checkbox" name="socials[{{ $soc->id }}][show_in_banner]" value="1" @checked($soc->show_in_banner)> Top banner</label>
                                 <input type="hidden" name="socials[{{ $soc->id }}][show_in_footer]" value="0"><label><input type="checkbox" name="socials[{{ $soc->id }}][show_in_footer]" value="1" @checked($soc->show_in_footer)> Footer</label>
+                                <input type="hidden" name="socials[{{ $soc->id }}][show_in_floating]" value="0"><label><input type="checkbox" name="socials[{{ $soc->id }}][show_in_floating]" value="1" @checked(old("socials.{$soc->id}.show_in_floating", $soc->show_in_floating))> Show in floating social menu</label>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">

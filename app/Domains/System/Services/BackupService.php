@@ -82,17 +82,17 @@ class BackupService
             $fileHashes = [];
 
             // Add private files (includes gated resources stored under storage/app/private/resources)
-            $this->addDirectoryToZip($zip, Storage::disk('local')->path(''), 'storage/private', $fileHashes);
+            $this->addDirectoryToZip($zip, Storage::disk('local')->path(''), 'storage/private', $fileHashes, $tempDir);
 
             // Add public files (includes public media)
-            $this->addDirectoryToZip($zip, Storage::disk('public')->path(''), 'storage/public', $fileHashes);
+            $this->addDirectoryToZip($zip, Storage::disk('public')->path(''), 'storage/public', $fileHashes, $tempDir);
 
             // Legacy path fallbacks if present
             if (File::isDirectory(storage_path('app/resources'))) {
-                $this->addDirectoryToZip($zip, storage_path('app/resources'), 'storage/resources', $fileHashes);
+                $this->addDirectoryToZip($zip, storage_path('app/resources'), 'storage/resources', $fileHashes, $tempDir);
             }
             if (File::isDirectory(storage_path('app/media'))) {
-                $this->addDirectoryToZip($zip, storage_path('app/media'), 'storage/media', $fileHashes);
+                $this->addDirectoryToZip($zip, storage_path('app/media'), 'storage/media', $fileHashes, $tempDir);
             }
 
             // Add metadata manifest
@@ -111,7 +111,9 @@ class BackupService
             ];
             $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT));
 
-            $zip->close();
+            if (! $zip->close()) {
+                throw new Exception('The backup archive could not be finalized.');
+            }
             if (! File::chmod($zipPath, 0600)) {
                 throw new Exception('The backup archive could not be made private.');
             }
@@ -305,6 +307,10 @@ class BackupService
             $tables = DB::select('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"');
             $dbName = DB::getDatabaseName();
             $tableKey = "Tables_in_{$dbName}";
+            $generatedByTable = [];
+            foreach (DB::select("SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND GENERATION_EXPRESSION IS NOT NULL AND GENERATION_EXPRESSION <> ''", [$dbName]) as $column) {
+                $generatedByTable[$column->TABLE_NAME][] = $column->COLUMN_NAME;
+            }
 
             foreach ($tables as $tableObj) {
                 $table = $tableObj->$tableKey ?? current((array) $tableObj);
@@ -334,6 +340,12 @@ class BackupService
                         return DB::getPdo()->quote((string) $val);
                     }, (array) $row);
 
+                    foreach ($generatedByTable[$table] ?? [] as $column) {
+                        if (array_key_exists($column, $values)) {
+                            $values[$column] = 'DEFAULT';
+                        }
+                    }
+
                     $batch[] = '('.implode(', ', $values).')';
 
                     if (count($batch) >= 100) {
@@ -360,7 +372,7 @@ class BackupService
     /**
      * Add a directory to a zip archive recursively while computing file checksums.
      */
-    protected function addDirectoryToZip(ZipArchive $zip, string $dirPath, string $zipPrefix, array &$fileHashes = []): void
+    protected function addDirectoryToZip(ZipArchive $zip, string $dirPath, string $zipPrefix, array &$fileHashes, string $stagingDirectory): void
     {
         if (! File::isDirectory($dirPath)) {
             return;
@@ -369,7 +381,17 @@ class BackupService
         $files = File::allFiles($dirPath);
         foreach ($files as $file) {
             $relativePath = $zipPrefix.'/'.str_replace('\\', '/', $file->getRelativePathname());
-            $zip->addFile($file->getRealPath(), $relativePath);
+            $filePath = $file->getRealPath();
+            if (PHP_OS_FAMILY === 'Windows' && strlen($filePath) > 240) {
+                $stagedPath = $stagingDirectory.'/asset-'.count($fileHashes);
+                if (! File::copy($filePath, $stagedPath)) {
+                    throw new Exception('A required asset could not be staged for backup.');
+                }
+                $filePath = $stagedPath;
+            }
+            if (! $zip->addFile($filePath, $relativePath)) {
+                throw new Exception('A required asset could not be added to the backup archive.');
+            }
             $fileHashes[$relativePath] = [
                 'sha256' => hash_file('sha256', $file->getRealPath()),
                 'size_bytes' => $file->getSize(),

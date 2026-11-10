@@ -9,6 +9,7 @@ use App\Domains\Booking\Services\BookingService;
 use App\Domains\CMS\Models\Faq;
 use App\Domains\CMS\Models\Page;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\CMS\Models\WebsiteCopy;
 use App\Domains\CMS\Services\PublicContentImporter;
 use App\Domains\Students\Models\ResourceAssignment;
 use App\Domains\Students\Models\Student;
@@ -33,8 +34,16 @@ class PublicContentOverhaulTest extends TestCase
         $service = app(PublicContentImporter::class);
         $first = $service->import();
         $this->assertTrue($first['changed']);
-        $this->assertSame(34, Faq::active()->count());
+        $this->assertSame(33, Faq::active()->count());
         $this->assertSame(6, Faq::active()->where('featured', true)->count());
+        $this->assertSame(2, Faq::active()->where('topic', 'Resources & Games')->count());
+        $this->assertDatabaseMissing('faqs', ['question' => "What's included in the Arabic Alphabet Workbook?"]);
+        foreach (['Can I use your learning resources without taking private lessons?', 'Are the language games free?', 'Can I start learning Arabic with absolutely no experience?'] as $question) {
+            $this->assertDatabaseHas('faqs', ['question' => $question, 'active' => true]);
+        }
+        $defaults = array_column(config('public_content.faqs'), 'question', 'key');
+        $this->assertArrayNotHasKey('faq-31', $defaults);
+        $this->assertSame('Are the language games free?', $defaults['faq-32']);
         $this->assertFalse($old->fresh()->active);
         $this->assertSame('Original answer', $old->fresh()->answer);
         $this->assertSame('Private data policy', $privacy->fresh()->content);
@@ -45,7 +54,7 @@ class PublicContentOverhaulTest extends TestCase
         $this->assertStringContainsString('full refund', strtolower($terms->fresh()->content));
         $this->assertGreaterThan(0, $old->revisions()->count());
         $this->assertFalse($service->import()['changed']);
-        $this->assertDatabaseCount('faqs', 35);
+        $this->assertDatabaseCount('faqs', 34);
         $this->assertDatabaseMissing('faq_translations', ['locale' => 'fr']);
         $this->assertDatabaseMissing('faq_translations', ['locale' => 'de']);
     }
@@ -107,10 +116,13 @@ class PublicContentOverhaulTest extends TestCase
 
     public function test_english_copy_has_honest_fallback_and_no_unavailable_workbook_link(): void
     {
-        $this->get('/fr')->assertOk()->assertSeeText('Learn Arabic with a plan built around you.')->assertSeeText('La version anglaise est affichée.');
+        $this->get('/fr')->assertOk()->assertSeeText('Apprenez l’arabe avec un programme qui vous ressemble.');
+        WebsiteCopy::query()->create(['page' => 'home', 'locale' => 'en', 'published_content' => ['home__0__title' => 'A personal English learning plan.']]);
+        $this->get('/fr')->assertOk()->assertSeeText('A personal English learning plan.')->assertSeeText('La version anglaise est affichée.');
+        $this->withSession(['public_locale' => 'en']);
         $this->get('/pricing')->assertOk()->assertSeeText('$280')->assertSeeText('$390')->assertSeeText('first payment, including a partial payment');
-        $this->get('/resources')->assertOk()->assertSeeText('Learning materials are being prepared.')->assertDontSeeText('awaiting its confirmed file')->assertDontSeeText('Explore the Workbook');
-        $this->get('/booking-policy')->assertOk()->assertSeeText('Full refund or rescheduling.')->assertSeeText('Online rescheduling requires at least 24 hours');
+        $this->get('/resources')->assertOk()->assertSeeText('No resources are available to browse just yet.')->assertDontSeeText('awaiting its confirmed file')->assertDontSeeText('Explore the Workbook');
+        $this->get('/booking-policy')->assertOk()->assertSeeText('The student may request a full refund.')->assertSeeText('Online rescheduling requires at least 24 hours');
     }
 
     public function test_content_import_refuses_a_production_environment(): void

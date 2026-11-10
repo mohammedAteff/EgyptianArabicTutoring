@@ -164,8 +164,8 @@ class PublicCopyRemediationTest extends TestCase
 
     public function test_empty_resource_library_uses_its_actual_empty_state_without_a_workbook_claim(): void
     {
-        $this->get('/resources')->assertSeeText('Learning materials are being prepared.')
-            ->assertSeeText("There aren't any published resources in the library at the moment.")
+        $this->get('/resources')->assertSeeText('No resources are available to browse just yet.')
+            ->assertSeeText("Additional learning materials will appear here as they're published.")
             ->assertDontSeeText('awaiting its confirmed file')->assertDontSeeText('Explore the Workbook');
     }
 
@@ -175,7 +175,7 @@ class PublicCopyRemediationTest extends TestCase
             'external_url' => 'https://example.test/engineering-alphabet', 'is_gated' => true]);
         $before = $resource->fresh()->getRawOriginal();
 
-        $this->get('/resources')->assertSeeText('Arabic Alphabet')->assertDontSeeText('Learning materials are being prepared.')
+        $this->get('/resources')->assertSeeText('Arabic Alphabet')->assertDontSeeText('No resources are available to browse just yet.')
             ->assertDontSeeText('awaiting its confirmed file')->assertSee(route('resources.show', $resource->slug));
         $this->get(route('resources.show', $resource->slug))->assertSeeText('Get Free Access')->assertSee('name="name"', false)->assertSee('name="email"', false);
         $this->get(route('resources.download', $resource->slug))->assertRedirect(route('resources.show', $resource->slug));
@@ -185,11 +185,14 @@ class PublicCopyRemediationTest extends TestCase
         $this->assertDatabaseCount('resource_downloads', 0);
     }
 
-    public function test_imported_resource_faq_keeps_planned_video_wording_without_blanket_workbook_unavailability(): void
+    public function test_imported_resource_faq_keeps_public_access_guidance_without_obsolete_workbook_promises(): void
     {
         app(PublicContentImporter::class)->import();
 
-        $this->get('/faq')->assertSeeText('The accompanying video series is planned.')
+        $this->get('/faq')->assertSeeText('Can I use your learning resources without taking private lessons?')
+            ->assertSeeText('The public learning library is available to everyone, including independent learners.')
+            ->assertDontSeeText("What's included in the Arabic Alphabet Workbook?")
+            ->assertDontSeeText('The accompanying video series is planned.')
             ->assertDontSeeText('awaiting its confirmed file')->assertDontSeeText('not available to download yet');
     }
 

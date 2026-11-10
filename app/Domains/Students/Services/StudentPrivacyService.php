@@ -11,6 +11,7 @@ use App\Domains\Contacts\Models\Contact;
 use App\Domains\Database\Services\DatabaseCapability;
 use App\Domains\Forms\Models\FormAnswer;
 use App\Domains\Lms\Services\LmsStudentLifecycle;
+use App\Domains\Reporting\Services\EstimatedActivityLifecycle;
 use App\Domains\Students\Models\Student;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -125,7 +126,9 @@ class StudentPrivacyService
             DB::table('student_bins')->where('student_id', $studentId)->update(['title' => 'Redacted educational note', 'body' => '[redacted]', 'student_visible' => false]);
             $this->lessonMaterials->eraseForBookings($lockedIds, $administratorId);
             $this->teaching->erase($studentId);
+            app(EstimatedActivityLifecycle::class)->erase($student);
             $this->learning->erase($studentId);
+            app(FeedbackLifecycle::class)->erase($studentId);
             DB::table('student_birthday_reminders')->where('student_id', $studentId)->delete();
             DB::table('admin_notifications')->whereIn('type', ['student_birthday', 'waitlist_opening'])->where('data->student_id', $studentId)->update(['title' => 'Redacted student reminder', 'message' => 'This student record was anonymized.', 'link' => null, 'data' => null]);
             DB::table('recurring_lesson_plans')->where('student_id', $studentId)->update(['status' => 'paused']);

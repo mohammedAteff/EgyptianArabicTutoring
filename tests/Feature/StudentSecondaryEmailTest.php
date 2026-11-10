@@ -45,7 +45,7 @@ class StudentSecondaryEmailTest extends TestCase
         $this->assertDatabaseHas('student_emails', ['student_id' => $student->id, 'email_normalized' => 'secondary@routable.example']);
         $this->get($url)->assertSessionHasErrors('email');
         $this->post(route('student.logout'));
-        $this->post(route('student.login.submit'), ['date_of_birth' => $student->date_of_birth->toDateString(), 'name' => $student->name, 'email' => 'secondary@routable.example'])->assertRedirect(route('student.dashboard'));
+        $this->post(route('student.login.submit'), ['date_of_birth' => $student->date_of_birth->toDateString(), 'name' => $student->name, 'email' => 'secondary@routable.example'])->assertRedirect(route('student.home'));
         $this->assertAuthenticatedAs($student, 'student');
     }
 

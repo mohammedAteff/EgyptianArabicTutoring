@@ -40,15 +40,15 @@ class FinancialStatementService
         $statement = $this->statement($package, $studentView);
         $references = $statement['references'];
         $purchaseNumber = $studentView ? $references['purchases'][$package->id] : $package->id;
-        yield ['Purchase', $purchaseNumber, $package->created_at->setTimezone($statement['timezone'])->toDateTimeString(), $package->final_price, $package->currency, $package->package_name, ''];
+        yield [$studentView ? __('Purchase') : 'Purchase', $purchaseNumber, $package->created_at->setTimezone($statement['timezone'])->toDateTimeString(), $package->final_price, $package->currency, $package->package_name, ''];
         foreach ($package->payments->sortBy('paid_at') as $payment) {
-            yield ['Actual payment', $studentView ? $references['payments'][$payment->id] : $payment->id, $payment->paid_at->setTimezone($statement['timezone'])->toDateTimeString(), $payment->amount_paid,
-                $package->currency, $payment->payment_method ?: 'Manual payment', $payment->transaction_reference ?? ''];
+            yield [$studentView ? __('Actual payment') : 'Actual payment', $studentView ? $references['payments'][$payment->id] : $payment->id, $payment->paid_at->setTimezone($statement['timezone'])->toDateTimeString(), $payment->amount_paid,
+                $package->currency, $payment->payment_method ?: ($studentView ? __('Manual payment') : 'Manual payment'), $payment->transaction_reference ?? ''];
         }
         foreach ($package->refunds->sortBy('refunded_at') as $refund) {
-            yield ['Actual refund', $studentView ? $references['refunds'][$refund->id] : $refund->id, $refund->refunded_at->setTimezone($statement['timezone'])->toDateTimeString(), $refund->amount_refunded, $package->currency, 'Original payment #'.($studentView ? $references['payments'][$refund->payment_record_id] : $refund->payment_record_id), ''];
+            yield [$studentView ? __('Actual refund') : 'Actual refund', $studentView ? $references['refunds'][$refund->id] : $refund->id, $refund->refunded_at->setTimezone($statement['timezone'])->toDateTimeString(), $refund->amount_refunded, $package->currency, $studentView ? __('Original payment #:reference', ['reference' => $references['payments'][$refund->payment_record_id]]) : 'Original payment #'.$refund->payment_record_id, ''];
         }
-        yield ['Balance due now', $purchaseNumber, now($statement['timezone'])->toDateTimeString(), $statement['summary']['balance_due'], $package->currency, '', ''];
-        yield ['Overpayment now', $purchaseNumber, now($statement['timezone'])->toDateTimeString(), $statement['summary']['overpaid'], $package->currency, '', ''];
+        yield [$studentView ? __('Balance due now') : 'Balance due now', $purchaseNumber, now($statement['timezone'])->toDateTimeString(), $statement['summary']['balance_due'], $package->currency, '', ''];
+        yield [$studentView ? __('Overpayment now') : 'Overpayment now', $purchaseNumber, now($statement['timezone'])->toDateTimeString(), $statement['summary']['overpaid'], $package->currency, '', ''];
     }
 }

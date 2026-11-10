@@ -39,10 +39,10 @@ class BookingController extends Controller
             'timezone' => app(TimezoneService::class)->isValid(is_string($request->query('timezone')) ? $request->query('timezone') : null) ? $request->query('timezone') : $booking->customer_timezone,
             'meetingUrl' => $meetingLinks->studentUrl($booking),
             'noIndex' => true,
-            'isFallback' => app()->getLocale() !== 'en',
-            'contentLocale' => 'en',
+            'isFallback' => false,
+            'contentLocale' => app()->getLocale(),
             'entityLocales' => [],
-            'title' => $booking->studentStatusLabel().' — #'.substr($booking->confirmation_token, 0, 8),
+            'title' => __($booking->studentStatusLabel()).' — #'.substr($booking->confirmation_token, 0, 8),
         ]);
     }
 
@@ -54,6 +54,7 @@ class BookingController extends Controller
             ->firstOrFail();
 
         abort_if($booking->end_at_utc->copy()->addDays(7)->isPast(), 410, 'This calendar link has expired.');
+        abort_unless($booking->status === 'confirmed', 404);
 
         $icsContent = $icsGenerator->generate($booking);
 

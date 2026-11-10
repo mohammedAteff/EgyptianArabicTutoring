@@ -1,3 +1,4 @@
+import { uiText } from './ui-translations.js';
 export function bookmarkSeconds(media) {
     const duration = Number(media.duration);
     const current = Number(media.currentTime);
@@ -27,12 +28,12 @@ function initialize() {
             if (!video || !button || !status) return;
             const update = () => {
                 button.disabled = bookmarkSeconds(video) === null;
-                status.textContent = button.disabled ? 'A timestamp needs a playable video with a known duration.' : 'Save the current video time to your private bookmarks.';
+                status.textContent = button.disabled ? uiText('A timestamp needs a playable video with a known duration.') : uiText('Save the current video time to your private bookmarks.');
             };
             ['loadedmetadata', 'durationchange', 'timeupdate'].forEach(event => video.addEventListener(event, update));
             video.addEventListener('error', () => {
                 button.disabled = true;
-                status.textContent = 'This video could not be loaded. Try again later.';
+                status.textContent = uiText('This video could not be loaded. Try again later.');
             });
             button.addEventListener('click', () => {
                 const seconds = bookmarkSeconds(video);
@@ -49,19 +50,19 @@ function initialize() {
             const seek = () => {
                 try {
                     if (!seekBookmark(video, button.dataset.lmsJumpPosition)) {
-                        status.textContent = 'This saved timestamp is unavailable in the current video.';
+                        status.textContent = uiText('This saved timestamp is unavailable in the current video.');
                         return;
                     }
                     video.scrollIntoView({block: 'center'});
                     video.focus();
-                    status.textContent = 'Video moved to your saved moment.';
+                    status.textContent = uiText('Video moved to your saved moment.');
                 } catch {
-                    status.textContent = 'This video cannot seek to the saved moment yet.';
+                    status.textContent = uiText('This video cannot seek to the saved moment yet.');
                 }
             };
             if (video.readyState >= 1) seek();
             else {
-                status.textContent = 'Waiting for the video to load…';
+                status.textContent = uiText('Waiting for the video to load…');
                 video.addEventListener('loadedmetadata', seek, {once: true});
             }
         }));

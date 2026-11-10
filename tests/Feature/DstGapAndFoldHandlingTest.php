@@ -180,6 +180,7 @@ class DstGapAndFoldHandlingTest extends TestCase
 
     public function test_slot_presentation_disambiguates_repeated_times_during_dst_fold(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-31 08:00:00', 'UTC'));
         // Tutor available Sunday 04:00 to 10:00 in Cairo (which corresponds to 01:00 to 07:00 UTC)
         AvailabilityRule::create([
             'weekday' => 0, // Sunday

@@ -20,7 +20,7 @@ class StudentSchedulingService
     {
         if (StudentUnavailability::query()->where('student_id', $studentId)->where('status', 'active')
             ->where('starts_at_utc', '<', $end)->where('ends_at_utc', '>', $start)->exists()) {
-            throw new SlotUnavailableException('This time overlaps your recorded unavailability.');
+            throw new SlotUnavailableException(__('This time overlaps your recorded unavailability.'));
         }
     }
 
@@ -39,10 +39,10 @@ class StudentSchedulingService
             $start = $timezones->resolveLocalWallTime($values['date_from'].' 00:00:00', $values['timezone'], 'first');
             $end = $timezones->resolveLocalWallTime($nextDate.' 00:00:00', $values['timezone'], 'first');
         } catch (SlotUnavailableException) {
-            throw ValidationException::withMessages(['date_from' => 'A date boundary does not exist in this timezone because of a clock change. Choose another date or timezone.']);
+            throw ValidationException::withMessages(['date_from' => __('A date boundary does not exist in this timezone because of a clock change. Choose another date or timezone.')]);
         }
         if ($end->diffInDays($start, true) > 367) {
-            throw ValidationException::withMessages(['date_to' => 'Use a period of at most one year.']);
+            throw ValidationException::withMessages(['date_to' => __('Use a period of at most one year.')]);
         }
         $fingerprint = hash('sha256', json_encode($values, JSON_THROW_ON_ERROR));
 
@@ -82,7 +82,7 @@ class StudentSchedulingService
         ])->validate();
         OperationalReasonCatalog::validate($values['reason_code'] ?? null);
         if (CarbonImmutable::parse($values['date_from'])->diffInDays(CarbonImmutable::parse($values['date_to'])) > 90) {
-            throw ValidationException::withMessages(['date_to' => 'Waitlist interests cover at most 90 days.']);
+            throw ValidationException::withMessages(['date_to' => __('Waitlist interests cover at most 90 days.')]);
         }
         $fingerprint = hash('sha256', json_encode($values, JSON_THROW_ON_ERROR));
 
@@ -95,7 +95,7 @@ class StudentSchedulingService
                 return $existing;
             }
             if (BookingWaitlist::query()->where('student_id', $student->id)->whereIn('status', ['open', 'contacted'])->count() >= 5) {
-                throw ValidationException::withMessages(['date_from' => 'Keep at most five open preferences. Withdraw an older preference first.']);
+                throw ValidationException::withMessages(['date_from' => __('Keep at most five open preferences. Withdraw an older preference first.')]);
             }
             $record = BookingWaitlist::query()->create(array_merge($values, ['student_id' => $student->id, 'fingerprint' => $fingerprint]));
             if ($administratorId === null) {
@@ -153,7 +153,7 @@ class StudentSchedulingService
     private function assertReplay(int $owner, int $studentId, string $existing, string $fingerprint): void
     {
         if ($owner !== $studentId || ! hash_equals($existing, $fingerprint)) {
-            throw ValidationException::withMessages(['idempotency_key' => 'This request key was already used for different details.']);
+            throw ValidationException::withMessages(['idempotency_key' => __('This request key was already used for different details.')]);
         }
     }
 }

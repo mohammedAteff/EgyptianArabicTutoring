@@ -1,27 +1,36 @@
-
 @extends('layouts.public')
+@section('body-class', 'studio-games-page')
 @section('content')
 <x-public-english-fallback :is-fallback="$isFallback ?? false" />
-<div lang="{{ $copyLocale ?? 'en' }}" class="mx-auto max-w-6xl space-y-14 px-4 py-12 sm:px-6 lg:px-8">
+@php($resourcesUrl = website_link('games', 'resources', localized_url('resources')))
+<div class="games-page" lang="{{ $copyLocale ?? 'en' }}">
     @foreach(config('public_content.games') as $index => $section)
         @if(! ($section['_visible'] ?? true)) @continue @endif
-        <section class="space-y-7">
-            <x-public-copy-section :section="$section" :level="$index === 0 ? 1 : 2" />
+        <section @class(['games-section', 'games-intro' => $index === 0, 'games-library' => $index === 1, 'games-benefits' => $index === 2, 'games-resources' => $index === 3]) id="games-section-{{ $index }}">
+            <x-public-copy-section class="games-copy" :section="$index === 2 ? array_replace($section, ['extra_content' => '']) : $section" :level="$index === 0 ? 1 : 2" :show-blocks="$index !== 2" />
+            @if($index === 0 && (config('public_content.games.1._visible') ?? true))
+                <a href="#games-section-1" class="studio-link games-jump">{{ website_text('games', 'Jump to games') }}<x-public-studio-icon name="arrow" class="studio-link-arrow" /></a>
+            @endif
             @if($index === 1)
+                @unless($hasAvailableGames)
+                    <div class="games-empty">
+                        <h3>{{ website_text('games', 'New challenges are on their way.') }}</h3>
+                        <p>{{ website_text('games', 'There aren\'t any games available at the moment. In the meantime, explore our Arabic learning resources.') }}</p>
+                        <a href="{{ $resourcesUrl }}" class="studio-link">{{ website_text('games', 'Explore Arabic Resources') }}<x-public-studio-icon name="arrow" class="studio-link-arrow" /></a>
+                    </div>
+                @endunless
                 @if($games->isNotEmpty())
-                    <div class="grid gap-6 sm:grid-cols-2">@foreach($games as $game)<x-public-game-card :game="$game" />@endforeach</div>
-                    @if($games->contains(fn ($game) => $game->status === 'available' && str_contains((string) $game->target_url, '/6word')))
-                        <div class="rounded-2xl border border-stone-200 bg-white p-7">
-                            <h3 class="text-2xl font-bold">{{ config('public_content.game_feature.heading') }}</h3>
-                            @foreach(config('public_content.game_feature.paragraphs') as $paragraph)<p class="mt-4 leading-relaxed text-stone-600">{{ $paragraph }}</p>@endforeach
-                            <ul class="mt-6 list-disc space-y-3 pl-5 text-stone-600">@foreach(config('public_content.game_feature.features') as $feature)<li>{{ $feature }}</li>@endforeach</ul>
-                        </div>
-                    @endif
-                @else
-                    <div class="rounded-2xl border border-stone-200 bg-white p-8"><h3 class="text-xl font-bold">{{ website_text('games', 'New challenges are on their way.') }}</h3><p class="mt-3 text-stone-600">{{ website_text('games', 'There aren\'t any games available at the moment. In the meantime, explore our Arabic learning resources.') }}</p></div>
+                    <div class="games-grid">
+                        @foreach($games as $game)
+                            <x-games-library-game :game="$game" :wide="$game->id === $wideGameId" :spotlight="$game->id === $featuredGameId" :priority="$loop->first" :copy-locale="$copyLocale ?? 'en'" />
+                        @endforeach
+                    </div>
                 @endif
+            @elseif($index === 2)
+                <x-games-benefits :blocks="$section['blocks']" />
+                @if(!empty($section['extra_content']))<div class="games-extra article-copy">{!! app(\App\Domains\CMS\Services\RichTextSanitizer::class)->sanitize($section['extra_content']) !!}</div>@endif
             @elseif($index === 3)
-                <a href="{{ website_link('games', 'resources', localized_url('resources')) }}" class="inline-flex rounded-xl bg-nile-900 px-6 py-3 font-bold text-white">{{ website_text('games', 'Explore Arabic Resources') }}</a>
+                <a href="{{ $resourcesUrl }}" class="studio-link">{{ website_text('games', 'Explore Arabic Resources') }}<x-public-studio-icon name="arrow" class="studio-link-arrow" /></a>
             @endif
         </section>
     @endforeach

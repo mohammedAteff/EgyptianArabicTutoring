@@ -3,6 +3,10 @@
 namespace App\Domains\CMS\Services;
 
 use DOMDocument;
+use DOMElement;
+use DOMXPath;
+use HTMLPurifier_AttrDef_Lang;
+use HTMLPurifier_Config;
 use Illuminate\Support\Facades\URL;
 use Mews\Purifier\Purifier;
 
@@ -35,6 +39,62 @@ class RichTextSanitizer
             'URI.AllowedSchemes' => ['http' => true, 'https' => true, 'mailto' => true],
             'Attr.EnableID' => false,
         ]);
+    }
+
+    public function sanitizeLesson(string $html): string
+    {
+        $textElements = ['h1', 'h2', 'h3', 'h4', 'p', 'b', 'i', 'strong', 'em', 'span', 'ul', 'ol', 'li', 'blockquote'];
+        $allowed = implode(',', array_map(fn (string $element): string => $element.'[dir|lang]', $textElements));
+        $clean = (string) $this->purifier->clean($html, [
+            'HTML.Allowed' => $allowed.',a[href|title],br',
+            'HTML.DefinitionID' => 'student-lesson-direction',
+            'HTML.DefinitionRev' => 1,
+            'AutoFormat.AutoParagraph' => true,
+            'URI.AllowedSchemes' => ['http' => true, 'https' => true, 'mailto' => true],
+            'Attr.EnableID' => false,
+        ], function (HTMLPurifier_Config $config) use ($textElements): void {
+            if ($definition = $config->maybeGetRawHTMLDefinition()) {
+                foreach ($textElements as $element) {
+                    $definition->addAttribute($element, 'dir', 'Enum#ltr,rtl,auto');
+                    $definition->addAttribute($element, 'lang', new HTMLPurifier_AttrDef_Lang);
+                }
+            }
+        });
+
+        $document = new DOMDocument('1.0', 'UTF-8');
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $document->loadHTML('<?xml encoding="UTF-8">'.$clean, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new DOMXPath($document);
+            $unannotated = $xpath->query('//p[not(@dir)] | //h1[not(@dir)] | //h2[not(@dir)] | //h3[not(@dir)] | //h4[not(@dir)] | //li[not(@dir)] | //blockquote[not(@dir)]');
+            $independent = [];
+            foreach ($unannotated as $element) {
+                if (! $element instanceof DOMElement) {
+                    continue;
+                }
+                $ancestor = $element->parentNode;
+                while ($ancestor instanceof DOMElement && ! in_array($ancestor->getAttribute('dir'), ['ltr', 'rtl'], true)) {
+                    $ancestor = $ancestor->parentNode;
+                }
+                if (! $ancestor instanceof DOMElement) {
+                    $independent[] = $element;
+                }
+            }
+            foreach ($independent as $element) {
+                $element->setAttribute('dir', 'auto');
+            }
+
+            $body = $document->getElementsByTagName('body')->item(0);
+            $result = '';
+            foreach ($body->childNodes ?? [] as $child) {
+                $result .= $document->saveHTML($child);
+            }
+
+            return $result;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
     }
 
     private function removeNonStorageImages(string $html): string

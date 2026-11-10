@@ -185,12 +185,12 @@ class PhaseEVerificationTest extends TestCase
         Page::query()->whereIn('slug', ['privacy', 'terms'])->get()->each->delete();
 
         $privacy = $this->get('/privacy')->assertOk();
-        $privacy->assertSee('Authoritative policy unavailable');
+        $privacy->assertSeeText('The published privacy policy is not available yet. Please contact Abdallah directly for the current policy before submitting personal information.');
         $privacy->assertDontSee('No Third-Party Tracking Scripts');
         $privacy->assertDontSee('retained for a maximum of 180 days');
 
         $terms = $this->get('/terms')->assertOk();
-        $terms->assertSee('Authoritative terms unavailable');
+        $terms->assertSeeText('The published terms are not available yet. Please contact Abdallah directly for the current terms before booking.');
         $terms->assertDontSee('Rescheduling & Cancellation Policy');
         $terms->assertDontSee('24 hours prior');
     }

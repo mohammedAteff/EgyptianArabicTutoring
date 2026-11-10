@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domains\Analytics\Services\AnalyticsService;
+use App\Domains\CMS\Services\WebsiteCopyService;
 use App\Domains\Games\Models\Game;
 use App\Domains\Games\Services\GameTelemetryService;
 use Illuminate\Http\JsonResponse;
@@ -25,11 +26,25 @@ class GameController extends Controller
             ->orderBy('sort_order')
             ->get();
 
+        $availableGames = $games->where('status', 'available');
+        $featuredGame = $availableGames->firstWhere('featured', true);
+        $wideGame = $availableGames->count() === 1 ? $availableGames->first() : $featuredGame;
+        $entityLocales = ['en'];
+        foreach (['fr', 'de'] as $locale) {
+            if (app(WebsiteCopyService::class)->hasTranslation('games', $locale)
+                && $games->every(fn (Game $game): bool => $game->localizedContent($locale)['locale'] === $locale)) {
+                $entityLocales[] = $locale;
+            }
+        }
+
         return view('public.games.index', [
             'games' => $games,
+            'featuredGameId' => $featuredGame?->id,
+            'wideGameId' => $wideGame?->id,
+            'hasAvailableGames' => $availableGames->isNotEmpty(),
             'title' => 'Language Games',
-            'isFallback' => app()->getLocale() !== 'en',
-            'entityLocales' => ['en'],
+            'isFallback' => ! in_array(app()->getLocale(), $entityLocales, true),
+            'entityLocales' => $entityLocales,
         ]);
     }
 
@@ -49,17 +64,17 @@ class GameController extends Controller
             $previewGame->title = $draftRevision->title ?? $game->title;
             $previewGame->description = $draftRevision->content['description'] ?? $game->description;
             $previewGame->badge = $draftRevision->content['badge'] ?? $game->badge;
-            $previewGame->target_url = $draftRevision->content['target_url'] ?? $game->target_url;
+            $previewGame->target_url = array_key_exists('target_url', $draftRevision->content) ? $draftRevision->content['target_url'] : $game->target_url;
             $previewGame->thumbnail_path = $draftRevision->content['thumbnail_path'] ?? $game->thumbnail_path;
         } else {
             $previewGame = $game;
         }
 
-        if ($previewGame->target_url && $request->boolean('redirect')) {
+        if ($previewGame->isExternal() && $request->boolean('redirect')) {
             return redirect()->away($previewGame->target_url);
         }
 
-        return view('public.games.show', [
+        return view($previewGame->localView() ?? 'public.games.show', [
             'game' => $previewGame,
             'title' => '[PREVIEW] '.$previewGame->title,
             'isPreview' => true,
@@ -75,6 +90,7 @@ class GameController extends Controller
             ->firstOrFail();
 
         $resolved = $game->resolveTranslation();
+        $localized = $game->localizedContent();
 
         $visitorToken = $request->attributes->get('analytics_visitor_token')
             ?? ($request->hasSession() ? $request->session()->get('analytics_visitor_token') : null)
@@ -89,7 +105,7 @@ class GameController extends Controller
             metadata: [
                 'game_slug' => $game->slug,
                 'game_title' => $game->title,
-                'target_url' => $game->target_url,
+                'target_url' => $game->isExternal() ? $game->target_url : null,
             ],
             request: $request,
             visitorToken: $visitorToken,
@@ -97,17 +113,18 @@ class GameController extends Controller
             page: '/'.ltrim($request->path(), '/')
         );
 
-        if ($game->target_url) {
+        if ($game->isExternal()) {
             return redirect()->away($game->target_url);
         }
 
-        return view('public.games.show', [
+        return view($game->localView() ?? 'public.games.show', [
             'game' => $game,
             'translation' => $resolved['translation'],
-            'isFallback' => $resolved['is_fallback'],
+            'localized' => $localized,
+            'isFallback' => $localized['locale'] !== app()->getLocale(),
             'isStale' => $resolved['is_stale'],
             'entityLocales' => $game->getAvailableLocales(),
-            'title' => ($resolved['translation']->title ?? $game->title).' — Egyptian Arabic Game',
+            'title' => $localized['title'].' — '.__('Language Games'),
         ]);
     }
 
@@ -118,9 +135,9 @@ class GameController extends Controller
             ->available()
             ->firstOrFail();
 
-        $action = $request->input('action'); // 'game_started' or 'game_completed'
+        $action = $request->input('action');
 
-        if (! in_array($action, ['game_started', 'game_completed'], true)) {
+        if (! in_array($action, ['game_started', 'game_completed', 'game_activity', 'game_interrupted'], true)) {
             return response()->json(['error' => 'Invalid game action'], 422);
         }
 
@@ -137,9 +154,12 @@ class GameController extends Controller
             ?? ($request->hasSession() ? $request->session()->get('analytics_session_token') : null)
             ?? $request->cookie('_va_session');
 
-        $allowedKeys = $action === 'game_started'
-            ? ['level', 'attempt_id']
-            : ['score', 'total', 'duration_seconds', 'level', 'attempt_id'];
+        $allowedKeys = match ($action) {
+            'game_started' => ['level', 'attempt_id', 'ui_locale', 'practice_language', 'mode', 'reveal_seconds', 'content_source', 'contract_version'],
+            'game_completed' => ['score', 'total', 'duration_seconds', 'level', 'attempt_id', 'ending', 'skip_count', 'revealed_count', 'contract_version'],
+            'game_interrupted' => ['attempt_id', 'duration_seconds', 'reason', 'revealed_count', 'contract_version'],
+            'game_activity' => ['attempt_id', 'duration_seconds', 'sequence', 'contract_version'],
+        };
 
         $clientValues = [];
 
@@ -187,6 +207,16 @@ class GameController extends Controller
 
         $telemetry->validate($clientValues);
 
+        if (in_array($action, ['game_activity', 'game_interrupted'], true)) {
+            $request->validate(['metadata.attempt_id' => ['required_without:attempt_id', 'uuid']]);
+        }
+        if ($action === 'game_activity' && ! isset($clientValues['sequence'])) {
+            return response()->json(['error' => 'Activity sequence is required.'], 422);
+        }
+        if ($game->localView() && (isset($clientValues['score']) || isset($clientValues['total']))) {
+            return response()->json(['error' => 'This game does not collect scores.'], 422);
+        }
+
         $this->analyticsService->track(
             eventName: $action,
             metadata: $metadata,
@@ -194,7 +224,7 @@ class GameController extends Controller
             visitorToken: $visitorToken,
             sessionToken: $sessionToken,
             page: '/'.ltrim($request->path(), '/'),
-            eventUuid: $telemetry->eventIdentity($request, $game, $action, $clientValues['attempt_id'] ?? null)
+            eventUuid: $telemetry->eventIdentity($request, $game, $action, $clientValues['attempt_id'] ?? null, isset($clientValues['sequence']) ? (int) $clientValues['sequence'] : null)
         );
 
         return response()->json(['status' => 'tracked', 'action' => $action]);

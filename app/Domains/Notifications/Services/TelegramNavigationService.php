@@ -5,6 +5,9 @@ namespace App\Domains\Notifications\Services;
 use App\Domains\Notifications\Models\TelegramBot;
 use App\Domains\Notifications\Models\TelegramDestination;
 use App\Domains\Reporting\Services\ReportPeriod;
+use App\Domains\Reporting\Services\StudentInsightsContext;
+use App\Domains\Reporting\Services\StudentInsightsReadModel;
+use App\Domains\Students\Models\Student;
 use App\Domains\Timezone\Services\TimezoneService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -21,7 +24,7 @@ class TelegramNavigationService
     public function state(string $command, string $argument): array
     {
         $state = ['command' => $command, 'range' => '7d', 'page' => 0];
-        if ($command === 'student') {
+        if (in_array($command, ['student', 'insights'], true)) {
             $state['query'] = $argument;
         } elseif (in_array($command, ['stats', 'games', 'resources', 'money'], true)) {
             if ($argument !== '') {
@@ -47,15 +50,26 @@ class TelegramNavigationService
     {
         $command = $state['command'];
         $personal = $destination->detail_level === 'personal';
-        if (! $personal && in_array($command, ['student', 'money', 'brief', 'wrap'], true)) {
+        if (! $personal && in_array($command, TelegramCommandCatalog::PERSONAL_COMMANDS, true)) {
             $page = ['text' => $command === 'student' ? 'Student lookups require a trusted personal-detail destination.' : 'This report requires a trusted personal-detail destination.', 'buttons' => []];
         } elseif (in_array($command, ['start', 'help'], true)) {
             $page = ['text' => '<b>🏠 Business dashboard</b>'."\n".e(app(TimezoneService::class)->getBusinessTimezone())."\n\nChoose what you need.".($command === 'help' ? "\n\nFind a student: /student name\nReports: today, yesterday, 7d, 30d, or two dates.\nExample: /stats 2026-10-01 2026-10-14\nUp to 90 days, ending today or earlier.\n\nEnable more options in the website Telegram settings." : ''), 'buttons' => []];
             foreach ($this->catalog->all() as $name => $label) {
-                if ($this->catalog->allows($bot, $name) && ($personal || ! in_array($name, ['student', 'money', 'brief', 'wrap'], true))) {
+                if ($this->catalog->allows($bot, $name) && ($personal || ! in_array($name, TelegramCommandCatalog::PERSONAL_COMMANDS, true))) {
                     $page['buttons'][] = ['label' => $label, 'command' => $name, 'state' => in_array($name, ['games', 'resources'], true) ? ['section' => $name] : []];
                 }
             }
+            if ($command === 'help' && $personal) {
+                foreach (['feedback' => '/feedback — Student Feedback inbox and status filters.', 'insights' => '/insights — Student Insights. Find a student: /insights name.'] as $name => $description) {
+                    if ($this->catalog->allows($bot, $name)) {
+                        $page['text'] .= "\n".$description;
+                    }
+                }
+            }
+        } elseif ($command === 'feedback') {
+            $page = $this->feedback();
+        } elseif ($command === 'insights') {
+            $page = $this->insights($state, $destination->type === 'private');
         } elseif (in_array($command, ['stats', 'games', 'resources', 'money'], true)) {
             [$start, $end] = $this->bounds($state);
             if (! empty($state['period_picker'])) {
@@ -79,6 +93,16 @@ class TelegramNavigationService
             }
         } elseif ($command === 'student') {
             $page = $this->business->student($state);
+            $selected = collect($page['buttons'])->first(fn (array $button): bool => isset($button['state']['id']));
+            if (isset($selected['state']['id']) && collect($page['buttons'])->contains('label', 'Open student')) {
+                $studentId = (int) $selected['state']['id'];
+                if ($this->catalog->allows($bot, 'feedback')) {
+                    $page['buttons'][] = ['label' => 'Student Feedback', 'url' => route('admin.feedback.index', ['student_id' => $studentId])];
+                }
+                if ($this->catalog->allows($bot, 'insights') && app(StudentInsightsReadModel::class)->population($studentId)->exists()) {
+                    $page['buttons'][] = ['label' => 'Student Insights', 'url' => route('admin.student-insights.index', $this->insightsFilters($state) + ['student_id' => $studentId])];
+                }
+            }
         } elseif ($command === 'attention') {
             $page = $this->business->attention($personal, (string) ($state['category'] ?? ''), (int) ($state['page'] ?? 0), (bool) ($state['include_clear'] ?? false));
         } elseif ($command === 'status') {
@@ -107,7 +131,11 @@ class TelegramNavigationService
             if (! $this->catalog->allows($bot, $target)) {
                 continue;
             }
-            $base = $target === $command ? $state : array_intersect_key($state, array_flip(['range', 'start_date', 'end_date']));
+            $contextKeys = ['range', 'start_date', 'end_date'];
+            if ($command === 'insights' || $target === 'insights') {
+                $contextKeys[] = 'timezone';
+            }
+            $base = $target === $command ? $state : array_intersect_key($state, array_flip($contextKeys));
             $next = array_replace($base, $button['state'] ?? [], ['command' => $target]);
             $token = Str::random(32);
             $context = ['bot' => $bot->id, 'destination' => $destination->id, 'user' => $user, 'state' => $next];
@@ -135,6 +163,63 @@ class TelegramNavigationService
         }
 
         return ['text' => $page['text'], 'reply_markup' => ['inline_keyboard' => $rows]];
+    }
+
+    /** @return array{text: string, buttons: list<array<string, mixed>>} */
+    private function feedback(): array
+    {
+        $buttons = [['label' => 'Feedback inbox ↗', 'url' => route('admin.feedback.index')]];
+        foreach (['open' => 'Open conversations', 'waiting_student' => 'Waiting for the student', 'resolved' => 'Resolved conversations', 'closed' => 'Closed conversations'] as $status => $label) {
+            $buttons[] = ['label' => $label.' ↗', 'url' => route('admin.feedback.index', ['status' => $status])];
+        }
+
+        return ['text' => '<b>💬 Student Feedback</b>'."\n\nOpen the authenticated website to read and manage conversations. Opening this menu does not mark conversations as read.", 'buttons' => $buttons];
+    }
+
+    /** @param array<string, mixed> $state
+     * @return array{text: string, buttons: list<array<string, mixed>>} */
+    private function insights(array $state, bool $private): array
+    {
+        $filters = $this->insightsFilters($state);
+        if ($private && (isset($state['id']) || ! empty($state['query']))) {
+            $page = $this->business->student($state, function (Student $student) use ($filters): array {
+                if (! app(StudentInsightsReadModel::class)->population($student->id)->exists()) {
+                    return ['text' => 'Student unavailable. Use /insights to search again.', 'buttons' => []];
+                }
+
+                return ['text' => '<b>📖 Student Insights</b>'."\n\nOpen the selected student's recorded educational activity in the authenticated website. Estimated activity, where available, is partial and is not a measure of proficiency, attention or productivity.",
+                    'buttons' => [['label' => 'Student Insights ↗', 'url' => route('admin.student-insights.index', $filters + ['student_id' => $student->id])]]];
+            });
+            $page['text'] = str_replace('Use /student to search again.', 'Use /insights to search again.', $page['text']);
+            $page['buttons'][] = ['label' => '← Student Insights', 'state' => ['id' => null, 'query' => null, 'find_student' => false], 'row' => 'back'];
+
+            return $page;
+        }
+
+        $buttons = [['label' => 'Student Insights overview ↗', 'url' => route('admin.student-insights.index', $filters)]];
+        if ($private) {
+            $buttons[] = ['label' => 'Find student', 'state' => ['find_student' => true]];
+            if (! empty($state['find_student'])) {
+                $buttons[] = ['label' => '← Student Insights', 'state' => ['find_student' => false], 'row' => 'back'];
+            }
+        }
+
+        return ['text' => '<b>📖 Student Insights</b>'."\n\n".($private ? (! empty($state['find_student']) ? 'Send /insights followed by all or part of the student’s name.' : 'View recorded educational activity in the authenticated website. Find a student: /insights name.') : 'View recorded educational activity in the authenticated website. Student search is available in a private personal-detail destination.'),
+            'buttons' => $buttons];
+    }
+
+    /** @param array<string, mixed> $state
+     * @return array<string, mixed> */
+    private function insightsFilters(array $state): array
+    {
+        $filters = array_intersect_key($state, array_flip(['range', 'start_date', 'end_date', 'timezone']));
+        if (($filters['range'] ?? null) === 'yesterday') {
+            $timezone = $filters['timezone'] ?? app(TimezoneService::class)->getBusinessTimezone();
+            $date = CarbonImmutable::yesterday($timezone)->toDateString();
+            $filters = ['range' => 'custom', 'start_date' => $date, 'end_date' => $date, 'timezone' => $timezone];
+        }
+
+        return array_filter(StudentInsightsContext::fromRequest(Request::create('/', 'GET', $filters), null, true)->filters(), fn (mixed $value): bool => $value !== null);
     }
 
     /** @return array<string, mixed>|null */

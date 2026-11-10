@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use RuntimeException;
 
 if (! class_exists('Symfony\Component\DomCrawler\Crawler')) {
@@ -19,6 +20,14 @@ if (! class_exists('Symfony\Component\DomCrawler\Crawler')) {
 abstract class TestCase extends BaseTestCase
 {
     private static ?string $databaseStrategy = null;
+
+    protected function acceptanceOutputPath(string $name): string
+    {
+        $directory = getenv('ACCEPTANCE_OUTPUT_DIRECTORY') ?: storage_path('acceptance-output');
+        File::ensureDirectoryExists($directory, 0700);
+
+        return $directory.'/'.$name;
+    }
 
     protected function setUpTraits(): array
     {

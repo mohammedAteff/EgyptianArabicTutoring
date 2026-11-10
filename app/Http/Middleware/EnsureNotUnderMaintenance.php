@@ -84,9 +84,22 @@ class EnsureNotUnderMaintenance
             app(OperationFailureReporter::class)->report($e, 'track_maintenance_visit');
         }
 
-        $view = 'errors.503';
+        $maintenanceMessage = null;
+        try {
+            $configuredMessage = Setting::get('maintenance_message');
+            if (is_string($configuredMessage) && trim($configuredMessage) !== '') {
+                $maintenanceMessage = $configuredMessage;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Optional maintenance message lookup failed; using the default message.', [
+                'exception' => $e,
+            ]);
+        }
 
-        $response = response()->view($view, ['title' => 'Under Scheduled Maintenance'], 503);
+        $response = response()->view('errors.503', [
+            'maintenanceContext' => true,
+            'maintenanceMessage' => $maintenanceMessage,
+        ], 503);
         $token = $request->attributes->get('analytics_maintenance_visitor_token');
         if (is_string($token) && $token !== $request->cookie('_va_visitor')) {
             $response->withCookie(cookie('_va_visitor', $token, 60 * 24 * 365, '/', null, $request->isSecure() || app()->isProduction(), false, false, 'Lax'));

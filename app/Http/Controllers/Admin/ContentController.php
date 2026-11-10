@@ -206,6 +206,7 @@ class ContentController extends Controller
             'socials.*.enabled' => ['nullable', 'boolean'],
             'socials.*.show_in_banner' => ['sometimes', 'boolean'],
             'socials.*.show_in_footer' => ['sometimes', 'boolean'],
+            'socials.*.show_in_floating' => ['sometimes', 'boolean'],
             'socials.*.sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
         ]);
 
@@ -224,6 +225,7 @@ class ContentController extends Controller
                     'enabled' => (bool) ($data['enabled'] ?? false),
                     'show_in_banner' => (bool) ($data['show_in_banner'] ?? $link->show_in_banner),
                     'show_in_footer' => (bool) ($data['show_in_footer'] ?? $link->show_in_footer),
+                    'show_in_floating' => (bool) ($data['show_in_floating'] ?? $link->show_in_floating),
                     'sort_order' => (int) $data['sort_order'],
                 ]);
             }

@@ -255,7 +255,7 @@ class TranslationService
      */
     private function sanitizeTranslatableData(Faq|Page|Game|\App\Domains\Resources\Models\Resource|ResourceCategory $entity, array $translatableData): array
     {
-        if ($entity->getEntityType() === 'page' && array_key_exists('content', $translatableData)) {
+        if ($entity->getEntityType() === 'page' && ! in_array($entity->slug, ['terms', 'privacy'], true) && array_key_exists('content', $translatableData)) {
             $translatableData['content'] = $this->sanitizer->sanitize((string) $translatableData['content']);
         }
 

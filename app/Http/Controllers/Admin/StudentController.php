@@ -156,7 +156,8 @@ class StudentController extends Controller
                 'version.form:id,title,slug',
                 'answers' => fn ($query) => $query->select(['id', 'form_submission_id', 'form_question_id', 'value_text'])
                     ->when($isAssistant, fn ($answers) => $answers->whereHas('question', fn ($questions) => $questions->where('assistant_visible', true))),
-                'answers.question:id,label,assistant_visible',
+                'answers.question:id,label,question_type,assistant_visible',
+                'answers.question.options',
             ])
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')

@@ -50,7 +50,7 @@ class LmsTeachingTimeline
             }
         };
         foreach (Booking::query()->where('student_id', $student->id)->where('status', 'completed')->whereNotNull('completed_at')->orderByDesc('completed_at')->limit(20)->get() as $booking) {
-            $add('session:'.$booking->id.':delivered', $booking->completed_at, 'Session delivered', 'Tutoring session #'.$booking->id);
+            $add('session:'.$booking->id.':delivered', $booking->completed_at, 'Session delivered', $staff ? 'Tutoring session #'.$booking->id : __('Tutoring session #:reference', ['reference' => $booking->id]));
         }
         $resources = ResourceAssignment::query()->where('student_id', $student->id)->where('student_visible', true)
             ->whereHas('resource', fn ($query) => $query->published())
@@ -93,14 +93,15 @@ class LmsTeachingTimeline
             if (! $block || $block->kind !== $kind || $evidence->definition_hash !== $this->definitions->hash($block->payload ?? []) || (! $staff && ($block->status !== 'ready' || ! ($overview['states'][$block->lesson_id]['allowed'] ?? false)))) {
                 continue;
             }
-            $detail = $block->payload['title'] ?? ucfirst($kind);
+            $detail = $block->payload['title'] ?? ($staff ? ucfirst($kind) : __(ucfirst($kind)));
             if ($kind === 'quiz') {
                 $add('quiz:'.$evidence->id.':passed', $evidence->graded_at ?? $evidence->updated_at, 'Quiz passed', $detail);
             } else {
                 $add('assignment:'.$evidence->id.':submitted', $evidence->created_at, 'Assignment submitted', $detail);
                 if (in_array($evidence->status, ['under_review', 'needs_revision', 'approved'], true)) {
                     $reviewedAt = $evidence->reviewed_at ?? $evidence->updated_at;
-                    $add('assignment:'.$evidence->id.':review:'.$evidence->status.':'.$reviewedAt?->toIso8601String(), $reviewedAt, 'Assignment reviewed', $detail.' · '.str_replace('_', ' ', $evidence->status));
+                    $status = str_replace('_', ' ', $evidence->status);
+                    $add('assignment:'.$evidence->id.':review:'.$evidence->status.':'.$reviewedAt?->toIso8601String(), $reviewedAt, 'Assignment reviewed', $detail.' · '.($staff ? $status : __(ucfirst($status))));
                 }
             }
         }

@@ -1,5 +1,9 @@
 import './analytics-telemetry.js';
+import './estimated-activity.js';
 import './game-telemetry.js';
+import './public-clock.js';
+import './faq.js';
+import './legal.js';
 
 import './form-builder.js';
 import './clipboard.js';
@@ -7,6 +11,12 @@ import './announcement-banner.js';
 
 import './staff-quick-actions.js';
 import './admin-navigation.js';
+import './tutor-work.js';
+import './student-shell.js';
+import './quick-notes.js';
+import './floating-social.js';
+import './student-sign-in.js';
+import './feedback.js';
 import './admin-ux.js';
 import './learning-player.js';
 import './protected-video.js';

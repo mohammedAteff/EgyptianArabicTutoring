@@ -226,6 +226,7 @@ class BookingWizard extends Component
                         $this->selectedSlotId = $savedState['selected_slot_id'] ?? null;
                         $this->selectedSlot = $savedState['selected_slot'] ?? null;
                         $this->currentStep = $savedState['current_step'] ?? 3;
+                        $this->refreshHeldSlotForTimezone($this->customerTimezone);
                     } else {
                         $this->holdId = null;
                         $this->holdToken = null;
@@ -235,9 +236,7 @@ class BookingWizard extends Component
                         $this->selectedSlotId = null;
                         $this->selectedSlot = null;
                         $this->currentStep = 2;
-                        if ($hold && ! $hold->expires_at->isFuture()) {
-                            $this->errorMessage = 'Your reserved slot has expired. Please select a time slot to continue.';
-                        }
+                        $this->clearBookingHoldState('Your reservation is no longer valid. Please choose a time again.');
                     }
                 } elseif (! empty($savedState['current_step'])) {
                     $this->currentStep = min($savedState['current_step'], 2);
@@ -298,14 +297,16 @@ class BookingWizard extends Component
             ->where('session_token', session()->getId())
             ->first();
 
-        if (! $hold
-            || $hold->status !== 'active'
-            || ! $hold->expires_at->isFuture()
-            || ! $this->selectedSlotStartUtc
-            || ! $this->selectedSlotEndUtc
-            || $hold->slot_start_utc->toDateTimeString() !== $this->selectedSlotStartUtc
-            || $hold->slot_end_utc->toDateTimeString() !== $this->selectedSlotEndUtc) {
-            $this->clearBookingHoldState('Your reservation has expired or is no longer valid. Please select a time slot again.');
+        try {
+            $hold = app(BookingHoldService::class)->validateOwnedHold(
+                $this->holdId, $this->holdToken, $this->visitorToken, session()->getId(),
+                $this->selectedSessionTypeId, $this->selectedSlotStartUtc, $this->selectedSlotEndUtc,
+            );
+        } catch (SlotUnavailableException) {
+            if ($hold) {
+                $this->releaseOwnedHold($hold);
+            }
+            $this->clearBookingHoldState('Your reservation has expired or is no longer valid. Please choose a time again.');
 
             return;
         }
@@ -386,6 +387,7 @@ class BookingWizard extends Component
         $this->selectedSlotStartUtc = null;
         $this->selectedSlotEndUtc = null;
         $this->selectedSlotId = null;
+        $this->selectedDate = null;
         $this->currentStep = 2;
         $this->errorMessage = $message;
 
@@ -396,6 +398,7 @@ class BookingWizard extends Component
             'active_booking_slot_end_utc',
             'active_booking_session_type_id',
         ]);
+        $this->syncSessionState();
     }
 
     public function selectSession(int $id): void
@@ -406,34 +409,43 @@ class BookingWizard extends Component
             return;
         }
 
+        if ($this->holdId && ($hold = BookingHold::query()->find($this->holdId))) {
+            $this->releaseOwnedHold($hold);
+        }
+        $this->clearBookingHoldState('');
         $this->selectedSessionTypeId = $id;
         $this->selectedSlot = null;
         $this->selectedSlotStartUtc = null;
         $this->selectedSlotEndUtc = null;
         $this->selectedSlotId = null;
         $this->currentStep = 2;
+        $this->errorMessage = null;
+        $this->syncSessionState();
     }
 
     public function previousMonth(): void
     {
-        $current = CarbonImmutable::createFromFormat('Y-m', $this->calendarMonth, $this->customerTimezone);
+        $current = $this->displayedMonth();
         $minMonth = CarbonImmutable::now($this->customerTimezone)->startOfMonth();
 
         if ($current->greaterThan($minMonth)) {
             $this->calendarMonth = $current->subMonth()->format('Y-m');
             $this->selectedDate = null;
+            $this->errorMessage = null;
+            $this->syncSessionState();
         }
     }
 
     public function nextMonth(): void
     {
-        $current = CarbonImmutable::createFromFormat('Y-m', $this->calendarMonth, $this->customerTimezone);
-        $maxHorizonDays = (int) (AvailabilityRule::query()->where('enabled', true)->max('max_horizon_days') ?: Setting::get('booking_max_horizon_days', 60));
-        $maxMonth = CarbonImmutable::now($this->customerTimezone)->addDays($maxHorizonDays)->endOfMonth();
+        $current = $this->displayedMonth();
+        $maxMonth = $this->lastBookableMonth();
 
-        if ($current->lessThan($maxMonth)) {
+        if ($current->addMonth()->lessThanOrEqualTo($maxMonth)) {
             $this->calendarMonth = $current->addMonth()->format('Y-m');
             $this->selectedDate = null;
+            $this->errorMessage = null;
+            $this->syncSessionState();
         }
     }
 
@@ -443,9 +455,25 @@ class BookingWizard extends Component
             return;
         }
 
+        $month = $this->displayedMonth();
+        $sessionType = SessionType::query()->publicBookable()->find($this->selectedSessionTypeId);
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
+            || ! str_starts_with($date, $this->calendarMonth.'-')
+            || $date < now($this->customerTimezone)->toDateString()
+            || ! $sessionType
+            || empty(app(BookingSlotPresenter::class)->forMonth(
+                $sessionType, $this->customerTimezone, $month, $month->endOfMonth(), $this->visitorToken,
+            )[$date])) {
+            $this->selectedDate = null;
+            $this->errorMessage = 'That date has no available times. Please choose another available date.';
+            $this->syncSessionState();
+
+            return;
+        }
+
         $this->selectedDate = $date;
-        $this->calendarMonth = CarbonImmutable::createFromFormat('!Y-m-d', $date, $this->customerTimezone)->format('Y-m');
         $this->errorMessage = null;
+        $this->syncSessionState();
     }
 
     public function selectSlot(string $slotId): void
@@ -481,6 +509,10 @@ class BookingWizard extends Component
             );
             $startUtc = $slotData['slot_start_utc'];
             $endUtc = $slotData['slot_end_utc'];
+            if ($this->currentStep !== 2 || ($this->selectedDate !== null && $slotData['customer_date'] !== $this->selectedDate)
+                || ! str_starts_with($slotData['customer_date'], $this->calendarMonth.'-')) {
+                throw new SlotUnavailableException('Please choose a time from the selected date.');
+            }
             $this->selectedDate = $slotData['customer_date'];
 
             $aVisitor = $this->analyticsVisitorToken ?? session('analytics_visitor_token') ?? request()->cookie('_va_visitor');
@@ -534,18 +566,17 @@ class BookingWizard extends Component
         }
 
         $this->errorMessage = null;
-        DB::transaction(function (): void {
-            $hold = BookingHold::query()
-                ->where('hold_token', $this->holdToken)
-                ->where('visitor_token', $this->visitorToken)
-                ->where('session_token', session()->getId())
-                ->where('status', 'active')->where('expires_at', '>', now())
-                ->lockForUpdate()->first();
-            if ($hold) {
-                $hold->lead_details = ['name' => $this->name, 'email' => $this->email, 'phone' => $this->phone];
-                $hold->save();
-            }
-        });
+        try {
+            app(BookingHoldService::class)->validateOwnedHold(
+                $this->holdId, $this->holdToken, $this->visitorToken, session()->getId(),
+                $this->selectedSessionTypeId, $this->selectedSlotStartUtc, $this->selectedSlotEndUtc,
+                ['name' => $this->name, 'email' => $this->email, 'phone' => $this->phone],
+            );
+        } catch (SlotUnavailableException) {
+            $this->clearBookingHoldState('Your reservation has expired or is no longer valid. Please choose a time again.');
+
+            return;
+        }
         $this->currentStep = 4; // Step 4: Review
         $this->syncSessionState();
     }
@@ -608,8 +639,7 @@ class BookingWizard extends Component
 
         $sessionType = SessionType::publicBookable()->find($this->selectedSessionTypeId);
         if (! $sessionType || ! $this->selectedSlotId) {
-            $this->errorMessage = 'Incomplete booking details. Please select your time slot again.';
-            $this->currentStep = 2;
+            $this->clearBookingHoldState('Incomplete booking details. Please select your time slot again.');
 
             return;
         }
@@ -619,8 +649,7 @@ class BookingWizard extends Component
         $sessionToken = session()->getId();
 
         if (! $holdId || ! $holdToken) {
-            $this->errorMessage = 'Your reservation hold has expired or is missing. Please select a time slot again.';
-            $this->currentStep = 2;
+            $this->clearBookingHoldState('Your reservation hold has expired or is missing. Please select a time slot again.');
 
             return;
         }
@@ -677,8 +706,7 @@ class BookingWizard extends Component
             };
             $this->redirectRoute($confRoute, ['token' => $booking->confirmation_token]);
         } catch (SlotUnavailableException $e) {
-            $this->errorMessage = $e->getMessage();
-            $this->currentStep = 2; // return to slot selection
+            $this->clearBookingHoldState($e->getMessage());
         } catch (ConcurrentIdentityProvisioningException $e) {
             abort(429, $e->getMessage());
         } catch (StudentIdentityConflictException $e) {
@@ -737,8 +765,11 @@ class BookingWizard extends Component
     public function goToStep(int $step): void
     {
         $this->errorMessage = null;
-        if ($step < $this->currentStep) {
+        if ($step >= 1 && $step < $this->currentStep) {
             $this->currentStep = $step;
+            if ($this->holdId) {
+                $this->refreshHeldSlotForTimezone($this->customerTimezone);
+            }
             $this->syncSessionState();
         }
     }
@@ -826,6 +857,25 @@ class BookingWizard extends Component
         $this->redirect($targetUrl);
     }
 
+    private function lastBookableMonth(): CarbonImmutable
+    {
+        $horizonDays = (int) (AvailabilityRule::query()->where('enabled', true)->max('max_horizon_days') ?: Setting::get('booking_max_horizon_days', 60));
+
+        return CarbonImmutable::now($this->customerTimezone)->addDays($horizonDays)->startOfMonth();
+    }
+
+    private function displayedMonth(): CarbonImmutable
+    {
+        $minimum = CarbonImmutable::now($this->customerTimezone)->startOfMonth();
+        $month = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $this->calendarMonth)
+            ? CarbonImmutable::createFromFormat('!Y-m', $this->calendarMonth, $this->customerTimezone)
+            : $minimum;
+        $month = $month->max($minimum)->min($this->lastBookableMonth());
+        $this->calendarMonth = $month->format('Y-m');
+
+        return $month;
+    }
+
     public function render()
     {
         $sessionType = $this->selectedSessionTypeId
@@ -834,11 +884,19 @@ class BookingWizard extends Component
         $activeSessionTypes = SessionType::publicBookable()->orderByRaw("CASE WHEN slug = 'diagnostic-session' THEN 0 ELSE 1 END")->orderBy('duration_minutes')->orderBy('id')->get();
 
         $availableSlotsByDate = [];
+        $canViewNextMonth = false;
         if ($sessionType) {
-            $monthStart = CarbonImmutable::createFromFormat('!Y-m', $this->calendarMonth, $this->customerTimezone)->startOfMonth();
+            $monthStart = $this->displayedMonth();
             $availableSlotsByDate = app(BookingSlotPresenter::class)->forMonth(
                 $sessionType, $this->customerTimezone, $monthStart, $monthStart->endOfMonth(), $this->visitorToken,
             );
+            $canViewNextMonth = $monthStart->addMonth()->lessThanOrEqualTo($this->lastBookableMonth());
+        }
+        if ($this->currentStep === 2 && $this->selectedDate && ! $this->holdId
+            && (! str_starts_with($this->selectedDate, $this->calendarMonth.'-') || empty($availableSlotsByDate[$this->selectedDate]))) {
+            $this->selectedDate = null;
+            $this->errorMessage = 'No times remain on your selected date. Please choose another available date.';
+            $this->syncSessionState();
         }
         $preBookingQuestions = collect();
         if ($this->preBookingFormId && $this->initialPublishedVersionId) {
@@ -856,6 +914,7 @@ class BookingWizard extends Component
             'sessionType' => $sessionType,
             'activeSessionTypes' => $activeSessionTypes,
             'availableSlotsByDate' => $availableSlotsByDate,
+            'canViewNextMonth' => $canViewNextMonth,
             'preBookingQuestions' => $preBookingQuestions,
         ]);
     }

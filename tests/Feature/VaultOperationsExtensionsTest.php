@@ -118,7 +118,7 @@ class VaultOperationsExtensionsTest extends TestCase
     public function test_successful_authentication_records_only_date_and_preferred_timezone(): void
     {
         $student = Student::factory()->verified()->create(['preferred_timezone' => 'Asia/Tokyo']);
-        $this->post(route('student.login.submit'), ['date_of_birth' => $student->date_of_birth->toDateString(), 'name' => $student->name, 'email' => $student->email])->assertRedirect(route('student.dashboard'));
+        $this->post(route('student.login.submit'), ['date_of_birth' => $student->date_of_birth->toDateString(), 'name' => $student->name, 'email' => $student->email])->assertRedirect(route('student.home'));
         $login = StudentPortalLogin::query()->sole();
         $this->assertSame($student->id, $login->student_id);
         $this->assertSame('Asia/Tokyo', $login->timezone);

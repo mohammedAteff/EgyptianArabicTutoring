@@ -25,7 +25,7 @@ class HomeworkController extends Controller
         DB::transaction(function () use ($request, $homework, $records, $read, $data): void {
             $student = $records->lockStudent($request->attributes->get('student')->id);
             $item = $read->shared(Homework::query(), $student)->lockForUpdate()->findOrFail($homework);
-            abort_if($item->status === 'completed', 409, 'Completed homework is locked.');
+            abort_if($item->status === 'completed', 409, __('Completed homework is locked.'));
             if ($item->submissions()->doesntExist() && filled($item->student_response) && in_array($item->status, ['submitted', 'reviewed'], true)) {
                 HomeworkSubmission::query()->create(['homework_id' => $item->id, 'body' => $item->student_response, 'submission_key' => Str::uuid()->toString(), 'submitted_at' => $item->getAttribute('updated_at')]);
             }
@@ -34,7 +34,7 @@ class HomeworkController extends Controller
                 $existing = HomeworkSubmission::query()->where('submission_key', $key)->first();
                 if ($existing) {
                     if ((int) $existing->homework_id !== (int) $item->id || (string) $existing->body !== (string) ($data['student_response'] ?? '')) {
-                        throw ValidationException::withMessages(['student_response' => 'This submission key was already used. Reload the form and try again.']);
+                        throw ValidationException::withMessages(['student_response' => __('This submission key was already used. Reload the form and try again.')]);
                     }
 
                     return;
@@ -45,7 +45,7 @@ class HomeworkController extends Controller
             $item->update($data);
         }, 3);
 
-        return to_route('student.teaching.index')->with('success', 'Homework progress saved.');
+        return to_route('student.teaching.index')->with('success', __('Homework progress saved.'));
     }
 
     public function resource(Request $request, int $homework, StudentTeachingReadModel $read, LessonMaterialService $materials): Response

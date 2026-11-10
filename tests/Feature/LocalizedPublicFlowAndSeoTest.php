@@ -42,7 +42,7 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $responseFr->assertStatus(200);
         $responseFr->assertSee('Accueil');
         $responseFr->assertSee('Ressources');
-        $responseFr->assertSee('Réserver une leçon');
+        $responseFr->assertSee('Réserver un cours');
         $responseFr->assertSee('href="'.url('/fr/reservation').'"', false);
 
         // German
@@ -50,7 +50,7 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $responseDe->assertStatus(200);
         $responseDe->assertSee('Startseite');
         $responseDe->assertSee('Ressourcen');
-        $responseDe->assertSee('Stunde buchen');
+        $responseDe->assertSee('Unterricht buchen');
         $responseDe->assertSee('href="'.url('/de/buchen').'"', false);
     }
 
@@ -290,7 +290,7 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $responseAbout->assertSee('Ahmad ist ein muttersprachlicher Arabischlehrer aus Kairo.');
     }
 
-    public function test_booking_wizard_and_confirmation_render_in_french(): void
+    public function test_french_booking_routes_render_localized_instructions_and_confirmation(): void
     {
         $sessionType = SessionType::create([
             'title' => 'Private Lesson',
@@ -303,11 +303,12 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
 
         $responseWizard = $this->get('/fr/reservation');
         $responseWizard->assertStatus(200);
-        $responseWizard->assertSee('Affichage des horaires dans votre fuseau horaire :');
-        $responseWizard->assertSee('Changer de fuseau horaire');
-        $responseWizard->assertSee('Vos coordonnées');
+        $responseWizard->assertDontSeeText('La version anglaise est affichée.');
+        $responseWizard->assertSeeText('Horaires affichés dans');
+        $responseWizard->assertSee('data-timezone-selector', false);
+        $responseWizard->assertSee('<html lang="fr"', false);
 
-        // Create a confirmed booking to inspect localized confirmation view
+        // The localized route retains the declared English confirmation content.
         $contact = Contact::create([
             'email' => 'pierre@example.fr',
             'name' => 'Pierre Dubois',
@@ -339,14 +340,14 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
 
         $responseConf = $this->get('/fr/reservation/confirmation/'.$booking->confirmation_token);
         $responseConf->assertStatus(200);
-        $responseConf->assertSee('Réservation confirmée');
-        $responseConf->assertSee('Payment is arranged separately; confirming this booking has not charged you.');
-        $responseConf->assertSee('<html lang="en"', false);
-        $responseConf->assertSee('Calendrier des leçons');
-        $responseConf->assertSee('Votre heure locale');
-        $responseConf->assertSee('Heure du tuteur (Le Caire)');
-        $responseConf->assertSee('Ajouter au calendrier (.ics)');
-        $responseConf->assertSee('Que se passe-t-il ensuite ?');
+        $responseConf->assertSeeText(__('Confirmed'));
+        $responseConf->assertSeeText('Le paiement est organisé séparément');
+        $responseConf->assertSee('<html lang="fr"', false);
+        $responseConf->assertDontSeeText('La version anglaise est affichée.');
+        $responseConf->assertSeeText('Calendrier des leçons');
+        $responseConf->assertSeeText('Votre heure locale');
+        $responseConf->assertSeeText('Ajouter au calendrier (.ics)');
+        $responseConf->assertSeeText('Et ensuite ?');
     }
 
     public function test_policy_pages_render_fallback_banner_and_english_canonical_with_zero_hreflang_when_requested_in_french_or_german(): void
@@ -357,7 +358,7 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $responseFrTerms->assertSee(__('content_fallback_banner', [], 'fr'));
         $responseFrTerms->assertSee('<link rel="canonical" href="'.url('/terms').'">', false);
         $responseFrTerms->assertDontSee('hreflang=', false);
-        $responseFrTerms->assertSee('lang="en" dir="ltr"', false);
+        $responseFrTerms->assertSee('<html lang="en" data-ui-locale="fr" dir="ltr"', false);
 
         // German privacy
         $responseDePrivacy = $this->get('/de/datenschutz');
@@ -365,7 +366,7 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
         $responseDePrivacy->assertSee(__('content_fallback_banner', [], 'de'));
         $responseDePrivacy->assertSee('<link rel="canonical" href="'.url('/privacy').'">', false);
         $responseDePrivacy->assertDontSee('hreflang=', false);
-        $responseDePrivacy->assertSee('lang="en" dir="ltr"', false);
+        $responseDePrivacy->assertSee('<html lang="en" data-ui-locale="de" dir="ltr"', false);
     }
 
     public function test_custom_page_supports_french_route_and_canonical_when_translated_and_falls_back_when_not(): void
@@ -439,8 +440,11 @@ class LocalizedPublicFlowAndSeoTest extends TestCase
 
         // FAQ 2 is untranslated and has per-item fallback markup and badge
         $response->assertSee('What platform is used?');
-        $response->assertSee('English Fallback');
-        $response->assertSee('lang="en" dir="ltr"', false);
+        $response->assertSee(__('English Fallback'));
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+        $this->assertSame(1, $xpath->query('//details[@lang="en" and contains(@class, "faq-question") and contains(., "What platform is used?")]')->length);
 
         // Because French is only partially translated (mixed), it is NOT advertised as an alternate hreflang
         $response->assertDontSee('hreflang="fr"', false);

@@ -327,16 +327,22 @@ class TelegramAutomationTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_student_digest_excludes_unsettled_first_payment_packages(): void
+    public function test_student_digest_excludes_installment_packages_until_full_settlement(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-21 12:00:00 UTC'));
         $ledger = app(StudentLedgerService::class);
         $package = $ledger->createPackage(Student::factory()->verified()->create(), 'Foundation', 8, '280', '0', 'USD', null, 'digest-unsettled', presetKey: 'foundation_track');
         $ledger->recordPayment($package, '100', 'digest-first-payment', null);
+        $ledger->adjustCredits($package, -7, 'Synthetic usage correction', 'digest-low-balance', allocationId: $package->entitlements()->sole()->id);
+        $this->travelTo(CarbonImmutable::parse('2026-12-25 12:00:00 UTC'));
 
         $text = app(TelegramReadService::class)->businessDigest(['students']);
 
         $this->assertSame("Students with low credits (all types ≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
+        $ledger->recordPayment($package, '180', 'digest-final-payment', null);
+        $text = app(TelegramReadService::class)->businessDigest(['students']);
+
+        $this->assertSame("Students with low credits (all types ≤1): 1\nUnused entitlement allocations expiring within 14 days: 1", $text);
         Http::assertNothingSent();
     }
 
@@ -635,7 +641,7 @@ class TelegramAutomationTest extends TestCase
                 File::put($outputPath, '-- Fictional test database dump');
             }
 
-            protected function addDirectoryToZip(\ZipArchive $zip, string $dirPath, string $zipPrefix, array &$fileHashes = []): void {}
+            protected function addDirectoryToZip(\ZipArchive $zip, string $dirPath, string $zipPrefix, array &$fileHashes, string $stagingDirectory): void {}
         };
         $path = $service->createBackup('telegram-qa-'.Str::random(8));
         try {

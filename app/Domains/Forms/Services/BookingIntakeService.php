@@ -21,12 +21,12 @@ class BookingIntakeService
         $form = $this->publishedIntakeForm();
         if ($versionId !== $form?->published_version_id) {
             throw ValidationException::withMessages([
-                'intakeForm' => 'The intake form was updated while you were booking. Please review the updated questions.',
+                'intakeForm' => __('The intake form was updated while you were booking. Please review the updated questions.'),
             ]);
         }
         if (! $form) {
             if ($answers !== []) {
-                throw ValidationException::withMessages(['intakeForm' => 'No published intake form is available.']);
+                throw ValidationException::withMessages(['intakeForm' => __('No published intake form is available.')]);
             }
 
             return [];
@@ -39,10 +39,10 @@ class BookingIntakeService
         foreach ($answers as $key => $value) {
             $question = $byId->get((string) $key) ?? $byKey->get((string) $key);
             if (! $question) {
-                throw ValidationException::withMessages(["intakeAnswers.{$key}" => 'Submitted question ID does not belong to the active form version.']);
+                throw ValidationException::withMessages(["intakeAnswers.{$key}" => __('Submitted question ID does not belong to the active form version.')]);
             }
             if (array_key_exists($question->question_key, $normalized)) {
-                throw ValidationException::withMessages(["intakeAnswers.{$question->id}" => 'Submit only one answer per question.']);
+                throw ValidationException::withMessages(["intakeAnswers.{$question->id}" => __('Submit only one answer per question.')]);
             }
             $normalized[$question->question_key] = $value;
         }

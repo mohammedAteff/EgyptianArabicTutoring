@@ -10,6 +10,7 @@ use App\Domains\Lms\Models\Course;
 use App\Domains\Lms\Models\Lesson;
 use App\Domains\Lms\Models\LessonBlock;
 use App\Domains\Lms\Models\Section;
+use App\Domains\Reporting\Services\EstimatedActivityLifecycle;
 use App\Domains\Resources\Models\Resource;
 use App\Domains\Students\Services\TeachingRecordService;
 use App\Rules\SafeLessonUrl;
@@ -177,6 +178,7 @@ class LmsStructureService
             $rule = AccessRule::query()->where('course_id', $current->id)->lockForUpdate()->first() ?? new AccessRule;
             $before = $rule->exists ? ['audience' => $rule->audience, 'access_mode' => $rule->access_mode] : null;
             $rule->forceFill($values + $window + ['course_id' => $current->id, 'updated_by' => $actor->id])->save();
+            app(EstimatedActivityLifecycle::class)->courseChanged($current->id);
             $this->audits->log('lms_access_rule_changed', Course::class, $current->id, $before, $values + ['access_mode' => $window['access_mode']], $actor->id);
 
             return $rule;

@@ -12,6 +12,17 @@ class StudentBin extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $attributes = ['revision' => 1];
+
+    protected static function booted(): void
+    {
+        static::updating(function (StudentBin $bin): void {
+            if ($bin->isDirty(['body', 'title', 'student_visible'])) {
+                $bin->revision = (int) $bin->getOriginal('revision') + 1;
+            }
+        });
+    }
+
     protected $fillable = ['student_id', 'created_by_type', 'created_by_id', 'student_visible', 'title', 'body'];
 
     protected static function newFactory(): StudentBinFactory
@@ -21,7 +32,7 @@ class StudentBin extends Model
 
     protected function casts(): array
     {
-        return ['student_visible' => 'boolean'];
+        return ['student_visible' => 'boolean', 'revision' => 'integer'];
     }
 
     /** @return BelongsTo<Student, $this> */

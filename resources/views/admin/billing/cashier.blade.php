@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="space-y-8" x-data="{
+<div class="aq-page aq-cashier space-y-8" x-data="{
     selectedStudentId: {{ $selectedStudent ? $selectedStudent->id : 'null' }},
     selectedStudentName: '{{ $selectedStudent ? addslashes($selectedStudent->name) : '' }}',
     hasDiagnosticCredit: {{ $diagnosticEligibility && $diagnosticEligibility['eligible'] ? 'true' : 'false' }},
@@ -105,7 +105,7 @@
         'student_id'=>['Student',$studentOptions], 'date_from'=>['Date from','date'], 'date_to'=>['Date through','date'], 'transaction_type'=>['Transaction type',['payment'=>'Payment','refund'=>'Refund','credit'=>'Courtesy credit / adjustment']], 'offering_key'=>['Offering',$packageOptions], 'payment_method'=>['Payment method',$methodOptions], 'package_status'=>['Package status',['active'=>'Active','expired'=>'Expired','completed'=>'Completed','cancelled'=>'Cancelled']]
     ]" />
     <section class="rounded-2xl border border-slate-200 bg-white p-5"><h2 class="text-xl font-semibold">Filtered Transactions</h2><p class="mt-1 text-sm text-slate-500">{{ $businessTz }} · First 100 matching transactions. Exports include every matching row.</p>
-        <div class="mt-4 overflow-x-auto"><table class="min-w-[70rem] w-full text-left text-xs"><thead><tr>@foreach($transactionHeaders as $header)<th class="border-b border-slate-200 p-3">{{ $header }}</th>@endforeach</tr></thead><tbody>@forelse($transactionRows as $row)<tr>@foreach($row as $value)<td class="border-b border-slate-100 p-3">{{ $value }}</td>@endforeach</tr>@empty<tr><td colspan="13" class="p-6 text-slate-500">No transactions match these filters.</td></tr>@endforelse</tbody></table></div>
+        <div class="mt-4 overflow-x-auto" tabindex="0" role="region" aria-label="Transaction report, scroll horizontally for all columns"><table class="aq-transactions min-w-[70rem] w-full text-left text-xs"><thead><tr>@foreach($transactionHeaders as $header)<th class="border-b border-slate-200 p-3">{{ $header }}</th>@endforeach</tr></thead><tbody>@forelse($transactionRows as $row)<tr>@foreach($row as $value)<td class="border-b border-slate-100 p-3">{{ $value }}</td>@endforeach</tr>@empty<tr><td colspan="13" class="p-6 text-slate-500">No transactions match these filters.</td></tr>@endforelse</tbody></table></div>
     </section>
     <a href="{{ route('admin.session-types.index') }}" class="inline-flex min-h-11 items-center font-semibold text-amber-800">Configure lesson funding →</a>
     @if($selectedStudent)<x-credit-expiry-table :packages="$creditPackages" />@endif
@@ -302,7 +302,7 @@
                     @foreach($selectedStudent->packages as $pkg)
                         <div class="p-6 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-4">
                             <!-- Package Header -->
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                            <div class="aq-package-summary flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                                 <div>
                                     <div class="flex items-center gap-2">
                                         <h3 class="font-bold text-slate-900 text-base">{{ $pkg->package_name }}</h3>
@@ -314,7 +314,7 @@
                                     </div>
                                     <p class="text-xs text-slate-500 mt-0.5">Created {{ $pkg->created_at->format('M j, Y') }} • Expires {{ $pkg->expiryLabel() }}</p>
                                 </div>
-                                <div class="flex items-center gap-4 text-xs font-mono">
+                                <div class="aq-package-balances flex items-center gap-4 text-xs font-mono">
                                     <div>Original Price: <span class="font-bold">${{ $pkg->original_price }}</span></div>
                                     <div>Discount: <span class="font-bold">${{ $pkg->discount_amount }}</span></div>
                                     <div>Amount Paid (net): <span class="font-bold">${{ $pkg->net_paid }}</span></div>

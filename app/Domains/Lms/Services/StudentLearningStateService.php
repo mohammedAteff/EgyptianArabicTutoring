@@ -36,7 +36,7 @@ class StudentLearningStateService
             [$student, $course, $lesson] = $this->lockTarget($student, $course, $lesson);
             $note = $noteId ? LessonNote::query()->where('student_id', $student->id)->where('lesson_id', $lesson->id)->lockForUpdate()->findOrFail($noteId) : new LessonNote;
             if ($noteId) {
-                abort_unless($note->lock_version === $version, 409, 'This note changed. Reload before editing.');
+                abort_unless($note->lock_version === $version, 409, __('This note changed. Reload before editing.'));
             }
             $values = Validator::make(['body' => $body], ['body' => ['required', 'string', 'max:10000']])->validate();
             $note->forceFill(['student_id' => $student->id, 'lesson_id' => $lesson->id, 'body' => $values['body'], 'lock_version' => $noteId ? $note->lock_version + 1 : 1])->save();
@@ -51,7 +51,7 @@ class StudentLearningStateService
         DB::transaction(function () use ($student, $noteId, $version): void {
             $student = $this->records->lockStudent($student->id);
             $note = LessonNote::query()->where('student_id', $student->id)->lockForUpdate()->findOrFail($noteId);
-            abort_unless($note->lock_version === $version, 409, 'This note changed. Reload before deleting.');
+            abort_unless($note->lock_version === $version, 409, __('This note changed. Reload before deleting.'));
             $note->delete();
         }, 3);
     }
@@ -73,13 +73,13 @@ class StudentLearningStateService
                 }
             }
             if (! $timestampSupported) {
-                throw ValidationException::withMessages(['block_id' => 'Timestamp bookmarks are available for direct videos.']);
+                throw ValidationException::withMessages(['block_id' => __('Timestamp bookmarks are available for direct videos.')]);
             }
             if (! is_finite($seconds) || $seconds < 0 || $seconds > 86400) {
-                throw ValidationException::withMessages(['seconds' => 'Choose a video timestamp between 0 and 86400 seconds.']);
+                throw ValidationException::withMessages(['seconds' => __('Choose a video timestamp between 0 and 86400 seconds.')]);
             }
             if ($block->kind === 'video' && $block->videoAsset?->provider === 'bunny' && $seconds > ($block->videoAsset->duration_seconds ?? 0)) {
-                throw ValidationException::withMessages(['seconds' => 'Choose a timestamp within this video.']);
+                throw ValidationException::withMessages(['seconds' => __('Choose a timestamp within this video.')]);
             }
             $label = Validator::make(['label' => $label], ['label' => ['nullable', 'string', 'max:500']])->validate()['label'];
             $position = (int) round($seconds * 1000);

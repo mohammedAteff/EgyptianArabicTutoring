@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\Audit\Services\AuditLogService;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
+use App\Domains\Students\Models\StudentBookmark;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,10 @@ class StudentBinController extends Controller
             $query->where(fn ($bins) => $bins->where('title', 'like', $like)->orWhere('body', 'like', $like));
         }
 
-        return view('student.educational-bins', ['student' => $student, 'bins' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(20)->withQueryString(), 'filters' => $filters, 'portal' => $portal, 'editing' => null]);
+        $bins = $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(20)->withQueryString();
+        $noteBookmarks = $portal ? StudentBookmark::query()->where('student_id', $student->id)->where('kind', 'note')->whereIn('target_id', $bins->pluck('id'))->get()->keyBy('target_id') : collect();
+
+        return view('student.educational-bins', ['student' => $student, 'bins' => $bins, 'noteBookmarks' => $noteBookmarks, 'filters' => $filters, 'portal' => $portal, 'editing' => null]);
     }
 
     public function store(Request $request, AuditLogService $audit, ?Student $student = null): RedirectResponse
@@ -72,8 +76,21 @@ class StudentBinController extends Controller
         abort_unless($bin instanceof StudentBin, 404);
         $this->authorizeBin($request, $student, $bin, 'update');
         $data = $request->validate(['title' => ['required', 'string', 'max:160'], 'body' => ['required', 'string', 'max:30000'], 'student_visible' => ['nullable', 'boolean']]);
-        $bin->update([...$data, 'student_visible' => $request->routeIs('student.*') || $request->boolean('student_visible')]);
-        $this->audit($request, $audit, 'student_bin_updated', $bin);
+        $request->validate(['revision' => ['required', 'integer', 'min:1']]);
+        $saved = DB::transaction(function () use ($request, $student, $bin, $data, $audit): bool {
+            $current = StudentBin::query()->lockForUpdate()->findOrFail($bin->id);
+            $this->authorizeBin($request, $student, $current, 'update');
+            if ($current->revision !== $request->integer('revision')) {
+                return false;
+            }
+            $current->update([...$data, 'student_visible' => $request->routeIs('student.*') || $request->boolean('student_visible')]);
+            $this->audit($request, $audit, 'student_bin_updated', $current);
+
+            return true;
+        }, 3);
+        if (! $saved) {
+            return back()->withInput()->withErrors(['revision' => __('This note changed in another editor. Copy your text before loading the current version.')]);
+        }
 
         return $this->redirect($request, $student)->with('success', 'Educational note updated.');
     }

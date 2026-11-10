@@ -38,7 +38,7 @@ class FormSubmissionService
                     ->lockForUpdate()
                     ->firstOrFail();
                 if ($submission->status === 'submitted' && ! $lockedForm->can_edit_after_submission) {
-                    throw ValidationException::withMessages(['form' => 'This submitted form can no longer be edited.']);
+                    throw ValidationException::withMessages(['form' => __('This submitted form can no longer be edited.')]);
                 }
                 $version = $submission->version()->with('questions.options')->firstOrFail();
             } else {
@@ -56,7 +56,7 @@ class FormSubmissionService
                     ->first();
 
                 if ($submission?->status === 'submitted' && ! $lockedForm->can_edit_after_submission) {
-                    throw ValidationException::withMessages(['form' => 'This form has already been submitted.']);
+                    throw ValidationException::withMessages(['form' => __('This form has already been submitted.')]);
                 }
 
                 if (! $submission) {
@@ -71,7 +71,7 @@ class FormSubmissionService
             }
 
             if ($expectedVersionId !== null && (int) $version->id !== $expectedVersionId) {
-                abort(409, 'The form version changed. Reload before saving.');
+                abort(409, __('The form version changed. Reload before saving.'));
             }
 
             $normalizedAnswers = $this->validation->validateAnswers($version->questions->all(), $answers, $submit);

@@ -1,3 +1,4 @@
+import { uiText } from './ui-translations.js';
 export function createQuestionnaireSaveController({ capture, persist, report, schedule = setTimeout, cancel = clearTimeout }) {
     let revision = 0;
     let acknowledged = 0;
@@ -33,8 +34,8 @@ export function createQuestionnaireSaveController({ capture, persist, report, sc
     };
     return {
         changed() {
+            if (navigationAllowed) preparing = false;
             navigationAllowed = false;
-            if (preparing && !inFlight) preparing = false;
             revision += 1;
             report('pending');
             if (!preparing) queue();
@@ -50,10 +51,12 @@ export function createQuestionnaireSaveController({ capture, persist, report, sc
             navigationAllowed = true;
             report('submitting');
         },
-        cancelSubmission() {
+        cancelSubmission(error) {
             navigationAllowed = false;
             preparing = false;
-            if (revision !== acknowledged) report('pending');
+            if (error) report('error', error);
+            else if (revision !== acknowledged) report('pending');
+            else report(acknowledged > 0 ? 'saved' : 'idle');
         },
     };
 }
@@ -74,28 +77,29 @@ export function initializeQuestionnaireSaves(root = document) {
                         body: JSON.stringify({ answers, submission_id: form.querySelector('[name="submission_id"]').value || null, form_version_id: Number(form.querySelector('[name="form_version_id"]').value) }),
                     });
                 } catch {
-                    throw new Error("Your latest changes couldn't be saved. Check your connection and use Save Draft to try again. Keep this page open until your answers are saved.");
+                    throw new Error(uiText("Your latest changes couldn't be saved. Check your connection and use Save Draft to try again. Keep this page open until your answers are saved."));
                 }
                 if (!response.ok) throw new Error(response.status === 409
-                    ? "Your answers couldn't be saved. The questionnaire or response has changed. Keep this page open and review the update before leaving."
-                    : "Your latest changes couldn't be saved. Keep this page open and use Save Draft to try again.");
+                    ? uiText("Your answers couldn't be saved. The questionnaire or response has changed. Keep this page open and review the update before leaving.")
+                    : uiText("Your latest changes couldn't be saved. Keep this page open and use Save Draft to try again."));
                 let data;
                 try { data = await response.json(); } catch {
-                    throw new Error("Your latest changes couldn't be saved. Keep this page open and try Save Draft.");
+                    throw new Error(uiText("Your latest changes couldn't be saved. Keep this page open and try Save Draft."));
                 }
                 if (!Number.isSafeInteger(data?.draft_id) || data.draft_id < 1) {
-                    throw new Error("Your latest changes couldn't be saved. Keep this page open and try Save Draft.");
+                    throw new Error(uiText("Your latest changes couldn't be saved. Keep this page open and try Save Draft."));
                 }
                 form.querySelector('[name="submission_id"]').value = data.draft_id;
             },
             report: (state, error) => {
                 status.dataset.saveState = state;
                 status.textContent = {
-                    pending: 'Unsaved changes — waiting to save.',
-                    saving: 'Saving...',
-                    saved: 'Saved',
-                    submitting: 'Saving your answers...',
-                    error: error?.message || "Your latest changes couldn't be saved. Keep this page open and try Save Draft.",
+                    idle: uiText('Changes save automatically'),
+                    pending: uiText('Unsaved changes — waiting to save.'),
+                    saving: uiText('Saving...'),
+                    saved: uiText('Saved'),
+                    submitting: uiText('Saving your answers...'),
+                    error: error?.message || uiText("Your latest changes couldn't be saved. Keep this page open and try Save Draft."),
                 }[state];
             },
         });
@@ -107,32 +111,46 @@ export function initializeQuestionnaireSaves(root = document) {
             event.preventDefault();
             event.returnValue = '';
         });
-        window.addEventListener('pageshow', event => {
-            if (event.persisted) controller.cancelSubmission();
-        });
         let preparing = false;
         let reissuing = false;
-        let nativeSubmission = false;
+        let nativeSubmission = null;
+        window.addEventListener('pageshow', event => {
+            if (!event.persisted) return;
+            preparing = false;
+            reissuing = false;
+            nativeSubmission = null;
+            controller.cancelSubmission();
+        });
         form.addEventListener('submit', async event => {
             if (reissuing) {
-                nativeSubmission = true;
+                nativeSubmission = event;
                 controller.allowSubmissionNavigation();
                 return;
             }
             event.preventDefault();
             if (preparing) return;
             preparing = true;
-            nativeSubmission = false;
+            nativeSubmission = null;
             const submitter = event.submitter;
-            await controller.prepareSubmission();
+            let submissionError = null;
             try {
+                await controller.prepareSubmission();
+                // A new task lets the original native submission clear its re-entry guard.
+                await new Promise(resolve => setTimeout(resolve, 0));
+                if (submitter && submitter.form !== form) {
+                    throw new Error(uiText('The save action changed. Your answers are still here. Please choose Save Draft or Submit Answers again.'));
+                }
                 reissuing = true;
-                if (submitter?.form === form) form.requestSubmit(submitter);
+                if (submitter) form.requestSubmit(submitter);
                 else form.requestSubmit();
+            } catch (error) {
+                submissionError = new Error(uiText("Your answers couldn't be submitted. Keep this page open and try Save Draft again."), { cause: error });
             } finally {
                 reissuing = false;
-                preparing = false;
-                if (!nativeSubmission) controller.cancelSubmission();
+                if (submissionError || !nativeSubmission || nativeSubmission.defaultPrevented) {
+                    preparing = false;
+                    controller.cancelSubmission(submissionError);
+                }
             }
         });
     });

@@ -39,13 +39,35 @@ class SetRequestLocale
             default => 'en',
         };
 
+        if ($request->is('student', 'student/*')) {
+            $selected = $request->query('lang');
+            if (is_string($selected) && in_array($selected, ['en', 'fr', 'de'], true)) {
+                $request->session()->put('public_locale', $selected);
+                cookie()->queue(cookie('public_locale', $selected, 525600, null, null, $request->isSecure(), true, false, 'lax'));
+            }
+            $saved = $request->session()->get('public_locale', $request->cookie('public_locale') ?? $request->session()->get('locale'));
+            $locale = in_array($saved, ['en', 'fr', 'de'], true) ? $saved : 'en';
+        }
+
         $urls = app(LocalizedUrlService::class);
+        $calendarDownload = $request->routeIs('booking.ics');
+        if ($calendarDownload) {
+            $selected = $request->query('lang', $request->session()->get('public_locale', 'en'));
+            $locale = in_array($selected, ['en', 'fr', 'de'], true) ? $selected : 'en';
+        }
         $routeInfo = $urls->resolveRouteInfo(trim($request->getPathInfo(), '/'), $request);
-        $public = $routeInfo !== null && ! $request->is('admin*', 'student*', 'api*', 'preview*')
+        if ($routeInfo !== null && ! $request->isMethodSafe() && ! $request->is('admin*', 'student*', 'api*', 'preview*') && ! in_array($firstSegment, ['fr', 'de'], true)) {
+            $saved = $request->session()->get('public_locale', $request->cookie('public_locale'));
+            $locale = in_array($saved, ['en', 'fr', 'de'], true) ? $saved : 'en';
+        }
+        $public = $routeInfo !== null && ! $calendarDownload && ! $request->is('admin*', 'student*', 'api*', 'preview*')
             && $request->isMethod('GET') && ! str_contains($request->path(), '/download')
             && ! preg_match('/bot|crawler|spider/i', (string) $request->userAgent());
         if ($public) {
             $selected = $request->query('lang');
+            if (! is_string($selected) && in_array($firstSegment, ['fr', 'de'], true)) {
+                $selected = $firstSegment;
+            }
             if (is_string($selected) && in_array($selected, ['en', 'fr', 'de'], true)) {
                 $request->session()->put('public_locale', $selected);
                 cookie()->queue(cookie('public_locale', $selected, 525600, null, null, $request->isSecure(), true, false, 'lax'));

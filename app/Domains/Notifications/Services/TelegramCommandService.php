@@ -26,7 +26,7 @@ class TelegramCommandService
         foreach ($bot->destinations()->where('enabled', true)->whereIn('type', ['private', 'group'])->get() as $destination) {
             $commands = $basic;
             foreach ($this->catalog->all() as $command => $label) {
-                if ($this->catalog->allows($bot, $command) && ($destination->detail_level === 'personal' || ! in_array($command, ['student', 'money', 'brief', 'wrap'], true))) {
+                if ($this->catalog->allows($bot, $command) && ($destination->detail_level === 'personal' || ! in_array($command, TelegramCommandCatalog::PERSONAL_COMMANDS, true))) {
                     $commands[] = ['command' => $command, 'description' => preg_replace('/^[^\p{L}\p{N}]+/u', '', $label)];
                 }
             }
@@ -173,6 +173,9 @@ class TelegramCommandService
         $formatted = $this->formatter->format($page['text']);
         $parts = $this->formatter->split($formatted['text'], $formatted['entities']);
         $options = ['reply_markup' => $page['reply_markup'], 'command' => $state['command'], 'user' => $user, 'chat_id' => $destination->chat_id, 'personal' => $destination->detail_level === 'personal', 'expires_at' => now('UTC')->addMinutes(5)->timestamp];
+        if ($state['command'] === 'insights') {
+            $options['private_destination'] = $destination->type === 'private';
+        }
         if ($callback !== null && count($parts['parts']) === 1) {
             $options['edit_message_id'] = (int) $message['message_id'];
         }

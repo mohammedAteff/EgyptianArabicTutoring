@@ -26,12 +26,12 @@ class StudentAuthenticationTest extends TestCase
 
         $this->post(route('student.login.submit'), [
             'date_of_birth' => '1990-01-01', 'name' => 'MAYA LEE', 'email' => ' maya+study@example.com ',
-        ])->assertRedirect(route('student.dashboard'));
+        ])->assertRedirect(route('student.home'));
 
         $this->assertAuthenticatedAs($student, 'student');
         $this->assertSame($student->id, session('student_id'));
         $this->assertTrue(now('UTC')->addMinutes(179)->lessThan(session('student_auth_expires_at')));
-        $this->get(route('student.dashboard'))->assertOk()->assertSee('Welcome, Maya')->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        $this->get(route('student.home'))->assertOk()->assertSee('Maya')->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
     public function test_unverified_or_ambiguous_students_cannot_authenticate(): void

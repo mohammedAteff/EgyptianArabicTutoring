@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="space-y-8">
+<div class="aq-promotions space-y-8">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -74,7 +74,7 @@
                                     @if($promo->display_type === 'top_bar')
                                         <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">Top Bar</span>
                                     @elseif($promo->display_type === 'floating_modal')
-                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">Modal Popup</span>
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold aq-promotion-format-modal">Modal Popup</span>
                                     @else
                                         <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">Inline Card</span>
                                     @endif
@@ -126,7 +126,7 @@
                                     <form action="{{ route('admin.promotions.destroy', $promo) }}" method="POST" class="inline" onsubmit="return confirm('Permanently delete this promotion?');">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold transition-colors">
+                                        <button type="submit" class="aq-action-danger px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors">
                                             Delete
                                         </button>
                                     </form>

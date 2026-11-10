@@ -1132,7 +1132,7 @@ return [
                 ],
                 [
                     'type' => 'paragraph',
-                    'text' => '$25 · 60 minutes',
+                    'text' => '$25 USD · 60 minutes',
                 ],
                 [
                     'type' => 'paragraph',
@@ -1140,7 +1140,7 @@ return [
                 ],
                 [
                     'type' => 'paragraph',
-                    'text' => 'If you decide to enroll in an 8- or 12-session coaching package within 48 hours of completing your diagnostic, the full $25 fee is credited toward your package price.',
+                    'text' => 'If you decide to enroll in an eligible 8- or 12-session coaching package within 48 hours of completing your diagnostic, the full $25 you\'ve already paid is credited toward your package price.',
                 ],
             ],
         ],
@@ -1168,7 +1168,7 @@ return [
                 ],
                 [
                     'type' => 'paragraph',
-                    'text' => 'The accompanying educational video series is planned. Published companion materials will be listed here when available.',
+                    'text' => 'When a resource accompanies an educational video, you can use the material while watching and return to it afterward.',
                 ],
             ],
         ],
@@ -1176,7 +1176,7 @@ return [
             'badge' => 'FIND WHAT YOU NEED',
             'title' => 'Find Something Worth Learning.',
             'blocks' => [
-
+                ['type' => 'paragraph', 'text' => 'Looking for a particular topic? Browse the available materials or search for something you\'d like to understand or practice.'],
             ],
         ],
         [
@@ -1823,13 +1823,6 @@ Free resource access requires your name and email address, but you don\'t need t
             'featured' => false,
         ],
         [
-            'key' => 'faq-31',
-            'topic' => 'Resources & Games',
-            'question' => 'What\'s included in the Arabic Alphabet Workbook?',
-            'answer' => 'The accompanying video series is planned. Available learning materials are listed in the Resources library.',
-            'featured' => false,
-        ],
-        [
             'key' => 'faq-32',
             'topic' => 'Resources & Games',
             'question' => 'Are the language games free?',
@@ -1866,7 +1859,7 @@ Please don\'t share passwords or other sensitive account credentials.',
         ],
     ],
     'policy' => [
-        'title' => 'Booking, Cancellation, Rescheduling & Refund Policy',
+        'title' => 'Booking & Refund Policy',
         'version' => 'Version 1.0 — Agreed Business Rules',
         'blocks' => [
             [

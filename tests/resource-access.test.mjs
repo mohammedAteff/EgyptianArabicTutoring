@@ -7,11 +7,16 @@ import vm from 'node:vm';
 const view = readFileSync(new URL('../resources/views/public/resources/show.blade.php', import.meta.url), 'utf8');
 const method = view.slice(view.indexOf('submitEmail() {'), view.indexOf('submitPin() {')).trim().replace(/,$/, '');
 
-function gate(response, rejects = false) {
+function gate(response, rejects = false, locale = 'en') {
     const requests = [];
     const navigations = [];
     const location = { set href(value) { navigations.push(value); } };
-    const component = vm.runInNewContext(`({${method}})`, {
+    const translations = locale === 'en' ? {} : JSON.parse(readFileSync(new URL(`../lang/${locale}.json`, import.meta.url), 'utf8'));
+    const localizedMethod = method.replace(/@js\(__\('((?:\\.|[^'\\])*)'\)\)/g, (_, value) => {
+        const source = value.replace(/\\'/g, "'");
+        return JSON.stringify(translations[source] ?? source);
+    });
+    const component = vm.runInNewContext(`({${localizedMethod}})`, {
         fetch: async (url, options) => {
             requests.push({ url, options });
             if (rejects) { throw new Error('Network unavailable'); }
@@ -52,4 +57,23 @@ test('Rejected Resource access never presents or consumes a download grant', asy
     assert.equal(component.state, 'idle');
     assert.equal(component.downloadUrl, '');
     assert.equal(navigations.length, 0);
+});
+
+test('Resource access failures stay in the selected language without unlocking the resource', async () => {
+    for (const [locale, rateLimit, network] of [
+        ['fr', 'Trop de demandes. Veuillez réessayer plus tard.', 'Erreur de connexion. Veuillez réessayer.'],
+        ['de', 'Zu viele Anfragen. Bitte versuchen Sie es später erneut.', 'Verbindungsfehler. Bitte versuchen Sie es erneut.'],
+    ]) {
+        const limited = gate({ ok: false, status: 429, json: async () => ({}) }, false, locale);
+        limited.component.submitEmail();
+        await setImmediate();
+        assert.equal(limited.component.errorMessage, rateLimit);
+        assert.equal(limited.component.state, 'rate_limited');
+        assert.equal(limited.component.downloadUrl, '');
+        const disconnected = gate(null, true, locale);
+        disconnected.component.submitEmail();
+        await setImmediate();
+        assert.equal(disconnected.component.errorMessage, network);
+        assert.equal(disconnected.component.state, 'idle');
+    }
 });

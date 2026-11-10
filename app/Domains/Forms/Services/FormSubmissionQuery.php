@@ -38,7 +38,7 @@ class FormSubmissionQuery
                     ->when($isAssistant, fn ($answers) => $answers->whereHas('question', fn ($questions) => $questions->where('assistant_visible', true)))
                     ->orderBy('form_question_id');
                 if ($includeQuestionLabels) {
-                    $query->with(['question:id,question_key,label,question_type,assistant_visible,sort_order']);
+                    $query->with(['question:id,question_key,label,question_type,assistant_visible,sort_order', 'question.options']);
                 }
             }]);
         if (! empty($filters['status'])) {

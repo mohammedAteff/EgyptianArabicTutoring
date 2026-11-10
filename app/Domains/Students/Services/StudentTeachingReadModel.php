@@ -50,15 +50,12 @@ class StudentTeachingReadModel
      */
     public function data(Student $student, Collection $bookings, Collection $packages, Collection $forms, Collection $submissions, bool $readOnly = false): array
     {
-        $homework = $this->shared(Homework::query(), $student)->with([
-            'submissions', 'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
-        ])->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('id')->get();
-        $plans = $this->shared(LearningPlan::query(), $student, false)->with('milestones')->orderByDesc('id')->get();
-        $resources = $this->resources($student, studentDiscovery: true);
-        $errors = $this->shared(StudentErrorLog::query(), $student)->orderByDesc('id')->get();
-        $tags = $this->shared(TeachingTag::query(), $student)->orderBy('label')->orderBy('id')->get();
-        $notesCount = StudentBin::query()->where('student_id', $student->id)->where('student_visible', true)->count();
-        $milestones = $plans->flatMap(fn (LearningPlan $plan) => $plan->milestones);
+        $overview = $this->overview($student, $bookings);
+        $homework = $overview['homework'];
+        $plans = $overview['learningPlans'];
+        $resources = $overview['assignedResources'];
+        $errors = $overview['errorLog'];
+        $tags = $overview['teachingTags'];
         $openHomework = $homework->whereIn('status', ['assigned', 'in_progress'])->first();
         $outstandingForm = $forms->sortByDesc('is_mandatory')->first(fn ($form): bool => ! $submissions->get($form->id)
             || $submissions->get($form->id)->status !== 'submitted'
@@ -90,7 +87,7 @@ class StudentTeachingReadModel
                     ? $package->expires_at->setTimezone($student->preferred_timezone ?: $this->timezones->getBusinessTimezone())->format('j M Y, g:i:s A T')
                     : $package->expiryLabel();
                 $message = $balance['label'].' · '.$package->package_name.' · Purchase #'.$package->id.' · '.$balance['available'].' available · Valid until: '.$expiryLabel;
-                $notices[] = str_replace('Purchase #'.$package->id.' ·', 'Purchase #'.$purchaseReferences[$package->id].' ·', $message);
+                $notices[] = $this->notifications->localizedMessage(str_replace('Purchase #'.$package->id.' ·', 'Purchase #'.$purchaseReferences[$package->id].' ·', $message));
                 $events[] = ['key' => 'entitlement:'.$balance['id'].':'.$balance['available'].':'.$expiry.':'.($soon ? 'expiry' : 'low'), 'type' => 'entitlement', 'title' => $soon ? 'Package expiry notice' : 'Low entitlement balance', 'message' => $message, 'link' => route('student.dashboard', [], false).'#credits-title'];
             }
         }
@@ -117,7 +114,7 @@ class StudentTeachingReadModel
 
         return [
             'homework' => $homework, 'learningPlans' => $plans, 'assignedResources' => $resources, 'errorLog' => $errors, 'teachingTags' => $tags,
-            'progress' => ['completed_lessons' => $bookings->where('status', 'completed')->count(), 'milestones_completed' => $milestones->where('status', 'completed')->count(), 'milestones_total' => $milestones->count(), 'shared_notes' => $notesCount, 'homework_completed' => $homework->where('status', 'completed')->count(), 'homework_total' => $homework->count(), 'errors_improved' => $errors->whereIn('status', ['improved', 'resolved'])->count(), 'errors_total' => $errors->count()],
+            'progress' => $overview['progress'],
             'nextAction' => $action, 'entitlementNotices' => $notices,
             'canBookWithPackage' => $canBook,
             'skillAssessments' => StudentSkillAssessment::query()->where('student_id', $student->id)->where('student_visible', true)->with('skill')->orderByDesc('assessed_at')->get(),
@@ -125,6 +122,26 @@ class StudentTeachingReadModel
             'resourceCollections' => ResourceCollectionAssignment::query()->where('student_id', $student->id)->where('student_visible', true)->whereHas('collection', fn ($query) => $query->published())->with(['collection.resources' => fn ($query) => $query->published()->where('student_discoverable', true)])->get(),
             'unreadNotifications' => StudentNotification::query()->where('student_id', $student->id)->whereNull('read_at')->count(),
         ];
+    }
+
+    /** Read-only shared teaching facts, without notification synchronization or financial histories.
+     * @param  Collection<int, Booking>  $bookings
+     * @return array<string,mixed>
+     */
+    public function overview(Student $student, Collection $bookings): array
+    {
+        $homework = $this->shared(Homework::query(), $student)->with([
+            'submissions', 'resource:id,title,status,published_at', 'material' => fn ($query) => $query->visibleToStudent()->whereHas('booking', fn ($bookings) => $bookings->where('student_id', $student->id))->select(['id', 'booking_id', 'title']),
+        ])->orderByRaw('due_date IS NULL')->orderBy('due_date')->orderBy('id')->get();
+        $plans = $this->shared(LearningPlan::query(), $student, false)->with('milestones')->orderByDesc('id')->get();
+        $resources = $this->resources($student, studentDiscovery: true);
+        $errors = $this->shared(StudentErrorLog::query(), $student)->orderByDesc('id')->get();
+        $tags = $this->shared(TeachingTag::query(), $student)->orderBy('label')->orderBy('id')->get();
+        $notesCount = StudentBin::query()->where('student_id', $student->id)->where('student_visible', true)->count();
+        $milestones = $plans->flatMap(fn (LearningPlan $plan) => $plan->milestones);
+
+        return ['homework' => $homework, 'learningPlans' => $plans, 'assignedResources' => $resources,
+            'errorLog' => $errors, 'teachingTags' => $tags, 'progress' => ['completed_lessons' => $bookings->where('status', 'completed')->count(), 'milestones_completed' => $milestones->where('status', 'completed')->count(), 'milestones_total' => $milestones->count(), 'shared_notes' => $notesCount, 'homework_completed' => $homework->where('status', 'completed')->count(), 'homework_total' => $homework->count(), 'errors_improved' => $errors->whereIn('status', ['improved', 'resolved'])->count(), 'errors_total' => $errors->count()]];
     }
 
     /** @return Collection<int, ResourceAssignment> */

@@ -1,6 +1,7 @@
+import { uiText } from './ui-translations.js';
 export function secureRequestUUID(cryptoApi = globalThis.crypto) {
     if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
-    if (typeof cryptoApi?.getRandomValues !== 'function') throw new Error('Secure browser randomness is unavailable. Try a current browser.');
+    if (typeof cryptoApi?.getRandomValues !== 'function') throw new Error(uiText('Secure browser randomness is unavailable. Try a current browser.'));
     const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
     bytes[6] = (bytes[6] & 15) | 64;
     bytes[8] = (bytes[8] & 63) | 128;
@@ -11,36 +12,36 @@ export function secureRequestUUID(cryptoApi = globalThis.crypto) {
 export function scopedHlsUrl(candidate, authorizationUrl) {
     const signed = new URL(authorizationUrl);
     const marker = signed.pathname.match(/^(\/bcdn_token=HS256-[A-Za-z0-9_-]+&expires=\d+&token_path=%2F([a-f0-9-]{36})%2F)\/\2\/playlist\.m3u8$/);
-    if (signed.protocol !== 'https:' || !/^[a-z0-9-]+\.b-cdn\.net$/.test(signed.hostname) || !marker || signed.search || signed.hash) throw new Error('Invalid protected manifest.');
+    if (signed.protocol !== 'https:' || !/^[a-z0-9-]+\.b-cdn\.net$/.test(signed.hostname) || !marker || signed.search || signed.hash) throw new Error(uiText('Invalid protected manifest.'));
     const target = new URL(candidate, signed);
-    if (target.origin !== signed.origin || target.search || target.hash) throw new Error('Unexpected media target.');
+    if (target.origin !== signed.origin || target.search || target.hash) throw new Error(uiText('Unexpected media target.'));
     let path = target.pathname;
     if (path.startsWith('/bcdn_token=')) {
         const index = path.indexOf(`/${marker[2]}/`);
-        if (index < 0) throw new Error('Unexpected media scope.');
+        if (index < 0) throw new Error(uiText('Unexpected media scope.'));
         path = path.slice(index);
     }
-    if (!path.startsWith(`/${marker[2]}/`) || /%2f|%5c|%2e/i.test(path) || !/\.(?:m3u8|ts|m4s|mp4|key|vtt)$/i.test(path)) throw new Error('Unexpected media scope.');
+    if (!path.startsWith(`/${marker[2]}/`) || /%2f|%5c|%2e/i.test(path) || !/\.(?:m3u8|ts|m4s|mp4|key|vtt)$/i.test(path)) throw new Error(uiText('Unexpected media scope.'));
     return `${signed.origin}${marker[1]}${path}`;
 }
 
 export function authorizationDelay(data, now = Date.now()) {
     const remaining = Date.parse(data.expires_at) - now;
-    if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 610000) throw new Error('Video authorization expired.');
+    if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 610000) throw new Error(uiText('Video authorization expired.'));
     const interval = Number(data.heartbeat_seconds) * 1000;
-    if (!Number.isFinite(interval) || interval < 15000 || interval > 60000) throw new Error('Invalid renewal interval.');
+    if (!Number.isFinite(interval) || interval < 15000 || interval > 60000) throw new Error(uiText('Invalid renewal interval.'));
     return Math.max(1000, Math.min(interval, remaining - 5000));
 }
 
 export async function protectedPost(url, body, options = {}) {
     const target = new URL(url, window.location.href);
-    if (target.origin !== window.location.origin) throw new Error('Invalid authorization target.');
+    if (target.origin !== window.location.origin) throw new Error(uiText('Invalid authorization target.'));
     const response = await fetch(target, {method: 'POST', credentials: 'same-origin', redirect: 'error', referrerPolicy: 'no-referrer',
         headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? ''},
         body: JSON.stringify(body), cache: 'no-store', ...options});
     let data;
-    try { data = await response.json(); } catch { throw new Error('Your session or video authorization is unavailable. Reload this page.'); }
-    if (!response.ok) throw new Error(response.status === 409 || response.status === 403 ? data.message : 'Video authorization is unavailable. Check your access or try again later.');
+    try { data = await response.json(); } catch { throw new Error(uiText('Your session or video authorization is unavailable. Reload this page.')); }
+    if (!response.ok) throw new Error(response.status === 409 || response.status === 403 ? data.message : uiText('Video authorization is unavailable. Check your access or try again later.'));
     return data;
 }
 
@@ -60,7 +61,7 @@ function initialize() {
             clearTimeout(renewal); clearTimeout(expiry); clearInterval(movement);
             video.pause(); hls?.destroy(); hls = null;
             video.removeAttribute('src'); video.load(); watermark.hidden = true;
-            seek.disabled = true; play.textContent = 'Play video'; status.textContent = message;
+            seek.disabled = true; play.textContent = uiText('Play video'); status.textContent = message;
             const old = authorization;
             const oldProof = proof;
             authorization = null;
@@ -78,7 +79,7 @@ function initialize() {
                 move(); movement = setInterval(move, 9000);
             }
             clearTimeout(expiry);
-            expiry = setTimeout(() => stop('Video authorization expired. Select Play video to check access again.'), Math.max(0, Date.parse(data.expires_at) - Date.now()));
+            expiry = setTimeout(() => stop(uiText('Video authorization expired. Select Play video to check access again.')), Math.max(0, Date.parse(data.expires_at) - Date.now()));
         };
         const schedule = () => {
             clearTimeout(renewal);
@@ -102,11 +103,11 @@ function initialize() {
         play.addEventListener('click', async () => {
             if (busy) return;
             if (authorization) {
-                if (video.paused) { video.play().then(schedule).catch(() => { status.textContent = 'Select Play video again to start.'; }); } else video.pause();
+                if (video.paused) { video.play().then(schedule).catch(() => { status.textContent = uiText('Select Play video again to start.'); }); } else video.pause();
                 return;
             }
             busy = true; play.disabled = true; const turn = generation;
-            status.textContent = 'Checking video access…';
+            status.textContent = uiText('Checking video access…');
             try {
                 requestKey = secureRequestUUID(); proof = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
                 const data = await protectedPost(root.dataset.authorizeUrl, {request_key: requestKey, lease_token: proof});
@@ -122,36 +123,36 @@ function initialize() {
                 } else {
                     const {default: Hls} = await import('hls.js');
                     if (turn !== generation) return;
-                    if (!Hls.isSupported()) throw new Error('This browser does not support protected video.');
+                    if (!Hls.isSupported()) throw new Error(uiText('This browser does not support protected video.'));
                     class ScopedLoader extends Hls.DefaultConfig.loader {
                         load(context, config, callbacks) {
                             try { context.url = scopedHlsUrl(context.url, authorization.url); super.load(context, config, callbacks); }
-                            catch { stop('The provider returned an unexpected media location.'); }
+                            catch { stop(uiText('The provider returned an unexpected media location.')); }
                         }
                     }
                     hls = new Hls({loader: ScopedLoader, maxBufferLength: 30, backBufferLength: 0, debug: false});
-                    hls.on(Hls.Events.ERROR, (_event, details) => { if (details.fatal) stop('This video could not be played. Try again later.'); });
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => { status.textContent = 'Select Play video to start.'; }));
+                    hls.on(Hls.Events.ERROR, (_event, details) => { if (details.fatal) stop(uiText('This video could not be played. Try again later.')); });
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => { status.textContent = uiText('Select Play video to start.'); }));
                     hls.loadSource(data.url); hls.attachMedia(video);
                 }
-                status.textContent = 'Protected session active.'; schedule();
+                status.textContent = uiText('Protected session active.'); schedule();
             } catch (error) { if (turn === generation) stop(error.message); }
             finally { busy = false; play.disabled = false; }
         });
-        video.addEventListener('play', () => { play.textContent = 'Pause'; if (authorization) schedule(); });
-        video.addEventListener('pause', () => { play.textContent = 'Play video'; });
-        video.addEventListener('ended', () => stop('Video ended. Select Play video to replay.'));
-        video.addEventListener('error', () => { if (authorization) stop('This video could not be played. Try again later.'); });
+        video.addEventListener('play', () => { play.textContent = uiText('Pause'); if (authorization) schedule(); });
+        video.addEventListener('pause', () => { play.textContent = uiText('Play video'); });
+        video.addEventListener('ended', () => stop(uiText('Video ended. Select Play video to replay.')));
+        video.addEventListener('error', () => { if (authorization) stop(uiText('This video could not be played. Try again later.')); });
         video.addEventListener('timeupdate', () => { seek.value = String(video.currentTime); root.querySelector('[data-video-time]').textContent = `${Math.floor(video.currentTime / 60)}:${String(Math.floor(video.currentTime % 60)).padStart(2, '0')}`; });
         video.addEventListener('loadedmetadata', () => { seek.max = String(video.duration); seek.disabled = !Number.isFinite(video.duration); });
         seek.addEventListener('input', () => { if (Number.isFinite(video.duration)) video.currentTime = Math.min(Number(seek.value), video.duration); });
-        root.querySelector('[data-video-mute]').addEventListener('click', event => { video.muted = !video.muted; event.currentTarget.textContent = video.muted ? 'Unmute' : 'Mute'; });
+        root.querySelector('[data-video-mute]').addEventListener('click', event => { video.muted = !video.muted; event.currentTarget.textContent = video.muted ? uiText('Unmute') : uiText('Mute'); });
         const fullscreen = root.querySelector('[data-video-fullscreen]');
         fullscreen.hidden = !container.requestFullscreen;
-        fullscreen.addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else container.requestFullscreen().catch(() => { status.textContent = 'Fullscreen is unavailable in this browser.'; }); });
-        root.querySelector('[data-video-close]').addEventListener('click', () => stop('Player closed. Its issued video link expires shortly.'));
-        document.addEventListener('visibilitychange', () => { if (document.hidden && authorization) stop('Player stopped while the page was hidden. Select Play video to continue.'); });
-        window.addEventListener('pagehide', () => stop('Player closed.'));
+        fullscreen.addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else container.requestFullscreen().catch(() => { status.textContent = uiText('Fullscreen is unavailable in this browser.'); }); });
+        root.querySelector('[data-video-close]').addEventListener('click', () => stop(uiText('Player closed. Its issued video link expires shortly.')));
+        document.addEventListener('visibilitychange', () => { if (document.hidden && authorization) stop(uiText('Player stopped while the page was hidden. Select Play video to continue.')); });
+        window.addEventListener('pagehide', () => stop(uiText('Player closed.')));
     });
 }
 if (typeof document !== 'undefined') {

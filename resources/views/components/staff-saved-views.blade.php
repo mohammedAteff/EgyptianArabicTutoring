@@ -1,5 +1,5 @@
 @props(['section', 'filters', 'views'])
-<div class="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+<div class="aq-saved-views flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm">
     <span class="font-semibold text-slate-700">My saved views</span>
     @foreach($views as $savedView)
     <div class="flex items-center gap-1 rounded-lg bg-slate-100 pl-3">

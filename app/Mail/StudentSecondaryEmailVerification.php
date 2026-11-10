@@ -12,7 +12,7 @@ class StudentSecondaryEmailVerification extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Verify your secondary student email');
+        return new Envelope(subject: __('Verify your secondary student email'));
     }
 
     public function content(): Content

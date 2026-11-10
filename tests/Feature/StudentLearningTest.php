@@ -304,7 +304,7 @@ class StudentLearningTest extends TestCase
         $this->video($lesson, 'https://vimeo.com/123456');
         $this->video($lesson);
         LessonBlock::factory()->create(['lesson_id' => $lesson->id, 'kind' => 'bunny_video', 'status' => 'placeholder', 'payload' => null]);
-        $this->signIn($student)->get(route('student.learning.lessons.show', [$lesson->course, $lesson]))->assertOk()->assertSee('أهلاً Hello')->assertSee('dir="auto"', false)->assertSee('player.vimeo.com/video/123456')->assertSee('data-lms-video', false)->assertSee("This learning video isn't available yet", false)->assertSee('This content is currently unavailable.')->assertDontSee('PERMANENT-UNSAFE')->assertDontSee('javascript:alert')->assertDontSee('<script>INJECTED', false)->assertDontSee('evil.test');
+        $this->signIn($student)->get(route('student.learning.lessons.show', [$lesson->course, $lesson]))->assertOk()->assertSee('أهلاً Hello')->assertSee('dir="auto"', false)->assertSee('player.vimeo.com/video/123456')->assertSee('data-lms-video', false)->assertSeeText("This learning video isn't available yet")->assertSee('This content is currently unavailable.')->assertDontSee('PERMANENT-UNSAFE')->assertDontSee('javascript:alert')->assertDontSee('<script>INJECTED', false)->assertDontSee('evil.test');
     }
 
     public function test_current_published_resources_and_private_course_files_require_nested_access(): void

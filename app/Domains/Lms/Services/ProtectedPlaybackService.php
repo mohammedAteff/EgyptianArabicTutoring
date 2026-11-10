@@ -45,7 +45,7 @@ class ProtectedPlaybackService
         }
         $this->provider->verifyProtection($connection, strtolower((string) parse_url(config('app.url'), PHP_URL_HOST)));
         $asset = $this->videos->reconcile($asset);
-        abort_unless($asset->status === 'ready', 503, 'This video is still processing or unavailable.');
+        abort_unless($asset->status === 'ready', 503, __('This video is still processing or unavailable.'));
         $connectionVersion = $connection->lock_version;
         $profileVersion = $profile->lock_version;
 
@@ -58,7 +58,7 @@ class ProtectedPlaybackService
             $currentConnection = VideoProviderConnection::query()->lockForUpdate()->findOrFail($connection->id);
             abort_unless($currentAsset->id === $asset->id && $currentAsset->provider_video_id === $asset->provider_video_id
                 && $currentProfile->id === $profile->id && $currentProfile->lock_version === $profileVersion
-                && $currentConnection->enabled && $currentConnection->lock_version === $connectionVersion, 409, 'Video protection changed. Reload this lesson.');
+                && $currentConnection->enabled && $currentConnection->lock_version === $connectionVersion, 409, __('Video protection changed. Reload this lesson.'));
             $device = $this->devices->current($request, $student, $profile->device_limit, $leaseId === null);
             $lease = $leaseId ? PlaybackLease::query()->where('student_id', $student->id)->lockForUpdate()->findOrFail($leaseId)
                 : PlaybackLease::query()->where('student_id', $student->id)->where('request_key', $values['request_key'])->lockForUpdate()->first();
@@ -68,11 +68,11 @@ class ProtectedPlaybackService
                 abort_unless($lease->request_key === $values['request_key'] && $lease->device_id === $device->id
                     && $lease->course_id === $course->id && $lease->lesson_id === $lesson->id && $lease->block_id === $block->id
                     && $lease->video_asset_id === $asset->id && $lease->profile_id === $profile->id && $lease->profile_version === $profileVersion
-                    && $lease->status === 'active' && $lease->expires_at->gt($now), 409, 'This playback session ended. Start playback again.');
+                    && $lease->status === 'active' && $lease->expires_at->gt($now), 409, __('This playback session ended. Start playback again.'));
             }
             $occupied = PlaybackLease::query()->whereIn('student_id', Student::withTrashed()->whereKey($student->id)->orWhere('merged_into_student_id', $student->id)->select('id'))->when($lease, fn ($query) => $query->where('id', '!=', $lease->id))
                 ->where(fn ($query) => $query->where('authorized_until', '>', $now)->orWhere(fn ($query) => $query->where('status', 'active')->where('expires_at', '>', $now)))->count();
-            abort_if($profile->stream_limit !== null && $occupied >= $profile->stream_limit, 409, 'Your active video limit has been reached. Close another player and wait for its short authorization to expire.');
+            abort_if($profile->stream_limit !== null && $occupied >= $profile->stream_limit, 409, __('Your active video limit has been reached. Close another player and wait for its short authorization to expire.'));
             $ends = $this->access->accessEndings($student, collect([$course]), $lesson)[$course->id];
             $authorizationEnds = $now->addSeconds($profile->token_seconds)->min(CarbonImmutable::parse($request->session()->get('student_auth_expires_at'), 'UTC'));
             if ($ends) {

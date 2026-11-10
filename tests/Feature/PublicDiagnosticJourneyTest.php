@@ -77,6 +77,7 @@ class PublicDiagnosticJourneyTest extends TestCase
     #[TestWith(['wrong_purchase'])]
     public function test_invalid_diagnostic_link_rolls_back_the_purchase_and_ledger(string $case): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-21 08:00:00', 'UTC'));
         $student = Student::factory()->verified()->create();
         $type = $this->oneHourPackageLesson();
         $type->update(['slug' => 'diagnostic-session']);

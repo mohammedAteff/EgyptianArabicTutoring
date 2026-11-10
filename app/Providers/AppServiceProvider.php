@@ -28,6 +28,11 @@ use App\Domains\Lms\Services\BunnyStreamProvider;
 use App\Domains\Lms\Services\LmsSettings;
 use App\Domains\Lms\Services\VideoDeliveryProvider;
 use App\Domains\Notifications\Services\TelegramBusinessEvents;
+use App\Domains\Reporting\Models\TutorWorkEntry;
+use App\Domains\Reporting\Services\EstimatedActivityGate;
+use App\Domains\Reporting\Services\EstimatedActivitySynthetic;
+use App\Domains\Reporting\Services\TutorWorkWorkspace;
+use App\Domains\Students\Models\FeedbackConversation;
 use App\Domains\Students\Models\Student;
 use App\Domains\Students\Models\StudentBin;
 use App\Domains\Students\Models\StudentNotification;
@@ -35,6 +40,7 @@ use App\Domains\Students\Models\StudentOperationalAlert;
 use App\Domains\Students\Services\StudentIdentityService;
 use App\Domains\Students\Services\StudentSessionContext;
 use App\Domains\System\Services\DevelopmentDataSchema;
+use App\Policies\FeedbackPolicy;
 use App\Policies\LessonMaterialPolicy;
 use App\Policies\LessonWorkspacePolicy;
 use App\Policies\LmsPolicy;
@@ -43,6 +49,7 @@ use App\Policies\StaffTaskPolicy;
 use App\Policies\StudentBinPolicy;
 use App\Policies\StudentOperationalAlertPolicy;
 use App\Policies\StudentTeachingPolicy;
+use App\Policies\TutorWorkEntryPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
@@ -96,6 +103,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        app(EstimatedActivitySynthetic::class)->loadRuntime();
+        View::composer(['student.learning.lesson', 'student.learning.assessment', 'student.teaching',
+            'admin.lms.courses.create', 'admin.lms.courses.edit', 'admin.lms.reviews.index',
+            'admin.bookings.lesson-workspace', 'admin.feedback.show', 'admin.bookings.show', 'admin.bookings.create', 'admin.students.teaching'],
+            function (\Illuminate\View\View $view): void {
+                $view->with('activityContexts', app(EstimatedActivityGate::class)->surface(request(), $view->name(), $view->getData()));
+            });
+
         View::composer('layouts.public', function (\Illuminate\View\View $view): void {
             $view->with('publicSocialLinks', SocialLink::enabled()->orderBy('id')->get()->filter(fn (SocialLink $link): bool => $link->getFormattedUrl() !== '#'));
             $view->with('socialBannerEnabled', (bool) Setting::get('social.banner_enabled', true));
@@ -107,14 +122,17 @@ class AppServiceProvider extends ServiceProvider
             }
             $copies = app(WebsiteCopyService::class);
             $locale = app()->getLocale();
-            $published = $copies->document($page, $locale)?->published_content !== null;
+            $published = $copies->hasTranslation($page, $locale);
             $preview = request()->attributes->get('website_copy_preview', false);
             $view->with('copyLocale', ($published || $preview) ? $locale : 'en');
             if ($published || $preview) {
-                if ($page !== 'faq') {
+                if ($page !== 'faq' && $page !== 'blogs' && ! request()->routeIs('resources.index', 'resources.fr', 'resources.de', 'games.index', 'games.fr', 'games.de')) {
                     $view->with('isFallback', false);
+                    $view->with('entityLocales', ['en', ...($locale === 'en' ? [] : [$locale])]);
                 }
-                $view->with('entityLocales', ['en', ...($locale === 'en' ? [] : [$locale])]);
+            }
+            if ($page === 'blogs' && ! request()->routeIs('blog.index', 'blog.fr', 'blog.de')) {
+                return;
             }
             foreach (['seo.title' => 'title', 'seo.description' => 'metaDescription'] as $key => $variable) {
                 $value = $copies->value($page, $key);
@@ -152,6 +170,10 @@ class AppServiceProvider extends ServiceProvider
             unset($group);
             $view->with('adminNavigation', $groups);
             if ($view->name() === 'layouts.admin') {
+                $actor = auth('web')->user();
+                $canUseWork = $actor && Gate::forUser($actor)->allows('viewAny', TutorWorkEntry::class);
+                $workspace = $canUseWork ? app(TutorWorkWorkspace::class)->find() : null;
+                $view->with('tutorWorkShell', $canUseWork ? ['actor' => $actor->id, 'workspace' => $workspace?->id] : null);
                 $unreadCount = 0;
                 if (in_array($role, ['super_admin', 'admin'], true)) {
                     $query = AdminNotification::query()->unread();
@@ -175,11 +197,31 @@ class AppServiceProvider extends ServiceProvider
             $view->with('siteAnnouncement', app(AnnouncementService::class)->visible($view->name() === 'layouts.student' ? 'student' : 'public'));
         });
         View::composer('layouts.student', function (\Illuminate\View\View $view): void {
-            $student = app(StudentSessionContext::class)->current(request());
+            $student = empty($view->getData()['isPreview']) && ! request()->routeIs('student.login', 'student.two-factor.*')
+                ? app(StudentSessionContext::class)->current(request()) : null;
             $view->with('studentPortalAccount', $student);
             $view->with('studentPortalUnreadCount', $student
                 ? StudentNotification::query()->where('student_id', $student->id)->whereNull('read_at')->count()
                 : 0);
+            $groups = config('student_navigation.groups');
+            $destinations = collect($groups)->pluck('items')->collapse();
+            $currentRoute = $destinations->keys()->first(fn (string $route): bool => request()->routeIs($route))
+                ?? $destinations->keys()->first(fn (string $route): bool => request()->routeIs(...($destinations[$route]['active'] ?? [])));
+            $currentGroup = null;
+            foreach ($groups as $key => &$group) {
+                foreach ($group['items'] as $route => &$item) {
+                    $item += ['destination' => $route, 'current' => $route === $currentRoute, 'exact' => request()->routeIs($route)];
+                    if ($item['current']) {
+                        $currentGroup = $key;
+                    }
+                }
+                unset($item);
+            }
+            unset($group);
+            $view->with('studentNavigation', $groups);
+            $view->with('studentCurrentGroup', $currentGroup);
+            $view->with('studentCurrentLabel', $destinations[$currentRoute]['label'] ?? 'Student Portal');
+            $view->with('studentContentWidth', $destinations[$currentRoute]['width'] ?? 'standard');
         });
         Session::extend('database', fn ($app) => new PrivacyDatabaseSessionHandler(
             DB::connection(config('session.connection')), config('session.table'), (int) config('session.lifetime'), $app,
@@ -189,12 +231,14 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Gate::policy(StaffBin::class, StaffBinPolicy::class);
+        Gate::policy(TutorWorkEntry::class, TutorWorkEntryPolicy::class);
         Gate::policy(StaffTask::class, StaffTaskPolicy::class);
         Gate::policy(StudentOperationalAlert::class, StudentOperationalAlertPolicy::class);
         Gate::policy(StudentBin::class, StudentBinPolicy::class);
         Gate::policy(Booking::class, LessonWorkspacePolicy::class);
         Gate::policy(LessonMaterial::class, LessonMaterialPolicy::class);
         Gate::policy(Student::class, StudentTeachingPolicy::class);
+        Gate::policy(FeedbackConversation::class, FeedbackPolicy::class);
         foreach ([Course::class, Section::class, Lesson::class, LessonBlock::class, AccessGrant::class, Enrollment::class, LearningAssignment::class] as $learningModel) {
             Gate::policy($learningModel, LmsPolicy::class);
         }

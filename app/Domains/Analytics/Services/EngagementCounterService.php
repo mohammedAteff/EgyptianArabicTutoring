@@ -150,6 +150,7 @@ class EngagementCounterService
                 'enabled' => $learningHoursEnabled,
                 'window_days' => $windowDays,
                 'total_hours' => $learningActivity['total_hours'],
+                'total_minutes' => $learningActivity['days'] * 1440 + $learningActivity['hours'] * 60 + $learningActivity['minutes'],
                 'formatted_time' => $learningActivity['formatted_time'],
                 'headline' => $headline,
                 'subtitle' => $subtitle,
@@ -164,7 +165,7 @@ class EngagementCounterService
     {
         $timezone = app(TimezoneService::class)->getBusinessTimezone();
 
-        return 'counters.public.'.hash('sha256', $timezone).'.'.CarbonImmutable::now($timezone)->toDateString();
+        return 'counters.public.v2.'.hash('sha256', $timezone).'.'.CarbonImmutable::now($timezone)->toDateString();
     }
 
     /** @return array{string, string} */
@@ -185,12 +186,12 @@ class EngagementCounterService
         $count = $this->getLiveUsersCount();
         $payload['live_users']['count'] = $count;
         $payload['live_users']['enabled'] = (bool) Setting::get('counters.live_users.public_enabled', false);
-        $payload['live_users']['text'] = str_replace('{count}', number_format($count), (string) Setting::get('counters.live_users.template', '{count} active visitors online right now'));
+        $payload['learning_hours']['formatted_time'] = HumanDurationFormatter::minutes($payload['learning_hours']['total_minutes'], app()->getLocale());
         $copy = app(WebsiteCopyService::class);
         $text = fn (string $key, string $fallback): string => (string) $copy->value('shared', 'counters.'.str_replace('.', '__', $key), $fallback);
-        $payload['live_users']['text'] = str_replace('{count}', number_format($count), $text('counters.live_users.template', (string) Setting::get('counters.live_users.template', '{count} active visitors online right now')));
+        $payload['live_users']['text'] = str_replace('{count}', localized_number($count), $text('counters.live_users.template', (string) Setting::get('counters.live_users.template', '{count} active visitors online right now')));
         [$trafficKey, $trafficDefault] = $this->trafficTemplate($payload['monthly_traffic']['source']);
-        $payload['monthly_traffic']['text'] = str_replace('{count}', number_format($payload['monthly_traffic']['count']), $text($trafficKey, (string) Setting::get($trafficKey, $trafficDefault)));
+        $payload['monthly_traffic']['text'] = str_replace('{count}', localized_number($payload['monthly_traffic']['count']), $text($trafficKey, (string) Setting::get($trafficKey, $trafficDefault)));
         $payload['learning_hours']['headline'] = str_replace('{time}', $payload['learning_hours']['formatted_time'], $text('counters.learning_hours.headline', (string) Setting::get('counters.learning_hours.headline', 'Globally, students have put in...')));
         $payload['learning_hours']['subtitle'] = str_replace('{time}', $payload['learning_hours']['formatted_time'], $text('counters.learning_hours.subtitle', (string) Setting::get('counters.learning_hours.subtitle', 'of practice time in the last 7 days')));
 

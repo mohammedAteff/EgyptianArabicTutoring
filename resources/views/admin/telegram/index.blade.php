@@ -5,7 +5,7 @@ $input='block w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-s
 $button='rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700';
 $card='rounded-2xl border border-slate-200 bg-white p-6 shadow-sm';
 @endphp
-<div class="mx-auto max-w-6xl space-y-6">
+<div class="aq-form mx-auto max-w-6xl space-y-6">
 <div><h1 class="text-3xl font-bold text-slate-900">Telegram Bots</h1><p class="mt-2 text-slate-500">Manage notification bots, destinations, alert rules and delivery history. The public footer Telegram link is configured separately.</p></div>
 @if(session('success'))<div role="status" class="rounded-xl bg-emerald-50 p-4 text-emerald-800">{{ session('success') }}</div>@endif
 @if(session('error'))<div role="alert" class="rounded-xl bg-rose-50 p-4 text-rose-800">{{ session('error') }}</div>@endif

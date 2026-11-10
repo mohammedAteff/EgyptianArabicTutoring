@@ -30,6 +30,6 @@ class ResourceAssignmentController extends Controller
             $item->update(['reviewed_at' => $item->reviewed_at ?? now('UTC')]);
         }, 3);
 
-        return to_route('student.teaching.index')->with('success', 'Resource marked as reviewed.');
+        return to_route('student.teaching.index')->with('success', __('Resource marked as reviewed.'));
     }
 }

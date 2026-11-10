@@ -213,7 +213,7 @@ class BusinessLifecycleConcurrencyTest extends TestCase
         $this->assertEqualsWithDelta(7200, $this->package->fresh()->expires_at->timestamp - $before->timestamp, 10);
     }
 
-    public function test_parallel_partial_receipts_keep_the_earliest_payment_clock_without_unlocking_credits(): void
+    public function test_parallel_partial_receipts_keep_the_earliest_payment_clock_and_single_credit_grant(): void
     {
         $package = app(StudentLedgerService::class)->createPackage($this->student, 'Foundation', 8, '280', '0', 'USD', null, 'partial-race', presetKey: 'foundation_track');
         $payload = ['action' => 'record_payment', 'package_id' => $package->id, 'amount' => '100.00', 'administrator_id' => $this->administratorId];

@@ -110,6 +110,6 @@ class LmsAssignmentService
 
     private function invalid(string $message): never
     {
-        throw ValidationException::withMessages(['submission' => $message]);
+        throw ValidationException::withMessages(['submission' => __($message)]);
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/** @property-read string|null $library_name Localized projection selected by ResourceLibraryQuery. */
 class ResourceCategory extends Model
 {
     /** @use HasTranslations<CategoryTranslation> */

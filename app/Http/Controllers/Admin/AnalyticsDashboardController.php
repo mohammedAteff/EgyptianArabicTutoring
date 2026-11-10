@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Analytics\Services\AnalyticsService;
 use App\Domains\CMS\Models\Setting;
+use App\Domains\Games\Models\Game;
+use App\Domains\Games\Services\GameAnalyticsService;
 use App\Domains\Reporting\Services\ExportService;
 use App\Domains\Reporting\Services\ReportPeriod;
 use App\Domains\Reporting\Services\ReportService;
@@ -99,6 +101,19 @@ class AnalyticsDashboardController extends Controller
             'bounceTrend' => $bounceTrend,
             'goals' => $this->analyticsService->goalReport($startDateUtc, $endDateUtc),
             'whatsappActivity' => $this->analyticsService->whatsappReport($startDateUtc, $endDateUtc),
+        ]);
+    }
+
+    public function games(Request $request, GameAnalyticsService $games): View
+    {
+        $filters = app(ReportPeriod::class)->filters($request, ['game_id' => ['nullable', 'integer', 'exists:games,id']]);
+        [$start, $end] = app(ReportPeriod::class)->bounds($filters);
+
+        return view('admin.analytics.games', [
+            'title' => 'Games Analytics',
+            'filters' => $filters,
+            'games' => Game::query()->orderBy('sort_order')->orderBy('id')->pluck('title', 'id')->all(),
+            'report' => $games->report($start, $end, isset($filters['game_id']) ? (int) $filters['game_id'] : null),
         ]);
     }
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {bookmarkSeconds, seekBookmark} from '../resources/js/learning-player.js';
+import {uiText} from '../resources/js/ui-translations.js';
 
 test('bookmark captures elapsed video time to milliseconds without writing progress', () => {
     const media = {duration: 200, currentTime: 83.4567};
@@ -46,8 +47,8 @@ function playerFixture() {
     const jumpStatus = {textContent: ''};
     const player = {querySelectorAll: selector => selector === '[data-lms-video]' ? videos : selector === '[data-lms-bookmark-form]' ? forms : [jump], querySelector: () => jumpStatus};
     const document = {readyState: 'complete', querySelectorAll: selector => selector === '[data-lms-player]' ? [player] : []};
-    const source = fs.readFileSync(new URL('../resources/js/learning-player.js', import.meta.url), 'utf8').replace(/^export /gm, '');
-    vm.runInNewContext(source, {document, window: {matchMedia: () => ({matches: false})}});
+    const source = fs.readFileSync(new URL('../resources/js/learning-player.js', import.meta.url), 'utf8').replace(/^export /gm, '').replace(/^import .*;\r?\n/gm, '');
+    vm.runInNewContext(source, {document, uiText, window: {matchMedia: () => ({matches: false})}});
     return {videos, forms, jump, jumpStatus};
 }
 

@@ -21,7 +21,7 @@
     </div>
     @if($form)<label class="block text-sm font-medium">Version changelog<input name="changelog" maxlength="2000" class="mt-1 block w-full rounded-lg border-stone-300" placeholder="Describe this version if the current version is frozen"></label>@endif
     <input type="hidden" name="questions_json" :value="serialize()">
-    <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-semibold">Questions</h2><div class="flex gap-2"><button type="button" @click="preview = !preview" class="rounded-lg border border-stone-300 px-4 py-2" x-text="preview ? 'Edit questions' : 'Preview'"></button><button type="button" @click="add()" class="rounded-lg bg-nile-800 px-4 py-2 text-white">Add question</button></div></div>
+    <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-semibold">Questions</h2><div class="flex flex-wrap gap-2"><button type="button" @click="preview = !preview" class="rounded-lg border border-stone-300 px-4 py-2" x-text="preview ? 'Edit questions' : 'Preview'"></button><button type="button" @click="add()" class="aq-action-secondary rounded-lg px-4 py-2">Add question</button></div></div>
     <template x-for="(question, index) in questions" :key="question.question_key">
         <section class="space-y-4 rounded-xl border border-stone-300 bg-stone-50 p-4">
             <div x-show="!preview" class="space-y-4">
@@ -39,7 +39,7 @@
     </template>
     <p x-show="!questions.length" class="text-sm text-stone-600">Add your first question to get started.</p>
     <div class="flex flex-wrap gap-3">
-        <button type="submit" class="rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-nile-900">Save draft</button>
+        <button type="submit" class="aq-action-primary rounded-lg px-4 py-2.5 text-sm font-semibold">Save draft</button>
     </div>
 </form>
 @if($form && $form->status !== 'archived')

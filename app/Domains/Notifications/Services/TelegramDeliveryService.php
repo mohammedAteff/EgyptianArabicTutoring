@@ -56,6 +56,8 @@ class TelegramDeliveryService
             || ! app(TelegramCommandCatalog::class)->allows($delivery->bot, $access['command'])
             || ! in_array((string) ($access['user'] ?? ''), array_map('strval', $delivery->destination->allowed_user_ids ?? []), true)
             || (string) ($access['chat_id'] ?? '') !== (string) $delivery->destination->chat_id
+            || (in_array($access['command'], ['feedback', 'insights'], true) && $delivery->destination->detail_level !== 'personal')
+            || (! empty($access['private_destination']) && $delivery->destination->type !== 'private')
             || (! empty($access['personal']) && $delivery->destination->detail_level !== 'personal'))) {
             $delivery->update(['status' => 'cancelled', 'failure_code' => 'command_access_revoked']);
 

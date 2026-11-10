@@ -24,7 +24,7 @@ class ProfileController extends Controller
         $request->attributes->get('student')->update(['preferred_timezone' => $data['timezone']]);
         $request->session()->put('student_display_timezone', $data['timezone']);
 
-        return back()->with('success', 'Timezone preference saved.');
+        return back()->with('success', __('Timezone preference saved.'));
     }
 
     public function addEmail(Request $request, StudentEmailService $emails): RedirectResponse
@@ -32,13 +32,13 @@ class ProfileController extends Controller
         $data = $request->validate(['email' => ['required', 'email:rfc', 'max:255']]);
         $emails->addContactAddress($request->attributes->get('student'), $data['email']);
 
-        return back()->with('success', 'The email address has been added to your student profile.');
+        return back()->with('success', __('The email address has been added to your student profile.'));
     }
 
     public function verify(Request $request, string $token, StudentEmailService $emails): RedirectResponse
     {
         $emails->verify($request->attributes->get('student'), $token);
 
-        return redirect()->route('student.profile')->with('success', 'Secondary email verified.');
+        return redirect()->route('student.profile')->with('success', __('Secondary email verified.'));
     }
 }

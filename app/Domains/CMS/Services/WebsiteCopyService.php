@@ -24,6 +24,13 @@ class WebsiteCopyService
         $defaults = array_map(fn (array $field): mixed => $field['default'], $this->catalog->fields($page));
         $english = $this->document($page, 'en');
         $values = array_replace($defaults, $english->published_content ?? []);
+        if ($locale !== 'en') {
+            foreach ($this->catalog->fields($page) as $key => $field) {
+                if (is_string($values[$key] ?? null) && ! in_array($field['type'], ['image', 'url'], true)) {
+                    $values[$key] = __($values[$key], locale: $locale);
+                }
+            }
+        }
         if ($page === 'about' && $locale !== 'en') {
             $translation = Page::query()->where('slug', 'about')->where('status', 'published')->first()?->liveTranslation($locale);
             if ($translation) {
@@ -64,8 +71,32 @@ class WebsiteCopyService
             return $values[$token];
         }
         $english = $this->document($page, 'en');
+        $value = $english?->published_content[$token] ?? $fallback;
 
-        return $english?->published_content[$token] ?? $fallback;
+        return $locale !== 'en' && is_string($value) ? __($value, locale: $locale) : $value;
+    }
+
+    public function hasTranslation(string $page, string $locale): bool
+    {
+        $availability = request()->attributes->get('website_copy_locales', []);
+        if (array_key_exists($page.':'.$locale, $availability)) {
+            return $availability[$page.':'.$locale];
+        }
+        if ($locale === 'en' || $this->document($page, $locale)?->published_content !== null) {
+            return true;
+        }
+        $values = $this->values($page, 'en');
+        foreach ($this->catalog->fields($page) as $key => $field) {
+            $text = $values[$key] ?? '';
+            if (! is_string($text) || ! preg_match('/[a-z]/i', $text) || in_array($field['type'], ['image', 'url'], true)) {
+                continue;
+            }
+            if (! app('translator')->hasForLocale($text, $locale)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function document(string $page, string $locale): ?WebsiteCopy
@@ -166,6 +197,11 @@ class WebsiteCopyService
     public function apply(string $page, bool $preview = false): array
     {
         $original = config('public_content');
+        $availability = [];
+        foreach (['en', 'fr', 'de'] as $locale) {
+            $availability[$page.':'.$locale] = $this->hasTranslation($page, $locale);
+        }
+        request()->attributes->set('website_copy_locales', $availability);
         $fields = $this->catalog->fields($page);
         $values = $this->values($page, draft: $preview);
         $tree = $this->catalog->defaults($page);

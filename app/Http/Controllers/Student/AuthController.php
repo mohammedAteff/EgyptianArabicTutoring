@@ -8,7 +8,9 @@ use App\Domains\Students\Models\Student;
 use App\Domains\Students\Services\StudentAuthAttemptTracker;
 use App\Domains\Students\Services\StudentEmailService;
 use App\Domains\Students\Services\StudentIdentityService;
+use App\Domains\Students\Services\StudentIntendedDestination;
 use App\Domains\Students\Services\StudentLoginService;
+use App\Domains\Students\Services\StudentSessionContext;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,9 +23,9 @@ class AuthController extends Controller
 {
     private const FAILURE_MESSAGE = 'The provided student details could not be verified.';
 
-    public function showLogin(): View
+    public function showLogin(Request $request, StudentSessionContext $students): View|RedirectResponse
     {
-        return view('student.login');
+        return $students->current($request) ? redirect()->route('student.home') : view('student.login');
     }
 
     public function login(Request $request, StudentIdentityService $identity, StudentAuthAttemptTracker $attempts, AdminNotificationService $notifications): RedirectResponse
@@ -51,7 +53,7 @@ class AuthController extends Controller
                 $isValid = false;
             }
         }
-        $phone = trim((string) ($input['phone'] ?? '')) ?: null;
+        $phone = is_string($input['phone'] ?? null) ? (trim($input['phone']) ?: null) : null;
 
         $fingerprints = $identity->authFingerprints(
             is_string($input['email'] ?? null) ? $input['email'] : null,
@@ -88,7 +90,7 @@ class AuthController extends Controller
             });
 
             if ($matches->count() > 1) {
-                $notifications->notifySystemWarning('Ambiguous student verification', 'Multiple verified student profiles matched an authentication attempt. Review identity records.');
+                $notifications->notifySystemWarning('Ambiguous student verification', __('Multiple verified student profiles matched an authentication attempt. Review identity records.'));
             }
 
             return $matches->count() === 1 ? $matches->first() : null;
@@ -110,7 +112,7 @@ class AuthController extends Controller
     {
         app(ProtectedPlaybackService::class)->logout($request);
         Auth::guard('student')->logout();
-        $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at', 'student.two_factor_pending', 'student.two_factor_verified', 'student.two_factor_setup_approved']);
+        $request->session()->forget(['student_id', 'student_authenticated_at', 'student_auth_expires_at', 'student.two_factor_pending', 'student.two_factor_verified', 'student.two_factor_setup_approved', StudentIntendedDestination::SESSION_KEY]);
 
         return redirect()->route('student.login');
     }

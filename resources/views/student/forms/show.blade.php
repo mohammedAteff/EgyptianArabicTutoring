@@ -1,44 +1,66 @@
-@php $questionnaireTitle = match($form->slug) { 'short-form' => 'Your Learning Goals', 'long-form' => 'Your Learning Profile', default => $form->title }; @endphp
+@php
+    $presentation = $version->questions->first()?->presentation_config ?? [];
+    $questionnaireTitle = $presentation['form_title'] ?? $form->title;
+    $questionnaireDescription = $presentation['form_description'] ?? $form->description;
+    $historicalVersion = (int) $version->id !== (int) $form->published_version_id;
+    $previousSection = null;
+@endphp
 @extends('layouts.student', ['title' => $questionnaireTitle])
 
 @section('content')
-<a href="{{ route('student.dashboard') }}" class="text-sm font-medium text-nile-800 underline">← Back to Sessions</a>
-<h1 class="mt-3 text-3xl font-semibold tracking-tight text-nile-900">{{ $questionnaireTitle }}</h1>
-@if($form->description)<p class="mt-2 text-stone-600">{{ $form->description }}</p>@endif
-<p class="mt-2 text-xs text-stone-500">Form version {{ $version->version_number }}</p>
-@if($updateAvailable)<p role="status" class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">An updated questionnaire is available. Your existing answers remain connected to their original version.</p>@endif
-@if($updateAvailable && !$startNewVersion)<a href="{{ route('student.forms.show', [$form->slug, 'new_version' => 1]) }}" class="mt-3 inline-block rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-900">Start Updated Questionnaire</a>@endif
-@if($startNewVersion)<p class="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900">Starting a new response for version {{ $version->version_number }}. Your previous version remains unchanged.</p>@endif
-@if(session('success'))<p role="status" class="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{{ session('success') }}</p>@endif
-@if($errors->any())<div role="alert" class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
+<a href="{{ route('student.home').'#questionnaires' }}" class="text-sm font-medium text-nile-800 underline">{{ __('← Back to Home') }}</a>
+<div lang="{{ app()->getLocale() }}">
+<h1 class="mt-3 text-3xl font-semibold tracking-tight text-nile-900">{{ __($questionnaireTitle) }}</h1>
+@if($historicalVersion)<p class="mt-2 text-sm font-semibold text-amber-900">{{ __('Historical questionnaire — version') }} {{ $version->version_number }}</p>@endif
+@if(!empty($presentation['introduction_heading']))<h2 class="mt-6 text-xl font-semibold text-nile-900">{{ __($presentation['introduction_heading']) }}</h2>@endif
+@if($questionnaireDescription)<p class="mt-3 whitespace-pre-line leading-relaxed text-stone-600">{{ __($questionnaireDescription) }}</p>@endif
+<p class="mt-2 text-xs text-stone-500">{{ __('Form version') }} {{ $version->version_number }}</p>
+@if($updateAvailable)<p role="status" class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">{{ __('An updated questionnaire is available. Your existing answers remain connected to their original version.') }}</p>@endif
+@if($updateAvailable && !$startNewVersion)<a href="{{ route('student.forms.show', [$form->slug, 'new_version' => 1]) }}" class="mt-3 inline-block rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-900">{{ __('Start Updated Questionnaire') }}</a>@endif
+@if($startNewVersion)<p class="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900">{{ __('Starting a new response for version') }} {{ $version->version_number }}{{ __('. Your previous version remains unchanged.') }}</p>@endif
+@if(session('success'))<p role="status" class="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{{ __(session('success')) }}</p>@endif
+@if($errors->any())<div role="alert" class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">@foreach($errors->all() as $error)<p>{{ __($error) }}</p>@endforeach</div>@endif
 <form method="POST" action="{{ route('student.forms.save', $form->slug) }}" class="mt-6 space-y-5" data-questionnaire data-autosave-url="{{ route('student.forms.autosave', $form->slug) }}" data-read-only="{{ $readOnly ? '1' : '0' }}">
     @csrf
     <input type="hidden" name="submission_id" value="{{ $submission?->id }}"><input type="hidden" name="form_version_id" value="{{ $version->id }}">
-    <p data-save-status role="status" aria-live="polite" aria-atomic="true" class="text-sm text-stone-600">{{ $readOnly ? 'Completed' : 'Changes save automatically' }}</p>
+    <p data-save-status role="status" aria-live="polite" aria-atomic="true" class="text-sm text-stone-600">{{ __($readOnly ? 'Completed' : 'Changes save automatically') }}</p>
     @foreach($version->questions as $question)
-        @php $value = old("answers.{$question->question_key}", $answers[$question->question_key] ?? null); @endphp
+        @php
+            $value = old("answers.{$question->question_key}", $answers[$question->question_key] ?? null);
+            $section = $question->presentation_config['section'] ?? null;
+            $descriptionIds = trim(($question->description ? 'question-help-'.$question->id : '').' '.($errors->has('answers.'.$question->question_key) ? 'question-error-'.$question->id : ''));
+        @endphp
+        @if($section && $previousSection !== $section['key'])
+            <section aria-labelledby="{{ $section['key'] }}" class="pt-6">
+                <h2 id="{{ $section['key'] }}" class="text-xl font-semibold text-nile-900">{{ __($section['title']) }}</h2>
+                @if(!empty($section['description']))<p class="mt-2 leading-relaxed text-stone-600">{{ __($section['description']) }}</p>@endif
+            </section>
+            @php $previousSection = $section['key']; @endphp
+        @endif
         @if($question->question_type === 'info_block')
-            <section class="rounded-xl border border-stone-200 bg-blue-50 p-5"><h2 class="font-semibold text-nile-900">{{ $question->label }}</h2>@if($question->description)<p class="mt-2 whitespace-pre-line text-sm text-stone-700">{{ $question->description }}</p>@endif</section>
+            <section class="rounded-xl border border-stone-200 bg-blue-50 p-5"><h2 class="font-semibold text-nile-900">{{ __($question->label) }}</h2>@if($question->description)<p class="mt-2 whitespace-pre-line text-sm text-stone-700">{{ __($question->description) }}</p>@endif</section>
         @else
-            <fieldset data-question-key="{{ $question->question_key }}" data-question-type="{{ $question->question_type }}" data-conditional='@json($question->conditional_logic)' class="rounded-xl border border-stone-200 bg-white p-5">
-                <legend class="font-semibold text-stone-900">{{ $question->label }} @if($question->is_required)<span class="text-red-700" aria-label="required">*</span>@endif</legend>
-                @if($question->description)<p class="mt-1 text-sm text-stone-600">{{ $question->description }}</p>@endif
+            <fieldset data-question-key="{{ $question->question_key }}" data-question-type="{{ $question->question_type }}" data-conditional='@json($question->conditional_logic)' class="min-w-0 rounded-xl border border-stone-200 bg-white p-4 sm:p-5" @disabled($readOnly)>
+                <legend class="max-w-full break-words font-semibold text-stone-900" id="question-label-{{ $question->id }}">{{ __($question->label) }} @if($question->is_required)<span class="text-red-700" aria-label="{{ __('required') }}">*</span>@else<span class="ml-1 text-xs font-normal text-stone-500">{{ __('Optional') }}</span>@endif</legend>
+                @if($question->description)<p id="question-help-{{ $question->id }}" class="mt-1 text-sm leading-relaxed text-stone-600">{{ __($question->description) }}</p>@endif
                 @switch($question->question_type)
-                    @case('long_text')<textarea name="answers[{{ $question->question_key }}]" rows="4" @required($question->is_required) maxlength="{{ $question->validation_rules['max_length'] ?? 10000 }}" class="mt-3 block w-full rounded-lg border-stone-300">{{ $value }}</textarea>@break
+                    @case('long_text')<textarea name="answers[{{ $question->question_key }}]" aria-labelledby="question-label-{{ $question->id }}" @if($descriptionIds) aria-describedby="{{ $descriptionIds }}" @endif aria-invalid="{{ $errors->has('answers.'.$question->question_key) ? 'true' : 'false' }}" rows="4" @required($question->is_required) maxlength="{{ $question->validation_rules['max_length'] ?? 10000 }}" class="mt-3 block min-w-0 w-full max-w-full rounded-lg border-stone-300 focus:border-nile-700 focus:ring-nile-700">{{ $value }}</textarea>@break
                     @case('single_choice')
-                    @case('dropdown')<select name="answers[{{ $question->question_key }}]" @required($question->is_required) class="mt-3 block w-full rounded-lg border-stone-300"><option value="">Choose an option</option>@foreach($question->options as $option)<option value="{{ $option->value }}" @selected((string) $value === $option->value)>{{ $option->label }}</option>@endforeach</select>@break
-                    @case('multiple_choice')<div class="mt-3 space-y-2">@foreach($question->options as $option)<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="answers[{{ $question->question_key }}][]" value="{{ $option->value }}" @checked(in_array($option->value, (array) $value, true))>{{ $option->label }}</label>@endforeach</div>@break
-                    @case('yes_no')<select name="answers[{{ $question->question_key }}]" @required($question->is_required) class="mt-3 block w-full rounded-lg border-stone-300"><option value="">Choose</option><option value="1" @selected($value === true || $value === '1')>Yes</option><option value="0" @selected($value === false || $value === '0')>No</option></select>@break
-                    @case('rating_scale')<label class="mt-3 flex items-center gap-3">{{ $question->presentation_config['left_label'] ?? '' }}<input type="range" name="answers[{{ $question->question_key }}]" min="{{ $question->presentation_config['min'] ?? 1 }}" max="{{ $question->presentation_config['max'] ?? 5 }}" value="{{ $value ?? ($question->presentation_config['min'] ?? 1) }}" @required($question->is_required)><span>{{ $question->presentation_config['right_label'] ?? '' }}</span></label>@break
+                    @case('dropdown')<select name="answers[{{ $question->question_key }}]" aria-labelledby="question-label-{{ $question->id }}" @if($descriptionIds) aria-describedby="{{ $descriptionIds }}" @endif aria-invalid="{{ $errors->has('answers.'.$question->question_key) ? 'true' : 'false' }}" @required($question->is_required) class="mt-3 block min-w-0 w-full max-w-full rounded-lg border-stone-300 focus:border-nile-700 focus:ring-nile-700"><option value="">{{ __('Choose an option') }}</option>@foreach($question->options as $option)<option value="{{ $option->value }}" @selected((string) $value === $option->value)>{{ __($option->label) }}</option>@endforeach</select>@break
+                    @case('multiple_choice')<div class="mt-3 space-y-2">@foreach($question->options as $option)<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="answers[{{ $question->question_key }}][]" value="{{ $option->value }}" @checked(in_array($option->value, (array) $value, true))>{{ __($option->label) }}</label>@endforeach</div>@break
+                    @case('yes_no')<select name="answers[{{ $question->question_key }}]" aria-labelledby="question-label-{{ $question->id }}" @if($descriptionIds) aria-describedby="{{ $descriptionIds }}" @endif aria-invalid="{{ $errors->has('answers.'.$question->question_key) ? 'true' : 'false' }}" @required($question->is_required) class="mt-3 block min-w-0 w-full max-w-full rounded-lg border-stone-300 focus:border-nile-700 focus:ring-nile-700"><option value="">{{ __('Choose') }}</option><option value="1" @selected($value === true || $value === '1')>{{ __('Yes') }}</option><option value="0" @selected($value === false || $value === '0')>{{ __('No') }}</option></select>@break
+                    @case('rating_scale')<label class="mt-3 flex items-center gap-3">{{ __($question->presentation_config['left_label'] ?? '') }}<input type="range" name="answers[{{ $question->question_key }}]" aria-labelledby="question-label-{{ $question->id }}" @if($descriptionIds) aria-describedby="{{ $descriptionIds }}" @endif aria-invalid="{{ $errors->has('answers.'.$question->question_key) ? 'true' : 'false' }}" min="{{ $question->presentation_config['min'] ?? 1 }}" max="{{ $question->presentation_config['max'] ?? 5 }}" value="{{ $value ?? ($question->presentation_config['min'] ?? 1) }}" @required($question->is_required)><span>{{ __($question->presentation_config['right_label'] ?? '') }}</span></label>@break
                     @default
-                        <input type="{{ in_array($question->question_type, ['email', 'number', 'date'], true) ? $question->question_type : ($question->question_type === 'phone' ? 'tel' : 'text') }}" name="answers[{{ $question->question_key }}]" value="{{ $value }}" @required($question->is_required) @if($question->question_type === 'phone') pattern="\+[1-9][0-9]{7,14}" placeholder="+201012345678" @endif @if($question->question_type === 'short_text') maxlength="{{ $question->validation_rules['max_length'] ?? 255 }}" @endif class="mt-3 block w-full rounded-lg border-stone-300">
+                        <input type="{{ in_array($question->question_type, ['email', 'number', 'date'], true) ? $question->question_type : ($question->question_type === 'phone' ? 'tel' : 'text') }}" name="answers[{{ $question->question_key }}]" aria-labelledby="question-label-{{ $question->id }}" @if($descriptionIds) aria-describedby="{{ $descriptionIds }}" @endif aria-invalid="{{ $errors->has('answers.'.$question->question_key) ? 'true' : 'false' }}" value="{{ $value }}" @required($question->is_required) @if($question->question_type === 'phone') pattern="\+[1-9][0-9]{7,14}" placeholder="+201012345678" @endif @if($question->question_type === 'short_text') maxlength="{{ $question->validation_rules['max_length'] ?? 255 }}" @endif class="mt-3 block min-w-0 w-full max-w-full rounded-lg border-stone-300 focus:border-nile-700 focus:ring-nile-700">
                 @endswitch
+                @error('answers.'.$question->question_key)<p id="question-error-{{ $question->id }}" class="mt-2 text-sm text-red-700">{{ __($message) }}</p>@enderror
             </fieldset>
         @endif
     @endforeach
-    @unless($readOnly)<div class="flex flex-wrap gap-3"><button name="intent" value="draft" formnovalidate class="rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold">Save Draft</button><button name="intent" value="submit" class="rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white">{{ $submission?->status === 'submitted' ? 'Save Answers' : 'Submit Answers' }}</button></div>@else<p class="text-sm text-stone-600">Your Answers Are Saved. You can review them here. Contact Abdallah if you need a correction.</p>@endunless
+    @unless($readOnly)<div class="flex flex-wrap gap-3"><button name="intent" value="draft" formnovalidate class="rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold">{{ __('Save Draft') }}</button><button name="intent" value="submit" class="rounded-lg bg-nile-800 px-4 py-2.5 text-sm font-semibold text-white">{{ __($submission?->status === 'submitted' ? 'Save Answers' : 'Submit Answers') }}</button></div>@else<p class="text-sm text-stone-600">{{ __('Your Answers Are Saved. You can review them here. Contact Abdallah if you need a correction.') }}</p>@endunless
 </form>
-<noscript><p class="mt-4 text-sm text-stone-600">Automatic saving requires JavaScript. Use Save Draft or Submit Answers to save your work before leaving.</p></noscript>
+</div>
+<noscript><p class="mt-4 text-sm text-stone-600">{{ __('Automatic saving requires JavaScript. Use Save Draft or Submit Answers to save your work before leaving.') }}</p></noscript>
 <script>
 (() => {
     const form = document.querySelector('[data-questionnaire]');
@@ -101,7 +123,7 @@
             if (form.dataset.saveInitialized === '1') return;
             form.dataset.nativeSubmission = '0';
             form.dataset.earlyDirty = '1';
-            saveStatus.textContent = 'Unsaved changes. Use Save Draft if automatic saving is unavailable.';
+            saveStatus.textContent = @js(__('Unsaved changes. Use Save Draft if automatic saving is unavailable.'));
         };
         form.addEventListener('input', markEarlyChange);
         form.addEventListener('change', markEarlyChange);

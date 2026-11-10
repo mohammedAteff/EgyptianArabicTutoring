@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 
 @section('content')
+<x-estimated-activity-bootstrap :contexts="$activityContexts ?? []" />
 <div class="max-w-3xl mx-auto space-y-6">
 
     <div class="flex items-center justify-between">
@@ -84,7 +85,7 @@
             </div>
 
             <!-- Date & Time (Business Timezone) -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
+            <div id="activity-booking-create-schedule" class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
                 <div>
                     <label for="date" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Session Date ({{ $businessTz }})</label>
                     <input type="date" id="date" name="date" value="{{ old('date', $preferredDate ?? now($businessTz)->addDay()->format('Y-m-d')) }}" required

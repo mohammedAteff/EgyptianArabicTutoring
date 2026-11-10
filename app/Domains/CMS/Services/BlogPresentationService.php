@@ -4,6 +4,7 @@ namespace App\Domains\CMS\Services;
 
 use App\Domains\CMS\Models\Blog;
 use DOMDocument;
+use DOMXPath;
 use Illuminate\Support\Facades\Storage;
 
 class BlogPresentationService
@@ -35,24 +36,25 @@ class BlogPresentationService
 
         return [
             'blog' => $blog, 'preview' => $preview, 'isPreview' => $preview,
+            'copyLocale' => app(WebsiteCopyService::class)->hasTranslation('blogs', app()->getLocale()) ? app()->getLocale() : 'en',
             'title' => $blog->seo_title ?: $blog->title,
             'metaDescription' => $blog->seo_description ?: $blog->excerpt,
             'canonicalOverride' => $canonical, 'ogType' => 'article', 'ogImage' => $image,
             'articleSchema' => $preview ? null : $schema, 'contentLocale' => $blog->locale,
             'entityLocales' => $preview ? [] : $versions->pluck('locale')->all(),
             'articleAlternates' => $preview ? [] : $versions->mapWithKeys(fn (Blog $version): array => [$version->locale => $version->publicUrl()])->all(),
-            'versions' => $versions, 'featuredImage' => $image,
-            'articleBody' => $this->body($blog->body),
-            'relatedArticles' => $blog->relatedArticles()->published()->with('category')->get(),
+            'versions' => $versions, 'featuredImage' => $image, 'featuredImageDimensions' => $this->images->dimensions($blog->featured_image_path),
+            'articleBody' => $this->body($blog->body, $blog->locale),
+            'relatedArticles' => $blog->relatedArticles()->published()->whereKeyNot($blog->id)->with('category')->get(),
             'relatedResources' => $blog->relatedResources()->publicCatalogue()->with('translations', 'category')->get(),
             'relatedGames' => $blog->relatedGames()->available()->with('translations')->get(),
         ];
     }
 
-    private function body(string $body): string
+    private function body(string $body, string $locale): string
     {
         $body = $this->blogs->sanitizeBody($body);
-        if (! str_contains($body, '<img')) {
+        if (! preg_match('/<(?:img|h1|table)\b/i', $body)) {
             return $body;
         }
         $document = new DOMDocument('1.0', 'UTF-8');
@@ -64,7 +66,38 @@ class BlogPresentationService
                 $path = rawurldecode((string) parse_url($image->getAttribute('src'), PHP_URL_PATH));
                 if (! str_starts_with($path, $base) || ! $this->images->url(substr($path, strlen($base)))) {
                     $image->parentNode?->removeChild($image);
+
+                    continue;
                 }
+                $dimensions = $this->images->dimensions(substr($path, strlen($base)));
+                $image->setAttribute('width', (string) $dimensions['width']);
+                $image->setAttribute('height', (string) $dimensions['height']);
+                $image->setAttribute('loading', 'lazy');
+                $image->setAttribute('decoding', 'async');
+            }
+            if ($document->getElementsByTagName('h1')->length > 0) {
+                $headings = (new DOMXPath($document))->query('//h1|//h2|//h3|//h4|//h5|//h6');
+                foreach (iterator_to_array($headings) as $heading) {
+                    $replacement = $document->createElement('h'.min(6, (int) substr($heading->nodeName, 1) + 1));
+                    foreach ($heading->attributes as $attribute) {
+                        $replacement->setAttribute($attribute->name, $attribute->value);
+                    }
+                    while ($heading->firstChild) {
+                        $replacement->appendChild($heading->firstChild);
+                    }
+                    $heading->parentNode->replaceChild($replacement, $heading);
+                }
+            }
+            foreach (iterator_to_array($document->getElementsByTagName('table')) as $table) {
+                $region = $document->createElement('div');
+                $region->setAttribute('class', 'blog-table-region');
+                $region->setAttribute('role', 'region');
+                $region->setAttribute('tabindex', '0');
+                $region->setAttribute('aria-label', website_text('blogs', 'Scrollable table'));
+                $region->setAttribute('lang', app(WebsiteCopyService::class)->document('blogs', app()->getLocale())?->published_content !== null ? app()->getLocale() : 'en');
+                $table->setAttribute('lang', $locale);
+                $table->parentNode->insertBefore($region, $table);
+                $region->appendChild($table);
             }
             $bodyElement = $document->getElementsByTagName('body')->item(0);
             if (! $bodyElement) {

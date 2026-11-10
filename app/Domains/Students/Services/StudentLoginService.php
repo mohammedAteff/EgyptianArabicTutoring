@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Auth;
 
 class StudentLoginService
 {
-    public function __construct(private StudentTwoFactorService $factors) {}
+    public function __construct(private StudentTwoFactorService $factors, private StudentIntendedDestination $destinations) {}
 
     public function beginChallenge(Request $request, Student $student): RedirectResponse
     {
@@ -38,7 +38,7 @@ class StudentLoginService
         StudentPortalLogin::query()->create(['student_id' => $current->id, 'timezone' => $current->preferred_timezone, 'authenticated_at' => now('UTC')]);
         app(AnalyticsService::class)->linkAuthenticatedStudent($request, $current->id);
 
-        return redirect()->route('student.dashboard');
+        return redirect($this->destinations->consume($request));
     }
 
     public function refreshProof(Request $request, Student $student): void

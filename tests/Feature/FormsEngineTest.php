@@ -316,7 +316,7 @@ class FormsEngineTest extends TestCase
         $student = Student::factory()->verified()->create();
         $this->asStudent($student);
 
-        $this->get(route('student.dashboard'))
+        $this->get(route('student.home'))
             ->assertOk()
             ->assertSee('Always available')
             ->assertDontSee('After booking')
@@ -326,7 +326,7 @@ class FormsEngineTest extends TestCase
         $this->post(route('student.forms.save', $afterBooking->slug), ['intent' => 'draft', 'answers' => []])->assertNotFound();
 
         $booking = $this->createStudentBooking($student);
-        $this->get(route('student.dashboard'))
+        $this->get(route('student.home'))
             ->assertSee('After booking')
             ->assertSee('Before next session')
             ->assertDontSee('After reschedule');
@@ -346,7 +346,7 @@ class FormsEngineTest extends TestCase
             'created_at' => now('UTC'),
         ]);
 
-        $this->get(route('student.dashboard'))->assertSee('After reschedule');
+        $this->get(route('student.home'))->assertSee('After reschedule');
         $this->get(route('student.forms.show', $afterReschedule->slug))->assertOk();
     }
 
@@ -423,6 +423,123 @@ class FormsEngineTest extends TestCase
         $student = Student::factory()->verified()->create();
         $this->asStudent($student);
         $this->get(route('student.forms.show', $form->slug))->assertSee('Original goal')->assertDontSee('Draft goal');
+    }
+
+    public function test_foreign_response_ids_cannot_be_saved_by_another_student(): void
+    {
+        $form = $this->publishedForm($this->administrator('admin'), [
+            ['question_key' => 'goal', 'label' => 'Goal', 'question_type' => 'short_text'],
+        ], ['can_edit_after_submission' => true]);
+        $owner = Student::factory()->verified()->create();
+        $other = Student::factory()->verified()->create();
+        $this->asStudent($owner);
+        $this->post(route('student.forms.save', $form->slug), ['intent' => 'draft', 'answers' => ['goal' => 'Original owner answer']])->assertRedirect();
+        $submission = FormSubmission::query()->where('student_id', $owner->id)->firstOrFail();
+        $this->asStudent($other);
+        $payload = ['submission_id' => $submission->id, 'form_version_id' => $form->published_version_id, 'answers' => ['goal' => 'Unauthorized edit']];
+
+        $this->postJson(route('student.forms.autosave', $form->slug), $payload)->assertNotFound();
+        $this->post(route('student.forms.save', $form->slug), $payload + ['intent' => 'submit'])->assertNotFound();
+
+        $this->assertSame('Original owner answer', $submission->answers()->firstOrFail()->value_text);
+        $this->assertSame(1, $submission->fresh()->submission_revision);
+        $this->assertSame(1, $submission->revisions()->count());
+        $this->assertDatabaseMissing('form_submissions', ['student_id' => $other->id]);
+    }
+
+    public function test_each_single_answer_control_is_named_by_its_question_text(): void
+    {
+        $questions = [];
+        foreach (['short_text', 'long_text', 'email', 'phone', 'number', 'date', 'dropdown', 'single_choice', 'yes_no', 'rating_scale'] as $type) {
+            $questions[] = ['question_key' => $type, 'label' => 'Question '.$type, 'question_type' => $type, 'options' => in_array($type, ['dropdown', 'single_choice'], true) ? [['label' => 'Choice', 'value' => 'choice']] : []];
+        }
+        $form = $this->publishedForm($this->administrator('admin'), $questions);
+        $this->asStudent(Student::factory()->verified()->create());
+        $response = $this->get(route('student.forms.show', $form->slug))->assertOk();
+        $document = new \DOMDocument;
+        $document->loadHTML('<?xml encoding="UTF-8">'.$response->getContent(), LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new \DOMXPath($document);
+        $fields = $xpath->query('//fieldset[@data-question-key]');
+        $this->assertSame(10, $fields->length);
+
+        foreach ($fields as $field) {
+            $questionText = trim($xpath->query('./legend', $field)->item(0)->textContent);
+            $control = $xpath->query('.//input | .//textarea | .//select', $field)->item(0);
+            $labelId = $control->getAttribute('aria-labelledby');
+            $this->assertNotSame('', $labelId, 'The answer control needs a question name.');
+            $label = $document->getElementById($labelId);
+            $this->assertNotNull($label, 'The accessible-name reference must resolve.');
+            $this->assertSame($questionText, trim($label->textContent));
+        }
+    }
+
+    public function test_a_genuine_later_edit_can_return_an_editable_submitted_response_to_draft(): void
+    {
+        $form = $this->publishedForm($this->administrator('admin'), [
+            ['question_key' => 'goal', 'label' => 'Goal', 'question_type' => 'short_text', 'is_required' => true],
+        ], ['can_edit_after_submission' => true]);
+        $student = Student::factory()->verified()->create();
+        $this->asStudent($student);
+        $this->post(route('student.forms.save', $form->slug), ['intent' => 'submit', 'answers' => ['goal' => 'First submitted answer']])->assertRedirect();
+        $submission = FormSubmission::query()->where('student_id', $student->id)->firstOrFail();
+        $payload = ['submission_id' => $submission->id, 'form_version_id' => $submission->form_version_id, 'answers' => ['goal' => 'Intentional later edit']];
+
+        $this->postJson(route('student.forms.autosave', $form->slug), $payload)->assertOk()->assertJsonPath('draft_id', $submission->id);
+
+        $this->assertSame('draft', $submission->fresh()->status);
+        $this->assertSame(2, $submission->fresh()->submission_revision);
+        $this->assertSame('Intentional later edit', $submission->answers()->firstOrFail()->value_text);
+        $this->post(route('student.forms.save', $form->slug), $payload + ['intent' => 'submit'])->assertRedirect()->assertSessionHas('success', 'Your responses were submitted.');
+        $this->assertSame('submitted', $submission->fresh()->status);
+        $this->assertSame(3, $submission->fresh()->submission_revision);
+        $this->assertSame(3, $submission->revisions()->count());
+        $this->assertSame((int) $form->published_version_id, (int) $submission->fresh()->form_version_id);
+    }
+
+    public function test_an_owned_read_only_submission_id_rejects_both_save_paths(): void
+    {
+        $form = $this->publishedForm($this->administrator('admin'), [
+            ['question_key' => 'goal', 'label' => 'Goal', 'question_type' => 'short_text'],
+        ]);
+        $student = Student::factory()->verified()->create();
+        $this->asStudent($student);
+        $this->post(route('student.forms.save', $form->slug), ['intent' => 'submit', 'answers' => ['goal' => 'Completed answer']])->assertRedirect();
+        $submission = FormSubmission::query()->where('student_id', $student->id)->firstOrFail();
+        $payload = ['submission_id' => $submission->id, 'form_version_id' => $submission->form_version_id, 'answers' => ['goal' => 'Forbidden later edit']];
+
+        $this->postJson(route('student.forms.autosave', $form->slug), $payload)->assertUnprocessable()->assertJsonValidationErrors('form');
+        $this->postJson(route('student.forms.save', $form->slug), $payload + ['intent' => 'draft'])->assertUnprocessable()->assertJsonValidationErrors('form');
+
+        $this->get(route('student.forms.show', $form->slug))->assertOk()->assertViewHas('readOnly', true);
+        $this->assertSame('submitted', $submission->fresh()->status);
+        $this->assertSame(1, $submission->fresh()->submission_revision);
+        $this->assertSame(1, $submission->revisions()->count());
+        $this->assertSame('Completed answer', $submission->answers()->firstOrFail()->value_text);
+    }
+
+    public function test_expected_version_conflicts_do_not_create_or_modify_responses_and_old_version_edits_remain_allowed(): void
+    {
+        $admin = $this->administrator('admin');
+        $questions = [['question_key' => 'goal', 'label' => 'Original goal', 'question_type' => 'short_text']];
+        $form = $this->publishedForm($admin, $questions, ['can_edit_after_submission' => true]);
+        $student = Student::factory()->verified()->create();
+        $this->asStudent($student);
+        $this->postJson(route('student.forms.autosave', $form->slug), ['form_version_id' => 2147483647, 'answers' => ['goal' => 'Wrong version']])->assertConflict();
+        $this->assertDatabaseMissing('form_submissions', ['student_id' => $student->id]);
+        $this->post(route('student.forms.save', $form->slug), ['intent' => 'draft', 'answers' => ['goal' => 'Old version draft']])->assertRedirect();
+        $submission = FormSubmission::query()->where('student_id', $student->id)->firstOrFail();
+        $builder = app(FormBuilderService::class);
+        $updated = $builder->update($form->id, ['title' => $form->title], [['question_key' => 'goal', 'label' => 'New goal', 'question_type' => 'short_text']], $form->active_version_id, $form->lock_version);
+        $published = $builder->publish($updated->id, $updated->active_version_id, $updated->lock_version);
+        $this->assertNotSame((int) $submission->form_version_id, (int) $published->published_version_id);
+        $payload = ['submission_id' => $submission->id, 'form_version_id' => $submission->form_version_id, 'answers' => ['goal' => 'Edited old version']];
+
+        $this->post(route('student.forms.save', $form->slug), $payload + ['intent' => 'submit'])->assertRedirect();
+
+        $this->assertSame((int) $submission->form_version_id, (int) $submission->fresh()->form_version_id);
+        $this->assertSame('submitted', $submission->fresh()->status);
+        $this->assertSame('Edited old version', $submission->answers()->firstOrFail()->value_text);
+        $this->assertSame(1, FormSubmission::query()->where('student_id', $student->id)->count());
     }
 
     public function test_student_dashboard_displays_reschedule_and_delivery_labels(): void

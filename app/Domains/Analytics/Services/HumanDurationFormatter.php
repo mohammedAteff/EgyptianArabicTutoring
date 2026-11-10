@@ -4,7 +4,7 @@ namespace App\Domains\Analytics\Services;
 
 class HumanDurationFormatter
 {
-    public static function minutes(int $totalMinutes): string
+    public static function minutes(int $totalMinutes, string $locale = 'en'): string
     {
         $totalMinutes = max(0, $totalMinutes);
         $units = [
@@ -15,10 +15,12 @@ class HumanDurationFormatter
         $parts = [];
         foreach ($units as $unit => $count) {
             if ($count > 0) {
-                $parts[] = $count.' '.$unit.($count === 1 ? '' : 's');
+                $parts[] = $locale === 'en'
+                    ? $count.' '.$unit.($count === 1 ? '' : 's')
+                    : trans_choice(':count '.$unit.'|:count '.$unit.'s', $count, ['count' => $count], $locale);
             }
         }
 
-        return $parts === [] ? '0 minutes' : implode(', ', $parts);
+        return $parts === [] ? ($locale === 'en' ? '0 minutes' : trans_choice(':count minute|:count minutes', 0, ['count' => 0], $locale)) : implode(', ', $parts);
     }
 }

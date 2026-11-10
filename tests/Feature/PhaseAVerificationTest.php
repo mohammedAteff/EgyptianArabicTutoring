@@ -22,7 +22,9 @@ class PhaseAVerificationTest extends TestCase
             $content = $response->getContent();
             $crawler = new Crawler($content);
             // Header brand area
-            $headerText = $crawler->filter('header')->text();
+            $brand = $crawler->filterXPath('//header//img[@alt="Arabic with Abdallah"]');
+            $this->assertCount(1, $brand);
+            $headerText = $crawler->filter('header')->text().' '.$brand->attr('alt');
             $this->assertStringContainsString('Abdallah', $headerText);
             $this->assertStringNotContainsString('Ahmad', $headerText);
             $this->assertStringNotContainsString('Ahmed', $headerText);

@@ -77,7 +77,7 @@ class StudentTwoFactorTest extends TestCase
         $this->assertGuest('student');
         $this->travel(31)->seconds();
         $otp = app(Google2FA::class)->oathTotp($secret, intdiv(now('UTC')->timestamp, 30));
-        $this->post(route('student.two-factor.verify'), ['code' => $otp])->assertRedirect(route('student.dashboard'));
+        $this->post(route('student.two-factor.verify'), ['code' => $otp])->assertRedirect(route('student.home'));
     }
 
     public function test_enrollment_cannot_be_confirmed_without_the_email_link_or_in_another_browser(): void
