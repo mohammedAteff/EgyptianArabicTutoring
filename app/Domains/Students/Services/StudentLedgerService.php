@@ -720,8 +720,8 @@ class StudentLedgerService
             $state = 'Review required';
         } elseif ($package->isPaused()) {
             $state = 'Paused';
-        } elseif ($package->status === 'active' && $package->validity_days !== null && $package->funding_activated_at === null && ! $package->isExpired($businessTimezone)) {
-            $state = 'Awaiting settlement';
+        } elseif ($package->status === 'active' && $package->validity_days !== null && $package->validity_started_at === null && $package->funding_activated_at === null && ! $package->isExpired($businessTimezone)) {
+            $state = 'Awaiting first payment';
         } elseif ($package->status === 'active' && ! $this->entitlements->eligible($package, $businessTimezone)) {
             $state = 'Expired';
         } elseif ($package->status === 'active' && array_sum(array_column($typed, 'available')) <= 0) {

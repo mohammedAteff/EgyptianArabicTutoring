@@ -327,7 +327,7 @@ class TelegramAutomationTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_student_digest_excludes_installment_packages_until_full_settlement(): void
+    public function test_student_digest_includes_installment_packages_before_and_after_full_settlement(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-21 12:00:00 UTC'));
         $ledger = app(StudentLedgerService::class);
@@ -338,7 +338,7 @@ class TelegramAutomationTest extends TestCase
 
         $text = app(TelegramReadService::class)->businessDigest(['students']);
 
-        $this->assertSame("Students with low credits (all types ≤1): 0\nUnused entitlement allocations expiring within 14 days: 0", $text);
+        $this->assertSame("Students with low credits (all types ≤1): 1\nUnused entitlement allocations expiring within 14 days: 1", $text);
         $ledger->recordPayment($package, '180', 'digest-final-payment', null);
         $text = app(TelegramReadService::class)->businessDigest(['students']);
 

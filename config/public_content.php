@@ -543,7 +543,7 @@ return [
                 ],
                 [
                     'type' => 'paragraph',
-                    'text' => 'Package validity begins from the actual date and time your full package payment is received.',
+                    'text' => 'Package validity begins at the actual date and time your first positive payment, including a partial payment, is received. You can book available lessons during an agreed installment arrangement once that first payment is received. Later payments do not restart the validity period.',
                 ],
                 [
                     'type' => 'paragraph',
@@ -669,7 +669,7 @@ return [
                 ],
                 [
                     'type' => 'paragraph',
-                    'text' => 'You may request a package refund within 14 calendar days of payment.',
+                    'text' => 'The voluntary 14-day package refund window starts when your first package payment is received, including a partial payment. Later installments do not restart this window.',
                 ],
                 [
                     'type' => 'heading',
@@ -1629,7 +1629,7 @@ The right choice depends on how frequently you want to study and how much time y
             'key' => 'faq-18',
             'topic' => 'Pricing & Packages',
             'question' => 'When does my package validity begin?',
-            'answer' => 'Your package validity begins at the exact date and time your full package payment is received.
+            'answer' => 'Your package validity begins at the exact date and time your first payment, including a partial payment, is received.
 
 The eight-session package is valid for 75 calendar days, and the twelve-session package for 100 calendar days.
 
@@ -1663,7 +1663,7 @@ These are arranged individually and aren\'t alternatives to the required diagnos
 
 Once you\'ve chosen a package, I\'ll communicate the payment instructions and relevant details.
 
-Your package validity begins when full package payment is received.
+Your package validity begins when your first payment, including a partial payment, is received.
 
 If you qualify for the diagnostic credit, it will be reflected in your package balance.',
             'featured' => false,
@@ -1682,7 +1682,7 @@ Replacement appointments are subject to availability and must meet the usual 24-
 
 Rescheduling doesn\'t automatically extend your package validity.
 
-Online rescheduling requires at least 24 hours before your current appointment. For cancellation and rebooking closer to the appointment, contact Abdallah directly.',
+To reschedule, contact Abdallah directly at least 24 hours before your current appointment. For cancellation and rebooking closer to the appointment, contact Abdallah directly; the four-hour cancellation rule still applies.',
             'featured' => true,
         ],
         [
@@ -1697,7 +1697,7 @@ Four hours: The minimum notice required to cancel an existing appointment withou
 
 For example, cancelling five hours before a lesson preserves your eligible package credit. You can then choose another available appointment that meets the advance-booking requirement.
 
-The online rescheduling tool also requires 24 hours before the existing appointment. Contact Abdallah directly for cancellation and rebooking within that period.',
+To reschedule, contact Abdallah directly at least 24 hours before the existing appointment. For cancellation and rebooking within that period, contact Abdallah directly; the four-hour cancellation rule still applies.',
             'featured' => false,
         ],
         [
@@ -1719,7 +1719,7 @@ Genuine emergencies may be considered individually.',
             'key' => 'faq-24',
             'topic' => 'Cancellations & Refunds',
             'question' => 'Can I get a refund for a coaching package?',
-            'answer' => 'Yes. You can request a refund within 14 calendar days of package payment.
+            'answer' => 'Yes. The voluntary 14-day package refund window starts when your first package payment is received, including a partial payment. Later installments do not restart this window.
 
 If no sessions have been completed or forfeited, you may receive a full refund of the amount actually paid for the package.
 
@@ -2136,7 +2136,7 @@ Please don\'t share passwords or other sensitive account credentials.',
             ],
             [
                 'type' => 'paragraph',
-                'text' => 'Package validity begins at the actual date and time full package payment is received.',
+                'text' => 'Package validity begins at the actual date and time your first positive payment, including a partial payment, is received. You can book available lessons during an agreed installment arrangement once that first payment is received. Later payments do not restart the validity period.',
             ],
             [
                 'type' => 'paragraph',
@@ -2252,7 +2252,7 @@ Please don\'t share passwords or other sensitive account credentials.',
             ],
             [
                 'type' => 'paragraph',
-                'text' => 'Students may request a refund within 14 calendar days of package payment.',
+                'text' => 'The voluntary 14-day package refund window starts when your first package payment is received, including a partial payment. Later installments do not restart this window.',
             ],
             [
                 'type' => 'heading',
