@@ -2796,5 +2796,6 @@
     "Balance due now": "Derzeit offener Betrag",
     "Overpayment now": "Derzeitige Überzahlung",
     "Assignment": "Aufgabe",
-    "Quiz": "Quiz"
+    "Quiz": "Quiz",
+    "This time does not fit your selected lesson duration. Please choose another time or lesson type.": "Diese Zeit passt nicht zur Dauer der gewählten Unterrichtsstunde. Bitte wählen Sie eine andere Zeit oder Unterrichtsart."
 }

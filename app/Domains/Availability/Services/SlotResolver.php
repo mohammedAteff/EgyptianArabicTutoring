@@ -77,6 +77,13 @@ class SlotResolver
             throw new SlotUnavailableException('This time slot is invalid or has expired. Please select it again.');
         }
 
+        $this->availabilityService->resolveSlotConfiguration(
+            $sessionType,
+            CarbonImmutable::parse($identity['start_utc'], 'UTC'),
+            CarbonImmutable::parse($identity['end_utc'], 'UTC'),
+            requireSessionDuration: true,
+        );
+
         $available = $this->availabilityService->getAvailableSlotsGroupedByDate(
             sessionType: $sessionType,
             customerTimezone: $timezone,

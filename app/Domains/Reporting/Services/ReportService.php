@@ -54,6 +54,9 @@ class ReportService
                 'visitors_is_daily_sum' => $current['visitors_is_daily_sum'],
                 'sessions' => $current['sessions'],
                 'page_views' => $current['page_views'],
+                'top_source' => $current['top_source'],
+                'top_source_basis' => 'sum_of_daily_source_visitors',
+                'top_source_explanation' => $current['top_source_explanation'],
                 'prev_visitors' => $prev['visitors'],
                 'prev_visitors_basis' => $prev['visitors_basis'],
                 'prev_visitors_is_daily_sum' => $prev['visitors_is_daily_sum'],
@@ -78,7 +81,9 @@ class ReportService
      *     page_views: int,
      *     visitors_basis: string,
      *     visitors_is_daily_sum: bool,
-     *     has_pruned_dates: bool
+     *     has_pruned_dates: bool,
+     *     top_source: ?string,
+     *     top_source_explanation: ?string
      * }
      */
     protected function resolvePeriodTrafficMetrics(CarbonInterface $start, CarbonInterface $end, ?string $source = null): array
@@ -116,17 +121,19 @@ class ReportService
             ->groupBy('report_date')
             ->pluck('sessions_count', 'report_date');
 
-        // Calculate actual top acquisition source for each day
+        // Durable source rollups contain distinct event visitors with a recorded source.
         $sourcesByDate = (clone $query)
+            ->whereNotNull('utm_source')
+            ->where('utm_source', '!=', '')
             ->select(
                 DB::raw("{$dateExpr} as report_date"),
-                DB::raw('COALESCE(utm_source, "direct") as source_name'),
-                DB::raw('COUNT(*) as total_events')
+                'utm_source as source_name',
+                DB::raw('COUNT(DISTINCT visitor_token) as visitors')
             )
             ->groupBy('report_date', 'source_name')
-            ->orderByDesc('total_events')
             ->toBase()->get()
-            ->groupBy('report_date');
+            ->groupBy('report_date')
+            ->map(fn (Collection $rows): Collection => $rows->pluck('visitors', 'source_name')->map(fn ($count): int => (int) $count));
 
         $sessionQuery = $this->nonBotSessionQuery()->with('visitor')->whereBetween('started_at', [$start, $end])->when($source, fn ($q) => $q->where('utm_source', $source));
         $sessionRows = $sessionQuery->get();
@@ -144,8 +151,7 @@ class ReportService
         }
 
         $dailyRows = $dailyTotals->map(function ($row) use ($sourcesByDate, $sessionsByDate) {
-            $top = $sourcesByDate->get($row->report_date)?->first();
-            $row->top_source = $top ? $top->source_name : 'direct';
+            $row->top_source = $this->topSource($sourcesByDate->get($row->report_date, collect()));
             $row->sessions = (int) ($sessionsByDate->get($row->report_date) ?? 0);
 
             return $row;
@@ -162,6 +168,7 @@ class ReportService
             });
 
         $hasPrunedDates = false;
+        $uncoveredSourceHistory = false;
         foreach ($historicalMetrics as $mDate => $metricsForDate) {
             $mDateStr = (string) $mDate;
             $day = CarbonImmutable::parse($mDateStr, $this->timezoneService->getBusinessTimezone());
@@ -169,6 +176,12 @@ class ReportService
                 continue;
             }
             $existingRow = $dailyRows->firstWhere('report_date', $mDateStr);
+            $sourceMetrics = $metricsForDate->where('metric_name', 'visitors_by_source')->where('dimension_key', 'source')
+                ->where('dimension_value', '!=', '');
+            if ($sourceMetrics->isEmpty() && $sourcesByDate->get($mDateStr, collect())->isEmpty()
+                && $metricsForDate->where('dimension_key', '')->whereIn('metric_name', ['unique_visitors', 'sessions', 'page_view', 'page_views'])->sum('count') > 0) {
+                $uncoveredSourceHistory = true;
+            }
 
             $visitorsMetric = $source
                 ? (int) $metricsForDate->where('metric_name', 'visitors_by_source')->where('dimension_value', $source)->sum('count')
@@ -182,8 +195,18 @@ class ReportService
                 ? (int) $metricsForDate->where('metric_name', 'page_views_by_source')->where('dimension_value', $source)->sum('count')
                 : (int) ($metricsForDate->where('dimension_key', '')->where('metric_name', 'page_view')->sum('count') ?: $metricsForDate->where('metric_name', 'page_views')->sum('count'));
 
-            $topSourceRow = $metricsForDate->where('metric_name', 'visitors_by_source')->sortByDesc('count')->first();
-            $topSource = $source ?: ($topSourceRow?->getAttribute('dimension_value') ?: 'direct');
+            $retainedSources = $sourceMetrics
+                ->when($source, fn (Collection $metrics): Collection => $metrics->where('dimension_value', $source))
+                ->groupBy('dimension_value')->map(fn (Collection $metrics): int => (int) $metrics->sum('count'));
+            $rawSources = $sourcesByDate->get($mDateStr, collect());
+            foreach ($retainedSources as $name => $count) {
+                $rawSources->put($name, max((int) $rawSources->get($name, 0), $count));
+            }
+            $sourcesByDate->put($mDateStr, $rawSources);
+            $topSource = $this->topSource($rawSources);
+            if ($existingRow) {
+                $existingRow->top_source = $topSource;
+            }
 
             $hasMetrics = ($visitorsMetric > 0 || $sessionsMetric > 0 || $pvMetric > 0);
 
@@ -195,6 +218,12 @@ class ReportService
 
             if ($hasMetrics && (! $existingRow || ($existingRow->visitors === 0 && $existingRow->page_views === 0 && $existingRow->sessions === 0) || $isPartiallyPruned)) {
                 $hasPrunedDates = true;
+
+                // A remaining raw subset cannot supply missing retained source coverage.
+                if ($retainedSources->isEmpty()) {
+                    $sourcesByDate->put($mDateStr, collect());
+                    $topSource = null;
+                }
 
                 if ($existingRow) {
                     $existingRow->visitors = max($existingRow->visitors, $visitorsMetric);
@@ -214,6 +243,14 @@ class ReportService
         }
 
         $dailyRows = $dailyRows->sortByDesc('report_date')->values();
+
+        $sourceCoverageMissing = $uncoveredSourceHistory || $dailyRows->contains(fn ($row): bool => $row->top_source === null && ($row->visitors > 0 || $row->sessions > 0 || $row->page_views > 0));
+        $periodSources = collect();
+        foreach ($sourcesByDate as $counts) {
+            foreach ($counts as $name => $count) {
+                $periodSources->put($name, (int) $periodSources->get($name, 0) + $count);
+            }
+        }
 
         $rawEventsExist = (clone $query)->exists();
         $rawSessionsExist = $this->nonBotSessionQuery()
@@ -251,7 +288,20 @@ class ReportService
             'visitors_basis' => $visitorsBasis,
             'visitors_is_daily_sum' => $visitorsIsDailySum,
             'has_pruned_dates' => $hasPrunedDates,
+            'top_source' => $sourceCoverageMissing ? null : $this->topSource($periodSources),
+            'top_source_explanation' => $sourceCoverageMissing
+                ? 'Unavailable: source visitor coverage is missing for part of this period.'
+                : ($periodSources->isEmpty() ? 'Unavailable: no recorded source visitors in this period.' : null),
         ];
+    }
+
+    /** @param Collection<string, int> $counts */
+    private function topSource(Collection $counts): ?string
+    {
+        $ranked = $counts->filter(fn (int $count): bool => $count > 0)->all();
+        uksort($ranked, fn ($left, $right): int => ($ranked[$right] <=> $ranked[$left]) ?: strcmp((string) $left, (string) $right));
+
+        return $ranked === [] ? null : (string) array_key_first($ranked);
     }
 
     public function getBookingsReport(CarbonInterface $start, CarbonInterface $end, ?string $status = null, array $filters = []): array

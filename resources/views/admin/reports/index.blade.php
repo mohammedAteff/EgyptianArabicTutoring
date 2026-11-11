@@ -90,6 +90,9 @@
                 </div>
             </div>
 
+            <p class="text-xs text-slate-600">Top Source ranks recorded sources by the sum of distinct browser visitors per business day. Browsers may count on multiple days and under multiple sources. Unassigned sources are excluded; ties use source name order.</p>
+            <p class="text-xs text-slate-600">Period Top Source: <strong>{{ $reportData['summary']['top_source'] ?? 'Unavailable' }}</strong> {{ $reportData['summary']['top_source_explanation'] }}</p>
+
             <!-- Table -->
             <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                 <div class="overflow-x-auto">
@@ -100,7 +103,7 @@
                                 <th class="py-3 px-4">Unique Visitors</th>
                                 <th class="py-3 px-4">Sessions</th>
                                 <th class="py-3 px-4">Page Views</th>
-                                <th class="py-3 px-4">Top Acquisition Source</th>
+                                <th class="py-3 px-4">Top Source (daily browser visitors)</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -111,7 +114,7 @@
                                     <td class="py-3 px-4">{{ number_format($row->sessions) }}</td>
                                     <td class="py-3 px-4">{{ number_format($row->page_views) }}</td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-0.5 rounded-md bg-slate-100 font-mono text-[11px]">{{ $row->top_source }}</span>
+                                        <span class="px-2 py-0.5 rounded-md bg-slate-100 font-mono text-[11px]">{{ $row->top_source ?? 'Unavailable: no source visitor coverage' }}</span>
                                     </td>
                                 </tr>
                             @empty

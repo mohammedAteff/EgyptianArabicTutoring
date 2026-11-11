@@ -190,54 +190,51 @@
         </div>
     </div>
 
-    <!-- Secondary Funnels: Resources & Games -->
+    <!-- Resource and game activity -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <!-- Resource Gate Funnel -->
+        <!-- Resource activity -->
         <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-            <h3 class="text-sm font-bold text-slate-900 mb-1">Resource Lead Capture Funnel</h3>
-            <p class="text-xs text-slate-500 mb-4">Email-gated curriculum downloads converting anonymous visitors into leads.</p>
+            <h3 class="text-sm font-bold text-slate-900 mb-1">Resource activity</h3>
+            <p class="text-xs text-slate-500 mb-4">Distinct browsers per activity during this period. These independent counts do not establish a conversion journey.</p>
 
             <div class="space-y-4">
                 <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <span class="font-medium text-slate-700">1. Gate Viewed</span>
+                    <span class="font-medium text-slate-700">Gate Viewed</span>
                     <span class="font-black text-slate-900">{{ number_format($resourceFunnel['gate_viewed']) }}</span>
                 </div>
                 <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                     <div>
-                        <span class="font-medium text-slate-700">2. Lead Email Submitted</span>
-                        <span class="text-[11px] text-amber-700 ml-2 font-semibold">({{ $resourceFunnel['request_rate'] }}%)</span>
+                        <span class="font-medium text-slate-700">Resource Requested</span>
                     </div>
                     <span class="font-black text-slate-900">{{ number_format($resourceFunnel['requested']) }}</span>
                 </div>
                 <div class="flex items-center justify-between p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs">
                     <div>
-                        <span class="font-bold text-emerald-900">3. Material Downloaded</span>
-                        <span class="text-[11px] text-emerald-800 ml-2 font-bold">({{ $resourceFunnel['download_rate'] }}%)</span>
+                        <span class="font-bold text-emerald-900">Resource Accessed</span>
                     </div>
                     <span class="font-black text-emerald-950">{{ number_format($resourceFunnel['downloaded']) }}</span>
                 </div>
             </div>
         </div>
 
-        <!-- Game Engagement Funnel -->
+        <!-- Game activity -->
         <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-            <h3 class="text-sm font-bold text-slate-900 mb-1">Interactive Game Engagement</h3>
-            <p class="text-xs text-slate-500 mb-4">Vocabulary drills and audio games engaging students.</p>
+            <h3 class="text-sm font-bold text-slate-900 mb-1">Game activity</h3>
+            <p class="text-xs text-slate-500 mb-4">Distinct browsers per activity during this period. These independent counts do not establish a conversion journey.</p>
 
             <div class="space-y-4">
                 <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <span class="font-medium text-slate-700">1. Game Page Opened</span>
+                    <span class="font-medium text-slate-700">Game Page Opened</span>
                     <span class="font-black text-slate-900">{{ number_format($gameFunnel['opened']) }}</span>
                 </div>
                 <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <span class="font-medium text-slate-700">2. Game Play Started</span>
+                    <span class="font-medium text-slate-700">Game Play Started</span>
                     <span class="font-black text-slate-900">{{ number_format($gameFunnel['started']) }}</span>
                 </div>
                 <div class="flex items-center justify-between p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs">
                     <div>
-                        <span class="font-bold text-amber-900">3. Game Completed</span>
-                        <span class="text-[11px] text-amber-800 ml-2 font-bold">({{ $gameFunnel['completion_rate'] }}%)</span>
+                        <span class="font-bold text-amber-900">Game Completed</span>
                     </div>
                     <span class="font-black text-amber-950">{{ number_format($gameFunnel['completed']) }}</span>
                 </div>

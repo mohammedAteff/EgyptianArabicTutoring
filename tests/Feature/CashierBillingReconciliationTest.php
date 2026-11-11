@@ -174,7 +174,7 @@ class CashierBillingReconciliationTest extends TestCase
         $this->assertEquals($expected, $expDate);
     }
 
-    public function test_preset_terms_and_first_payment_expiry_are_authoritative_while_settlement_unlocks_credits(): void
+    public function test_preset_terms_and_first_payment_unlock_credits_while_later_settlement_preserves_expiry(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-20 12:00:00', 'UTC'));
         $payload = [
@@ -209,7 +209,9 @@ class CashierBillingReconciliationTest extends TestCase
         $this->ledger->recordPayment($package, '140.00', 'partial-payment-foundation', $this->admin->id);
         $this->assertSame('2026-10-20 12:00:00', $package->fresh()->validity_started_at->toDateTimeString());
         $this->assertSame('2027-01-03 13:00:00', $package->fresh()->expires_at->toDateTimeString());
-        $this->assertNull(DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $twoHourLesson)));
+        $this->assertSame($package->id, DB::transaction(fn () => $this->ledger->selectAndLockEligiblePackageForBooking($this->student->id, $twoHourLesson))?->id);
+        $this->assertSame('140.00', $this->ledger->summary($package->fresh())['balance_due']);
+        $this->assertNull($package->fresh()->funding_activated_at);
 
         $this->travel(1)->days();
         $this->ledger->recordPayment($package, '140.00', 'settlement-foundation', $this->admin->id);

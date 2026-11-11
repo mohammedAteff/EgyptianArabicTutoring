@@ -163,6 +163,9 @@ class AvailabilityService
             // 3. Generate candidate slots for each interval
             foreach ($intervals as $interval) {
                 $slotDurationMinutes = (int) $interval['duration'];
+                if (! $this->sessionDurationIsCompatible($sessionType, $slotDurationMinutes, true)) {
+                    continue;
+                }
                 $bufferMinutes = (int) $interval['buffer'];
                 $step = $slotDurationMinutes + $bufferMinutes;
                 $minNotice = (int) $interval['min_notice'];
@@ -471,7 +474,8 @@ class AvailabilityService
     public function resolveSlotConfiguration(
         SessionType $sessionType,
         CarbonInterface $startUtc,
-        ?CarbonInterface $endUtc = null
+        ?CarbonInterface $endUtc = null,
+        bool $requireSessionDuration = false
     ): array {
         if (! $sessionType->active) {
             throw new SlotUnavailableException('This session type is not currently active.');
@@ -515,6 +519,7 @@ class AvailabilityService
         // Match slot against authorized intervals and grid steps
         $matchedInterval = null;
         $gridExplanation = null;
+        $durationMismatch = false;
         foreach ($intervals as $interval) {
             $duration = (int) $interval['duration'];
             $buffer = (int) $interval['buffer'];
@@ -538,6 +543,12 @@ class AvailabilityService
 
             // Slot must fit completely within the interval
             if ($slotMinutes < $intervalStartMinutes || ($slotMinutes + $duration) > $intervalEndMinutes) {
+                continue;
+            }
+
+            if (! $this->sessionDurationIsCompatible($sessionType, $duration, $requireSessionDuration)) {
+                $durationMismatch = true;
+
                 continue;
             }
 
@@ -570,16 +581,23 @@ class AvailabilityService
         }
 
         if (! $matchedInterval) {
+            if ($durationMismatch) {
+                throw new SlotUnavailableException(__('This time does not fit your selected lesson duration. Please choose another time or lesson type.'));
+            }
             throw new SlotUnavailableException('The requested time is outside available tutoring hours or does not align with the schedule grid.'.($gridExplanation ?? ' Choose a lesson that fits completely within an available window.'));
         }
 
         $expectedDuration = (int) $matchedInterval['duration'];
+        $this->assertSessionDuration($sessionType, $expectedDuration, $requireSessionDuration);
         $expectedEnd = $start->addMinutes($expectedDuration);
 
         // Validate client-supplied end time if provided
         if ($endUtc !== null) {
             $clientEnd = $this->timezoneService->toUtc($endUtc);
             if ($clientEnd->getTimestamp() !== $expectedEnd->getTimestamp()) {
+                if ($requireSessionDuration || $sessionType->funding_mode === 'package') {
+                    throw new SlotUnavailableException(__('This time does not fit your selected lesson duration. Please choose another time or lesson type.'));
+                }
                 throw new SlotUnavailableException("Slot duration does not match the required session duration ({$expectedDuration} mins).");
             }
         }
@@ -633,8 +651,10 @@ class AvailabilityService
         $config = $resolvedConfig ?? $this->resolveSlotConfiguration(
             sessionType: $sessionType,
             startUtc: $startUtc,
-            endUtc: $endUtc
+            endUtc: $endUtc,
+            requireSessionDuration: ! $isTrustedAdmin
         );
+        $this->assertSessionDuration($sessionType, (int) $config['duration_minutes'], ! $isTrustedAdmin);
 
         $start = $config['start_utc'];
         $end = $config['end_utc'];
@@ -689,5 +709,17 @@ class AvailabilityService
         if ($holdQuery->lockForUpdate()->exists()) {
             throw new SlotUnavailableException('This time is currently reserved by another visitor. Please choose another available time.'.($bufferMinutes > 0 ? " The required gap between lessons is {$bufferMinutes} minutes." : ''));
         }
+    }
+
+    private function assertSessionDuration(SessionType $sessionType, int $durationMinutes, bool $required): void
+    {
+        if (! $this->sessionDurationIsCompatible($sessionType, $durationMinutes, $required)) {
+            throw new SlotUnavailableException(__('This time does not fit your selected lesson duration. Please choose another time or lesson type.'));
+        }
+    }
+
+    private function sessionDurationIsCompatible(SessionType $sessionType, int $durationMinutes, bool $required): bool
+    {
+        return (! $required && $sessionType->funding_mode !== 'package') || $durationMinutes === (int) $sessionType->duration_minutes;
     }
 }

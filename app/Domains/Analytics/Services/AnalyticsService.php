@@ -963,8 +963,6 @@ class AnalyticsService
             'gate_viewed' => $gateViewed,
             'requested' => $requested,
             'downloaded' => $downloaded,
-            'request_rate' => $gateViewed > 0 ? round(($requested / $gateViewed) * 100, 1) : 0,
-            'download_rate' => $requested > 0 ? round(($downloaded / $requested) * 100, 1) : 0,
         ];
     }
 
@@ -990,7 +988,6 @@ class AnalyticsService
             'opened' => $opened,
             'started' => $started,
             'completed' => $completed,
-            'completion_rate' => $started > 0 ? round(($completed / $started) * 100, 1) : 0,
         ];
     }
 

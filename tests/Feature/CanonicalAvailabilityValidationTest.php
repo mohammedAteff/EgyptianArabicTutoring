@@ -124,7 +124,7 @@ class CanonicalAvailabilityValidationTest extends TestCase
         );
     }
 
-    public function test_rule_duration_override_enforces_rule_duration_and_rejects_client_mismatch(): void
+    public function test_staff_direct_rule_duration_override_enforces_rule_duration_and_rejects_client_mismatch(): void
     {
         $futureMonday = CarbonImmutable::now('Africa/Cairo')->next(CarbonImmutable::MONDAY)->startOfDay();
 
@@ -157,7 +157,8 @@ class CanonicalAvailabilityValidationTest extends TestCase
         $this->availabilityService->validateSlotForBooking(
             sessionType: $this->sessionType,
             startUtc: $slotStart,
-            endUtc: $slotStart->addMinutes(50)
+            endUtc: $slotStart->addMinutes(50),
+            isTrustedAdmin: true
         );
     }
 

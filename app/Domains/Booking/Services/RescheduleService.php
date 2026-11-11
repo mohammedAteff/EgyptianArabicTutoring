@@ -84,7 +84,8 @@ class RescheduleService
             $candidateConfig = $this->availabilityService->resolveSlotConfiguration(
                 sessionType: $targetType,
                 startUtc: $startUtc,
-                endUtc: $newEndUtc ? $this->timezoneService->toUtc($newEndUtc) : null
+                endUtc: $newEndUtc ? $this->timezoneService->toUtc($newEndUtc) : null,
+                requireSessionDuration: $performedBy !== 'admin' || $booking->funding_mode === 'package' || $booking->consumed_ledger_entry_id !== null
             );
             $this->availabilityService->acquireCalendarDateLocks($startUtc, $candidateConfig['end_utc'], $candidateConfig['buffer_minutes']);
 
@@ -177,7 +178,7 @@ class RescheduleService
                 }
             }
 
-            // Authoritatively resolve target slot configuration without forcing base duration
+            // Staff may override manually scheduled direct lessons; funded lessons retain their product duration.
             $slotConfig = $candidateConfig;
             $endUtc = $slotConfig['end_utc'];
 
@@ -190,7 +191,7 @@ class RescheduleService
                 startUtc: $startUtc,
                 endUtc: $endUtc,
                 excludeBookingId: $lockedBooking->id,
-                isTrustedAdmin: ($performedBy === 'admin'),
+                isTrustedAdmin: $performedBy === 'admin' && $lockedBooking->funding_mode !== 'package' && $lockedBooking->consumed_ledger_entry_id === null,
                 resolvedConfig: $slotConfig
             );
 

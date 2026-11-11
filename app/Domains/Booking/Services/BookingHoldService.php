@@ -54,7 +54,8 @@ class BookingHoldService
             $config = $this->availabilityService->resolveSlotConfiguration(
                 sessionType: $sessionType,
                 startUtc: $start,
-                endUtc: $end
+                endUtc: $end,
+                requireSessionDuration: true
             );
 
             // 2. Acquire deterministic calendar row locks for buffer-expanded dates
@@ -156,7 +157,7 @@ class BookingHoldService
         return $this->databaseCapability->transaction(function () use ($snapshot, $matchesFlow, $sessionType, $visitorToken, $holdToken, $leadDetails): BookingHold {
             $start = CarbonImmutable::instance($snapshot->slot_start_utc)->utc();
             $end = CarbonImmutable::instance($snapshot->slot_end_utc)->utc();
-            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $start, $end);
+            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $start, $end, requireSessionDuration: true);
 
             // Match confirmation's lock order: calendar dates before reservation rows.
             $this->availabilityService->acquireCalendarDateLocks($start, $config['end_utc'], $config['buffer_minutes']);
@@ -165,7 +166,7 @@ class BookingHoldService
                 throw new SlotUnavailableException('Your reservation is no longer valid. Please choose a time again.');
             }
 
-            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $start, $end);
+            $config = $this->availabilityService->resolveSlotConfiguration($sessionType, $start, $end, requireSessionDuration: true);
             $this->availabilityService->validateSlotForBooking(
                 sessionType: $sessionType,
                 startUtc: $start,

@@ -85,16 +85,17 @@ class ReportController extends Controller
     protected function exportTraffic(CarbonImmutable $start, CarbonImmutable $end, string $format, string $ts, ?string $source): Response
     {
         $report = $this->reportService->getTrafficReport($start, $end, $source);
-        $headers = ['Date', 'Unique Visitors', 'Sessions', 'Page Views', 'Top Source'];
+        $headers = ['Date', 'Unique Visitors', 'Sessions', 'Page Views', 'Top Source (sum of daily browser visitors; recorded sources; ties by source name)', 'Source Coverage'];
         $rows = $report['rows']->map(fn ($r) => [
             $r->report_date,
             $r->visitors,
             $r->sessions,
             $r->page_views,
-            $r->top_source,
+            $r->top_source ?? 'Unavailable',
+            $r->top_source === null ? 'Unavailable: no source visitor coverage for this day.' : 'Recorded sources only; unassigned sources excluded.',
         ]);
 
-        $rows->push([$report['summary']['visitors_is_daily_sum'] ? 'Period total (sum of daily uniques)' : 'Period total (unique visitors)', $report['summary']['visitors'], $report['summary']['sessions'], $report['summary']['page_views'], $source ?: 'all']);
+        $rows->push([$report['summary']['visitors_is_daily_sum'] ? 'Period total (sum of daily uniques)' : 'Period total (unique visitors)', $report['summary']['visitors'], $report['summary']['sessions'], $report['summary']['page_views'], $report['summary']['top_source'] ?? 'Unavailable', $report['summary']['top_source_explanation'] ?? 'Recorded sources only; unassigned sources excluded.']);
 
         $filename = "traffic_report_{$ts}.{$format}";
 

@@ -27,6 +27,25 @@ class FirstPaymentValidityTest extends TestCase
         return app(StudentLedgerService::class)->createPackage(Student::factory()->verified()->create(), 'Foundation', 8, '280', '0', 'USD', null, fake()->uuid(), presetKey: 'foundation_track');
     }
 
+    public function test_zero_payment_does_not_start_validity_or_enable_credits(): void
+    {
+        $this->freezeTime();
+        $package = $this->purchase();
+        $ledger = app(StudentLedgerService::class);
+
+        try {
+            $ledger->recordPayment($package, '0.00', fake()->uuid(), null);
+            $this->fail('A zero payment must be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('Payment amount must be positive.', $exception->getMessage());
+        }
+
+        $this->assertFalse(app(EntitlementService::class)->eligible($package->fresh()));
+        $this->assertNull($package->fresh()->validity_started_at);
+        $this->assertSame('280.00', $ledger->summary($package->fresh())['balance_due']);
+        $this->assertDatabaseCount('payment_records', 0);
+    }
+
     public function test_first_partial_payment_starts_expiry_and_makes_booking_credits_available(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-20 12:00:00 UTC'));

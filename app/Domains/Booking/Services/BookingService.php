@@ -141,7 +141,7 @@ class BookingService
         if (! $heldSessionType) {
             throw new SlotUnavailableException('This reservation hold is no longer valid.');
         }
-        $initialConfig = $this->availabilityService->resolveSlotConfiguration($heldSessionType, $startUtc, $endUtc);
+        $initialConfig = $this->availabilityService->resolveSlotConfiguration($heldSessionType, $startUtc, $endUtc, requireSessionDuration: true);
 
         $email = trim((string) ($data['customer_email'] ?? $data['email'] ?? ''));
         $phone = trim((string) ($data['customer_phone'] ?? $data['phone'] ?? ''));
@@ -407,6 +407,7 @@ class BookingService
                     sessionType: $sessionType,
                     startUtc: $hold->slot_start_utc,
                     endUtc: $hold->slot_end_utc,
+                    requireSessionDuration: true,
                 );
                 $this->availabilityService->validateSlotForBooking(
                     sessionType: $sessionType,
